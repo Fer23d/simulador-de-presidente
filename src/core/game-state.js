@@ -1,9 +1,11 @@
 import { createCongress, negotiateSupport, voteOnLaw } from './congress.js';
 import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countries.js';
-import { DEFAULT_BUDGET, advanceEconomy, clampTaxRate } from './economy.js';
+import { DEFAULT_BUDGET, advanceEconomy, clampTaxRate, setBudgetRate } from './economy.js';
+import { advanceGeopolitics, createGeopolitics, declareWar, getGeopoliticalModifiers, proposeAlliance as formAlliance, proposeTradeTreaty } from './geopolitics.js';
+import { advanceMilitary, applyNuclearCompletion, canAutogolpe, createMilitary, createRegime, evaluateRegime, fundNuclearProject } from './military.js';
 import { LAW_LABOR_REFORM } from './laws.js';
 
-const STATE_VERSION = 1;
+const STATE_VERSION = 2;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 
 function clamp(value, minimum, maximum) {
@@ -60,6 +62,10 @@ export function createGameState(countryId = 'bra') {
     calendar: { month: 1, year: 2026 },
     economy: createEconomy(country),
     budget: { ...DEFAULT_BUDGET },
+    geopolitics: createGeopolitics(),
+    military: createMilitary(country),
+    regime: createRegime(),
+    randomSeed: countrySeed(country.id) || 1,
     congress: createCongress(countrySeed(country.id)),
     laws: { laborReform: { approved: false, voteCompleted: false } },
     history: [],
@@ -79,6 +85,45 @@ export function changeTax(state, taxKey, delta) {
   };
 }
 
+export function setBudget(state, budgetKey, value) {
+  const budget = setBudgetRate(state.budget, budgetKey, value);
+  if (budget === state.budget) return { ...state, notice: 'Controle orcamentario invalido.' };
+  return { ...state, budget, notice: 'Orcamento atualizado.' };
+}
+
+function applyGeopoliticalAction(state, action) {
+  const result = action(state.geopolitics);
+  return { ...state, geopolitics: result.geopolitics, notice: result.reason };
+}
+
+export function proposeTreaty(state, contactId) {
+  return applyGeopoliticalAction(state, (geopolitics) => proposeTradeTreaty(geopolitics, contactId));
+}
+
+export function proposeAlliance(state, contactId) {
+  return applyGeopoliticalAction(state, (geopolitics) => formAlliance(geopolitics, contactId));
+}
+
+export function startWar(state, contactId) {
+  return applyGeopoliticalAction(state, (geopolitics) => declareWar(geopolitics, contactId));
+}
+
+export function fundNuclear(state, kind, amount) {
+  const result = fundNuclearProject(state.military, state.economy, kind, amount);
+  return { ...state, military: result.military, economy: result.economy, notice: result.reason };
+}
+
+export function attemptAutogolpe(state) {
+  if (!canAutogolpe(state.regime, state.military, state.budget)) {
+    return { ...state, notice: 'Autogolpe exige apoio militar e defesa elevados.' };
+  }
+  return {
+    ...state,
+    regime: { ...state.regime, type: 'dictatorship', electionsSuspended: true, coupRisk: 0 },
+    notice: 'Estado de sitio decretado. O Congresso foi suspenso.',
+  };
+}
+
 export function negotiate(state, blocId) {
   const result = negotiateSupport(state.congress, state.economy, blocId);
   return {
@@ -90,6 +135,15 @@ export function negotiate(state, blocId) {
 }
 
 export function voteLaborLaw(state) {
+  if (state.regime?.type === 'dictatorship') {
+    const notice = 'Lei Trabalhista aprovada por decreto.';
+    return {
+      ...state,
+      laws: { laborReform: { approved: true, voteCompleted: true } },
+      notice,
+      history: addHistory(state, { type: 'decree', message: notice, calendar: state.calendar }),
+    };
+  }
   if (state.laws.laborReform.voteCompleted) {
     return { ...state, notice: 'A Lei Trabalhista ja foi votada nesta legislatura.' };
   }
@@ -107,25 +161,35 @@ export function voteLaborLaw(state) {
 }
 
 export function advanceMonth(state) {
+  if (state.regime?.gameOver) return { ...state, notice: 'A partida foi encerrada.' };
   const effects = state.laws.laborReform.approved ? LAW_LABOR_REFORM.monthlyEffects : {};
-  const economy = advanceEconomy(state.economy, state.budget, effects);
+  const modifiers = getGeopoliticalModifiers(state.geopolitics, state.military);
+  const economicMonth = advanceEconomy(state.economy, state.budget, effects, modifiers);
+  const nuclear = applyNuclearCompletion(state.geopolitics, state.military);
+  const geopoliticalMonth = advanceGeopolitics(nuclear.geopolitics, nuclear.military, economicMonth, state.randomSeed);
+  const militaryMonth = advanceMilitary(nuclear.military, geopoliticalMonth.economy, state.budget, geopoliticalMonth);
+  const stability = evaluateRegime(state.regime, geopoliticalMonth.economy, militaryMonth.military, geopoliticalMonth.geopolitics, geopoliticalMonth.seed);
   const month = state.calendar.month === 12 ? 1 : state.calendar.month + 1;
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
-  const notice = `Mes encerrado: PIB ${economy.monthlyBalance >= 0 ? 'com superavit' : 'com deficit'}.`;
+  const notice = stability.event ?? `Mes encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superavit' : 'com deficit'}.`;
 
   return {
     ...state,
-    economy,
+    economy: geopoliticalMonth.economy,
+    geopolitics: geopoliticalMonth.geopolitics,
+    military: militaryMonth.military,
+    regime: stability.regime,
+    randomSeed: stability.seed,
     calendar: { month, year },
     notice,
-    history: addHistory(state, { type: 'month', message: notice, calendar: { month, year } }),
+    history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
   };
 }
 
 export function hydrateGameState(serialized) {
   try {
     const parsed = JSON.parse(serialized);
-    if (parsed?.version !== STATE_VERSION || !getCountryById(parsed?.country?.id)) {
+    if (![1, STATE_VERSION].includes(parsed?.version) || !getCountryById(parsed?.country?.id)) {
       return createGameState();
     }
 
@@ -143,6 +207,10 @@ export function hydrateGameState(serialized) {
         ...base.budget,
         incomeTaxRate: clampTaxRate(parsed.budget?.incomeTaxRate ?? base.budget.incomeTaxRate),
         vatRate: clampTaxRate(parsed.budget?.vatRate ?? base.budget.vatRate),
+        healthSpend: Math.max(0, Number(parsed.budget?.healthSpend) || base.budget.healthSpend),
+        educationSpend: Math.max(0, Number(parsed.budget?.educationSpend) || base.budget.educationSpend),
+        infrastructureSpend: Math.max(0, Number(parsed.budget?.infrastructureSpend) || base.budget.infrastructureSpend),
+        defenseSpend: Math.max(0, Number(parsed.budget?.defenseSpend) || base.budget.defenseSpend),
       },
       economy: {
         ...base.economy,
@@ -150,8 +218,12 @@ export function hydrateGameState(serialized) {
         inflation: clamp(Number(economy.inflation) || 0, 0, 0.8),
         unemployment: clamp(Number(economy.unemployment) || base.economy.unemployment, 0.02, 0.45),
         popularity: clamp(Number(economy.popularity) || base.economy.popularity, 0, 100),
-        cash: Math.max(0, Number(economy.cash) || base.economy.cash),
+        cash: Number.isFinite(Number(economy.cash)) ? Number(economy.cash) : base.economy.cash,
       },
+      geopolitics: parsed.version === STATE_VERSION && Array.isArray(parsed.geopolitics?.contacts) ? parsed.geopolitics : base.geopolitics,
+      military: parsed.version === STATE_VERSION && parsed.military && typeof parsed.military === 'object' ? parsed.military : base.military,
+      regime: parsed.version === STATE_VERSION && parsed.regime && typeof parsed.regime === 'object' ? { ...base.regime, ...parsed.regime } : base.regime,
+      randomSeed: Number.isFinite(parsed.randomSeed) ? parsed.randomSeed : base.randomSeed,
       congress: isValidCongress(parsed.congress) ? parsed.congress : base.congress,
       laws: {
         laborReform: {

@@ -5,8 +5,13 @@ import {
   advanceMonth,
   changeTax,
   createGameState,
+  attemptAutogolpe,
+  fundNuclear,
   hydrateGameState,
   negotiate,
+  proposeTreaty,
+  setBudget,
+  startWar,
   voteLaborLaw,
 } from '../src/core/game-state.js';
 
@@ -69,4 +74,52 @@ test('labor law needs negotiation before it wins a majority in Brazil', () => {
 
   assert.equal(rejected.laws.laborReform.approved, false);
   assert.equal(approved.laws.laborReform.approved, true);
+});
+
+test('migrates a version 1 save with negative cash intact', () => {
+  const legacy = createGameState('bra');
+  legacy.version = 1;
+  legacy.economy.cash = -500;
+
+  assert.equal(hydrateGameState(JSON.stringify(legacy)).economy.cash, -500);
+});
+
+test('blocks progression after a terminal regime outcome', () => {
+  const state = {
+    ...createGameState('bra'),
+    regime: { type: 'democracy', gameOver: true, outcome: 'golpe-militar' },
+  };
+
+  assert.deepEqual(advanceMonth(state).calendar, state.calendar);
+});
+
+test('updates a spending slider through the state command', () => {
+  assert.equal(setBudget(createGameState('bra'), 'defenseSpend', 0.07).budget.defenseSpend, 0.07);
+});
+
+test('approves labor law by decree in dictatorship', () => {
+  const state = {
+    ...createGameState('bra'),
+    regime: { type: 'dictatorship', gameOver: false, outcome: null },
+  };
+
+  assert.equal(voteLaborLaw(state).laws.laborReform.approved, true);
+});
+
+test('integrates diplomatic, nuclear, and war commands', () => {
+  const state = createGameState('bra');
+  const treaty = proposeTreaty(state, 'arg');
+  const war = startWar(state, 'arg');
+  const nuclear = fundNuclear(state, 'civil', 5_000_000_000);
+
+  assert.equal(treaty.geopolitics.contacts.find((item) => item.id === 'arg').tradeTreaty, true);
+  assert.equal(war.geopolitics.contacts.find((item) => item.id === 'arg').atWar, true);
+  assert.ok(nuclear.military.nuclear.civilProgress > 0);
+});
+
+test('can change to dictatorship only after the military conditions are met', () => {
+  const state = setBudget(createGameState('bra'), 'defenseSpend', 0.06);
+  const eligible = { ...state, military: { ...state.military, support: 85 } };
+
+  assert.equal(attemptAutogolpe(eligible).regime.type, 'dictatorship');
 });
