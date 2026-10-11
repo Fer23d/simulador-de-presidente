@@ -29,6 +29,29 @@ function addHistory(state, entry) {
   return [entry, ...state.history].slice(0, 12);
 }
 
+function isValidCongress(congress) {
+  return Array.isArray(congress?.blocs)
+    && congress.blocs.length === 4
+    && congress.blocs.every((bloc) => bloc
+      && typeof bloc.id === 'string'
+      && Number.isFinite(bloc.seats)
+      && bloc.seats > 0
+      && Number.isFinite(bloc.support)
+      && bloc.support >= 0
+      && bloc.support <= 1)
+    && congress.blocs.reduce((total, bloc) => total + bloc.seats, 0) === 300;
+}
+
+function isValidHistory(history) {
+  return Array.isArray(history)
+    && history.every((entry) => entry
+      && typeof entry.type === 'string'
+      && typeof entry.message === 'string'
+      && entry.calendar
+      && Number.isFinite(entry.calendar.month)
+      && Number.isFinite(entry.calendar.year));
+}
+
 export function createGameState(countryId = 'bra') {
   const country = createCountryProfile(getCountryById(countryId) ?? COUNTRIES.find((item) => item.id === 'bra'));
   return {
@@ -129,14 +152,14 @@ export function hydrateGameState(serialized) {
         popularity: clamp(Number(economy.popularity) || base.economy.popularity, 0, 100),
         cash: Math.max(0, Number(economy.cash) || base.economy.cash),
       },
-      congress: Array.isArray(parsed.congress?.blocs) ? parsed.congress : base.congress,
+      congress: isValidCongress(parsed.congress) ? parsed.congress : base.congress,
       laws: {
         laborReform: {
           approved: Boolean(laws.approved),
           voteCompleted: Boolean(laws.voteCompleted),
         },
       },
-      history: Array.isArray(parsed.history) ? parsed.history.slice(0, 12) : [],
+      history: isValidHistory(parsed.history) ? parsed.history.slice(0, 12) : [],
       notice: typeof parsed.notice === 'string' ? parsed.notice : base.notice,
     };
   } catch {

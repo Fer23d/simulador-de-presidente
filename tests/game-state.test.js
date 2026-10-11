@@ -26,6 +26,18 @@ test('falls back to a valid game state for corrupted serialized data', () => {
   assert.equal(hydrateGameState('{invalid').country.id, 'bra');
 });
 
+test('falls back to a valid game state for structurally corrupted saved arrays', () => {
+  const corrupted = JSON.stringify({
+    ...createGameState('bra'),
+    congress: { blocs: [null] },
+    history: [null],
+  });
+  const hydrated = hydrateGameState(corrupted);
+
+  assert.equal(hydrated.congress.blocs.length, 4);
+  assert.deepEqual(hydrated.history, []);
+});
+
 test('advancing a month updates the calendar and records history', () => {
   const state = createGameState('bra');
   const updated = advanceMonth(state);
@@ -47,4 +59,14 @@ test('labor vote stores its result after approval or rejection', () => {
 
   assert.equal(updated.laws.laborReform.voteCompleted, true);
   assert.equal(typeof updated.notice, 'string');
+});
+
+test('labor law needs negotiation before it wins a majority in Brazil', () => {
+  const state = createGameState('bra');
+  const rejected = voteLaborLaw(state);
+  const negotiated = negotiate(state, 'center');
+  const approved = voteLaborLaw(negotiated);
+
+  assert.equal(rejected.laws.laborReform.approved, false);
+  assert.equal(approved.laws.laborReform.approved, true);
 });
