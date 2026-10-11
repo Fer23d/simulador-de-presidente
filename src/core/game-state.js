@@ -291,7 +291,9 @@ export function hydrateGameState(serialized) {
         cash: Number.isFinite(Number(economy.cash)) ? Number(economy.cash) : base.economy.cash,
       },
       geopolitics: parsed.version >= 2 && Array.isArray(parsed.geopolitics?.contacts) ? { ...base.geopolitics, ...parsed.geopolitics } : base.geopolitics,
-      military: parsed.version >= 2 && parsed.military?.nuclear && Number.isFinite(parsed.military.power) && Number.isFinite(parsed.military.support) ? parsed.military : base.military,
+      military: parsed.version >= 2 && parsed.military?.nuclear && Number.isFinite(parsed.military.power) && Number.isFinite(parsed.military.support)
+        ? { ...base.military, ...parsed.military, nuclear: { ...base.military.nuclear, ...parsed.military.nuclear } }
+        : base.military,
       technology: parsed.version >= 3 && Array.isArray(parsed.technology?.unlocked) ? { points: Math.max(0, Number(parsed.technology.points) || 0), unlocked: parsed.technology.unlocked.filter((id) => typeof id === 'string') } : base.technology,
       regime: parsed.version >= 2 && parsed.regime && typeof parsed.regime === 'object' ? { ...base.regime, ...parsed.regime } : base.regime,
       randomSeed: Number.isFinite(parsed.randomSeed) ? parsed.randomSeed : base.randomSeed,

@@ -140,3 +140,14 @@ test('keeps a saved zero spending rate and recovers malformed military data', ()
   assert.equal(hydrated.budget.defenseSpend, 0);
   assert.ok(hydrated.military.nuclear);
 });
+
+test('migrates an older military save with army management defaults', () => {
+  const saved = createGameState('bra');
+  saved.version = 3;
+  delete saved.military.soldiers;
+  delete saved.military.equipmentMultiplier;
+  const hydrated = hydrateGameState(JSON.stringify(saved));
+
+  assert.ok(hydrated.military.soldiers > 0);
+  assert.equal(hydrated.military.equipmentMultiplier, 1);
+});
