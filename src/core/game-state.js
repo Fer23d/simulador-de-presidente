@@ -308,7 +308,7 @@ export function advanceMonth(state) {
   const effects = LAWS.reduce((total, law) => state.laws[law.stateKey]?.approved
     ? Object.entries(law.monthlyEffects).reduce((next, [key, value]) => ({ ...next, [key]: (next[key] ?? 0) + value }), total)
     : total, {});
-  const technology = advanceTechnology(state.technology, state.economy, state.budget);
+  const technology = advanceTechnology(state.technology, state.economy, state.budget, state.country.trait);
   const technologyModifiers = getTechnologyModifiers(technology);
   const geopoliticalModifiers = getGeopoliticalModifiers(state.geopolitics, state.military);
   const modifiers = { ...geopoliticalModifiers, growthModifier: geopoliticalModifiers.growthModifier + technologyModifiers.growthModifier, infrastructureCostModifier: geopoliticalModifiers.infrastructureCostModifier + technologyModifiers.infrastructureCostModifier, popularityModifier: geopoliticalModifiers.popularityModifier + technologyModifiers.popularityModifier };

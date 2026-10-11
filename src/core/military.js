@@ -1,4 +1,5 @@
 import { nextRandom } from './geopolitics.js';
+import { getRecruitmentCostMultiplier } from './traits.js';
 
 function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
@@ -61,6 +62,7 @@ export function createMilitary(country) {
   const gdpScore = Math.log10(Math.max(1, country.pib_base ?? 1)) * 1.1;
   const soldiers = Math.max(20_000, Math.round((country.populacao_base ?? 1) * 0.00035));
   return normalizeMilitary({
+    trait: country.trait,
     support: 58,
     readiness: clamp((populationScore + gdpScore) / 30, 0.8, 1.2),
     exercito: { soldados: soldiers, blindados: Math.max(1, Math.floor((populationScore + gdpScore) / 8)) },
@@ -95,7 +97,7 @@ export function advanceMilitary(military, economy, budget, geopoliticalResult = 
 
 export function recrutarSoldado(military, economy, amount = 5_000) {
   const soldiers = Math.max(1, Math.floor(Number(amount) || 0));
-  const cost = soldiers * 12_000;
+  const cost = soldiers * 12_000 * getRecruitmentCostMultiplier(military?.trait);
   const cash = Number(economy?.cash) || 0;
   if (cash < cost) return { ok: false, reason: 'Caixa insuficiente para recrutamento.', military, economy };
 

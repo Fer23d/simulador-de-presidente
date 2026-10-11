@@ -16,9 +16,9 @@ export function createTechnology() {
   return { points: 0, unlocked: [] };
 }
 
-export function advanceTechnology(technology, economy, budget) {
+export function advanceTechnology(technology, economy, budget, trait = '') {
   const scienceSpend = clamp(Number(budget.scienceSpend) || 0, 0, 0.15);
-  const generated = Math.round((economy.gdp / 1_000_000_000) * scienceSpend * 0.1);
+  const generated = Math.round((economy.gdp / 1_000_000_000) * scienceSpend * 0.1 * (trait === 'tech_giant' ? 2 : 1));
   return { ...technology, points: Math.max(0, (Number(technology.points) || 0) + generated), generated };
 }
 

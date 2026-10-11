@@ -1023,6 +1023,13 @@ const REAL_POPULATIONS = Object.freeze({
   usa: 340110988,
 });
 
+const TRAIT_OVERRIDES = Object.freeze({
+  arg: 'agri_power', bra: 'agri_power', chn: 'tech_giant', isr: 'military_tradition',
+  jpn: 'tech_giant', kor: 'tech_giant', rus: 'military_tradition', sau: 'oil_rich',
+  che: 'financial_hub', sgp: 'financial_hub', ven: 'oil_rich',
+});
+const GENERIC_TRAITS = Object.freeze(['oil_rich', 'military_tradition', 'tech_giant', 'agri_power', 'financial_hub']);
+
 function hash(value) {
   return [...value].reduce((total, character) => ((total * 31) + character.charCodeAt(0)) >>> 0, 2166136261);
 }
@@ -1031,7 +1038,11 @@ function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
-export const COUNTRIES = Object.freeze(COUNTRY_SEED.map((country) => Object.freeze({ ...country })));
+function traitForCountry(id) {
+  return TRAIT_OVERRIDES[id] ?? GENERIC_TRAITS[hash(id) % GENERIC_TRAITS.length];
+}
+
+export const COUNTRIES = Object.freeze(COUNTRY_SEED.map((country) => Object.freeze({ ...country, trait: traitForCountry(country.id) })));
 
 export function validateCountries(countries) {
   if (!Array.isArray(countries) || countries.length !== 200) {
@@ -1040,8 +1051,8 @@ export function validateCountries(countries) {
 
   const ids = new Set();
   for (const country of countries) {
-    if (!country?.id || !country.nome || !Number.isFinite(country.area_km2) || country.area_km2 <= 0) {
-      throw new Error('Cada pais precisa de id, nome e area positiva.');
+    if (!country?.id || !country.nome || !country.trait || !Number.isFinite(country.area_km2) || country.area_km2 <= 0) {
+      throw new Error('Cada pais precisa de id, nome, trait e area positiva.');
     }
     if (ids.has(country.id)) {
       throw new Error(`ID de pais duplicado: ${country.id}`);
