@@ -224,8 +224,8 @@ export function mountDashboard(root) {
     if (action === 'negotiate') { commit(negotiate(state, control.dataset.bloc)); return; }
     if (action === 'vote') { commit(voteLaborLaw(state)); return; }
     if (action === 'advance') { commit(advanceMonth(state)); return; }
-    if (action === 'country') { commit(createGameState(control.dataset.country)); activeTab = 'overview'; return; }
-    if (action === 'reset') { commit(createGameState(state.country.id)); activeTab = 'overview'; }
+    if (action === 'country') { activeTab = 'overview'; commit(createGameState(control.dataset.country)); return; }
+    if (action === 'reset') { activeTab = 'overview'; commit(createGameState(state.country.id)); }
   });
 
   root.addEventListener('change', (event) => {
@@ -234,8 +234,8 @@ export function mountDashboard(root) {
       return;
     }
     if (event.target.matches('[data-action="select-country"]')) {
-      commit(createGameState(event.target.value));
       activeTab = 'overview';
+      commit(createGameState(event.target.value));
     }
   });
 

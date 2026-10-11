@@ -31,6 +31,10 @@ function addHistory(state, entry) {
   return [entry, ...state.history].slice(0, 12);
 }
 
+function isGameOver(state) {
+  return Boolean(state.regime?.gameOver);
+}
+
 function isValidCongress(congress) {
   return Array.isArray(congress?.blocs)
     && congress.blocs.length === 4
@@ -86,12 +90,14 @@ export function changeTax(state, taxKey, delta) {
 }
 
 export function setBudget(state, budgetKey, value) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const budget = setBudgetRate(state.budget, budgetKey, value);
   if (budget === state.budget) return { ...state, notice: 'Controle orcamentario invalido.' };
   return { ...state, budget, notice: 'Orcamento atualizado.' };
 }
 
 function applyGeopoliticalAction(state, action) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = action(state.geopolitics);
   return { ...state, geopolitics: result.geopolitics, notice: result.reason };
 }
@@ -109,11 +115,13 @@ export function startWar(state, contactId) {
 }
 
 export function fundNuclear(state, kind, amount) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = fundNuclearProject(state.military, state.economy, kind, amount);
   return { ...state, military: result.military, economy: result.economy, notice: result.reason };
 }
 
 export function attemptAutogolpe(state) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   if (!canAutogolpe(state.regime, state.military, state.budget)) {
     return { ...state, notice: 'Autogolpe exige apoio militar e defesa elevados.' };
   }
@@ -135,6 +143,7 @@ export function negotiate(state, blocId) {
 }
 
 export function voteLaborLaw(state) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   if (state.regime?.type === 'dictatorship') {
     const notice = 'Lei Trabalhista aprovada por decreto.';
     return {
@@ -166,8 +175,9 @@ export function advanceMonth(state) {
   const modifiers = getGeopoliticalModifiers(state.geopolitics, state.military);
   const economicMonth = advanceEconomy(state.economy, state.budget, effects, modifiers);
   const nuclear = applyNuclearCompletion(state.geopolitics, state.military);
-  const geopoliticalMonth = advanceGeopolitics(nuclear.geopolitics, nuclear.military, economicMonth, state.randomSeed);
-  const militaryMonth = advanceMilitary(nuclear.military, geopoliticalMonth.economy, state.budget, geopoliticalMonth);
+  const preparedMilitary = advanceMilitary(nuclear.military, economicMonth, state.budget);
+  const geopoliticalMonth = advanceGeopolitics(nuclear.geopolitics, preparedMilitary.military, economicMonth, state.randomSeed);
+  const militaryMonth = advanceMilitary(preparedMilitary.military, geopoliticalMonth.economy, { defenseSpend: 0 }, geopoliticalMonth);
   const stability = evaluateRegime(state.regime, geopoliticalMonth.economy, militaryMonth.military, geopoliticalMonth.geopolitics, geopoliticalMonth.seed);
   const month = state.calendar.month === 12 ? 1 : state.calendar.month + 1;
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
@@ -207,10 +217,10 @@ export function hydrateGameState(serialized) {
         ...base.budget,
         incomeTaxRate: clampTaxRate(parsed.budget?.incomeTaxRate ?? base.budget.incomeTaxRate),
         vatRate: clampTaxRate(parsed.budget?.vatRate ?? base.budget.vatRate),
-        healthSpend: Math.max(0, Number(parsed.budget?.healthSpend) || base.budget.healthSpend),
-        educationSpend: Math.max(0, Number(parsed.budget?.educationSpend) || base.budget.educationSpend),
-        infrastructureSpend: Math.max(0, Number(parsed.budget?.infrastructureSpend) || base.budget.infrastructureSpend),
-        defenseSpend: Math.max(0, Number(parsed.budget?.defenseSpend) || base.budget.defenseSpend),
+        healthSpend: Number.isFinite(Number(parsed.budget?.healthSpend)) ? Math.max(0, Number(parsed.budget.healthSpend)) : base.budget.healthSpend,
+        educationSpend: Number.isFinite(Number(parsed.budget?.educationSpend)) ? Math.max(0, Number(parsed.budget.educationSpend)) : base.budget.educationSpend,
+        infrastructureSpend: Number.isFinite(Number(parsed.budget?.infrastructureSpend)) ? Math.max(0, Number(parsed.budget.infrastructureSpend)) : base.budget.infrastructureSpend,
+        defenseSpend: Number.isFinite(Number(parsed.budget?.defenseSpend)) ? Math.max(0, Number(parsed.budget.defenseSpend)) : base.budget.defenseSpend,
       },
       economy: {
         ...base.economy,
@@ -221,7 +231,7 @@ export function hydrateGameState(serialized) {
         cash: Number.isFinite(Number(economy.cash)) ? Number(economy.cash) : base.economy.cash,
       },
       geopolitics: parsed.version === STATE_VERSION && Array.isArray(parsed.geopolitics?.contacts) ? parsed.geopolitics : base.geopolitics,
-      military: parsed.version === STATE_VERSION && parsed.military && typeof parsed.military === 'object' ? parsed.military : base.military,
+      military: parsed.version === STATE_VERSION && parsed.military?.nuclear && Number.isFinite(parsed.military.power) && Number.isFinite(parsed.military.support) ? parsed.military : base.military,
       regime: parsed.version === STATE_VERSION && parsed.regime && typeof parsed.regime === 'object' ? { ...base.regime, ...parsed.regime } : base.regime,
       randomSeed: Number.isFinite(parsed.randomSeed) ? parsed.randomSeed : base.randomSeed,
       congress: isValidCongress(parsed.congress) ? parsed.congress : base.congress,

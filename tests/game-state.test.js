@@ -123,3 +123,20 @@ test('can change to dictatorship only after the military conditions are met', ()
 
   assert.equal(attemptAutogolpe(eligible).regime.type, 'dictatorship');
 });
+
+test('blocks state-changing commands after the game ends', () => {
+  const state = { ...createGameState('bra'), regime: { ...createGameState('bra').regime, gameOver: true } };
+
+  assert.equal(startWar(state, 'arg').geopolitics, state.geopolitics);
+  assert.equal(setBudget(state, 'defenseSpend', 0.1).budget, state.budget);
+});
+
+test('keeps a saved zero spending rate and recovers malformed military data', () => {
+  const saved = createGameState('bra');
+  saved.budget.defenseSpend = 0;
+  saved.military = {};
+  const hydrated = hydrateGameState(JSON.stringify(saved));
+
+  assert.equal(hydrated.budget.defenseSpend, 0);
+  assert.ok(hydrated.military.nuclear);
+});

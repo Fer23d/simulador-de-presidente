@@ -22,7 +22,7 @@ export function createGeopolitics() {
     contacts: [
       { id: 'usa', name: 'Estados Unidos', relation: -10, militaryPower: 92, tradeTreaty: false, alliance: false, atWar: false },
       { id: 'chn', name: 'China', relation: 5, militaryPower: 88, tradeTreaty: false, alliance: false, atWar: false },
-      { id: 'arg', name: 'Argentina', relation: 25, militaryPower: 24, tradeTreaty: false, alliance: false, atWar: false },
+      { id: 'arg', name: 'Argentina', relation: 50, militaryPower: 24, tradeTreaty: false, alliance: false, atWar: false },
     ],
     sanctionSeverity: 0,
   };
