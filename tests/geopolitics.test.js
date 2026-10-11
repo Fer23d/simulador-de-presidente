@@ -64,3 +64,13 @@ test('sabotage spends cash and makes discovery deterministic from a seed', () =>
   assert.ok(result.economy.cash < economy.cash);
   assert.equal(typeof result.discovered, 'boolean');
 });
+
+test('ends a war and opens one peace treaty when the enemy power reaches zero', () => {
+  const atWar = declareWar(createGeopolitics(), 'arg').geopolitics;
+  const result = advanceGeopolitics(atWar, { power: 300, equipmentMultiplier: 1 }, economy, 7);
+  const target = result.geopolitics.contacts.find((contact) => contact.id === 'arg');
+
+  assert.equal(target.atWar, false);
+  assert.equal(target.militaryPower, 0);
+  assert.deepEqual(result.geopolitics.peaceTreaty, { targetId: 'arg', status: 'pending' });
+});

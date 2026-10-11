@@ -30,6 +30,8 @@ export function createGeopolitics() {
       population: country.populacao_base,
       area_km2: country.area_km2,
       pib_base: country.pib_base,
+      cash: Math.max(1_000_000_000, Math.round(country.pib_base * 0.015)),
+      trait: country.trait,
       tradeTreaty: false,
       alliance: false,
       atWar: false,
@@ -46,6 +48,7 @@ export function createGeopolitics() {
     onuScore: 50,
     internationalSanctions: false,
     annexedCountryIds: [],
+    peaceTreaty: null,
   };
 }
 
@@ -167,6 +170,7 @@ export function advanceGeopolitics(geopolitics, military, economy, seed) {
   const events = [];
   const cashCost = economy.gdp / 12 * 0.006;
   let cash = economy.cash;
+  let peaceTreaty = geopolitics.peaceTreaty ?? null;
 
   const contacts = geopolitics.contacts.map((contact) => {
     if (!contact.atWar) return contact;
@@ -180,15 +184,21 @@ export function advanceGeopolitics(geopolitics, military, economy, seed) {
     militaryPowerLoss += won ? 0.8 : 2.4;
     popularityDelta += won ? 0.45 : -0.8;
     events.push(won ? `Vitoria taticas contra ${contact.name}.` : `Reves militar contra ${contact.name}.`);
-    return won
-      ? { ...contact, relation: -85, militaryPower: Math.max(1, contact.militaryPower - 2) }
-      : { ...contact, relation: -100 };
+    if (!won) return { ...contact, relation: -100 };
+    const damage = Math.max(2, Math.round((playerScore / Math.max(1, contact.militaryPower)) * 4));
+    const militaryPower = Math.max(0, contact.militaryPower - damage);
+    if (militaryPower === 0 && !peaceTreaty) {
+      peaceTreaty = { targetId: contact.id, status: 'pending' };
+      events.push(`${contact.name} foi derrotado; tratado de paz pendente.`);
+    }
+    return { ...contact, relation: -85, atWar: militaryPower > 0, militaryPower };
   });
 
   return {
     geopolitics: {
       ...geopolitics,
       contacts,
+      peaceTreaty,
       sanctionSeverity: Math.max(0, geopolitics.sanctionSeverity - 0.015),
     },
     economy: { ...economy, cash, popularity: clamp(economy.popularity + popularityDelta, 0, 100) },

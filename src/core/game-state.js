@@ -171,7 +171,7 @@ export function anexarPais(state, contactId) {
   const contact = state.geopolitics.contacts.find((item) => item.id === contactId);
   const countrySeed = getCountryById(contactId);
   const target = countrySeed ? createCountryProfile(countrySeed) : null;
-  if (!contact || !target || contact.anexado || contact.militaryPower > 0) return { ...state, notice: 'Anexacao exige a derrota total do alvo.' };
+  if (!contact || !target || contact.destruido || contact.anexado || contact.militaryPower > 0) return { ...state, notice: 'Anexacao exige a derrota total do alvo.' };
 
   const population = (Number(state.country.populacao) || Number(state.country.populacao_base) || 0)
     + (Number(contact.population) || Number(target.populacao) || Number(target.populacao_base) || 0);
@@ -186,15 +186,39 @@ export function anexarPais(state, contactId) {
       populacao_base: population,
       pib_base: gdp,
     },
-    economy: { ...state.economy, gdp: state.economy.gdp + target.pib_base },
+    economy: { ...state.economy, gdp: state.economy.gdp + (contact.pib_base ?? target.pib_base) },
     geopolitics: changeOnuScore({
       ...state.geopolitics,
       annexedCountryIds: [...new Set([...(state.geopolitics.annexedCountryIds ?? []), contactId])],
+      peaceTreaty: null,
       contacts: state.geopolitics.contacts.map((item) => item.id === contactId
-        ? { ...item, anexado: true, atWar: false, alliance: false, tradeTreaty: false, militaryPower: 0 }
+        ? { ...item, anexado: true, destruido: true, atWar: false, alliance: false, tradeTreaty: false, militaryPower: 0, population: 0, area_km2: 0, pib_base: 0, cash: 0 }
         : item),
     }, -45),
     notice: `${target.nome} foi anexado; a ONU condenou a medida.`,
+  };
+}
+
+export function resolvePeaceTreaty(state, contactId, choice) {
+  const treaty = state.geopolitics.peaceTreaty;
+  const contact = state.geopolitics.contacts.find((item) => item.id === contactId);
+  if (!treaty || treaty.targetId !== contactId || !contact || contact.militaryPower > 0) {
+    return { ...state, notice: 'Nenhum tratado de paz valido para este alvo.' };
+  }
+  if (choice === 'annex') return anexarPais(state, contactId);
+  if (choice !== 'loot') return { ...state, notice: 'Termo de tratado invalido.' };
+  const loot = Math.round(Math.max(0, Number(contact.cash) || 0) * 0.8);
+  return {
+    ...state,
+    economy: { ...state.economy, cash: state.economy.cash + loot },
+    geopolitics: {
+      ...state.geopolitics,
+      peaceTreaty: null,
+      contacts: state.geopolitics.contacts.map((item) => item.id === contactId
+        ? { ...item, cash: Math.max(0, item.cash - loot), relation: -100, atWar: false }
+        : item),
+    },
+    notice: `${contact.name} foi saqueado; ${loot.toLocaleString('pt-BR')} transferidos ao Tesouro.`,
   };
 }
 

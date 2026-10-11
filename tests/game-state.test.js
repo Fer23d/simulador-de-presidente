@@ -17,6 +17,7 @@ import {
   anexarPais,
   exigirAnexacao,
   lancarAtaqueNuclear,
+  resolvePeaceTreaty,
 } from '../src/core/game-state.js';
 
 test('creates a game state for Brazil', () => {
@@ -202,4 +203,37 @@ test('nuclear strike devastates an active war target and ends every alliance', (
   assert.equal(attacked.population, Math.floor(target.population * 0.2));
   assert.equal(result.geopolitics.onuScore, 0);
   assert.ok(result.geopolitics.contacts.every((contact) => contact.alliance === false));
+});
+
+test('transfers an annexed target and removes it from active diplomacy', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    geopolitics: {
+      ...state.geopolitics,
+      peaceTreaty: { targetId: 'arg', status: 'pending' },
+      contacts: state.geopolitics.contacts.map((contact) => contact.id === 'arg' ? { ...contact, militaryPower: 0 } : contact),
+    },
+  };
+  const result = resolvePeaceTreaty(prepared, 'arg', 'annex');
+
+  assert.equal(result.geopolitics.contacts.find((contact) => contact.id === 'arg').destruido, true);
+  assert.equal(result.geopolitics.peaceTreaty, null);
+});
+
+test('transfers eighty percent of target cash when peace treaty is looted', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    geopolitics: {
+      ...state.geopolitics,
+      peaceTreaty: { targetId: 'arg', status: 'pending' },
+      contacts: state.geopolitics.contacts.map((contact) => contact.id === 'arg' ? { ...contact, militaryPower: 0, cash: 10_000 } : contact),
+    },
+  };
+  const result = resolvePeaceTreaty(prepared, 'arg', 'loot');
+
+  assert.equal(result.economy.cash, state.economy.cash + 8_000);
+  assert.equal(result.geopolitics.contacts.find((contact) => contact.id === 'arg').cash, 2_000);
+  assert.equal(result.geopolitics.contacts.find((contact) => contact.id === 'arg').relation, -100);
 });
