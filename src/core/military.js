@@ -20,6 +20,8 @@ export function createMilitary(country) {
   return {
     power: clamp(Math.round(populationScore + gdpScore - 18), 8, 70),
     support: 58,
+    soldiers: Math.max(20_000, Math.round((country.populacao_base ?? 1) * 0.00035)),
+    equipmentMultiplier: 1,
     nuclear: nuclearDefaults(),
   };
 }
@@ -30,14 +32,33 @@ export function advanceMilitary(military, economy, budget, geopoliticalResult = 
   const deficitPenalty = economy.cash < 0 ? 0.8 : 0;
   const powerGain = defenseSpend * 18;
   const supportShift = (economy.popularity - 50) * 0.015 + (defenseSpend * 8) + (warDelta.supportDelta ?? 0) - deficitPenalty;
+  const maintenance = (Number(military.soldiers) || 0) * 180;
   return {
     military: {
       ...military,
       power: clamp((Number(military.power) || 0) + powerGain - (warDelta.powerLoss ?? 0), 0, 100),
       support: clamp((Number(military.support) || 0) + supportShift, 0, 100),
+      soldiers: Math.max(0, Number(military.soldiers) || 0),
+      equipmentMultiplier: Math.max(1, Number(military.equipmentMultiplier) || 1),
       nuclear: nuclearDefaults(military.nuclear),
     },
+    economy: { ...economy, cash: economy.cash - maintenance },
   };
+}
+
+export function recrutarSoldado(military, economy, amount = 5_000) {
+  const soldiers = Math.max(1, Math.floor(Number(amount) || 0));
+  const cost = soldiers * 12_000;
+  if (economy.cash < cost) return { ok: false, reason: 'Caixa insuficiente para recrutamento.', military, economy };
+  return { ok: true, reason: `${soldiers.toLocaleString('pt-BR')} soldados recrutados.`, military: { ...military, soldiers: (military.soldiers || 0) + soldiers, power: clamp(military.power + (soldiers / 50_000), 0, 100) }, economy: { ...economy, cash: economy.cash - cost } };
+}
+
+export function comprarEquipamento(military, economy, kind) {
+  const catalog = { tanks: { cost: 4_000_000_000, multiplier: 0.12 }, jets: { cost: 7_000_000_000, multiplier: 0.2 } };
+  const item = catalog[kind];
+  if (!item) return { ok: false, reason: 'Equipamento invalido.', military, economy };
+  if (economy.cash < item.cost) return { ok: false, reason: 'Caixa insuficiente para equipamento.', military, economy };
+  return { ok: true, reason: 'Equipamento adquirido.', military: { ...military, equipmentMultiplier: clamp((military.equipmentMultiplier || 1) + item.multiplier, 1, 3) }, economy: { ...economy, cash: economy.cash - item.cost } };
 }
 
 export function fundNuclearProject(military, economy, kind, amount) {

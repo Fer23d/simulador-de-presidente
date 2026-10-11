@@ -4,6 +4,7 @@ import { BUDGET_LIMITS, projectBudget } from '../core/economy.js';
 import { TECHNOLOGIES } from '../core/technology.js';
 import {
   advanceMonth,
+  comprarMaterialMilitar,
   attemptAutogolpe,
   changeTax,
   createGameState,
@@ -13,6 +14,8 @@ import {
   proposeAlliance,
   proposeTreaty,
   researchTechnology,
+  recrutarSoldado,
+  sabotar,
   setBudget,
   startWar,
   voteLaborLaw,
@@ -160,13 +163,14 @@ function congressView(state) {
 }
 
 function diplomacyView(state) {
-  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Painel mundial</p><h2>Diplomacia</h2></div><span class="country-code">${formatPercent(state.geopolitics.sanctionSeverity, 0)} sancoes</span></div><div class="bloc-list">${state.geopolitics.contacts.map((contact) => `<article class="bloc-row"><div><strong>${contact.name}</strong><span>Relacao ${formatRelation(contact.relation)} | ${contact.atWar ? 'Em guerra' : contact.alliance ? 'Aliado' : contact.tradeTreaty ? 'Acordo comercial' : 'Sem tratado'}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comercio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Alianca</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.atWar ? 'disabled' : ''}>Guerra</button></div></article>`).join('')}</div></section>`;
+  const onuTone = state.geopolitics.onuScore < 25 ? 'negative' : state.geopolitics.onuScore >= 60 ? 'positive' : '';
+  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Painel mundial</p><h2>Diplomacia e Mapa</h2></div><span class="country-code ${onuTone}">ONU ${state.geopolitics.onuScore}/100</span></div><div class="onu-meter"><div><span>Reputacao global</span><strong class="${onuTone}">${state.geopolitics.internationalSanctions ? 'Sancoes internacionais ativas' : 'Sem sancoes internacionais'}</strong></div><div class="meter-track"><span style="width:${state.geopolitics.onuScore}%"></span></div></div><div class="bloc-list">${state.geopolitics.contacts.map((contact) => `<article class="bloc-row"><div><strong>${contact.name}</strong><span>Relacao ${formatRelation(contact.relation)} | Poder ${contact.militaryPower.toFixed(0)} | ${contact.atWar ? 'Em guerra' : contact.alliance ? 'Aliado' : contact.tradeTreaty ? 'Acordo comercial' : 'Sem tratado'}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comercio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Alianca</button><button type="button" class="quiet-action" data-action="sabotage" data-contact="${contact.id}" ${contact.atWar ? 'disabled' : ''}>Sabotar</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.atWar ? 'disabled' : ''}>Guerra</button></div></article>`).join('')}</div></section>`;
 }
 
 function militaryView(state) {
   const nuclear = state.military.nuclear;
   const canCoup = state.regime.type === 'democracy' && state.military.support >= 85 && state.budget.defenseSpend >= 0.06;
-  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Forcas Armadas</p><h2>Poder ${state.military.power.toFixed(0)}</h2><div class="ledger-row"><span>Apoio militar</span><strong>${state.military.support.toFixed(0)}%</strong></div><div class="ledger-row"><span>Risco institucional</span><strong>${formatPercent(state.regime.type === 'dictatorship' ? state.regime.revolutionRisk : state.regime.coupRisk, 0)}</strong></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section><section class="panel"><p class="eyebrow">Programa nuclear</p><h2>Projetos especiais</h2><div class="ledger-row"><span>Energia civil</span><strong>${nuclear.civilProgress.toFixed(0)}%</strong></div><div class="ledger-row"><span>Dissuasao militar</span><strong>${nuclear.militaryProgress.toFixed(0)}%</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="nuclear" data-kind="civil" data-amount="5000000000">Energia 5 bi</button><button type="button" class="quiet-action" data-action="nuclear" data-kind="military" data-amount="5000000000">Dissuasao 5 bi</button></div></section></section>`;
+  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Forcas Armadas</p><h2>Poder ${state.military.power.toFixed(0)}</h2><div class="ledger-row"><span>Soldados</span><strong>${formatNumber.format(state.military.soldiers)}</strong></div><div class="ledger-row"><span>Equipamento</span><strong>x${state.military.equipmentMultiplier.toFixed(2)}</strong></div><div class="ledger-row"><span>Apoio militar</span><strong>${state.military.support.toFixed(0)}%</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="recruit">Recrutar 5 mil</button><button type="button" class="quiet-action" data-action="equipment" data-kind="tanks">Tanques</button><button type="button" class="quiet-action" data-action="equipment" data-kind="jets">Cacas</button></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section><section class="panel"><p class="eyebrow">Programa nuclear</p><h2>Projetos especiais</h2><div class="ledger-row"><span>Energia civil</span><strong>${nuclear.civilProgress.toFixed(0)}%</strong></div><div class="ledger-row"><span>Dissuasao militar</span><strong>${nuclear.militaryProgress.toFixed(0)}%</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="nuclear" data-kind="civil" data-amount="5000000000">Energia 5 bi</button><button type="button" class="quiet-action" data-action="nuclear" data-kind="military" data-amount="5000000000">Dissuasao 5 bi</button></div></section></section>`;
 }
 
 function technologyView(state) {
@@ -232,6 +236,9 @@ export function mountDashboard(root) {
     if (action === 'treaty') { commit(proposeTreaty(state, control.dataset.contact)); return; }
     if (action === 'alliance') { commit(proposeAlliance(state, control.dataset.contact)); return; }
     if (action === 'war') { commit(startWar(state, control.dataset.contact)); return; }
+    if (action === 'sabotage') { commit(sabotar(state, control.dataset.contact)); return; }
+    if (action === 'recruit') { commit(recrutarSoldado(state)); return; }
+    if (action === 'equipment') { commit(comprarMaterialMilitar(state, control.dataset.kind)); return; }
     if (action === 'nuclear') { commit(fundNuclear(state, control.dataset.kind, Number(control.dataset.amount))); return; }
     if (action === 'coup') { commit(attemptAutogolpe(state)); return; }
     if (action === 'research') { commit(researchTechnology(state, control.dataset.technology)); return; }

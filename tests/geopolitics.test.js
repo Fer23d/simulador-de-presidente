@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 
 import {
   advanceGeopolitics,
+  alterarNotaONU,
   createGeopolitics,
   declareWar,
+  sabotar,
   proposeAlliance,
   proposeTradeTreaty,
 } from '../src/core/geopolitics.js';
@@ -47,4 +49,18 @@ test('resolves the same war outcome for the same seed', () => {
 
   assert.deepEqual(first, second);
   assert.ok(first.economy.cash < economy.cash);
+});
+
+test('applies international sanctions below ONU score 25', () => {
+  const result = alterarNotaONU(createGeopolitics(), -30);
+
+  assert.equal(result.onuScore, 20);
+  assert.equal(result.internationalSanctions, true);
+});
+
+test('sabotage spends cash and makes discovery deterministic from a seed', () => {
+  const result = sabotar(createGeopolitics(), 'arg', economy, 0);
+
+  assert.ok(result.economy.cash < economy.cash);
+  assert.equal(typeof result.discovered, 'boolean');
 });

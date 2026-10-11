@@ -1,12 +1,12 @@
 import { createCongress, negotiateSupport, voteOnLaw } from './congress.js';
 import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countries.js';
 import { DEFAULT_BUDGET, advanceEconomy, clampTaxRate, setBudgetRate } from './economy.js';
-import { advanceGeopolitics, createGeopolitics, declareWar, getGeopoliticalModifiers, proposeAlliance as formAlliance, proposeTradeTreaty } from './geopolitics.js';
-import { advanceMilitary, applyNuclearCompletion, canAutogolpe, createMilitary, createRegime, evaluateRegime, fundNuclearProject } from './military.js';
+import { advanceGeopolitics, alterarNotaONU as changeOnuScore, createGeopolitics, declareWar, getGeopoliticalModifiers, proposeAlliance as formAlliance, proposeTradeTreaty, sabotar as sabotageCountry } from './geopolitics.js';
+import { advanceMilitary, applyNuclearCompletion, canAutogolpe, comprarEquipamento, createMilitary, createRegime, evaluateRegime, fundNuclearProject, recrutarSoldado as recruitSoldiers } from './military.js';
 import { LAW_LABOR_REFORM } from './laws.js';
 import { advanceTechnology, createTechnology, getTechnologyModifiers, purchaseTechnology } from './technology.js';
 
-const STATE_VERSION = 3;
+const STATE_VERSION = 4;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 
 function clamp(value, minimum, maximum) {
@@ -112,8 +112,54 @@ export function proposeAlliance(state, contactId) {
   return applyGeopoliticalAction(state, (geopolitics) => formAlliance(geopolitics, contactId));
 }
 
+export function proporAlianca(state, contactId) {
+  return proposeAlliance(state, contactId);
+}
+
+export function alterarNotaONU(state, value) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return { ...state, geopolitics: changeOnuScore(state.geopolitics, value), notice: 'Nota da ONU atualizada.' };
+}
+
 export function startWar(state, contactId) {
-  return applyGeopoliticalAction(state, (geopolitics) => declareWar(geopolitics, contactId));
+  const next = applyGeopoliticalAction(state, (geopolitics) => declareWar(geopolitics, contactId));
+  return next.geopolitics === state.geopolitics ? next : { ...next, geopolitics: changeOnuScore(next.geopolitics, -18) };
+}
+
+export function declararGuerra(state, contactId) {
+  return startWar(state, contactId);
+}
+
+export function sabotar(state, contactId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = sabotageCountry(state.geopolitics, contactId, state.economy, state.randomSeed);
+  return { ...state, geopolitics: result.geopolitics, economy: result.economy, randomSeed: result.seed, notice: result.reason };
+}
+
+export function recrutarSoldado(state, amount = 5_000) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = recruitSoldiers(state.military, state.economy, amount);
+  return { ...state, military: result.military, economy: result.economy, notice: result.reason };
+}
+
+export function comprarMaterialMilitar(state, kind) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = comprarEquipamento(state.military, state.economy, kind);
+  return { ...state, military: result.military, economy: result.economy, notice: result.reason };
+}
+
+export function anexarPais(state, contactId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const contact = state.geopolitics.contacts.find((item) => item.id === contactId);
+  const country = getCountryById(contactId);
+  if (!contact || !country || contact.militaryPower > 0) return { ...state, notice: 'Anexacao exige a derrota total do alvo.' };
+  return {
+    ...state,
+    country: { ...state.country, area_km2: state.country.area_km2 + country.area_km2, populacao_base: state.country.populacao_base + country.populacao_base, pib_base: state.country.pib_base + country.pib_base },
+    economy: { ...state.economy, gdp: state.economy.gdp + country.pib_base },
+    geopolitics: changeOnuScore({ ...state.geopolitics, contacts: state.geopolitics.contacts.filter((item) => item.id !== contactId) }, -45),
+    notice: `${country.nome} foi anexado; a ONU condenou a medida.`,
+  };
 }
 
 export function fundNuclear(state, kind, amount) {
@@ -190,14 +236,14 @@ export function advanceMonth(state) {
   preparedMilitary.military.power = Math.min(100, preparedMilitary.military.power * (1 + technologyModifiers.militaryEffectiveness));
   const geopoliticalMonth = advanceGeopolitics(nuclear.geopolitics, preparedMilitary.military, economicMonth, state.randomSeed);
   const militaryMonth = advanceMilitary(preparedMilitary.military, geopoliticalMonth.economy, { defenseSpend: 0 }, geopoliticalMonth);
-  const stability = evaluateRegime(state.regime, geopoliticalMonth.economy, militaryMonth.military, geopoliticalMonth.geopolitics, geopoliticalMonth.seed);
+  const stability = evaluateRegime(state.regime, militaryMonth.economy, militaryMonth.military, geopoliticalMonth.geopolitics, geopoliticalMonth.seed);
   const month = state.calendar.month === 12 ? 1 : state.calendar.month + 1;
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? `Mes encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superavit' : 'com deficit'}.`;
 
   return {
     ...state,
-    economy: geopoliticalMonth.economy,
+    economy: militaryMonth.economy,
     geopolitics: geopoliticalMonth.geopolitics,
     military: militaryMonth.military,
     technology,
@@ -212,7 +258,7 @@ export function advanceMonth(state) {
 export function hydrateGameState(serialized) {
   try {
     const parsed = JSON.parse(serialized);
-    if (![1, 2, STATE_VERSION].includes(parsed?.version) || !getCountryById(parsed?.country?.id)) {
+    if (![1, 2, 3, STATE_VERSION].includes(parsed?.version) || !getCountryById(parsed?.country?.id)) {
       return createGameState();
     }
 
@@ -244,9 +290,9 @@ export function hydrateGameState(serialized) {
         popularity: clamp(Number(economy.popularity) || base.economy.popularity, 0, 100),
         cash: Number.isFinite(Number(economy.cash)) ? Number(economy.cash) : base.economy.cash,
       },
-      geopolitics: parsed.version >= 2 && Array.isArray(parsed.geopolitics?.contacts) ? parsed.geopolitics : base.geopolitics,
+      geopolitics: parsed.version >= 2 && Array.isArray(parsed.geopolitics?.contacts) ? { ...base.geopolitics, ...parsed.geopolitics } : base.geopolitics,
       military: parsed.version >= 2 && parsed.military?.nuclear && Number.isFinite(parsed.military.power) && Number.isFinite(parsed.military.support) ? parsed.military : base.military,
-      technology: parsed.version === STATE_VERSION && Array.isArray(parsed.technology?.unlocked) ? { points: Math.max(0, Number(parsed.technology.points) || 0), unlocked: parsed.technology.unlocked.filter((id) => typeof id === 'string') } : base.technology,
+      technology: parsed.version >= 3 && Array.isArray(parsed.technology?.unlocked) ? { points: Math.max(0, Number(parsed.technology.points) || 0), unlocked: parsed.technology.unlocked.filter((id) => typeof id === 'string') } : base.technology,
       regime: parsed.version >= 2 && parsed.regime && typeof parsed.regime === 'object' ? { ...base.regime, ...parsed.regime } : base.regime,
       randomSeed: Number.isFinite(parsed.randomSeed) ? parsed.randomSeed : base.randomSeed,
       congress: isValidCongress(parsed.congress) ? parsed.congress : base.congress,

@@ -107,6 +107,9 @@ h2 { margin-bottom: 0; font-size: 18px; line-height: 1.2; letter-spacing: 0; }
 .vote-meter { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; margin: 28px 0; }
 .meter-track { height: 8px; overflow: hidden; background: #0f1916; border-radius: 99px; }
 .meter-track span { display: block; height: 100%; background: var(--green); border-radius: inherit; }
+.onu-meter { display: grid; gap: 10px; margin: 0 0 18px; padding: 13px; border: 1px solid var(--line); background: #17231f; }
+.onu-meter > div:first-child { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 12px; }
+.onu-meter strong { color: var(--ink); }
 .vote-meter strong { font-size: 12px; }
 .bloc-list { display: grid; }
 .bloc-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }

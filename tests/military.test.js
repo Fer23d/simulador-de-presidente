@@ -9,6 +9,8 @@ import {
   createMilitary,
   evaluateRegime,
   fundNuclearProject,
+  comprarEquipamento,
+  recrutarSoldado,
 } from '../src/core/military.js';
 
 const country = { populacao_base: 210_000_000, pib_base: 2_000_000_000_000 };
@@ -72,4 +74,13 @@ test('marks a dictatorship as game over when a forced revolution roll succeeds',
 
   assert.equal(result.regime.gameOver, true);
   assert.equal(result.regime.outcome, 'revolucao-popular');
+});
+
+test('recruits soldiers and purchases equipment when treasury can pay', () => {
+  const initial = createMilitary(country);
+  const recruited = recrutarSoldado(initial, economy, 10_000);
+  const equipped = comprarEquipamento(recruited.military, recruited.economy, 'tanks');
+
+  assert.ok(recruited.military.soldiers > initial.soldiers);
+  assert.ok(equipped.military.equipmentMultiplier > recruited.military.equipmentMultiplier);
 });
