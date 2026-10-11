@@ -25,3 +25,16 @@ test('formats diplomatic relations with a sign', async () => {
   assert.equal(formatRelation(25), '+25');
   assert.equal(formatRelation(-10), '-10');
 });
+
+test('renders dynamic law rows and a blocking peace treaty dialog', async () => {
+  const { renderCongress, renderPeaceTreaty } = await import('../src/ui/dashboard.js');
+  const { createGameState } = await import('../src/core/game-state.js');
+  const state = createGameState('bra');
+  const treatyState = {
+    ...state,
+    geopolitics: { ...state.geopolitics, peaceTreaty: { targetId: 'arg', status: 'pending' } },
+  };
+
+  assert.match(renderCongress(state), /data-action="vote-law"/);
+  assert.match(renderPeaceTreaty(treatyState), /Tratado de Paz Obrigatorio/);
+});

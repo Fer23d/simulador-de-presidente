@@ -58,6 +58,16 @@ test('advancing a month updates the calendar and records history', () => {
   assert.equal(updated.history.length, 1);
 });
 
+test('blocks the monthly simulation while a peace treaty needs a decision', () => {
+  const state = createGameState('bra');
+  const prepared = { ...state, geopolitics: { ...state.geopolitics, peaceTreaty: { targetId: 'arg', status: 'pending' } } };
+
+  const result = advanceMonth(prepared);
+
+  assert.deepEqual(result.calendar, prepared.calendar);
+  assert.match(result.notice, /Tratado de Paz/);
+});
+
 test('negotiation returns a message and preserves a valid state', () => {
   const state = createGameState('bra');
   const updated = negotiate(state, 'center');

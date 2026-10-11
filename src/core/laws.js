@@ -90,3 +90,13 @@ export const LAWS = Object.freeze([
   LAW_ANTI_CORRUPTION,
   LAW_EXPORT_INCENTIVE,
 ]);
+
+export function aggregateActiveLawEffects(lawsState = {}) {
+  return LAWS.reduce((total, law) => {
+    if (!lawsState[law.stateKey]?.approved) return total;
+    return Object.entries(law.monthlyEffects).reduce(
+      (effects, [key, value]) => ({ ...effects, [key]: (effects[key] ?? 0) + value }),
+      total,
+    );
+  }, {});
+}

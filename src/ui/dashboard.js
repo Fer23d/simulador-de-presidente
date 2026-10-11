@@ -98,6 +98,7 @@ function taxControl(label, key, value) {
 
 function overviewView(state, projection) {
   const budgetTone = projection.monthlyBalance >= 0 ? 'positive' : 'negative';
+  const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending';
   return `<section class="view-grid overview-grid">
     <section class="panel agenda-panel">
       <div class="panel-heading"><div><p class="eyebrow">Agenda presidencial</p><h2>Proximo movimento</h2></div><span class="status-dot"></span></div>
@@ -107,7 +108,7 @@ function overviewView(state, projection) {
         <div><span>Maioria exigida</span><strong>${Math.floor(state.congress.totalSeats / 2) + 1} votos</strong></div>
         <div><span>Lei Trabalhista</span><strong>${state.laws.laborReform.approved ? 'Aprovada' : state.laws.laborReform.voteCompleted ? 'Rejeitada' : 'Pendente'}</strong></div>
       </div>
-      <button type="button" class="primary-action" data-action="advance">Avancar mes <span aria-hidden="true">→</span></button>
+      <button type="button" class="primary-action" data-action="advance" ${treatyPending ? 'disabled' : ''}>Avancar mes <span aria-hidden="true">→</span></button>
     </section>
     <section class="panel country-panel">
       <div class="panel-heading"><div><p class="eyebrow">Nacao</p><h2>${state.country.nome}</h2></div><span class="country-code">${state.country.id.toUpperCase()}</span></div>
@@ -148,6 +149,15 @@ function budgetView(state, projection) {
   </section>`;
 }
 
+export function renderCongress(state) {
+  return LAWS.map((law) => {
+    const lawState = state.laws[law.stateKey] ?? { approved: false, voteCompleted: false };
+    const approved = lawState.approved;
+    const completed = lawState.voteCompleted;
+    return `<article class="law-row"><div><strong>${law.title}</strong><span>${law.description}</span></div><span class="bill-state ${approved ? 'approved' : completed ? 'rejected' : ''}">${approved ? 'Aprovada' : completed ? 'Rejeitada' : 'Em pauta'}</span><button type="button" class="quiet-action" data-action="vote-law" data-law="${law.id}" ${completed ? 'disabled' : ''}>${completed ? 'Encerrada' : 'Votar'}</button></article>`;
+  }).join('');
+}
+
 function congressView(state) {
   if (state.regime.type === 'dictatorship') return `<section class="panel"><p class="eyebrow">Instituicoes</p><h2>Congresso suspenso</h2><p class="notice">Leis sao aprovadas por decreto enquanto durar o estado de sitio.</p></section>`;
   const forecast = getVoteForecast({
@@ -158,7 +168,7 @@ function congressView(state) {
     })),
   }, state.economy.popularity);
   return `<section class="view-grid congress-grid">
-    <section class="panel bill-panel"><div class="panel-heading"><div><p class="eyebrow">Projetos de lei</p><h2>Pauta do Congresso</h2></div></div><div class="law-list">${LAWS.map((law) => { const lawState = state.laws[law.stateKey]; const approved = lawState.approved; const completed = lawState.voteCompleted; return `<article class="law-row"><div><strong>${law.title}</strong><span>${law.description}</span></div><span class="bill-state ${approved ? 'approved' : completed ? 'rejected' : ''}">${approved ? 'Aprovada' : completed ? 'Rejeitada' : 'Em pauta'}</span><button type="button" class="quiet-action" data-action="vote-law" data-law="${law.id}" ${completed ? 'disabled' : ''}>${completed ? 'Encerrada' : 'Votar'}</button></article>`; }).join('')}</div><div class="vote-meter"><div class="meter-track"><span style="width:${percentage((forecast.votesFor / forecast.requiredVotes) * 100)}%"></span></div><strong>${forecast.votesFor} / ${forecast.requiredVotes} votos estimados</strong></div></section>
+    <section class="panel bill-panel"><div class="panel-heading"><div><p class="eyebrow">Projetos de lei</p><h2>Pauta do Congresso</h2></div></div><div id="lista-leis" class="law-list">${renderCongress(state)}</div><div class="vote-meter"><div class="meter-track"><span style="width:${percentage((forecast.votesFor / forecast.requiredVotes) * 100)}%"></span></div><strong>${forecast.votesFor} / ${forecast.requiredVotes} votos estimados</strong></div></section>
     <section class="panel bloc-panel">
       <div class="panel-heading"><div><p class="eyebrow">Bancadas</p><h2>Articulacao</h2></div></div>
       <div class="bloc-list">${state.congress.blocs.map((bloc) => `<article class="bloc-row"><div><strong>${bloc.label}</strong><span>${bloc.seats} assentos</span></div><button type="button" class="quiet-action" data-action="negotiate" data-bloc="${bloc.id}" ${bloc.negotiated ? 'disabled' : ''}>${bloc.negotiated ? 'Apoio obtido' : `Negociar ${formatMoney(bloc.negotiationCost)}`}</button></article>`).join('')}</div>
@@ -186,7 +196,7 @@ function diplomacyView(state) {
   const target = treaty && state.geopolitics.contacts.find((contact) => contact.id === treaty.targetId);
   const contacts = state.geopolitics.contacts.filter((contact) => !contact.destruido);
   const league = state.geopolitics.league;
-  const peacePanel = target ? `<section class="peace-panel"><p class="eyebrow">Tratado de Paz</p><h2>${target.name} foi derrotado</h2><div class="action-row"><button type="button" class="quiet-action danger-action" data-action="peace" data-choice="annex" data-contact="${target.id}">Anexar</button><button type="button" class="quiet-action" data-action="peace" data-choice="loot" data-contact="${target.id}">Saquear Tesouro</button></div></section>` : '';
+  const peacePanel = target ? '<p class="notice">Um tratado de paz aguarda decisao no painel bloqueante.</p>' : '';
   const leaguePanel = league ? `<div class="ledger-row"><span>${league.name}</span><strong>${league.memberIds.length} membros</strong></div>` : `<button type="button" class="quiet-action" data-action="league-create">Criar Nova Liga Global</button>`;
   return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relacoes Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}<div class="bloc-list">${contacts.map((contact) => `<article class="bloc-row"><div><strong>${contact.name}</strong><span>Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | ${contact.trait}</span></div><div class="action-row">${league && !league.memberIds.includes(contact.id) ? `<button type="button" class="quiet-action" data-action="league-invite" data-contact="${contact.id}">Convidar</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('')}</div></section>`;
 }
@@ -221,6 +231,20 @@ function countriesView(state) {
   return `<section class="panel countries-panel"><div class="panel-heading"><div><p class="eyebrow">Banco mundial</p><h2>200 nacoes jogaveis</h2></div><span class="country-code">${selection.length}</span></div><div class="country-table"><div class="country-table-head"><span>Pais</span><span>Area territorial</span><span></span></div>${selection.map((country) => `<div class="country-row ${country.id === state.country.id ? 'selected' : ''}"><span><strong>${country.nome}</strong><small>${country.id.toUpperCase()}</small></span><span>${formatNumber.format(country.area_km2)} km²</span><button type="button" class="quiet-action" data-action="country" data-country="${country.id}">Governar</button></div>`).join('')}</div></section>`;
 }
 
+export function renderPeaceTreaty(state) {
+  const treaty = state.geopolitics.peaceTreaty;
+  const target = treaty?.status === 'pending'
+    ? state.geopolitics.contacts.find((contact) => contact.id === treaty.targetId)
+    : null;
+  if (!target) return '';
+  return `<section class="peace-dialog" role="dialog" aria-modal="true" aria-labelledby="tratado-titulo">
+    <p class="eyebrow">Tratado de Paz Obrigatorio</p>
+    <h2 id="tratado-titulo">${target.name} foi derrotado</h2>
+    <p class="notice">Decida o destino do territorio antes de encerrar outro mes.</p>
+    <div class="action-row"><button type="button" class="quiet-action danger-action" data-action="ui-annex">Anexar</button><button type="button" class="primary-action" data-action="ui-loot">Saquear Tesouro</button></div>
+  </section>`;
+}
+
 export function mountDashboard(root) {
   if (!root) {
     throw new Error('Elemento raiz do dashboard nao encontrado.');
@@ -228,6 +252,7 @@ export function mountDashboard(root) {
   let state = loadState();
   let activeTab = 'overview';
   let storageNotice = '';
+  const treatyModal = document.getElementById('modal-tratado');
 
   function render() {
     const projection = projectBudget(state.economy, state.budget);
@@ -254,6 +279,11 @@ export function mountDashboard(root) {
       ${storageNotice ? `<p class="storage-notice">${storageNotice}</p>` : ''}
       <section class="content-area">${content}</section>
     </section></div>`;
+    if (treatyModal) {
+      const treatyMarkup = renderPeaceTreaty(state);
+      treatyModal.hidden = !treatyMarkup;
+      treatyModal.innerHTML = treatyMarkup;
+    }
   }
 
   function commit(nextState) {
@@ -261,6 +291,20 @@ export function mountDashboard(root) {
     storageNotice = saveState(state);
     render();
   }
+
+  function resolvePendingTreaty(choice) {
+    const targetId = state.geopolitics.peaceTreaty?.targetId;
+    if (targetId) commit(resolvePeaceTreaty(state, targetId, choice));
+  }
+
+  window.uiAnexar = () => resolvePendingTreaty('annex');
+  window.uiSaquear = () => resolvePendingTreaty('loot');
+
+  treatyModal?.addEventListener('click', (event) => {
+    const action = event.target.closest('[data-action]')?.dataset.action;
+    if (action === 'ui-annex') window.uiAnexar();
+    if (action === 'ui-loot') window.uiSaquear();
+  });
 
   root.addEventListener('click', (event) => {
     const control = event.target.closest('[data-action]');

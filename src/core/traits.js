@@ -3,7 +3,7 @@ const TRAIT_MODIFIERS = Object.freeze({
   military_tradition: Object.freeze({ exportRevenueRate: 0, sanctionVulnerability: 0, researchMultiplier: 1, foodInflationModifier: 0, cashInterest: 0 }),
   tech_giant: Object.freeze({ exportRevenueRate: 0, sanctionVulnerability: 0, researchMultiplier: 2, foodInflationModifier: 0, cashInterest: 0 }),
   agri_power: Object.freeze({ exportRevenueRate: 0, sanctionVulnerability: 0, researchMultiplier: 1, foodInflationModifier: -0.0015, cashInterest: 0 }),
-  financial_hub: Object.freeze({ exportRevenueRate: 0, sanctionVulnerability: 0, researchMultiplier: 1, foodInflationModifier: 0, cashInterest: 0.001 }),
+  financial_hub: Object.freeze({ exportRevenueRate: 0, sanctionVulnerability: 0, researchMultiplier: 1, foodInflationModifier: 0, cashInterest: 0.02 }),
 });
 
 const DEFAULT_MODIFIERS = Object.freeze({ exportRevenueRate: 0, sanctionVulnerability: 0, researchMultiplier: 1, foodInflationModifier: 0, cashInterest: 0 });

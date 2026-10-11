@@ -165,6 +165,66 @@ export function createLeague(geopolitics, playerId, economy, name) {
   };
 }
 
+function treatyTarget(state) {
+  const treaty = state.geopolitics?.peaceTreaty;
+  if (!treaty || treaty.status !== 'pending') return null;
+  return state.geopolitics.contacts.find((contact) => contact.id === treaty.targetId && !contact.destruido) ?? null;
+}
+
+export function checarFimDeGuerra(state, alvoId) {
+  const target = state.geopolitics?.contacts.find((contact) => contact.id === alvoId);
+  if (!target || target.destruido || Number(target.militaryPower) > 0) return state;
+  return {
+    ...state,
+    geopolitics: {
+      ...state.geopolitics,
+      peaceTreaty: state.geopolitics.peaceTreaty ?? { targetId: alvoId, status: 'pending' },
+      contacts: state.geopolitics.contacts.map((contact) => contact.id === alvoId ? { ...contact, atWar: false, militaryPower: 0 } : contact),
+    },
+  };
+}
+
+export function anexarPais(state) {
+  const target = treatyTarget(state);
+  if (!target || Number(target.militaryPower) > 0) return { ...state, notice: 'Anexacao exige um tratado de paz pendente com alvo derrotado.' };
+  const population = (Number(state.country.populacao) || Number(state.country.populacao_base) || 0) + (Number(target.populacao_base) || Number(target.population) || 0);
+  const area = (Number(state.country.area_km2) || 0) + (Number(target.area_km2) || 0);
+  const gdp = (Number(state.country.pib_base) || 0) + (Number(target.pib_base) || 0);
+  const cash = Math.max(0, Number(target.cash) || 0);
+  const geopolitics = alterarNotaONU({
+    ...state.geopolitics,
+    annexedCountryIds: [...new Set([...(state.geopolitics.annexedCountryIds ?? []), target.id])],
+    peaceTreaty: null,
+    contacts: state.geopolitics.contacts.map((contact) => contact.id === target.id
+      ? { ...contact, anexado: true, destruido: true, atWar: false, alliance: false, tradeTreaty: false, militaryPower: 0, population: 0, populacao_base: 0, area_km2: 0, pib_base: 0, cash: 0 }
+      : contact),
+  }, -45);
+  return {
+    ...state,
+    country: { ...state.country, area_km2: area, populacao: population, populacao_base: population, pib_base: gdp },
+    economy: { ...state.economy, gdp: state.economy.gdp + (Number(target.pib_base) || 0), cash: state.economy.cash + cash },
+    geopolitics,
+    notice: `${target.name} foi anexado; a ONU condenou a medida.`,
+  };
+}
+
+export function saquearTesouro(state) {
+  const target = treatyTarget(state);
+  if (!target || Number(target.militaryPower) > 0) return { ...state, notice: 'Saque exige um tratado de paz pendente com alvo derrotado.' };
+  const loot = Math.round(Math.max(0, Number(target.cash) || 0) * 0.8);
+  const geopolitics = alterarNotaONU({
+    ...state.geopolitics,
+    peaceTreaty: null,
+    contacts: state.geopolitics.contacts.map((contact) => contact.id === target.id ? { ...contact, cash: Math.max(0, contact.cash - loot), relation: -100, atWar: false } : contact),
+  }, -8);
+  return { ...state, economy: { ...state.economy, cash: state.economy.cash + loot }, geopolitics, notice: `${target.name} foi saqueado; recursos foram transferidos ao Tesouro.` };
+}
+
+export function criarLiga(state, nome = 'Liga Global') {
+  const result = createLeague(state.geopolitics, state.country.id, state.economy, nome);
+  return { ...state, geopolitics: result.geopolitics, economy: result.economy, notice: result.reason };
+}
+
 export function inviteToLeague(geopolitics, contactId) {
   const contact = geopolitics.contacts.find((item) => item.id === contactId);
   const league = geopolitics.league;

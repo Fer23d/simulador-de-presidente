@@ -3,13 +3,18 @@ import assert from 'node:assert/strict';
 
 import {
   advanceGeopolitics,
+  anexarPais,
   alterarNotaONU,
+  checarFimDeGuerra,
+  criarLiga,
   createGeopolitics,
   declareWar,
+  saquearTesouro,
   sabotar,
   proposeAlliance,
   proposeTradeTreaty,
 } from '../src/core/geopolitics.js';
+import { createGameState } from '../src/core/game-state.js';
 
 const economy = {
   gdp: 2_000_000_000_000,
@@ -73,4 +78,77 @@ test('ends a war and opens one peace treaty when the enemy power reaches zero', 
   assert.equal(target.atWar, false);
   assert.equal(target.militaryPower, 0);
   assert.deepEqual(result.geopolitics.peaceTreaty, { targetId: 'arg', status: 'pending' });
+});
+
+test('opens a peace treaty from a defeated target without advancing the calendar', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    geopolitics: {
+      ...state.geopolitics,
+      contacts: state.geopolitics.contacts.map((contact) => contact.id === 'arg'
+        ? { ...contact, militaryPower: 0, atWar: true }
+        : contact),
+    },
+  };
+
+  const result = checarFimDeGuerra(prepared, 'arg');
+
+  assert.deepEqual(result.geopolitics.peaceTreaty, { targetId: 'arg', status: 'pending' });
+  assert.equal(result.geopolitics.contacts.find((contact) => contact.id === 'arg').atWar, false);
+});
+
+test('annexation transfers population, area, GDP and cash from the pending treaty target', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    geopolitics: {
+      ...state.geopolitics,
+      peaceTreaty: { targetId: 'arg', status: 'pending' },
+      contacts: state.geopolitics.contacts.map((contact) => contact.id === 'arg'
+        ? { ...contact, militaryPower: 0, cash: 10_000 }
+        : contact),
+    },
+  };
+
+  const result = anexarPais(prepared);
+  const target = result.geopolitics.contacts.find((contact) => contact.id === 'arg');
+
+  assert.equal(result.country.area_km2, state.country.area_km2 + 2_780_400);
+  assert.equal(result.country.populacao_base, state.country.populacao_base + 45_808_747);
+  assert.equal(result.economy.cash, state.economy.cash + 10_000);
+  assert.equal(target.destruido, true);
+  assert.equal(target.cash, 0);
+  assert.equal(result.geopolitics.peaceTreaty, null);
+});
+
+test('looting a pending treaty transfers eighty percent and damages relations', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    geopolitics: {
+      ...state.geopolitics,
+      peaceTreaty: { targetId: 'arg', status: 'pending' },
+      contacts: state.geopolitics.contacts.map((contact) => contact.id === 'arg'
+        ? { ...contact, militaryPower: 0, cash: 10_000 }
+        : contact),
+    },
+  };
+
+  const result = saquearTesouro(prepared);
+  const target = result.geopolitics.contacts.find((contact) => contact.id === 'arg');
+
+  assert.equal(result.economy.cash, state.economy.cash + 8_000);
+  assert.equal(target.cash, 2_000);
+  assert.equal(target.relation, -100);
+  assert.equal(result.geopolitics.peaceTreaty, null);
+});
+
+test('creates a league only when the full state can afford it and has ONU reputation', () => {
+  const state = createGameState('bra');
+  const result = criarLiga(state, 'Liga dos Democratas');
+
+  assert.equal(result.geopolitics.league.name, 'Liga dos Democratas');
+  assert.equal(result.geopolitics.league.leaderId, 'bra');
+  assert.equal(result.economy.cash, state.economy.cash - 25_000_000_000);
 });

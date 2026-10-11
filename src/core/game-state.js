@@ -1,10 +1,11 @@
 import { createCongress, negotiateSupport, voteOnLaw } from './congress.js';
 import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countries.js';
 import { DEFAULT_BUDGET, advanceEconomy, clampTaxRate, setBudgetRate } from './economy.js';
-import { advanceGeopolitics, alterarNotaONU as changeOnuScore, createGeopolitics, createLeague as formLeague, declareWar, exigirAnexacao as demandAnnexation, getGeopoliticalModifiers, imporSancao as imposeSanction, inviteToLeague as inviteLeagueMember, proposeAlliance as formAlliance, proposeTradeTreaty, sabotar as sabotageCountry } from './geopolitics.js';
+import { advanceGeopolitics, anexarPais as annexTreatyTarget, alterarNotaONU as changeOnuScore, createGeopolitics, criarLiga as createLeagueState, declareWar, exigirAnexacao as demandAnnexation, getGeopoliticalModifiers, imporSancao as imposeSanction, inviteToLeague as inviteLeagueMember, proposeAlliance as formAlliance, proposeTradeTreaty, sabotar as sabotageCountry, saquearTesouro as lootTreatyTarget } from './geopolitics.js';
 import { advanceMilitary, applyNuclearCompletion, canAutogolpe, comprarBlindados, comprarCacas, comprarEquipamento, comprarNavios, createMilitary, createRegime, evaluateRegime, fundNuclearProject, getPoderTotal, normalizeMilitary, recrutarSoldado as recruitSoldiers } from './military.js';
-import { LAWS, LAW_LABOR_REFORM } from './laws.js';
+import { aggregateActiveLawEffects, LAWS, LAW_LABOR_REFORM } from './laws.js';
 import { advanceTechnology, createTechnology, getTechnologyModifiers, purchaseTechnology } from './technology.js';
+import { getTraitModifiers } from './traits.js';
 
 const STATE_VERSION = 6;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
@@ -168,35 +169,13 @@ export function comprarCaca(state, amount = 1) {
 
 export function anexarPais(state, contactId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
-  const contact = state.geopolitics.contacts.find((item) => item.id === contactId);
-  const countrySeed = getCountryById(contactId);
-  const target = countrySeed ? createCountryProfile(countrySeed) : null;
-  if (!contact || !target || contact.destruido || contact.anexado || contact.militaryPower > 0) return { ...state, notice: 'Anexacao exige a derrota total do alvo.' };
-
-  const population = (Number(state.country.populacao) || Number(state.country.populacao_base) || 0)
-    + (Number(contact.population) || Number(target.populacao) || Number(target.populacao_base) || 0);
-  const area = (Number(state.country.area_km2) || 0) + (Number(contact.area_km2) || Number(target.area_km2) || 0);
-  const gdp = (Number(state.country.pib_base) || 0) + (Number(target.pib_base) || 0);
-  return {
-    ...state,
-    country: {
-      ...state.country,
-      area_km2: area,
-      populacao: population,
-      populacao_base: population,
-      pib_base: gdp,
-    },
-    economy: { ...state.economy, gdp: state.economy.gdp + (contact.pib_base ?? target.pib_base) },
-    geopolitics: changeOnuScore({
-      ...state.geopolitics,
-      annexedCountryIds: [...new Set([...(state.geopolitics.annexedCountryIds ?? []), contactId])],
-      peaceTreaty: null,
-      contacts: state.geopolitics.contacts.map((item) => item.id === contactId
-        ? { ...item, anexado: true, destruido: true, atWar: false, alliance: false, tradeTreaty: false, militaryPower: 0, population: 0, area_km2: 0, pib_base: 0, cash: 0 }
-        : item),
-    }, -45),
-    notice: `${target.nome} foi anexado; a ONU condenou a medida.`,
-  };
+  const targetId = contactId ?? state.geopolitics.peaceTreaty?.targetId;
+  const contact = state.geopolitics.contacts.find((item) => item.id === targetId);
+  if (!contact || contact.destruido || contact.anexado || contact.militaryPower > 0) return { ...state, notice: 'Anexacao exige a derrota total do alvo.' };
+  const prepared = state.geopolitics.peaceTreaty?.targetId === targetId
+    ? state
+    : { ...state, geopolitics: { ...state.geopolitics, peaceTreaty: { targetId, status: 'pending' } } };
+  return annexTreatyTarget(prepared);
 }
 
 export function resolvePeaceTreaty(state, contactId, choice) {
@@ -207,19 +186,7 @@ export function resolvePeaceTreaty(state, contactId, choice) {
   }
   if (choice === 'annex') return anexarPais(state, contactId);
   if (choice !== 'loot') return { ...state, notice: 'Termo de tratado invalido.' };
-  const loot = Math.round(Math.max(0, Number(contact.cash) || 0) * 0.8);
-  return {
-    ...state,
-    economy: { ...state.economy, cash: state.economy.cash + loot },
-    geopolitics: {
-      ...state.geopolitics,
-      peaceTreaty: null,
-      contacts: state.geopolitics.contacts.map((item) => item.id === contactId
-        ? { ...item, cash: Math.max(0, item.cash - loot), relation: -100, atWar: false }
-        : item),
-    },
-    notice: `${contact.name} foi saqueado; ${loot.toLocaleString('pt-BR')} transferidos ao Tesouro.`,
-  };
+  return lootTreatyTarget(state);
 }
 
 export function exigirAnexacao(state, contactId) {
@@ -245,8 +212,7 @@ export function imporSancao(state, contactId) {
 
 export function createLeague(state, name = 'Liga Global') {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
-  const result = formLeague(state.geopolitics, state.country.id, state.economy, name);
-  return { ...state, geopolitics: result.geopolitics, economy: result.economy, notice: result.reason };
+  return createLeagueState(state, name);
 }
 
 export function inviteToLeague(state, contactId) {
@@ -341,14 +307,23 @@ export function voteLaborLaw(state) {
 
 export function advanceMonth(state) {
   if (state.regime?.gameOver) return { ...state, notice: 'A partida foi encerrada.' };
-  const effects = LAWS.reduce((total, law) => state.laws[law.stateKey]?.approved
-    ? Object.entries(law.monthlyEffects).reduce((next, [key, value]) => ({ ...next, [key]: (next[key] ?? 0) + value }), total)
-    : total, {});
+  if (state.geopolitics.peaceTreaty?.status === 'pending') return { ...state, notice: 'Resolva o Tratado de Paz antes de avancar o mes.' };
+  const effects = aggregateActiveLawEffects(state.laws);
   const technology = advanceTechnology(state.technology, state.economy, state.budget, state.country.trait);
   const technologyModifiers = getTechnologyModifiers(technology);
   const geopoliticalModifiers = getGeopoliticalModifiers(state.geopolitics, state.military);
-  const modifiers = { ...geopoliticalModifiers, growthModifier: geopoliticalModifiers.growthModifier + technologyModifiers.growthModifier, infrastructureCostModifier: geopoliticalModifiers.infrastructureCostModifier + technologyModifiers.infrastructureCostModifier, popularityModifier: geopoliticalModifiers.popularityModifier + technologyModifiers.popularityModifier };
-  const economicMonth = advanceEconomy(state.economy, state.budget, effects, modifiers);
+  const traitModifiers = getTraitModifiers(state.country, state.geopolitics);
+  const modifiers = {
+    ...geopoliticalModifiers,
+    growthModifier: geopoliticalModifiers.growthModifier + technologyModifiers.growthModifier,
+    infrastructureCostModifier: geopoliticalModifiers.infrastructureCostModifier + technologyModifiers.infrastructureCostModifier,
+    popularityModifier: geopoliticalModifiers.popularityModifier + technologyModifiers.popularityModifier,
+    tradeRevenueRate: geopoliticalModifiers.tradeRevenueRate + traitModifiers.exportRevenueRate,
+    inflationModifier: traitModifiers.foodInflationModifier,
+  };
+  const economyAfterPolicy = advanceEconomy(state.economy, state.budget, effects, modifiers);
+  const traitInterest = economyAfterPolicy.cash > 0 ? economyAfterPolicy.cash * traitModifiers.cashInterest : 0;
+  const economicMonth = { ...economyAfterPolicy, cash: economyAfterPolicy.cash + traitInterest };
   const nuclear = applyNuclearCompletion(changeOnuScore(state.geopolitics, effects.onuModifier ?? 0), state.military);
   const preparedMilitary = advanceMilitary(nuclear.military, economicMonth, state.budget);
   preparedMilitary.military.support = clamp(preparedMilitary.military.support + (effects.militarySupportModifier ?? 0), 0, 100);
