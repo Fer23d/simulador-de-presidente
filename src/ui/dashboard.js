@@ -1,6 +1,7 @@
 import { COUNTRIES } from '../data/countries.js';
 import { getVoteForecast } from '../core/congress.js';
 import { BUDGET_LIMITS, projectBudget } from '../core/economy.js';
+import { LAWS } from '../core/laws.js';
 import { TECHNOLOGIES } from '../core/technology.js';
 import {
   advanceMonth,
@@ -19,6 +20,7 @@ import {
   setBudget,
   startWar,
   voteLaborLaw,
+  voteLaw,
 } from '../core/game-state.js';
 
 const STORAGE_KEY = 'simulador-presidente-state-v1';
@@ -146,15 +148,8 @@ function congressView(state) {
       support: bloc.baseSupport ? Math.min(1, 0.01 + (bloc.id === 'left' ? 0.82 : bloc.id === 'center' ? 0.58 : bloc.id === 'right' ? 0.28 : 0.36) + bloc.support) : bloc.support,
     })),
   }, state.economy.popularity);
-  const approved = state.laws.laborReform.approved;
-  const completed = state.laws.laborReform.voteCompleted;
   return `<section class="view-grid congress-grid">
-    <section class="panel bill-panel">
-      <div class="panel-heading"><div><p class="eyebrow">Projeto de lei</p><h2>Lei Trabalhista</h2></div><span class="bill-state ${approved ? 'approved' : completed ? 'rejected' : ''}">${approved ? 'Aprovada' : completed ? 'Rejeitada' : 'Em pauta'}</span></div>
-      <p class="notice">Amplia qualificacao profissional e atualiza garantias de trabalho.</p>
-      <div class="vote-meter"><div class="meter-track"><span style="width:${percentage((forecast.votesFor / forecast.requiredVotes) * 100)}%"></span></div><strong>${forecast.votesFor} / ${forecast.requiredVotes} votos</strong></div>
-      <button type="button" class="primary-action" data-action="vote" ${completed ? 'disabled' : ''}>${completed ? 'Votacao encerrada' : 'Levar a votacao'} <span aria-hidden="true">→</span></button>
-    </section>
+    <section class="panel bill-panel"><div class="panel-heading"><div><p class="eyebrow">Projetos de lei</p><h2>Pauta do Congresso</h2></div></div><div class="law-list">${LAWS.map((law) => { const lawState = state.laws[law.stateKey]; const approved = lawState.approved; const completed = lawState.voteCompleted; return `<article class="law-row"><div><strong>${law.title}</strong><span>${law.description}</span></div><span class="bill-state ${approved ? 'approved' : completed ? 'rejected' : ''}">${approved ? 'Aprovada' : completed ? 'Rejeitada' : 'Em pauta'}</span><button type="button" class="quiet-action" data-action="vote-law" data-law="${law.id}" ${completed ? 'disabled' : ''}>${completed ? 'Encerrada' : 'Votar'}</button></article>`; }).join('')}</div><div class="vote-meter"><div class="meter-track"><span style="width:${percentage((forecast.votesFor / forecast.requiredVotes) * 100)}%"></span></div><strong>${forecast.votesFor} / ${forecast.requiredVotes} votos estimados</strong></div></section>
     <section class="panel bloc-panel">
       <div class="panel-heading"><div><p class="eyebrow">Bancadas</p><h2>Articulacao</h2></div></div>
       <div class="bloc-list">${state.congress.blocs.map((bloc) => `<article class="bloc-row"><div><strong>${bloc.label}</strong><span>${bloc.seats} assentos</span></div><button type="button" class="quiet-action" data-action="negotiate" data-bloc="${bloc.id}" ${bloc.negotiated ? 'disabled' : ''}>${bloc.negotiated ? 'Apoio obtido' : `Negociar ${formatMoney(bloc.negotiationCost)}`}</button></article>`).join('')}</div>
@@ -168,9 +163,10 @@ function diplomacyView(state) {
 }
 
 function militaryView(state) {
-  const nuclear = state.military.nuclear;
-  const canCoup = state.regime.type === 'democracy' && state.military.support >= 85 && state.budget.defenseSpend >= 0.06;
-  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Forcas Armadas</p><h2>Poder ${state.military.power.toFixed(0)}</h2><div class="ledger-row"><span>Soldados</span><strong>${formatNumber.format(state.military.soldiers)}</strong></div><div class="ledger-row"><span>Equipamento</span><strong>x${state.military.equipmentMultiplier.toFixed(2)}</strong></div><div class="ledger-row"><span>Apoio militar</span><strong>${state.military.support.toFixed(0)}%</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="recruit">Recrutar 5 mil</button><button type="button" class="quiet-action" data-action="equipment" data-kind="tanks">Tanques</button><button type="button" class="quiet-action" data-action="equipment" data-kind="jets">Cacas</button></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section><section class="panel"><p class="eyebrow">Programa nuclear</p><h2>Projetos especiais</h2><div class="ledger-row"><span>Energia civil</span><strong>${nuclear.civilProgress.toFixed(0)}%</strong></div><div class="ledger-row"><span>Dissuasao militar</span><strong>${nuclear.militaryProgress.toFixed(0)}%</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="nuclear" data-kind="civil" data-amount="5000000000">Energia 5 bi</button><button type="button" class="quiet-action" data-action="nuclear" data-kind="military" data-amount="5000000000">Dissuasao 5 bi</button></div></section></section>`;
+  const military = { soldiers: 0, equipmentMultiplier: 1, nuclear: {}, ...state.military };
+  const nuclear = { civilProgress: 0, militaryProgress: 0, ...military.nuclear };
+  const canCoup = state.regime.type === 'democracy' && military.support >= 85 && state.budget.defenseSpend >= 0.06;
+  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Forcas Armadas</p><h2>Poder ${Number(military.power || 0).toFixed(0)}</h2><p class="notice">${state.notice}</p><div class="ledger-row"><span>Soldados</span><strong>${formatNumber.format(military.soldiers)}</strong></div><div class="ledger-row"><span>Equipamento</span><strong>x${Number(military.equipmentMultiplier).toFixed(2)}</strong></div><div class="ledger-row"><span>Apoio militar</span><strong>${Number(military.support || 0).toFixed(0)}%</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="recruit">Recrutar 5 mil</button><button type="button" class="quiet-action" data-action="equipment" data-kind="tanks">Tanques</button><button type="button" class="quiet-action" data-action="equipment" data-kind="jets">Cacas</button></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section><section class="panel"><p class="eyebrow">Programa nuclear</p><h2>Projetos especiais</h2><div class="ledger-row"><span>Energia civil</span><strong>${Number(nuclear.civilProgress).toFixed(0)}%</strong></div><div class="ledger-row"><span>Dissuasao militar</span><strong>${Number(nuclear.militaryProgress).toFixed(0)}%</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="nuclear" data-kind="civil" data-amount="5000000000">Energia 5 bi</button><button type="button" class="quiet-action" data-action="nuclear" data-kind="military" data-amount="5000000000">Dissuasao 5 bi</button></div></section></section>`;
 }
 
 function technologyView(state) {
@@ -244,6 +240,7 @@ export function mountDashboard(root) {
     if (action === 'research') { commit(researchTechnology(state, control.dataset.technology)); return; }
     if (action === 'negotiate') { commit(negotiate(state, control.dataset.bloc)); return; }
     if (action === 'vote') { commit(voteLaborLaw(state)); return; }
+    if (action === 'vote-law') { commit(voteLaw(state, control.dataset.law)); return; }
     if (action === 'advance') { commit(advanceMonth(state)); return; }
     if (action === 'country') { activeTab = 'overview'; commit(createGameState(control.dataset.country)); return; }
     if (action === 'reset') { activeTab = 'overview'; commit(createGameState(state.country.id)); }

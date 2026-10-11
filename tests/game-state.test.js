@@ -13,6 +13,7 @@ import {
   setBudget,
   startWar,
   voteLaborLaw,
+  voteLaw,
 } from '../src/core/game-state.js';
 
 test('creates a game state for Brazil', () => {
@@ -74,6 +75,14 @@ test('labor law needs negotiation before it wins a majority in Brazil', () => {
 
   assert.equal(rejected.laws.laborReform.approved, false);
   assert.equal(approved.laws.laborReform.approved, true);
+});
+
+test('tracks separate votes for multiple congressional laws', () => {
+  const state = createGameState('bra');
+  const updated = voteLaw(state, 'tax-reform');
+
+  assert.equal(updated.laws.taxReform.voteCompleted, true);
+  assert.equal(updated.laws.laborReform.voteCompleted, false);
 });
 
 test('migrates a version 1 save with negative cash intact', () => {

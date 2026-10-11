@@ -3,7 +3,7 @@ import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countri
 import { DEFAULT_BUDGET, advanceEconomy, clampTaxRate, setBudgetRate } from './economy.js';
 import { advanceGeopolitics, alterarNotaONU as changeOnuScore, createGeopolitics, declareWar, getGeopoliticalModifiers, proposeAlliance as formAlliance, proposeTradeTreaty, sabotar as sabotageCountry } from './geopolitics.js';
 import { advanceMilitary, applyNuclearCompletion, canAutogolpe, comprarEquipamento, createMilitary, createRegime, evaluateRegime, fundNuclearProject, recrutarSoldado as recruitSoldiers } from './military.js';
-import { LAW_LABOR_REFORM } from './laws.js';
+import { LAWS, LAW_LABOR_REFORM } from './laws.js';
 import { advanceTechnology, createTechnology, getTechnologyModifiers, purchaseTechnology } from './technology.js';
 
 const STATE_VERSION = 4;
@@ -73,7 +73,7 @@ export function createGameState(countryId = 'bra') {
     regime: createRegime(),
     randomSeed: countrySeed(country.id) || 1,
     congress: createCongress(countrySeed(country.id)),
-    laws: { laborReform: { approved: false, voteCompleted: false } },
+    laws: Object.fromEntries(LAWS.map((law) => [law.stateKey, { approved: false, voteCompleted: false }])),
     history: [],
     notice: 'Gabinete iniciado. O primeiro mes de governo comeca agora.',
   };
@@ -196,36 +196,45 @@ export function negotiate(state, blocId) {
   };
 }
 
-export function voteLaborLaw(state) {
+export function voteLaw(state, lawId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const law = LAWS.find((item) => item.id === lawId);
+  if (!law) return { ...state, notice: 'Projeto de lei nao encontrado.' };
   if (state.regime?.type === 'dictatorship') {
-    const notice = 'Lei Trabalhista aprovada por decreto.';
+    const notice = `${law.title} aprovada por decreto.`;
     return {
       ...state,
-      laws: { laborReform: { approved: true, voteCompleted: true } },
+      laws: { ...state.laws, [law.stateKey]: { approved: true, voteCompleted: true } },
       notice,
       history: addHistory(state, { type: 'decree', message: notice, calendar: state.calendar }),
     };
   }
-  if (state.laws.laborReform.voteCompleted) {
-    return { ...state, notice: 'A Lei Trabalhista ja foi votada nesta legislatura.' };
+  const lawState = state.laws[law.stateKey] ?? { approved: false, voteCompleted: false };
+  if (lawState.voteCompleted) {
+    return { ...state, notice: `${law.title} ja foi votada nesta legislatura.` };
   }
 
-  const result = voteOnLaw(state.congress, LAW_LABOR_REFORM, state.economy.popularity);
+  const result = voteOnLaw(state.congress, law, state.economy.popularity);
   const notice = result.approved
-    ? `Lei Trabalhista aprovada por ${result.votesFor} votos.`
-    : `Lei Trabalhista rejeitada: ${result.votesFor}/${result.requiredVotes} votos.`;
+    ? `${law.title} aprovada por ${result.votesFor} votos.`
+    : `${law.title} rejeitada: ${result.votesFor}/${result.requiredVotes} votos.`;
   return {
     ...state,
-    laws: { laborReform: { approved: result.approved, voteCompleted: true } },
+    laws: { ...state.laws, [law.stateKey]: { approved: result.approved, voteCompleted: true } },
     notice,
     history: addHistory(state, { type: 'vote', message: notice, calendar: state.calendar }),
   };
 }
 
+export function voteLaborLaw(state) {
+  return voteLaw(state, LAW_LABOR_REFORM.id);
+}
+
 export function advanceMonth(state) {
   if (state.regime?.gameOver) return { ...state, notice: 'A partida foi encerrada.' };
-  const effects = state.laws.laborReform.approved ? LAW_LABOR_REFORM.monthlyEffects : {};
+  const effects = LAWS.reduce((total, law) => state.laws[law.stateKey]?.approved
+    ? Object.fromEntries(Object.keys(law.monthlyEffects).map((key) => [key, (total[key] ?? 0) + law.monthlyEffects[key]]))
+    : total, {});
   const technology = advanceTechnology(state.technology, state.economy, state.budget);
   const technologyModifiers = getTechnologyModifiers(technology);
   const geopoliticalModifiers = getGeopoliticalModifiers(state.geopolitics, state.military);
@@ -298,12 +307,10 @@ export function hydrateGameState(serialized) {
       regime: parsed.version >= 2 && parsed.regime && typeof parsed.regime === 'object' ? { ...base.regime, ...parsed.regime } : base.regime,
       randomSeed: Number.isFinite(parsed.randomSeed) ? parsed.randomSeed : base.randomSeed,
       congress: isValidCongress(parsed.congress) ? parsed.congress : base.congress,
-      laws: {
-        laborReform: {
-          approved: Boolean(laws.approved),
-          voteCompleted: Boolean(laws.voteCompleted),
-        },
-      },
+      laws: Object.fromEntries(LAWS.map((law) => {
+        const savedLaw = law.stateKey === 'laborReform' ? laws : parsed.laws?.[law.stateKey];
+        return [law.stateKey, { approved: Boolean(savedLaw?.approved), voteCompleted: Boolean(savedLaw?.voteCompleted) }];
+      })),
       history: isValidHistory(parsed.history) ? parsed.history.slice(0, 12) : [],
       notice: typeof parsed.notice === 'string' ? parsed.notice : base.notice,
     };
