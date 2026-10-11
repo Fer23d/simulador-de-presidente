@@ -1,4 +1,4 @@
-import { createCountryProfile, getCountryById } from '../data/countries.js';
+import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countries.js';
 
 function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
@@ -19,19 +19,23 @@ export function nextRandom(seed) {
   return { seed: nextSeed, value: nextSeed / 4_294_967_296 };
 }
 
-export function createGeopolitics() {
-  const contact = (id, name, relation, militaryPower) => {
-    const country = createCountryProfile(getCountryById(id));
+export function createGeopolitics(playerId = 'bra') {
+  const contact = (country) => {
     return {
-      id,
-      name,
-      relation,
-      militaryPower,
+      id: country.id,
+      name: country.nome,
+      relation: country.id === 'arg' ? 50 : country.id === 'chn' ? 5 : country.id === 'usa' ? -10 : ((country.id.charCodeAt(0) * 7 + country.id.charCodeAt(1)) % 61) - 20,
+      militaryPower: country.id === 'usa' ? 92 : country.id === 'chn' ? 88 : country.id === 'rus' ? 86 : Math.max(8, Math.min(76, Math.round((Math.log10(country.populacao_base) * 3) + (Math.log10(country.pib_base) * 1.5) - 20))),
       population: country.populacao_base,
       area_km2: country.area_km2,
       pib_base: country.pib_base,
       cash: Math.max(1_000_000_000, Math.round(country.pib_base * 0.015)),
       trait: country.trait,
+      military: {
+        exercito: { soldados: Math.max(2_000, Math.round(country.populacao_base * 0.00022)), blindados: Math.max(1, Math.floor(Math.log10(country.pib_base) - 6)) },
+        marinha: { navios: Math.max(0, Math.floor(Math.log10(country.pib_base) - 9)) },
+        aeronautica: { cacas: Math.max(1, Math.floor(Math.log10(country.pib_base) - 7)) },
+      },
       tradeTreaty: false,
       alliance: false,
       atWar: false,
@@ -39,17 +43,14 @@ export function createGeopolitics() {
     };
   };
   return {
-    contacts: [
-      contact('usa', 'Estados Unidos', -10, 92),
-      contact('chn', 'China', 5, 88),
-      contact('arg', 'Argentina', 50, 24),
-    ],
+    contacts: COUNTRIES.filter((country) => country.id !== playerId).map((country) => contact(createCountryProfile(country))),
     sanctionSeverity: 0,
     onuScore: 50,
     internationalSanctions: false,
     annexedCountryIds: [],
     peaceTreaty: null,
     league: null,
+    tradeGrowthBonus: 0,
   };
 }
 
@@ -58,13 +59,13 @@ export function alterarNotaONU(geopolitics, value) {
   return { ...geopolitics, onuScore, internationalSanctions: onuScore < 25 };
 }
 
-export function sabotar(geopolitics, contactId, economy, seed) {
+export function sabotar(geopolitics, contactId, economy, seed, options = {}) {
   const contact = geopolitics.contacts.find((item) => item.id === contactId);
   if (!contact) return { ok: false, reason: 'Pais nao encontrado.', geopolitics, economy, seed };
   const cost = Math.max(500_000_000, economy.gdp * 0.0005);
   if (economy.cash < cost) return { ok: false, reason: 'Caixa insuficiente para a operacao.', geopolitics, economy, seed };
   const random = nextRandom(seed);
-  const discovered = random.value < 0.45;
+  const discovered = options.guaranteedSuccess ? false : random.value < 0.45;
   const updated = updateContact(geopolitics, contactId, (item) => discovered
     ? { ...item, relation: -100 }
     : { ...item, militaryPower: Math.max(1, item.militaryPower - 8) });
@@ -86,12 +87,15 @@ export function proposeTradeTreaty(geopolitics, contactId) {
   const contact = geopolitics.contacts.find((item) => item.id === contactId);
   if (!contact) return rejected(geopolitics, 'Pais nao encontrado.');
   if (contact.atWar) return rejected(geopolitics, 'Nao e possivel negociar durante uma guerra.');
-  if (contact.relation <= 20) return rejected(geopolitics, 'Relacao diplomatica insuficiente para o acordo comercial.');
+  if (contact.relation <= 30) return rejected(geopolitics, 'Relacao diplomatica insuficiente para o acordo comercial.');
   if (contact.tradeTreaty) return rejected(geopolitics, 'Acordo comercial ja esta em vigor.');
   return {
     ok: true,
     reason: `Acordo comercial firmado com ${contact.name}.`,
-    geopolitics: updateContact(geopolitics, contactId, (item) => ({ ...item, tradeTreaty: true, relation: clamp(item.relation + 4, -100, 100) })),
+    geopolitics: alterarNotaONU({
+      ...updateContact(geopolitics, contactId, (item) => ({ ...item, tradeTreaty: true, relation: clamp(item.relation + 6, -100, 100) })),
+      tradeGrowthBonus: (Number(geopolitics.tradeGrowthBonus) || 0) + 0.005,
+    }, 1),
   };
 }
 
@@ -191,6 +195,18 @@ export function anexarPais(state) {
   const area = (Number(state.country.area_km2) || 0) + (Number(target.area_km2) || 0);
   const gdp = (Number(state.country.pib_base) || 0) + (Number(target.pib_base) || 0);
   const cash = Math.max(0, Number(target.cash) || 0);
+  const playerMilitary = state.military ?? {};
+  const targetMilitary = target.military ?? {};
+  const military = {
+    ...playerMilitary,
+    exercito: {
+      ...(playerMilitary.exercito ?? {}),
+      soldados: (Number(playerMilitary.exercito?.soldados) || 0) + (Number(targetMilitary.exercito?.soldados) || 0),
+      blindados: (Number(playerMilitary.exercito?.blindados) || 0) + (Number(targetMilitary.exercito?.blindados) || 0),
+    },
+    marinha: { ...(playerMilitary.marinha ?? {}), navios: (Number(playerMilitary.marinha?.navios) || 0) + (Number(targetMilitary.marinha?.navios) || 0) },
+    aeronautica: { ...(playerMilitary.aeronautica ?? {}), cacas: (Number(playerMilitary.aeronautica?.cacas) || 0) + (Number(targetMilitary.aeronautica?.cacas) || 0) },
+  };
   const geopolitics = alterarNotaONU({
     ...state.geopolitics,
     annexedCountryIds: [...new Set([...(state.geopolitics.annexedCountryIds ?? []), target.id])],
@@ -203,6 +219,7 @@ export function anexarPais(state) {
     ...state,
     country: { ...state.country, area_km2: area, populacao: population, populacao_base: population, pib_base: gdp },
     economy: { ...state.economy, gdp: state.economy.gdp + (Number(target.pib_base) || 0), cash: state.economy.cash + cash },
+    military,
     geopolitics,
     notice: `${target.name} foi anexado; a ONU condenou a medida.`,
   };
@@ -240,7 +257,7 @@ export function getGeopoliticalModifiers(geopolitics, military) {
   const nuclear = military?.nuclear ?? {};
   return {
     tradeRevenueRate: geopolitics.internationalSanctions ? 0 : treatyCount * 0.002,
-    growthModifier: (treatyCount * 0.00035) + (nuclear.civilOnline ? 0.0007 : 0) - (geopolitics.sanctionSeverity * 0.0015) - (geopolitics.internationalSanctions ? 0.012 : 0),
+    growthModifier: (Number(geopolitics.tradeGrowthBonus) || 0) + (treatyCount * 0.00035) + (nuclear.civilOnline ? 0.0007 : 0) - (geopolitics.sanctionSeverity * 0.0015) - (geopolitics.internationalSanctions ? 0.012 : 0),
     infrastructureCostModifier: nuclear.civilOnline ? -0.1 : 0,
     popularityModifier: (treatyCount * 0.03) - (warCount * 0.35),
   };

@@ -38,3 +38,14 @@ test('renders dynamic law rows and a blocking peace treaty dialog', async () => 
   assert.match(renderCongress(state), /data-action="vote-law"/);
   assert.match(renderPeaceTreaty(treatyState), /Tratado de Paz Obrigatorio/);
 });
+
+test('renders a searchable and scrollable full diplomacy list', async () => {
+  const { diplomacyView } = await import('../src/ui/dashboard.js');
+  const { createGameState } = await import('../src/core/game-state.js');
+  const view = diplomacyView(createGameState('bra'), 'argentina');
+
+  assert.match(view, /diplomacy-search/);
+  assert.match(view, /Propor Acordo Comercial/);
+  assert.match(view, /Argentina/);
+  assert.doesNotMatch(view, /Estados Unidos/);
+});

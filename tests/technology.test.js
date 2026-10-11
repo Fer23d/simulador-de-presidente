@@ -6,6 +6,7 @@ import {
   createTechnology,
   getTechnologyModifiers,
   purchaseTechnology,
+  TECHNOLOGIES,
 } from '../src/core/technology.js';
 
 test('generates research points from science budget spending', () => {
@@ -29,4 +30,14 @@ test('derives economic and military modifiers from unlocked technologies', () =>
   assert.ok(modifiers.militaryEffectiveness > 0);
   assert.ok(modifiers.growthModifier > 0);
   assert.ok(modifiers.popularityModifier > 0);
+});
+
+test('publishes deep research across energy, military, cybernetics, agronomy and health', () => {
+  const branches = new Set(TECHNOLOGIES.map((technology) => technology.branch));
+
+  for (const branch of ['Energia', 'Engenharia Militar', 'Cibernetica', 'Agronomia', 'Saude']) {
+    assert.ok(branches.has(branch));
+  }
+  assert.ok(TECHNOLOGIES.some((technology) => technology.id === 'state-hackers'));
+  assert.equal(getTechnologyModifiers({ points: 0, unlocked: ['exoskeletons'] }).infantryMultiplier, 2);
 });

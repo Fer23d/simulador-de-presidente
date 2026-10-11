@@ -64,6 +64,10 @@ function percentage(value) {
   return Math.max(0, Math.min(100, value));
 }
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+}
+
 function loadState() {
   try {
     return hydrateGameState(localStorage.getItem(STORAGE_KEY));
@@ -191,14 +195,17 @@ function riskDiplomacyView(state) {
   return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Painel mundial</p><h2>Diplomacia de risco</h2></div><span class="country-code ${onuTone}">ONU ${state.geopolitics.onuScore}/100</span></div><div class="onu-meter"><div><span>Reputacao global</span><strong class="${onuTone}">${state.geopolitics.internationalSanctions ? 'Sancoes internacionais ativas' : 'Sem sancoes internacionais'}</strong></div><div class="meter-track"><span style="width:${state.geopolitics.onuScore}%"></span></div></div><div class="bloc-list">${state.geopolitics.contacts.map((contact) => { const nuclearReady = contact.atWar && arsenal > 0 && !contact.anexado; return `<article class="bloc-row ${contact.anexado ? 'annexed-contact' : ''}"><div><strong>${contact.name}</strong><span>${contact.anexado ? 'Territorio anexado' : `Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | Populacao ${formatNumber.format(contact.population || 0)}${contact.sancionado_por_jogador ? ' | Sancionado' : ''}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.anexado || contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comercio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${contact.anexado || contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Alianca</button><button type="button" class="quiet-action" data-action="sanction" data-contact="${contact.id}" ${contact.anexado || contact.sancionado_por_jogador ? 'disabled' : ''}>Impor sancao</button><button type="button" class="quiet-action" data-action="ultimatum" data-contact="${contact.id}" ${contact.anexado ? 'disabled' : ''}>Exigir anexacao</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.anexado || contact.atWar ? 'disabled' : ''}>Guerra</button>${nuclearReady ? `<button type="button" class="quiet-action nuclear-action" data-action="nuclear-strike" data-contact="${contact.id}">Ataque nuclear</button>` : ''}</div></article>`; }).join('')}</div></section>`;
 }
 
-function diplomacyView(state) {
+export function diplomacyView(state, searchQuery = '') {
   const treaty = state.geopolitics.peaceTreaty;
   const target = treaty && state.geopolitics.contacts.find((contact) => contact.id === treaty.targetId);
-  const contacts = state.geopolitics.contacts.filter((contact) => !contact.destruido);
+  const query = searchQuery.trim().toLocaleLowerCase('pt-BR');
+  const contacts = (state.world ?? state.geopolitics.contacts)
+    .filter((contact) => !contact.destruido && contact.id !== state.country.id)
+    .filter((contact) => !query || contact.name.toLocaleLowerCase('pt-BR').includes(query));
   const league = state.geopolitics.league;
   const peacePanel = target ? '<p class="notice">Um tratado de paz aguarda decisao no painel bloqueante.</p>' : '';
   const leaguePanel = league ? `<div class="ledger-row"><span>${league.name}</span><strong>${league.memberIds.length} membros</strong></div>` : `<button type="button" class="quiet-action" data-action="league-create">Criar Nova Liga Global</button>`;
-  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relacoes Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}<div class="bloc-list">${contacts.map((contact) => `<article class="bloc-row"><div><strong>${contact.name}</strong><span>Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | ${contact.trait}</span></div><div class="action-row">${league && !league.memberIds.includes(contact.id) ? `<button type="button" class="quiet-action" data-action="league-invite" data-contact="${contact.id}">Convidar</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('')}</div></section>`;
+  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relacoes Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}<label class="diplomacy-search"><span>Buscar pais</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de paises diplomaticos">${contacts.map((contact) => `<article class="bloc-row"><div><strong>${contact.name}</strong><span>Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | ${contact.trait}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button>${league && !league.memberIds.includes(contact.id) ? `<button type="button" class="quiet-action" data-action="league-invite" data-contact="${contact.id}">Convidar</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('') || '<p class="notice">Nenhum pais corresponde a busca.</p>'}</div></section>`;
 }
 
 function legacyMilitaryView(state) {
@@ -252,6 +259,7 @@ export function mountDashboard(root) {
   let state = loadState();
   let activeTab = 'overview';
   let storageNotice = '';
+  let diplomacyQuery = '';
   const treatyModal = document.getElementById('modal-tratado');
 
   function render() {
@@ -266,7 +274,7 @@ export function mountDashboard(root) {
       ['countries', 'Paises'],
     ];
     const content = activeTab === 'budget' ? budgetView(state, projection)
-      : activeTab === 'diplomacy' ? diplomacyView(state)
+      : activeTab === 'diplomacy' ? diplomacyView(state, diplomacyQuery)
         : activeTab === 'military' ? militaryView(state)
           : activeTab === 'technology' ? technologyView(state)
       : activeTab === 'congress' ? congressView(state)
@@ -347,6 +355,13 @@ export function mountDashboard(root) {
     if (event.target.matches('[data-action="select-country"]')) {
       activeTab = 'overview';
       commit(createGameState(event.target.value));
+    }
+  });
+
+  root.addEventListener('input', (event) => {
+    if (event.target.matches('[data-action="diplomacy-search"]')) {
+      diplomacyQuery = event.target.value;
+      render();
     }
   });
 

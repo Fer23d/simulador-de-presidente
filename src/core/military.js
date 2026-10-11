@@ -32,13 +32,21 @@ function branchDefaults(military = {}) {
 
 export function getPoderTotal(military) {
   const branches = branchDefaults(military);
-  const terrestrial = (branches.exercito.soldados / 8_000) + (branches.exercito.blindados * 1.6);
+  const terrestrial = ((branches.exercito.soldados / 8_000) + (branches.exercito.blindados * 1.6)) * Math.max(1, Number(military?.infantryMultiplier) || 1);
   const naval = branches.marinha.navios * 3;
   const air = branches.aeronautica.cacas * 3.5;
   const supportBonus = 1 + Math.min(0.65, (naval * 0.012) + (air * 0.012));
   const readiness = clamp(Number(military?.readiness) || 1, 0.5, 1.8);
   const readinessPower = (terrestrial * supportBonus * readiness) + ((naval + air) * 0.45);
   return Math.round(clamp(readinessPower + (Number(military?.combatAdjustment) || 0), 0, 300) * 10) / 10;
+}
+
+export function getPoderTerrestre(military) {
+  const branches = branchDefaults(military);
+  const rawPower = (branches.exercito.soldados / 8_000) + (branches.exercito.blindados * 1.6);
+  const readiness = clamp(Number(military?.readiness) || 1, 0.5, 1.8);
+  const infantryMultiplier = Math.max(1, Number(military?.infantryMultiplier) || 1);
+  return rawPower * readiness * infantryMultiplier;
 }
 
 export function normalizeMilitary(military = {}) {
@@ -186,11 +194,11 @@ export function applyNuclearCompletion(geopolitics, military) {
   };
 }
 
-export function canAutogolpe(regime, military, budget) {
+export function canAutogolpe(regime, military) {
   return regime?.type === 'democracy'
     && !regime.gameOver
-    && Number(military?.support) >= 85
-    && Number(budget?.defenseSpend) >= 0.06;
+    && Number(military?.support) > 60
+    && getPoderTerrestre(military) >= 20;
 }
 
 export function createRegime() {
@@ -204,7 +212,8 @@ export function evaluateRegime(regime, economy, military, geopolitics, seed) {
   const random = nextRandom(seed);
   if (regime.type === 'dictatorship') {
     const revolutionRisk = clamp(
-      ((100 - clamp(Number(economy.popularity) || 0, 0, 100)) / 100) * 0.5
+      (Number(regime.revolutionRisk) || 0) + 0.015
+        + ((100 - clamp(Number(economy.popularity) || 0, 0, 100)) / 100) * 0.12
         + (Number(economy.inflation) || 0) * 0.3
         + (Number(economy.unemployment) || 0) * 0.2
         + (atWar * 0.1)

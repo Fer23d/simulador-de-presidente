@@ -37,6 +37,10 @@ function isGameOver(state) {
   return Boolean(state.regime?.gameOver);
 }
 
+function syncWorld(state) {
+  return { ...state, world: state.geopolitics?.contacts ?? state.world ?? [] };
+}
+
 function isValidCongress(congress) {
   return Array.isArray(congress?.blocs)
     && congress.blocs.length === 4
@@ -62,13 +66,15 @@ function isValidHistory(history) {
 
 export function createGameState(countryId = 'bra') {
   const country = createCountryProfile(getCountryById(countryId) ?? COUNTRIES.find((item) => item.id === 'bra'));
+  const geopolitics = createGeopolitics(country.id);
   return {
     version: STATE_VERSION,
     country,
     calendar: { month: 1, year: 2026 },
     economy: createEconomy(country),
     budget: { ...DEFAULT_BUDGET },
-    geopolitics: createGeopolitics(),
+    geopolitics,
+    world: geopolitics.contacts,
     military: createMilitary(country),
     technology: createTechnology(),
     regime: createRegime(),
@@ -85,11 +91,11 @@ export function changeTax(state, taxKey, delta) {
     return state;
   }
   const nextRate = clampTaxRate(state.budget[taxKey] + (delta * 0.01));
-  return {
+  return syncWorld({
     ...state,
     budget: { ...state.budget, [taxKey]: nextRate },
     notice: taxKey === 'incomeTaxRate' ? 'Imposto de renda ajustado.' : 'IVA ajustado.',
-  };
+  });
 }
 
 export function setBudget(state, budgetKey, value) {
@@ -102,7 +108,7 @@ export function setBudget(state, budgetKey, value) {
 function applyGeopoliticalAction(state, action) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = action(state.geopolitics);
-  return { ...state, geopolitics: result.geopolitics, notice: result.reason };
+  return syncWorld({ ...state, geopolitics: result.geopolitics, notice: result.reason });
 }
 
 export function proposeTreaty(state, contactId) {
@@ -119,12 +125,12 @@ export function proporAlianca(state, contactId) {
 
 export function alterarNotaONU(state, value) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
-  return { ...state, geopolitics: changeOnuScore(state.geopolitics, value), notice: 'Nota da ONU atualizada.' };
+  return syncWorld({ ...state, geopolitics: changeOnuScore(state.geopolitics, value), notice: 'Nota da ONU atualizada.' });
 }
 
 export function startWar(state, contactId) {
   const next = applyGeopoliticalAction(state, (geopolitics) => declareWar(geopolitics, contactId));
-  return next.geopolitics === state.geopolitics ? next : { ...next, geopolitics: changeOnuScore(next.geopolitics, -18) };
+  return next.geopolitics === state.geopolitics ? next : syncWorld({ ...next, geopolitics: changeOnuScore(next.geopolitics, -18) });
 }
 
 export function declararGuerra(state, contactId) {
@@ -133,8 +139,9 @@ export function declararGuerra(state, contactId) {
 
 export function sabotar(state, contactId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
-  const result = sabotageCountry(state.geopolitics, contactId, state.economy, state.randomSeed);
-  return { ...state, geopolitics: result.geopolitics, economy: result.economy, randomSeed: result.seed, notice: result.reason };
+  const technology = getTechnologyModifiers(state.technology);
+  const result = sabotageCountry(state.geopolitics, contactId, state.economy, state.randomSeed, { guaranteedSuccess: technology.guaranteedSabotage });
+  return syncWorld({ ...state, geopolitics: result.geopolitics, economy: result.economy, randomSeed: result.seed, notice: result.reason });
 }
 
 export function recrutarSoldado(state, amount = 5_000) {
@@ -175,7 +182,8 @@ export function anexarPais(state, contactId) {
   const prepared = state.geopolitics.peaceTreaty?.targetId === targetId
     ? state
     : { ...state, geopolitics: { ...state.geopolitics, peaceTreaty: { targetId, status: 'pending' } } };
-  return annexTreatyTarget(prepared);
+  const annexed = annexTreatyTarget(prepared);
+  return syncWorld({ ...annexed, military: normalizeMilitary(annexed.military) });
 }
 
 export function resolvePeaceTreaty(state, contactId, choice) {
@@ -186,7 +194,7 @@ export function resolvePeaceTreaty(state, contactId, choice) {
   }
   if (choice === 'annex') return anexarPais(state, contactId);
   if (choice !== 'loot') return { ...state, notice: 'Termo de tratado invalido.' };
-  return lootTreatyTarget(state);
+  return syncWorld(lootTreatyTarget(state));
 }
 
 export function exigirAnexacao(state, contactId) {
@@ -196,29 +204,29 @@ export function exigirAnexacao(state, contactId) {
   if (result.accepted) {
     return anexarPais({ ...state, geopolitics: result.geopolitics, randomSeed: result.seed }, contactId);
   }
-  return {
+  return syncWorld({
     ...state,
     geopolitics: changeOnuScore(result.geopolitics, -18),
     randomSeed: result.seed,
     notice: result.reason,
-  };
+  });
 }
 
 export function imporSancao(state, contactId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = imposeSanction(state.geopolitics, contactId, state.economy.gdp);
-  return { ...state, geopolitics: result.geopolitics, notice: result.reason };
+  return syncWorld({ ...state, geopolitics: result.geopolitics, notice: result.reason });
 }
 
 export function createLeague(state, name = 'Liga Global') {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
-  return createLeagueState(state, name);
+  return syncWorld(createLeagueState(state, name));
 }
 
 export function inviteToLeague(state, contactId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = inviteLeagueMember(state.geopolitics, contactId);
-  return { ...state, geopolitics: result.geopolitics, notice: result.reason };
+  return syncWorld({ ...state, geopolitics: result.geopolitics, notice: result.reason });
 }
 
 export function lancarAtaqueNuclear(state, contactId) {
@@ -229,12 +237,12 @@ export function lancarAtaqueNuclear(state, contactId) {
   const contacts = state.geopolitics.contacts.map((item) => item.id === contactId
     ? { ...item, militaryPower: item.militaryPower * 0.2, population: Math.floor((Number(item.population) || 0) * 0.2), nuclearStruck: true, alliance: false }
     : { ...item, alliance: false });
-  return {
+  return syncWorld({
     ...state,
     military: normalizeMilitary({ ...state.military, armasNucleares: arsenal - 1, nuclear: { ...state.military.nuclear, arsenal: Math.max(0, arsenal - 1) } }),
     geopolitics: { ...state.geopolitics, contacts, onuScore: 0, internationalSanctions: true, sanctionSeverity: 1 },
     notice: `Ataque nuclear contra ${contact.name}: reputacao na ONU colapsou.`,
-  };
+  });
 }
 
 export function fundNuclear(state, kind, amount) {
@@ -245,14 +253,15 @@ export function fundNuclear(state, kind, amount) {
 
 export function attemptAutogolpe(state) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
-  if (!canAutogolpe(state.regime, state.military, state.budget)) {
-    return { ...state, notice: 'Autogolpe exige apoio militar e defesa elevados.' };
+  if (!canAutogolpe(state.regime, state.military)) {
+    return { ...state, notice: 'Autogolpe exige apoio militar acima de 60% e poder terrestre elevado.' };
   }
-  return {
+  return syncWorld({
     ...state,
-    regime: { ...state.regime, type: 'dictatorship', electionsSuspended: true, coupRisk: 0 },
-    notice: 'Estado de sitio decretado. O Congresso foi suspenso.',
-  };
+    regime: { ...state.regime, type: 'dictatorship', electionsSuspended: true, coupRisk: 0, revolutionRisk: 0.015 },
+    laws: Object.fromEntries(LAWS.map((law) => [law.stateKey, { approved: true, voteCompleted: true }])),
+    notice: 'Estado de sitio decretado. Congresso dissolvido e leis aprovadas por decreto.',
+  });
 }
 
 export function researchTechnology(state, technologyId) {
@@ -277,12 +286,12 @@ export function voteLaw(state, lawId) {
   if (!law) return { ...state, notice: 'Projeto de lei nao encontrado.' };
   if (state.regime?.type === 'dictatorship') {
     const notice = `${law.title} aprovada por decreto.`;
-    return {
+    return syncWorld({
       ...state,
       laws: { ...state.laws, [law.stateKey]: { approved: true, voteCompleted: true } },
       notice,
       history: addHistory(state, { type: 'decree', message: notice, calendar: state.calendar }),
-    };
+    });
   }
   const lawState = state.laws[law.stateKey] ?? { approved: false, voteCompleted: false };
   if (lawState.voteCompleted) {
@@ -319,13 +328,14 @@ export function advanceMonth(state) {
     infrastructureCostModifier: geopoliticalModifiers.infrastructureCostModifier + technologyModifiers.infrastructureCostModifier,
     popularityModifier: geopoliticalModifiers.popularityModifier + technologyModifiers.popularityModifier,
     tradeRevenueRate: geopoliticalModifiers.tradeRevenueRate + traitModifiers.exportRevenueRate,
-    inflationModifier: traitModifiers.foodInflationModifier,
+    inflationModifier: traitModifiers.foodInflationModifier + technologyModifiers.foodInflationModifier,
   };
   const economyAfterPolicy = advanceEconomy(state.economy, state.budget, effects, modifiers);
   const traitInterest = economyAfterPolicy.cash > 0 ? economyAfterPolicy.cash * traitModifiers.cashInterest : 0;
   const economicMonth = { ...economyAfterPolicy, cash: economyAfterPolicy.cash + traitInterest };
   const nuclear = applyNuclearCompletion(changeOnuScore(state.geopolitics, effects.onuModifier ?? 0), state.military);
   const preparedMilitary = advanceMilitary(nuclear.military, economicMonth, state.budget);
+  preparedMilitary.military.infantryMultiplier = technologyModifiers.infantryMultiplier;
   preparedMilitary.military.support = clamp(preparedMilitary.military.support + (effects.militarySupportModifier ?? 0), 0, 100);
   preparedMilitary.military.power = Math.min(100, preparedMilitary.military.power * (1 + technologyModifiers.militaryEffectiveness));
   const geopoliticalMonth = advanceGeopolitics(nuclear.geopolitics, preparedMilitary.military, economicMonth, state.randomSeed);
@@ -335,7 +345,7 @@ export function advanceMonth(state) {
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? `Mes encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superavit' : 'com deficit'}.`;
 
-  return {
+  return syncWorld({
     ...state,
     economy: militaryMonth.economy,
     geopolitics: geopoliticalMonth.geopolitics,
@@ -346,7 +356,7 @@ export function advanceMonth(state) {
     calendar: { month, year },
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
-  };
+  });
 }
 
 export function hydrateGameState(serialized) {
@@ -360,7 +370,7 @@ export function hydrateGameState(serialized) {
     const economy = parsed.economy ?? {};
     const calendar = parsed.calendar ?? {};
     const laws = parsed.laws?.laborReform ?? {};
-    return {
+    const hydrated = {
       ...base,
       country: {
         ...base.country,
@@ -413,6 +423,7 @@ export function hydrateGameState(serialized) {
       history: isValidHistory(parsed.history) ? parsed.history.slice(0, 12) : [],
       notice: typeof parsed.notice === 'string' ? parsed.notice : base.notice,
     };
+    return syncWorld(hydrated);
   } catch {
     return createGameState();
   }

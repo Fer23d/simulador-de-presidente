@@ -62,9 +62,10 @@ test('applies military nuclear sanctions only once', () => {
   assert.equal(second.geopolitics.sanctionSeverity, first.geopolitics.sanctionSeverity);
 });
 
-test('permits autogolpe only with strong support and defense', () => {
-  assert.equal(canAutogolpe({ type: 'democracy' }, { support: 85 }, { defenseSpend: 0.06 }), true);
-  assert.equal(canAutogolpe({ type: 'democracy' }, { support: 84 }, { defenseSpend: 0.06 }), false);
+test('permits autogolpe only with military support and a strong land force', () => {
+  const strongArmy = { support: 61, exercito: { soldados: 200_000, blindados: 25 } };
+  assert.equal(canAutogolpe({ type: 'democracy' }, strongArmy), true);
+  assert.equal(canAutogolpe({ type: 'democracy' }, { ...strongArmy, support: 60 }), false);
 });
 
 test('marks a dictatorship as game over when a forced revolution roll succeeds', () => {

@@ -143,10 +143,12 @@ test('integrates diplomatic, nuclear, and war commands', () => {
 });
 
 test('can change to dictatorship only after the military conditions are met', () => {
-  const state = setBudget(createGameState('bra'), 'defenseSpend', 0.06);
-  const eligible = { ...state, military: { ...state.military, support: 85 } };
+  const state = createGameState('bra');
+  const eligible = { ...state, military: { ...state.military, support: 61, exercito: { soldados: 200_000, blindados: 25 } } };
 
-  assert.equal(attemptAutogolpe(eligible).regime.type, 'dictatorship');
+  const result = attemptAutogolpe(eligible);
+  assert.equal(result.regime.type, 'dictatorship');
+  assert.ok(Object.values(result.laws).every((law) => law.approved));
 });
 
 test('blocks state-changing commands after the game ends', () => {

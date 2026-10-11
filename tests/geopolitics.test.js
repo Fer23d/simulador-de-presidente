@@ -22,12 +22,12 @@ const economy = {
   popularity: 55,
 };
 
-test('only signs a trade treaty above relation 20 and outside war', () => {
+test('only signs a trade treaty above relation 30 and outside war', () => {
   const state = createGeopolitics();
   const rejected = proposeTradeTreaty(state, 'usa');
   const eligible = {
     ...state,
-    contacts: state.contacts.map((item) => item.id === 'usa' ? { ...item, relation: 21 } : item),
+    contacts: state.contacts.map((item) => item.id === 'usa' ? { ...item, relation: 31 } : item),
   };
 
   assert.equal(rejected.ok, false);
@@ -151,4 +151,43 @@ test('creates a league only when the full state can afford it and has ONU reputa
   assert.equal(result.geopolitics.league.name, 'Liga dos Democratas');
   assert.equal(result.geopolitics.league.leaderId, 'bra');
   assert.equal(result.economy.cash, state.economy.cash - 25_000_000_000);
+});
+
+test('creates one diplomatic world entry for every foreign country', () => {
+  const state = createGameState('bra');
+
+  assert.equal(state.world.length, 199);
+  assert.equal(state.world.some((country) => country.id === 'bra'), false);
+});
+
+test('commercial agreement above thirty relation grants permanent growth and ONU reputation', () => {
+  const geopolitics = {
+    ...createGeopolitics(),
+    contacts: createGeopolitics().contacts.map((contact) => contact.id === 'arg' ? { ...contact, relation: 31 } : contact),
+  };
+  const result = proposeTradeTreaty(geopolitics, 'arg');
+
+  assert.equal(result.ok, true);
+  assert.equal(result.geopolitics.tradeGrowthBonus, 0.005);
+  assert.equal(result.geopolitics.onuScore, geopolitics.onuScore + 1);
+});
+
+test('annexation inherits the defeated military branches', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    geopolitics: {
+      ...state.geopolitics,
+      peaceTreaty: { targetId: 'arg', status: 'pending' },
+      contacts: state.geopolitics.contacts.map((contact) => contact.id === 'arg'
+        ? { ...contact, militaryPower: 0, military: { exercito: { soldados: 12_000, blindados: 7 }, marinha: { navios: 3 }, aeronautica: { cacas: 4 } } }
+        : contact),
+    },
+  };
+  const result = anexarPais(prepared);
+
+  assert.equal(result.military.exercito.soldados, state.military.exercito.soldados + 12_000);
+  assert.equal(result.military.exercito.blindados, state.military.exercito.blindados + 7);
+  assert.equal(result.military.marinha.navios, state.military.marinha.navios + 3);
+  assert.equal(result.military.aeronautica.cacas, state.military.aeronautica.cacas + 4);
 });
