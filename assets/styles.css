@@ -122,6 +122,13 @@ h2 { margin-bottom: 0; font-size: 18px; line-height: 1.2; letter-spacing: 0; }
 .map-selection .ledger-row { display: grid; gap: 4px; }
 .map-selection .ledger-row strong { overflow-wrap: anywhere; font-size: 12px; }
 .annexed-contact { opacity: .55; }
+.branch-list { display: grid; margin: 16px 0; border-top: 1px solid var(--line); }
+.branch-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.branch-row > div:first-child { display: grid; gap: 4px; }
+.branch-row strong { font-size: 13px; }
+.branch-row span { color: var(--muted); font-size: 12px; }
+.nuclear-action { color: #ff8b8b; border-color: #963e3e; background: #351b1b; }
+.nuclear-action:hover:not(:disabled) { border-color: #ff8b8b; background: #522020; }
 .vote-meter strong { font-size: 12px; }
 .bloc-list { display: grid; }
 .bloc-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }

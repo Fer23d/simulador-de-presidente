@@ -10,6 +10,10 @@ import {
   evaluateRegime,
   fundNuclearProject,
   comprarEquipamento,
+  comprarBlindados,
+  comprarCacas,
+  comprarNavios,
+  getPoderTotal,
   recrutarSoldado,
 } from '../src/core/military.js';
 
@@ -93,4 +97,16 @@ test('leaves state untouched when a military purchase cannot be funded', () => {
   assert.equal(result.ok, false);
   assert.equal(result.military, initial);
   assert.equal(result.economy.cash, 1);
+});
+
+test('manages army, navy and air force as separate military branches', () => {
+  const initial = createMilitary(country);
+  const withTanks = comprarBlindados(initial, economy, 2);
+  const withShips = comprarNavios(withTanks.military, withTanks.economy, 1);
+  const withJets = comprarCacas(withShips.military, withShips.economy, 2);
+
+  assert.equal(withTanks.military.exercito.blindados, initial.exercito.blindados + 2);
+  assert.equal(withShips.military.marinha.navios, initial.marinha.navios + 1);
+  assert.equal(withJets.military.aeronautica.cacas, initial.aeronautica.cacas + 2);
+  assert.ok(getPoderTotal(withJets.military) > getPoderTotal(initial));
 });

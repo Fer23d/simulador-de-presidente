@@ -1,3 +1,5 @@
+import { createCountryProfile, getCountryById } from '../data/countries.js';
+
 function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
 }
@@ -18,11 +20,27 @@ export function nextRandom(seed) {
 }
 
 export function createGeopolitics() {
+  const contact = (id, name, relation, militaryPower) => {
+    const country = createCountryProfile(getCountryById(id));
+    return {
+      id,
+      name,
+      relation,
+      militaryPower,
+      population: country.populacao_base,
+      area_km2: country.area_km2,
+      pib_base: country.pib_base,
+      tradeTreaty: false,
+      alliance: false,
+      atWar: false,
+      sancionado_por_jogador: false,
+    };
+  };
   return {
     contacts: [
-      { id: 'usa', name: 'Estados Unidos', relation: -10, militaryPower: 92, tradeTreaty: false, alliance: false, atWar: false },
-      { id: 'chn', name: 'China', relation: 5, militaryPower: 88, tradeTreaty: false, alliance: false, atWar: false },
-      { id: 'arg', name: 'Argentina', relation: 50, militaryPower: 24, tradeTreaty: false, alliance: false, atWar: false },
+      contact('usa', 'Estados Unidos', -10, 92),
+      contact('chn', 'China', 5, 88),
+      contact('arg', 'Argentina', 50, 24),
     ],
     sanctionSeverity: 0,
     onuScore: 50,
@@ -95,6 +113,38 @@ export function declareWar(geopolitics, contactId) {
     ok: true,
     reason: `Guerra declarada contra ${contact.name}.`,
     geopolitics: updateContact(geopolitics, contactId, (item) => ({ ...item, atWar: true, alliance: false, relation: -100 })),
+  };
+}
+
+export function exigirAnexacao(geopolitics, contactId, playerPower, seed) {
+  const contact = geopolitics.contacts.find((item) => item.id === contactId);
+  if (!contact || contact.anexado) return { ok: false, accepted: false, reason: 'Pais nao encontrado ou ja anexado.', geopolitics, seed };
+  const ratio = Number(playerPower) / Math.max(1, Number(contact.militaryPower) || 1);
+  if (ratio < 5) return { ok: false, accepted: false, reason: 'Ultimato exige poder militar cinco vezes superior ao alvo.', geopolitics, seed };
+  const random = nextRandom(seed);
+  const chance = clamp(0.55 + ((ratio - 5) * 0.05), 0.55, 0.9);
+  if (random.value < chance) {
+    return {
+      ok: true,
+      accepted: true,
+      reason: `${contact.name} aceitou a anexacao sob ultimato.`,
+      geopolitics: updateContact(geopolitics, contactId, (item) => ({ ...item, militaryPower: 0 })),
+      seed: random.seed,
+    };
+  }
+  const war = declareWar(geopolitics, contactId);
+  return { ok: war.ok, accepted: false, reason: `${contact.name} recusou o ultimato; guerra declarada.`, geopolitics: war.geopolitics, seed: random.seed };
+}
+
+export function imporSancao(geopolitics, contactId, playerGdp) {
+  if (Number(playerGdp) < 1_000_000_000_000) return rejected(geopolitics, 'Sancoes exigem um PIB de ao menos R$ 1 tri.');
+  const contact = geopolitics.contacts.find((item) => item.id === contactId);
+  if (!contact || contact.anexado) return rejected(geopolitics, 'Pais nao encontrado ou ja anexado.');
+  if (contact.sancionado_por_jogador) return rejected(geopolitics, 'Sancoes ja estao ativas contra este alvo.');
+  return {
+    ok: true,
+    reason: `Sancoes impostas a ${contact.name}; seu crescimento economico foi comprometido.`,
+    geopolitics: updateContact(geopolitics, contactId, (item) => ({ ...item, sancionado_por_jogador: true, growthModifier: -0.03, relation: -100 })),
   };
 }
 

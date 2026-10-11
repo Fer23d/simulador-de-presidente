@@ -15,6 +15,8 @@ import {
   voteLaborLaw,
   voteLaw,
   anexarPais,
+  exigirAnexacao,
+  lancarAtaqueNuclear,
 } from '../src/core/game-state.js';
 
 test('creates a game state for Brazil', () => {
@@ -159,7 +161,9 @@ test('migrates an older military save with army management defaults', () => {
   const hydrated = hydrateGameState(JSON.stringify(saved));
 
   assert.ok(hydrated.military.soldiers > 0);
-  assert.equal(hydrated.military.equipmentMultiplier, 1);
+  assert.ok(hydrated.military.exercito);
+  assert.ok(hydrated.military.marinha);
+  assert.ok(hydrated.military.aeronautica);
 });
 
 test('annexation transfers target territory, population and GDP and records the target as annexed', () => {
@@ -173,4 +177,29 @@ test('annexation transfers target territory, population and GDP and records the 
   assert.ok(annexed.country.pib_base > state.country.pib_base);
   assert.ok(annexed.geopolitics.annexedCountryIds.includes('arg'));
   assert.equal(annexed.geopolitics.contacts.find((contact) => contact.id === 'arg').anexado, true);
+});
+
+test('turns a refused annexation ultimatum into war and accepts overwhelming peaceful annexation', () => {
+  const state = createGameState('bra');
+  const strong = {
+    ...state,
+    military: { ...state.military, exercito: { ...state.military.exercito, blindados: 200 } },
+    randomSeed: 1,
+  };
+  const result = exigirAnexacao(strong, 'arg');
+
+  assert.ok(result.geopolitics.contacts.find((contact) => contact.id === 'arg').anexado || result.geopolitics.contacts.find((contact) => contact.id === 'arg').atWar);
+});
+
+test('nuclear strike devastates an active war target and ends every alliance', () => {
+  const state = startWar(createGameState('bra'), 'arg');
+  const armed = { ...state, military: { ...state.military, armasNucleares: 1 } };
+  const target = armed.geopolitics.contacts.find((contact) => contact.id === 'arg');
+  const result = lancarAtaqueNuclear(armed, 'arg');
+  const attacked = result.geopolitics.contacts.find((contact) => contact.id === 'arg');
+
+  assert.equal(attacked.militaryPower, target.militaryPower * 0.2);
+  assert.equal(attacked.population, Math.floor(target.population * 0.2));
+  assert.equal(result.geopolitics.onuScore, 0);
+  assert.ok(result.geopolitics.contacts.every((contact) => contact.alliance === false));
 });
