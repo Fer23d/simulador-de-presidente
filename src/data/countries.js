@@ -1012,6 +1012,17 @@ const GOVERNMENTS = [
   'Estado de partido dominante',
 ];
 
+// Populacoes usadas pelos primeiros territorios desenhados no mapa de teste.
+// Os demais paises continuam com uma estimativa deterministica ate a importacao
+// completa do censo mundial para o seed de 200 nacoes.
+const REAL_POPULATIONS = Object.freeze({
+  arg: 45808747,
+  bra: 212583750,
+  chn: 1409670000,
+  rus: 143957079,
+  usa: 340110988,
+});
+
 function hash(value) {
   return [...value].reduce((total, character) => ((total * 31) + character.charCodeAt(0)) >>> 0, 2166136261);
 }
@@ -1050,11 +1061,13 @@ export function createCountryProfile(country) {
 
   const seed = hash(country.id);
   const density = 12 + (seed % 240);
-  const populacao_base = clamp(Math.round(country.area_km2 * density), 25_000, 1_450_000_000);
+  const populacao_base = REAL_POPULATIONS[country.id]
+    ?? clamp(Math.round(country.area_km2 * density), 25_000, 1_450_000_000);
   const pibPerCapita = 3_500 + ((seed >>> 8) % 57_000);
 
   return {
     ...country,
+    populacao: populacao_base,
     populacao_base,
     pib_base: populacao_base * pibPerCapita,
     bioma_dominante: BIOMES[(seed >>> 16) % BIOMES.length],

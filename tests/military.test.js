@@ -83,4 +83,14 @@ test('recruits soldiers and purchases equipment when treasury can pay', () => {
 
   assert.ok(recruited.military.soldiers > initial.soldiers);
   assert.ok(equipped.military.equipmentMultiplier > recruited.military.equipmentMultiplier);
+  assert.equal(equipped.economy.cash, economy.cash - 120_000_000 - 4_000_000_000);
+});
+
+test('leaves state untouched when a military purchase cannot be funded', () => {
+  const initial = createMilitary(country);
+  const result = comprarEquipamento(initial, { ...economy, cash: 1 }, 'jets');
+
+  assert.equal(result.ok, false);
+  assert.equal(result.military, initial);
+  assert.equal(result.economy.cash, 1);
 });

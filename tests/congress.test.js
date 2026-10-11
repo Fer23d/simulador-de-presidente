@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { LAW_LABOR_REFORM } from '../src/core/laws.js';
+import { LAWS, LAW_LABOR_REFORM } from '../src/core/laws.js';
 import {
   createCongress,
   getVoteForecast,
@@ -60,4 +60,14 @@ test('forecasts votes from current blocs and popularity', () => {
 
   assert.ok(forecast.votesFor >= 0);
   assert.equal(forecast.requiredVotes, 151);
+});
+
+test('publishes the expanded congressional law catalogue', () => {
+  assert.deepEqual(LAWS.map((law) => law.id), [
+    'labor-reform',
+    'tax-reform',
+    'environmental-protection',
+    'media-censorship',
+    'military-subsidy',
+  ]);
 });

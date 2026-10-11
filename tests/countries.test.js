@@ -26,3 +26,10 @@ test('derives a stable playable profile from a country', () => {
   assert.ok(first.pib_base > 0);
   assert.equal(typeof first.bioma_dominante, 'string');
 });
+
+test('uses real population data for countries shown in the interactive map', () => {
+  assert.equal(createCountryProfile(getCountryById('bra')).populacao_base, 212583750);
+  assert.equal(createCountryProfile(getCountryById('usa')).populacao_base, 340110988);
+  assert.equal(createCountryProfile(getCountryById('rus')).populacao_base, 143957079);
+  assert.equal(createCountryProfile(getCountryById('chn')).populacao_base, 1409670000);
+});

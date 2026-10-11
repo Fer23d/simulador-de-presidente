@@ -49,16 +49,40 @@ export function advanceMilitary(military, economy, budget, geopoliticalResult = 
 export function recrutarSoldado(military, economy, amount = 5_000) {
   const soldiers = Math.max(1, Math.floor(Number(amount) || 0));
   const cost = soldiers * 12_000;
-  if (economy.cash < cost) return { ok: false, reason: 'Caixa insuficiente para recrutamento.', military, economy };
-  return { ok: true, reason: `${soldiers.toLocaleString('pt-BR')} soldados recrutados.`, military: { ...military, soldiers: (military.soldiers || 0) + soldiers, power: clamp(military.power + (soldiers / 50_000), 0, 100) }, economy: { ...economy, cash: economy.cash - cost } };
+  const cash = Number(economy?.cash) || 0;
+  if (cash < cost) return { ok: false, reason: 'Caixa insuficiente para recrutamento.', military, economy };
+
+  const currentSoldiers = Math.max(0, Number(military?.soldiers) || 0);
+  const currentPower = clamp(Number(military?.power) || 0, 0, 100);
+  return {
+    ok: true,
+    reason: `${soldiers.toLocaleString('pt-BR')} soldados recrutados.`,
+    military: {
+      ...military,
+      soldiers: currentSoldiers + soldiers,
+      power: clamp(currentPower + (soldiers / 50_000), 0, 100),
+    },
+    economy: { ...economy, cash: cash - cost },
+  };
 }
 
 export function comprarEquipamento(military, economy, kind) {
-  const catalog = { tanks: { cost: 4_000_000_000, multiplier: 0.12 }, jets: { cost: 7_000_000_000, multiplier: 0.2 } };
+  const catalog = {
+    tanks: { label: 'Blindados', cost: 4_000_000_000, multiplier: 0.12 },
+    jets: { label: 'Cacas', cost: 7_000_000_000, multiplier: 0.2 },
+  };
   const item = catalog[kind];
   if (!item) return { ok: false, reason: 'Equipamento invalido.', military, economy };
-  if (economy.cash < item.cost) return { ok: false, reason: 'Caixa insuficiente para equipamento.', military, economy };
-  return { ok: true, reason: 'Equipamento adquirido.', military: { ...military, equipmentMultiplier: clamp((military.equipmentMultiplier || 1) + item.multiplier, 1, 3) }, economy: { ...economy, cash: economy.cash - item.cost } };
+  const cash = Number(economy?.cash) || 0;
+  if (cash < item.cost) return { ok: false, reason: `Caixa insuficiente para ${item.label.toLowerCase()}.`, military, economy };
+
+  const currentMultiplier = Math.max(1, Number(military?.equipmentMultiplier) || 1);
+  return {
+    ok: true,
+    reason: `${item.label} adquiridos; capacidade de combate ampliada.`,
+    military: { ...military, equipmentMultiplier: clamp(currentMultiplier + item.multiplier, 1, 3) },
+    economy: { ...economy, cash: cash - item.cost },
+  };
 }
 
 export function fundNuclearProject(military, economy, kind, amount) {

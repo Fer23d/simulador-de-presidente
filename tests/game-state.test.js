@@ -14,6 +14,7 @@ import {
   startWar,
   voteLaborLaw,
   voteLaw,
+  anexarPais,
 } from '../src/core/game-state.js';
 
 test('creates a game state for Brazil', () => {
@@ -159,4 +160,17 @@ test('migrates an older military save with army management defaults', () => {
 
   assert.ok(hydrated.military.soldiers > 0);
   assert.equal(hydrated.military.equipmentMultiplier, 1);
+});
+
+test('annexation transfers target territory, population and GDP and records the target as annexed', () => {
+  const state = createGameState('bra');
+  const target = state.geopolitics.contacts.find((contact) => contact.id === 'arg');
+  target.militaryPower = 0;
+  const annexed = anexarPais(state, 'arg');
+
+  assert.equal(annexed.country.area_km2, state.country.area_km2 + 2780400);
+  assert.equal(annexed.country.populacao_base, state.country.populacao_base + 45808747);
+  assert.ok(annexed.country.pib_base > state.country.pib_base);
+  assert.ok(annexed.geopolitics.annexedCountryIds.includes('arg'));
+  assert.equal(annexed.geopolitics.contacts.find((contact) => contact.id === 'arg').anexado, true);
 });

@@ -27,6 +27,7 @@ export function createGeopolitics() {
     sanctionSeverity: 0,
     onuScore: 50,
     internationalSanctions: false,
+    annexedCountryIds: [],
   };
 }
 
@@ -88,6 +89,7 @@ export function proposeAlliance(geopolitics, contactId) {
 export function declareWar(geopolitics, contactId) {
   const contact = geopolitics.contacts.find((item) => item.id === contactId);
   if (!contact) return rejected(geopolitics, 'Pais nao encontrado.');
+  if (contact.anexado) return rejected(geopolitics, 'Este territorio ja foi anexado.');
   if (contact.atWar) return rejected(geopolitics, 'Conflito ja esta em curso.');
   return {
     ok: true,

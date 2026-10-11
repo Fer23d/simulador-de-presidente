@@ -55,8 +55,9 @@ export function projectBudget(economy, budget, modifiers = {}) {
   const monthlyGdp = economy.gdp / 12;
   const incomeTaxRate = clampTaxRate(budget.incomeTaxRate);
   const vatRate = clampTaxRate(budget.vatRate);
-  const incomeTax = monthlyGdp * 0.52 * incomeTaxRate * 0.88;
-  const vat = monthlyGdp * 0.64 * vatRate * 0.9;
+  const taxRevenueMultiplier = Math.max(0, 1 + (Number(modifiers.taxRevenueModifier) || 0));
+  const incomeTax = monthlyGdp * 0.52 * incomeTaxRate * 0.88 * taxRevenueMultiplier;
+  const vat = monthlyGdp * 0.64 * vatRate * 0.9 * taxRevenueMultiplier;
   const tradeRevenue = monthlyGdp * Math.max(0, Number(modifiers.tradeRevenueRate) || 0);
   const infrastructureCostMultiplier = clamp(
     1 + (Number(modifiers.infrastructureCostModifier) || 0),
@@ -88,7 +89,7 @@ export function projectBudget(economy, budget, modifiers = {}) {
 }
 
 export function advanceEconomy(economy, budget, lawEffects = {}, modifiers = {}) {
-  const projection = projectBudget(economy, budget, modifiers);
+  const projection = projectBudget(economy, budget, { ...modifiers, taxRevenueModifier: lawEffects.taxRevenueModifier });
   const totalTaxRate = clampTaxRate(budget.incomeTaxRate) + clampTaxRate(budget.vatRate);
   const deficitPressure = -projection.monthlyBalance / projection.monthlyGdp;
   const taxPressure = Math.max(0, totalTaxRate - 0.3);
@@ -142,7 +143,7 @@ export function advanceEconomy(economy, budget, lawEffects = {}, modifiers = {})
     inflation,
     unemployment,
     popularity,
-    cash: economy.cash + projection.monthlyBalance,
+    cash: economy.cash + projection.monthlyBalance + (lawEffects.cashModifier ?? 0),
     ...projection,
   };
 }

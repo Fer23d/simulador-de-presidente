@@ -6,7 +6,7 @@ import { advanceMilitary, applyNuclearCompletion, canAutogolpe, comprarEquipamen
 import { LAWS, LAW_LABOR_REFORM } from './laws.js';
 import { advanceTechnology, createTechnology, getTechnologyModifiers, purchaseTechnology } from './technology.js';
 
-const STATE_VERSION = 4;
+const STATE_VERSION = 5;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 
 function clamp(value, minimum, maximum) {
@@ -151,14 +151,32 @@ export function comprarMaterialMilitar(state, kind) {
 export function anexarPais(state, contactId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const contact = state.geopolitics.contacts.find((item) => item.id === contactId);
-  const country = getCountryById(contactId);
-  if (!contact || !country || contact.militaryPower > 0) return { ...state, notice: 'Anexacao exige a derrota total do alvo.' };
+  const countrySeed = getCountryById(contactId);
+  const target = countrySeed ? createCountryProfile(countrySeed) : null;
+  if (!contact || !target || contact.anexado || contact.militaryPower > 0) return { ...state, notice: 'Anexacao exige a derrota total do alvo.' };
+
+  const population = (Number(state.country.populacao) || Number(state.country.populacao_base) || 0)
+    + (Number(target.populacao) || Number(target.populacao_base) || 0);
+  const area = (Number(state.country.area_km2) || 0) + (Number(target.area_km2) || 0);
+  const gdp = (Number(state.country.pib_base) || 0) + (Number(target.pib_base) || 0);
   return {
     ...state,
-    country: { ...state.country, area_km2: state.country.area_km2 + country.area_km2, populacao_base: state.country.populacao_base + country.populacao_base, pib_base: state.country.pib_base + country.pib_base },
-    economy: { ...state.economy, gdp: state.economy.gdp + country.pib_base },
-    geopolitics: changeOnuScore({ ...state.geopolitics, contacts: state.geopolitics.contacts.filter((item) => item.id !== contactId) }, -45),
-    notice: `${country.nome} foi anexado; a ONU condenou a medida.`,
+    country: {
+      ...state.country,
+      area_km2: area,
+      populacao: population,
+      populacao_base: population,
+      pib_base: gdp,
+    },
+    economy: { ...state.economy, gdp: state.economy.gdp + target.pib_base },
+    geopolitics: changeOnuScore({
+      ...state.geopolitics,
+      annexedCountryIds: [...new Set([...(state.geopolitics.annexedCountryIds ?? []), contactId])],
+      contacts: state.geopolitics.contacts.map((item) => item.id === contactId
+        ? { ...item, anexado: true, atWar: false, alliance: false, tradeTreaty: false, militaryPower: 0 }
+        : item),
+    }, -45),
+    notice: `${target.nome} foi anexado; a ONU condenou a medida.`,
   };
 }
 
@@ -233,15 +251,16 @@ export function voteLaborLaw(state) {
 export function advanceMonth(state) {
   if (state.regime?.gameOver) return { ...state, notice: 'A partida foi encerrada.' };
   const effects = LAWS.reduce((total, law) => state.laws[law.stateKey]?.approved
-    ? Object.fromEntries(Object.keys(law.monthlyEffects).map((key) => [key, (total[key] ?? 0) + law.monthlyEffects[key]]))
+    ? Object.entries(law.monthlyEffects).reduce((next, [key, value]) => ({ ...next, [key]: (next[key] ?? 0) + value }), total)
     : total, {});
   const technology = advanceTechnology(state.technology, state.economy, state.budget);
   const technologyModifiers = getTechnologyModifiers(technology);
   const geopoliticalModifiers = getGeopoliticalModifiers(state.geopolitics, state.military);
   const modifiers = { ...geopoliticalModifiers, growthModifier: geopoliticalModifiers.growthModifier + technologyModifiers.growthModifier, infrastructureCostModifier: geopoliticalModifiers.infrastructureCostModifier + technologyModifiers.infrastructureCostModifier, popularityModifier: geopoliticalModifiers.popularityModifier + technologyModifiers.popularityModifier };
   const economicMonth = advanceEconomy(state.economy, state.budget, effects, modifiers);
-  const nuclear = applyNuclearCompletion(state.geopolitics, state.military);
+  const nuclear = applyNuclearCompletion(changeOnuScore(state.geopolitics, effects.onuModifier ?? 0), state.military);
   const preparedMilitary = advanceMilitary(nuclear.military, economicMonth, state.budget);
+  preparedMilitary.military.support = clamp(preparedMilitary.military.support + (effects.militarySupportModifier ?? 0), 0, 100);
   preparedMilitary.military.power = Math.min(100, preparedMilitary.military.power * (1 + technologyModifiers.militaryEffectiveness));
   const geopoliticalMonth = advanceGeopolitics(nuclear.geopolitics, preparedMilitary.military, economicMonth, state.randomSeed);
   const militaryMonth = advanceMilitary(preparedMilitary.military, geopoliticalMonth.economy, { defenseSpend: 0 }, geopoliticalMonth);
@@ -256,7 +275,7 @@ export function advanceMonth(state) {
     geopolitics: geopoliticalMonth.geopolitics,
     military: militaryMonth.military,
     technology,
-    regime: stability.regime,
+    regime: { ...stability.regime, coupRisk: clamp(stability.regime.coupRisk + (effects.coupRiskModifier ?? 0), 0, 0.8) },
     randomSeed: stability.seed,
     calendar: { month, year },
     notice,
@@ -267,7 +286,7 @@ export function advanceMonth(state) {
 export function hydrateGameState(serialized) {
   try {
     const parsed = JSON.parse(serialized);
-    if (![1, 2, 3, STATE_VERSION].includes(parsed?.version) || !getCountryById(parsed?.country?.id)) {
+    if (![1, 2, 3, 4, STATE_VERSION].includes(parsed?.version) || !getCountryById(parsed?.country?.id)) {
       return createGameState();
     }
 
@@ -277,6 +296,13 @@ export function hydrateGameState(serialized) {
     const laws = parsed.laws?.laborReform ?? {};
     return {
       ...base,
+      country: {
+        ...base.country,
+        area_km2: Number.isFinite(Number(parsed.country?.area_km2)) ? Math.max(1, Number(parsed.country.area_km2)) : base.country.area_km2,
+        populacao: Number.isFinite(Number(parsed.country?.populacao ?? parsed.country?.populacao_base)) ? Math.max(1, Number(parsed.country.populacao ?? parsed.country.populacao_base)) : base.country.populacao,
+        populacao_base: Number.isFinite(Number(parsed.country?.populacao_base ?? parsed.country?.populacao)) ? Math.max(1, Number(parsed.country.populacao_base ?? parsed.country.populacao)) : base.country.populacao_base,
+        pib_base: Number.isFinite(Number(parsed.country?.pib_base)) ? Math.max(1, Number(parsed.country.pib_base)) : base.country.pib_base,
+      },
       calendar: {
         month: clamp(Math.floor(Number(calendar.month) || 1), 1, 12),
         year: clamp(Math.floor(Number(calendar.year) || 2026), 1900, 2500),
