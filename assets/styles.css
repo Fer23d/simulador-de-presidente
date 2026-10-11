@@ -1,0 +1,125 @@
+:root {
+  color-scheme: dark;
+  --ink: #edf3ef;
+  --muted: #9cab9f;
+  --quiet: #607168;
+  --canvas: #101817;
+  --sidebar: #14201e;
+  --panel: #192724;
+  --panel-raised: #20312d;
+  --line: #31443d;
+  --green: #69c598;
+  --green-deep: #1e6c4b;
+  --red: #f28477;
+  --amber: #e8ba63;
+  --radius: 7px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; background: var(--canvas); color: var(--ink); }
+button, select { font: inherit; }
+button { cursor: pointer; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+
+.app-shell { min-height: 100vh; display: grid; grid-template-columns: 228px minmax(0, 1fr); }
+.sidebar { padding: 26px 16px 18px; border-right: 1px solid var(--line); background: var(--sidebar); display: flex; flex-direction: column; gap: 38px; }
+.brand { display: flex; gap: 10px; align-items: center; padding: 0 7px; }
+.brand-mark { width: 34px; height: 34px; display: grid; place-items: center; background: var(--green); color: #10231b; font-size: 12px; font-weight: 800; border-radius: 5px; }
+.brand strong, .brand small { display: block; line-height: 1.05; }
+.brand strong { font-size: 14px; letter-spacing: 0; }
+.brand small { margin-top: 3px; color: var(--muted); font-size: 12px; }
+.tab-list { display: grid; gap: 5px; }
+.tab-button { min-height: 40px; border: 1px solid transparent; color: var(--muted); background: transparent; text-align: left; padding: 0 11px; border-radius: 5px; font-size: 14px; }
+.tab-button:hover { background: #1b2a26; color: var(--ink); }
+.tab-button.active { background: var(--panel-raised); color: var(--ink); border-color: var(--line); }
+.sidebar-footer { margin-top: auto; padding: 13px 9px; border-top: 1px solid var(--line); color: var(--muted); display: flex; justify-content: space-between; font-size: 12px; }
+.sidebar-footer strong { color: var(--green); }
+
+.workspace { min-width: 0; padding: 28px clamp(18px, 4vw, 56px) 46px; }
+.topbar { display: flex; justify-content: space-between; gap: 18px; align-items: end; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+.eyebrow { margin: 0 0 5px; color: var(--green); text-transform: uppercase; letter-spacing: .08em; font-size: 10px; font-weight: 750; }
+h1, h2, p { margin-top: 0; }
+h1 { margin-bottom: 0; font-size: clamp(23px, 3vw, 32px); font-weight: 650; line-height: 1.1; letter-spacing: 0; }
+h2 { margin-bottom: 0; font-size: 18px; line-height: 1.2; letter-spacing: 0; }
+.topbar-actions { display: flex; align-items: end; gap: 11px; }
+.country-picker { display: grid; gap: 4px; color: var(--muted); font-size: 11px; }
+.country-picker select { width: 180px; min-height: 34px; color: var(--ink); background: #1c2a27; border: 1px solid var(--line); border-radius: 4px; padding: 0 8px; }
+.quiet-action, .primary-action, .icon-button { border: 1px solid var(--line); border-radius: 4px; }
+.quiet-action { min-height: 34px; padding: 0 10px; color: var(--ink); background: transparent; font-size: 12px; }
+.quiet-action:hover:not(:disabled) { border-color: var(--green); background: #1e302a; }
+.quiet-action:disabled, .primary-action:disabled { opacity: .5; cursor: not-allowed; }
+
+.metrics { display: grid; grid-template-columns: repeat(6, minmax(120px, 1fr)); border-bottom: 1px solid var(--line); }
+.metric { min-width: 0; padding: 21px 12px 20px 0; }
+.metric + .metric { padding-left: 16px; border-left: 1px solid var(--line); }
+.metric span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 7px; }
+.metric strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; font-weight: 600; }
+.positive { color: var(--green) !important; }
+.negative { color: var(--red) !important; }
+.storage-notice { margin: 16px 0 0; color: var(--amber); font-size: 12px; }
+.content-area { padding-top: 25px; }
+.view-grid { display: grid; gap: 16px; }
+.overview-grid { grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr); }
+.agenda-panel { min-height: 270px; }
+.history-panel { grid-column: 1 / -1; }
+.budget-grid, .congress-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 1000px; }
+.panel { border: 1px solid var(--line); background: var(--panel); border-radius: var(--radius); padding: 20px; }
+.panel-heading { display: flex; justify-content: space-between; gap: 12px; align-items: start; margin-bottom: 21px; }
+.status-dot { width: 9px; height: 9px; margin-top: 4px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 5px rgba(105, 197, 152, .12); }
+.country-code, .bill-state { color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 4px 7px; font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.bill-state.approved { color: var(--green); border-color: var(--green-deep); }
+.bill-state.rejected { color: var(--red); }
+.notice { color: var(--muted); line-height: 1.6; font-size: 14px; }
+.agenda-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 25px 0; }
+.agenda-stats div { display: grid; gap: 5px; }
+.agenda-stats span, .country-facts dt { color: var(--muted); font-size: 11px; }
+.agenda-stats strong { font-size: 13px; }
+.primary-action { min-height: 40px; background: var(--green); border-color: var(--green); color: #10231b; padding: 0 15px; font-size: 13px; font-weight: 750; }
+.primary-action:hover:not(:disabled) { background: #82d9aa; }
+.primary-action span { margin-left: 10px; }
+.country-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; margin: 0; }
+.country-facts div { min-width: 0; }
+.country-facts dd { margin: 4px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+.history-list { list-style: none; display: grid; gap: 12px; padding: 0; margin: 0; }
+.history-list li { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 12px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.history-list span { color: var(--green); font-size: 11px; font-weight: 700; }
+
+.budget-controls { display: grid; align-content: start; gap: 16px; }
+.tax-control { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+.stepper { display: grid; grid-template-columns: 32px 64px 32px; align-items: center; }
+.stepper strong { text-align: center; color: var(--ink); font-size: 13px; }
+.icon-button { width: 29px; height: 29px; padding: 0; color: var(--ink); background: #1e302a; font-size: 18px; line-height: 1; }
+.icon-button:hover { border-color: var(--green); color: var(--green); }
+.budget-summary, .ledger-row { display: flex; justify-content: space-between; gap: 20px; }
+.budget-summary { padding-top: 12px; color: var(--muted); font-size: 12px; }
+.budget-summary strong { color: var(--ink); }
+.projection-panel { display: grid; align-content: start; }
+.ledger-row { padding: 13px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+.ledger-row strong { color: var(--ink); }
+.ledger-row.total { margin-top: 9px; padding-top: 18px; font-size: 14px; font-weight: 700; }
+
+.vote-meter { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; margin: 28px 0; }
+.meter-track { height: 8px; overflow: hidden; background: #0f1916; border-radius: 99px; }
+.meter-track span { display: block; height: 100%; background: var(--green); border-radius: inherit; }
+.vote-meter strong { font-size: 12px; }
+.bloc-list { display: grid; }
+.bloc-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+.bloc-row div { display: grid; gap: 3px; }
+.bloc-row strong { font-size: 13px; }
+.bloc-row span { color: var(--muted); font-size: 11px; }
+.bloc-row .quiet-action { white-space: nowrap; }
+
+.countries-panel { max-width: 1000px; }
+.country-table { max-height: 620px; overflow: auto; border-top: 1px solid var(--line); }
+.country-table-head, .country-row { display: grid; grid-template-columns: minmax(200px, 1fr) 180px 100px; gap: 12px; align-items: center; }
+.country-table-head { position: sticky; top: 0; padding: 11px 0; background: var(--panel); color: var(--quiet); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.country-row { min-height: 56px; border-top: 1px solid rgba(49, 68, 61, .55); color: var(--muted); font-size: 12px; }
+.country-row.selected { background: rgba(105, 197, 152, .05); }
+.country-row > span:first-child { display: grid; gap: 2px; }
+.country-row strong { color: var(--ink); font-size: 13px; }
+.country-row small { color: var(--quiet); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+@media (max-width: 1060px) { .metrics { grid-template-columns: repeat(3, 1fr); } .metric:nth-child(4) { border-left: 0; } .metric:nth-child(n + 4) { border-top: 1px solid var(--line); } }
+@media (max-width: 760px) { .app-shell { grid-template-columns: 1fr; } .sidebar { min-height: auto; flex-direction: row; align-items: center; padding: 13px 16px; gap: 16px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); } .tab-list { display: flex; gap: 3px; } .tab-button { white-space: nowrap; } .sidebar-footer { display: none; } .workspace { padding: 20px 16px 32px; } .topbar { align-items: start; flex-direction: column; } .topbar-actions { width: 100%; justify-content: space-between; } .country-picker { flex: 1; } .country-picker select { width: 100%; } .overview-grid, .budget-grid, .congress-grid { grid-template-columns: 1fr; } .history-panel { grid-column: auto; } .agenda-stats { grid-template-columns: 1fr; gap: 9px; } .agenda-stats div { grid-template-columns: 1fr auto; } .country-table-head, .country-row { grid-template-columns: minmax(150px, 1fr) 96px 78px; } }
+@media (max-width: 480px) { .metrics { grid-template-columns: repeat(2, 1fr); } .metric:nth-child(n) { border-top: 1px solid var(--line); } .metric:nth-child(odd) { border-left: 0; padding-left: 0; } .metric:nth-child(even) { border-left: 1px solid var(--line); padding-left: 12px; } .metric:nth-child(-n + 2) { border-top: 0; } .country-facts { grid-template-columns: 1fr; gap: 11px; } .country-table-head, .country-row { grid-template-columns: minmax(125px, 1fr) 78px 65px; gap: 7px; } .country-row .quiet-action { padding: 0 5px; font-size: 11px; } }
