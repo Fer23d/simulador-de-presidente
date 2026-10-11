@@ -3,8 +3,10 @@ import { getVoteForecast } from '../core/congress.js';
 import { BUDGET_LIMITS, projectBudget } from '../core/economy.js';
 import { LAWS } from '../core/laws.js';
 import { TECHNOLOGIES } from '../core/technology.js';
+import { MINISTERS } from '../core/ministers.js';
 import {
   advanceMonth,
+  dismissMinister,
   comprarBlindado,
   comprarCaca,
   comprarMaterialMilitar,
@@ -13,6 +15,7 @@ import {
   changeTax,
   createGameState,
   fundNuclear,
+  hireMinister,
   resolvePeaceTreaty,
   createLeague,
   inviteToLeague,
@@ -22,6 +25,7 @@ import {
   proposeAlliance,
   proposeTreaty,
   researchTechnology,
+  resolveEvent,
   recrutarSoldado,
   imporSancao,
   lancarAtaqueNuclear,
@@ -102,7 +106,7 @@ function taxControl(label, key, value) {
 
 function overviewView(state, projection) {
   const budgetTone = projection.monthlyBalance >= 0 ? 'positive' : 'negative';
-  const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending';
+  const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent);
   return `<section class="view-grid overview-grid">
     <section class="panel agenda-panel">
       <div class="panel-heading"><div><p class="eyebrow">Agenda presidencial</p><h2>Proximo movimento</h2></div><span class="status-dot"></span></div>
@@ -225,6 +229,13 @@ function militaryView(state) {
   return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Tríade militar</p><h2>Poder total ${Number(military.power || 0).toFixed(1)}</h2><p class="notice">${state.notice}</p><div class="branch-list"><article class="branch-row"><div><strong>Exercito</strong><span>${formatNumber.format(exercito.soldados)} soldados | ${formatNumber.format(exercito.blindados)} blindados</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="recruit">Recrutar soldados</button><button type="button" class="quiet-action" data-action="buy-tank">Comprar blindado</button></div></article><article class="branch-row"><div><strong>Marinha</strong><span>${formatNumber.format(marinha.navios)} navios operacionais</span></div><button type="button" class="quiet-action" data-action="buy-ship">Comprar navio</button></article><article class="branch-row"><div><strong>Aeronautica</strong><span>${formatNumber.format(aeronautica.cacas)} cacas operacionais</span></div><button type="button" class="quiet-action" data-action="buy-jet">Comprar caca</button></article></div><div class="ledger-row"><span>Apoio militar</span><strong>${Number(military.support || 0).toFixed(0)}%</strong></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section><section class="panel"><p class="eyebrow">Arsenal estrategico</p><h2>Programa nuclear</h2><div class="ledger-row"><span>Energia civil</span><strong>${Number(nuclear.civilProgress || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Dissuasao militar</span><strong>${Number(nuclear.militaryProgress || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Armas nucleares</span><strong>${Number(military.armasNucleares || 0)}</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="nuclear" data-kind="civil" data-amount="5000000000">Energia 5 bi</button><button type="button" class="quiet-action" data-action="nuclear" data-kind="military" data-amount="5000000000">Dissuasao 5 bi</button></div></section></section>`;
 }
 
+function cabinetView(state) {
+  return `<section class="panel cabinet-panel"><div class="panel-heading"><div><p class="eyebrow">Equipe de governo</p><h2>Gabinete de Ministros</h2></div></div><div class="minister-list">${MINISTERS.map((minister) => {
+    const active = Boolean(state.ministers?.[minister.id]);
+    return `<article class="minister-row"><div><strong>${minister.title}</strong><span>${minister.description}</span></div>${active ? `<button type="button" class="quiet-action" data-action="minister-dismiss" data-minister="${minister.id}">Demitir (+3 aprovacao)</button>` : `<button type="button" class="quiet-action" data-action="minister-hire" data-minister="${minister.id}">Contratar ${formatMoney(minister.cost)}</button>`}</article>`;
+  }).join('')}</div></section>`;
+}
+
 function technologyView(state) {
   return `<section class="panel technology-panel"><div class="panel-heading"><div><p class="eyebrow">Inovacao nacional</p><h2>Tecnologia</h2></div><span class="country-code">${state.technology.points} PP</span></div><div class="technology-list">${TECHNOLOGIES.map((technology) => {
     const unlocked = state.technology.unlocked.includes(technology.id);
@@ -236,6 +247,11 @@ function technologyView(state) {
 function countriesView(state) {
   const selection = COUNTRIES.slice().sort((left, right) => left.nome.localeCompare(right.nome, 'pt-BR'));
   return `<section class="panel countries-panel"><div class="panel-heading"><div><p class="eyebrow">Banco mundial</p><h2>200 nacoes jogaveis</h2></div><span class="country-code">${selection.length}</span></div><div class="country-table"><div class="country-table-head"><span>Pais</span><span>Area territorial</span><span></span></div>${selection.map((country) => `<div class="country-row ${country.id === state.country.id ? 'selected' : ''}"><span><strong>${country.nome}</strong><small>${country.id.toUpperCase()}</small></span><span>${formatNumber.format(country.area_km2)} km²</span><button type="button" class="quiet-action" data-action="country" data-country="${country.id}">Governar</button></div>`).join('')}</div></section>`;
+}
+
+export function renderNews(state) {
+  const news = (state.news ?? []).slice(0, 5);
+  return `<aside class="news-feed" aria-label="Giro de Noticias"><div class="panel-heading"><div><p class="eyebrow">Giro de Noticias</p><h2>Ultimas manchetes</h2></div></div><ol>${news.length ? news.map((item) => `<li><span>${MONTHS[(item.calendar?.month ?? 1) - 1]} ${item.calendar?.year ?? ''}</span>${item.text}</li>`).join('') : '<li><span>Agora</span>O gabinete aguarda a primeira decisao.</li>'}</ol></aside>`;
 }
 
 export function renderPeaceTreaty(state) {
@@ -252,6 +268,12 @@ export function renderPeaceTreaty(state) {
   </section>`;
 }
 
+export function renderCrisis(state) {
+  const event = state.pendingEvent;
+  if (!event) return '';
+  return `<section class="peace-dialog crisis-dialog" role="dialog" aria-modal="true" aria-labelledby="crise-titulo"><p class="eyebrow">Crise Nacional</p><h2 id="crise-titulo">${event.title}</h2><p class="notice">${event.description}</p><div class="action-row">${event.options.map((option) => `<button type="button" class="${option.id === 'protect' || option.id === 'enforce-operation' ? 'quiet-action danger-action' : 'primary-action'}" data-action="crisis-option" data-option="${option.id}">${option.label}</button>`).join('')}</div></section>`;
+}
+
 export function mountDashboard(root) {
   if (!root) {
     throw new Error('Elemento raiz do dashboard nao encontrado.');
@@ -261,6 +283,7 @@ export function mountDashboard(root) {
   let storageNotice = '';
   let diplomacyQuery = '';
   const treatyModal = document.getElementById('modal-tratado');
+  const crisisModal = document.getElementById('modal-crise');
 
   function render() {
     const projection = projectBudget(state.economy, state.budget);
@@ -269,6 +292,7 @@ export function mountDashboard(root) {
       ['budget', 'Orcamento'],
       ['diplomacy', 'Diplomacia'],
       ['military', 'Forcas Armadas'],
+      ['cabinet', 'Gabinete'],
       ['technology', 'Tecnologia'],
       ['congress', 'Congresso'],
       ['countries', 'Paises'],
@@ -276,6 +300,7 @@ export function mountDashboard(root) {
     const content = activeTab === 'budget' ? budgetView(state, projection)
       : activeTab === 'diplomacy' ? diplomacyView(state, diplomacyQuery)
         : activeTab === 'military' ? militaryView(state)
+          : activeTab === 'cabinet' ? cabinetView(state)
           : activeTab === 'technology' ? technologyView(state)
       : activeTab === 'congress' ? congressView(state)
         : activeTab === 'countries' ? countriesView(state)
@@ -285,12 +310,17 @@ export function mountDashboard(root) {
       <section class="workspace"><header class="topbar"><div><p class="eyebrow">Mandato presidencial</p><h1>${MONTHS[state.calendar.month - 1]} de ${state.calendar.year}</h1></div><div class="topbar-actions"><label class="country-picker"><span>Pais</span><select data-action="select-country" aria-label="Selecionar pais">${COUNTRIES.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((country) => `<option value="${country.id}" ${country.id === state.country.id ? 'selected' : ''}>${country.nome}</option>`).join('')}</select></label><button type="button" class="quiet-action" data-action="reset">Reiniciar</button></div></header>
       <section class="metrics">${metric('PIB', formatMoney(state.economy.gdp))}${metric('Inflacao', formatPercent(state.economy.inflation), state.economy.inflation > 0.1 ? 'negative' : '')}${metric('Desemprego', formatPercent(state.economy.unemployment))}${metric('Popularidade', `${state.economy.popularity.toFixed(0)}%`, state.economy.popularity >= 55 ? 'positive' : '')}${metric('Caixa nacional', formatMoney(state.economy.cash))}${metric('Saldo projetado', formatMoney(projection.monthlyBalance), projection.monthlyBalance >= 0 ? 'positive' : 'negative')}</section>
       ${storageNotice ? `<p class="storage-notice">${storageNotice}</p>` : ''}
-      <section class="content-area">${content}</section>
+      <section class="content-area">${content}</section>${renderNews(state)}
     </section></div>`;
     if (treatyModal) {
       const treatyMarkup = renderPeaceTreaty(state);
       treatyModal.hidden = !treatyMarkup;
       treatyModal.innerHTML = treatyMarkup;
+    }
+    if (crisisModal) {
+      const crisisMarkup = renderCrisis(state);
+      crisisModal.hidden = !crisisMarkup;
+      crisisModal.innerHTML = crisisMarkup;
     }
   }
 
@@ -312,6 +342,11 @@ export function mountDashboard(root) {
     const action = event.target.closest('[data-action]')?.dataset.action;
     if (action === 'ui-annex') window.uiAnexar();
     if (action === 'ui-loot') window.uiSaquear();
+  });
+
+  crisisModal?.addEventListener('click', (event) => {
+    const optionId = event.target.closest('[data-action="crisis-option"]')?.dataset.option;
+    if (optionId) commit(resolveEvent(state, optionId));
   });
 
   root.addEventListener('click', (event) => {
@@ -337,6 +372,8 @@ export function mountDashboard(root) {
     if (action === 'buy-ship') { commit(comprarNavio(state)); return; }
     if (action === 'buy-jet') { commit(comprarCaca(state)); return; }
     if (action === 'nuclear') { commit(fundNuclear(state, control.dataset.kind, Number(control.dataset.amount))); return; }
+    if (action === 'minister-hire') { commit(hireMinister(state, control.dataset.minister)); return; }
+    if (action === 'minister-dismiss') { commit(dismissMinister(state, control.dataset.minister)); return; }
     if (action === 'coup') { commit(attemptAutogolpe(state)); return; }
     if (action === 'research') { commit(researchTechnology(state, control.dataset.technology)); return; }
     if (action === 'negotiate') { commit(negotiate(state, control.dataset.bloc)); return; }

@@ -23,7 +23,19 @@ import {
 } from '../src/core/game-state.js';
 
 test('creates a game state for Brazil', () => {
-  assert.equal(createGameState('bra').country.id, 'bra');
+  const state = createGameState('bra');
+  assert.equal(state.country.id, 'bra');
+  assert.deepEqual(state.news, []);
+  assert.ok(state.ministers);
+});
+
+test('keeps the five most recent news headlines', async () => {
+  const { addNews } = await import('../src/core/game-state.js');
+  const state = createGameState('bra');
+  const result = ['um', 'dois', 'tres', 'quatro', 'cinco', 'seis'].reduce((next, text) => addNews(next, text), state);
+
+  assert.equal(result.news.length, 5);
+  assert.equal(result.news[0].text, 'seis');
 });
 
 test('changes only a recognized tax rate within its limits', () => {
@@ -66,6 +78,15 @@ test('blocks the monthly simulation while a peace treaty needs a decision', () =
 
   assert.deepEqual(result.calendar, prepared.calendar);
   assert.match(result.notice, /Tratado de Paz/);
+});
+
+test('blocks the monthly simulation while a national crisis awaits a decision', () => {
+  const state = { ...createGameState('bra'), pendingEvent: { id: 'test-crisis', options: [] } };
+
+  const result = advanceMonth(state);
+
+  assert.deepEqual(result.calendar, state.calendar);
+  assert.match(result.notice, /crise nacional/i);
 });
 
 test('negotiation returns a message and preserves a valid state', () => {
@@ -166,6 +187,19 @@ test('keeps a saved zero spending rate and recovers malformed military data', ()
 
   assert.equal(hydrated.budget.defenseSpend, 0);
   assert.ok(hydrated.military.nuclear);
+});
+
+test('preserves the cabinet, news and a pending crisis in a saved game', () => {
+  const saved = createGameState('bra');
+  saved.ministers.economy = { id: 'economy' };
+  saved.news = [{ text: 'Manchete persistida.', calendar: { month: 1, year: 2026 } }];
+  saved.pendingEvent = { id: 'severe-drought' };
+
+  const hydrated = hydrateGameState(JSON.stringify(saved));
+
+  assert.equal(hydrated.ministers.economy.id, 'economy');
+  assert.equal(hydrated.news[0].text, 'Manchete persistida.');
+  assert.equal(hydrated.pendingEvent.id, 'severe-drought');
 });
 
 test('migrates an older military save with army management defaults', () => {

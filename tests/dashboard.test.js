@@ -49,3 +49,12 @@ test('renders a searchable and scrollable full diplomacy list', async () => {
   assert.match(view, /Argentina/);
   assert.doesNotMatch(view, /Estados Unidos/);
 });
+
+test('renders the news feed and a blocking crisis dialog', async () => {
+  const { renderCrisis, renderNews } = await import('../src/ui/dashboard.js');
+  const { EVENTS } = await import('../src/core/events.js');
+  const state = { news: [{ text: 'Mercados reagem.', calendar: { month: 1, year: 2026 } }], pendingEvent: EVENTS[0] };
+
+  assert.match(renderNews(state), /Giro de Noticias/);
+  assert.match(renderCrisis(state), /Escandalo de Corrupcao/);
+});
