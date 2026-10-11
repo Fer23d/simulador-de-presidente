@@ -1,4 +1,5 @@
 export const LAW_LABOR_REFORM = Object.freeze({
+  category: 'Sociedade',
   id: 'labor-reform',
   stateKey: 'laborReform',
   title: 'Lei Trabalhista de Protecao e Qualificacao',
@@ -18,6 +19,7 @@ export const LAW_LABOR_REFORM = Object.freeze({
 });
 
 export const LAW_TAX_REFORM = Object.freeze({
+  category: 'Economia',
   id: 'tax-reform',
   stateKey: 'taxReform',
   title: 'Reforma Tributaria',
@@ -27,6 +29,7 @@ export const LAW_TAX_REFORM = Object.freeze({
 });
 
 export const LAW_ENVIRONMENTAL_PROTECTION = Object.freeze({
+  category: 'Ambiente',
   id: 'environmental-protection',
   stateKey: 'environmentalProtection',
   title: 'Lei Ambiental Rigida',
@@ -36,6 +39,7 @@ export const LAW_ENVIRONMENTAL_PROTECTION = Object.freeze({
 });
 
 export const LAW_MEDIA_CENSORSHIP = Object.freeze({
+  category: 'Seguranca',
   id: 'media-censorship',
   stateKey: 'mediaCensorship',
   title: 'Censura da Midia',
@@ -45,6 +49,7 @@ export const LAW_MEDIA_CENSORSHIP = Object.freeze({
 });
 
 export const LAW_MILITARY_SUBSIDY = Object.freeze({
+  category: 'Seguranca',
   id: 'military-subsidy',
   stateKey: 'militarySubsidy',
   title: 'Subsidio Militar',
@@ -53,10 +58,35 @@ export const LAW_MILITARY_SUBSIDY = Object.freeze({
   monthlyEffects: Object.freeze({ popularityModifier: -0.05, militarySupportModifier: 1.5, cashModifier: -1_200_000_000 }),
 });
 
+function policy(id, stateKey, title, category, monthlyEffects) {
+  return Object.freeze({ id, stateKey, title, category, description: title, affinity: Object.freeze({ left: 0.5, center: 0.5, right: 0.5, nationalist: 0.5 }), monthlyEffects: Object.freeze(monthlyEffects) });
+}
+
+export const LAW_OIL_NATIONALIZATION = policy('oil-nationalization', 'oilNationalization', 'Estatizacao do Petroleo', 'Economia', { cashModifier: 1_000_000_000, popularityModifier: -0.08 });
+export const LAW_PRESS_CENSORSHIP = policy('press-censorship', 'pressCensorship', 'Censura da Imprensa', 'Seguranca', { popularityModifier: -0.04, onuModifier: -4, coupRiskModifier: -0.08 });
+export const LAW_MANDATORY_SERVICE = policy('mandatory-service', 'mandatoryService', 'Servico Militar Obrigatorio', 'Seguranca', { growthModifier: -0.0003, popularityModifier: -0.12, militarySupportModifier: 0.8 });
+export const LAW_WEALTH_TAX = policy('wealth-tax', 'wealthTax', 'Imposto sobre Grandes Fortunas', 'Economia', { cashModifier: 800_000_000, growthModifier: -0.00045, popularityModifier: -0.1 });
+export const LAW_UNIVERSAL_HEALTH = policy('universal-health', 'universalHealth', 'Saude Universal', 'Sociedade', { popularityModifier: 0.2, unemploymentModifier: -0.0001, cashModifier: -600_000_000 });
+export const LAW_HOUSING_PROGRAM = policy('housing-program', 'housingProgram', 'Programa Nacional de Habitacao', 'Sociedade', { popularityModifier: 0.16, growthModifier: 0.00015, cashModifier: -500_000_000 });
+export const LAW_GREEN_ENERGY = policy('green-energy', 'greenEnergy', 'Transicao para Energia Limpa', 'Ambiente', { growthModifier: -0.0001, onuModifier: 1.2, inflationModifier: -0.0001 });
+export const LAW_FOREST_PROTECTION = policy('forest-protection', 'forestProtection', 'Protecao Florestal', 'Ambiente', { growthModifier: -0.00015, onuModifier: 0.9, popularityModifier: 0.06 });
+export const LAW_ANTI_CORRUPTION = policy('anti-corruption', 'antiCorruption', 'Lei Anticorrupcao', 'Seguranca', { popularityModifier: 0.11, onuModifier: 0.5, cashModifier: 250_000_000 });
+export const LAW_EXPORT_INCENTIVE = policy('export-incentive', 'exportIncentive', 'Incentivo a Exportacoes', 'Economia', { growthModifier: 0.0004, inflationModifier: -0.0001 });
+
 export const LAWS = Object.freeze([
   LAW_LABOR_REFORM,
   LAW_TAX_REFORM,
   LAW_ENVIRONMENTAL_PROTECTION,
   LAW_MEDIA_CENSORSHIP,
   LAW_MILITARY_SUBSIDY,
+  LAW_OIL_NATIONALIZATION,
+  LAW_PRESS_CENSORSHIP,
+  LAW_MANDATORY_SERVICE,
+  LAW_WEALTH_TAX,
+  LAW_UNIVERSAL_HEALTH,
+  LAW_HOUSING_PROGRAM,
+  LAW_GREEN_ENERGY,
+  LAW_FOREST_PROTECTION,
+  LAW_ANTI_CORRUPTION,
+  LAW_EXPORT_INCENTIVE,
 ]);

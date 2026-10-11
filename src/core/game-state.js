@@ -1,7 +1,7 @@
 import { createCongress, negotiateSupport, voteOnLaw } from './congress.js';
 import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countries.js';
 import { DEFAULT_BUDGET, advanceEconomy, clampTaxRate, setBudgetRate } from './economy.js';
-import { advanceGeopolitics, alterarNotaONU as changeOnuScore, createGeopolitics, declareWar, exigirAnexacao as demandAnnexation, getGeopoliticalModifiers, imporSancao as imposeSanction, proposeAlliance as formAlliance, proposeTradeTreaty, sabotar as sabotageCountry } from './geopolitics.js';
+import { advanceGeopolitics, alterarNotaONU as changeOnuScore, createGeopolitics, createLeague as formLeague, declareWar, exigirAnexacao as demandAnnexation, getGeopoliticalModifiers, imporSancao as imposeSanction, inviteToLeague as inviteLeagueMember, proposeAlliance as formAlliance, proposeTradeTreaty, sabotar as sabotageCountry } from './geopolitics.js';
 import { advanceMilitary, applyNuclearCompletion, canAutogolpe, comprarBlindados, comprarCacas, comprarEquipamento, comprarNavios, createMilitary, createRegime, evaluateRegime, fundNuclearProject, getPoderTotal, normalizeMilitary, recrutarSoldado as recruitSoldiers } from './military.js';
 import { LAWS, LAW_LABOR_REFORM } from './laws.js';
 import { advanceTechnology, createTechnology, getTechnologyModifiers, purchaseTechnology } from './technology.js';
@@ -240,6 +240,18 @@ export function exigirAnexacao(state, contactId) {
 export function imporSancao(state, contactId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = imposeSanction(state.geopolitics, contactId, state.economy.gdp);
+  return { ...state, geopolitics: result.geopolitics, notice: result.reason };
+}
+
+export function createLeague(state, name = 'Liga Global') {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = formLeague(state.geopolitics, state.country.id, state.economy, name);
+  return { ...state, geopolitics: result.geopolitics, economy: result.economy, notice: result.reason };
+}
+
+export function inviteToLeague(state, contactId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = inviteLeagueMember(state.geopolitics, contactId);
   return { ...state, geopolitics: result.geopolitics, notice: result.reason };
 }
 

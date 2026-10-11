@@ -62,12 +62,8 @@ test('forecasts votes from current blocs and popularity', () => {
   assert.equal(forecast.requiredVotes, 151);
 });
 
-test('publishes the expanded congressional law catalogue', () => {
-  assert.deepEqual(LAWS.map((law) => law.id), [
-    'labor-reform',
-    'tax-reform',
-    'environmental-protection',
-    'media-censorship',
-    'military-subsidy',
-  ]);
+test('publishes at least fifteen categorized congressional laws', () => {
+  assert.ok(LAWS.length >= 15);
+  assert.deepEqual(new Set(LAWS.map((law) => law.category)), new Set(['Economia', 'Sociedade', 'Seguranca', 'Ambiente']));
+  assert.ok(LAWS.some((law) => law.id === 'oil-nationalization'));
 });

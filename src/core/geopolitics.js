@@ -49,6 +49,7 @@ export function createGeopolitics() {
     internationalSanctions: false,
     annexedCountryIds: [],
     peaceTreaty: null,
+    league: null,
   };
 }
 
@@ -149,6 +150,28 @@ export function imporSancao(geopolitics, contactId, playerGdp) {
     reason: `Sancoes impostas a ${contact.name}; seu crescimento economico foi comprometido.`,
     geopolitics: updateContact(geopolitics, contactId, (item) => ({ ...item, sancionado_por_jogador: true, growthModifier: -0.03, relation: -100 })),
   };
+}
+
+export function createLeague(geopolitics, playerId, economy, name) {
+  const cost = 25_000_000_000;
+  if (geopolitics.league) return { ok: false, reason: 'Uma liga global ja existe.', geopolitics, economy };
+  if (geopolitics.onuScore < 40) return { ok: false, reason: 'A criacao da liga exige reputacao ONU de ao menos 40.', geopolitics, economy };
+  if ((Number(economy.cash) || 0) < cost) return { ok: false, reason: 'Caixa insuficiente para criar a liga.', geopolitics, economy };
+  return {
+    ok: true,
+    reason: `${name} foi fundada.`,
+    geopolitics: { ...geopolitics, league: { name, leaderId: playerId, memberIds: [] } },
+    economy: { ...economy, cash: economy.cash - cost },
+  };
+}
+
+export function inviteToLeague(geopolitics, contactId) {
+  const contact = geopolitics.contacts.find((item) => item.id === contactId);
+  const league = geopolitics.league;
+  if (!league || !contact || contact.destruido) return rejected(geopolitics, 'Liga ou pais convidado invalido.');
+  if (contact.relation <= 80) return rejected(geopolitics, 'Convite exige relacao diplomatica acima de 80.');
+  if (league.memberIds.includes(contactId)) return rejected(geopolitics, 'Pais ja participa da liga.');
+  return { ok: true, reason: `${contact.name} entrou na ${league.name}.`, geopolitics: { ...geopolitics, league: { ...league, memberIds: [...league.memberIds, contactId] } } };
 }
 
 export function getGeopoliticalModifiers(geopolitics, military) {

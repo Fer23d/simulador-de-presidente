@@ -18,6 +18,8 @@ import {
   exigirAnexacao,
   lancarAtaqueNuclear,
   resolvePeaceTreaty,
+  createLeague,
+  inviteToLeague,
 } from '../src/core/game-state.js';
 
 test('creates a game state for Brazil', () => {
@@ -236,4 +238,17 @@ test('transfers eighty percent of target cash when peace treaty is looted', () =
   assert.equal(result.economy.cash, state.economy.cash + 8_000);
   assert.equal(result.geopolitics.contacts.find((contact) => contact.id === 'arg').cash, 2_000);
   assert.equal(result.geopolitics.contacts.find((contact) => contact.id === 'arg').relation, -100);
+});
+
+test('creates a league and invites a closely aligned contact', () => {
+  const state = createGameState('bra');
+  const league = createLeague(state, 'Liga Atlantica');
+  const eligible = {
+    ...league,
+    geopolitics: { ...league.geopolitics, contacts: league.geopolitics.contacts.map((contact) => contact.id === 'arg' ? { ...contact, relation: 90 } : contact) },
+  };
+  const result = inviteToLeague(eligible, 'arg');
+
+  assert.equal(league.geopolitics.league.leaderId, 'bra');
+  assert.equal(result.geopolitics.league.memberIds.includes('arg'), true);
 });
