@@ -87,6 +87,11 @@ h2 { margin-bottom: 0; font-size: 18px; line-height: 1.2; letter-spacing: 0; }
 
 .budget-controls { display: grid; align-content: start; gap: 16px; }
 .tax-control { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+.range-control { display: grid; gap: 7px; padding: 10px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+.range-control span, .action-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.range-control strong { color: var(--ink); }
+.range-control input { width: 100%; accent-color: var(--green); }
+.danger-action { color: #ff9c9c; }
 .stepper { display: grid; grid-template-columns: 32px 64px 32px; align-items: center; }
 .stepper strong { text-align: center; color: var(--ink); font-size: 13px; }
 .icon-button { width: 29px; height: 29px; padding: 0; color: var(--ink); background: #1e302a; font-size: 18px; line-height: 1; }
