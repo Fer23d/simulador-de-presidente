@@ -14,12 +14,16 @@ const STORAGE_KEY = 'simulador-presidente-state-v1';
 const MONTHS = ['Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 const formatNumber = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
-const formatMoney = new Intl.NumberFormat('pt-BR', {
+const moneyFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
   currency: 'BRL',
   notation: 'compact',
   maximumFractionDigits: 1,
 });
+
+export function formatMoney(value) {
+  return moneyFormatter.format(value);
+}
 
 function formatPercent(value, digits = 1) {
   return `${(value * 100).toFixed(digits).replace('.', ',')}%`;
