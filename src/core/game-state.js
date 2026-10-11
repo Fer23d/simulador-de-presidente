@@ -4,8 +4,9 @@ import { DEFAULT_BUDGET, advanceEconomy, clampTaxRate, setBudgetRate } from './e
 import { advanceGeopolitics, createGeopolitics, declareWar, getGeopoliticalModifiers, proposeAlliance as formAlliance, proposeTradeTreaty } from './geopolitics.js';
 import { advanceMilitary, applyNuclearCompletion, canAutogolpe, createMilitary, createRegime, evaluateRegime, fundNuclearProject } from './military.js';
 import { LAW_LABOR_REFORM } from './laws.js';
+import { advanceTechnology, createTechnology, getTechnologyModifiers, purchaseTechnology } from './technology.js';
 
-const STATE_VERSION = 2;
+const STATE_VERSION = 3;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 
 function clamp(value, minimum, maximum) {
@@ -68,6 +69,7 @@ export function createGameState(countryId = 'bra') {
     budget: { ...DEFAULT_BUDGET },
     geopolitics: createGeopolitics(),
     military: createMilitary(country),
+    technology: createTechnology(),
     regime: createRegime(),
     randomSeed: countrySeed(country.id) || 1,
     congress: createCongress(countrySeed(country.id)),
@@ -132,6 +134,12 @@ export function attemptAutogolpe(state) {
   };
 }
 
+export function researchTechnology(state, technologyId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = purchaseTechnology(state.technology, technologyId);
+  return { ...state, technology: result.technology, notice: result.reason };
+}
+
 export function negotiate(state, blocId) {
   const result = negotiateSupport(state.congress, state.economy, blocId);
   return {
@@ -172,10 +180,14 @@ export function voteLaborLaw(state) {
 export function advanceMonth(state) {
   if (state.regime?.gameOver) return { ...state, notice: 'A partida foi encerrada.' };
   const effects = state.laws.laborReform.approved ? LAW_LABOR_REFORM.monthlyEffects : {};
-  const modifiers = getGeopoliticalModifiers(state.geopolitics, state.military);
+  const technology = advanceTechnology(state.technology, state.economy, state.budget);
+  const technologyModifiers = getTechnologyModifiers(technology);
+  const geopoliticalModifiers = getGeopoliticalModifiers(state.geopolitics, state.military);
+  const modifiers = { ...geopoliticalModifiers, growthModifier: geopoliticalModifiers.growthModifier + technologyModifiers.growthModifier, infrastructureCostModifier: geopoliticalModifiers.infrastructureCostModifier + technologyModifiers.infrastructureCostModifier, popularityModifier: geopoliticalModifiers.popularityModifier + technologyModifiers.popularityModifier };
   const economicMonth = advanceEconomy(state.economy, state.budget, effects, modifiers);
   const nuclear = applyNuclearCompletion(state.geopolitics, state.military);
   const preparedMilitary = advanceMilitary(nuclear.military, economicMonth, state.budget);
+  preparedMilitary.military.power = Math.min(100, preparedMilitary.military.power * (1 + technologyModifiers.militaryEffectiveness));
   const geopoliticalMonth = advanceGeopolitics(nuclear.geopolitics, preparedMilitary.military, economicMonth, state.randomSeed);
   const militaryMonth = advanceMilitary(preparedMilitary.military, geopoliticalMonth.economy, { defenseSpend: 0 }, geopoliticalMonth);
   const stability = evaluateRegime(state.regime, geopoliticalMonth.economy, militaryMonth.military, geopoliticalMonth.geopolitics, geopoliticalMonth.seed);
@@ -188,6 +200,7 @@ export function advanceMonth(state) {
     economy: geopoliticalMonth.economy,
     geopolitics: geopoliticalMonth.geopolitics,
     military: militaryMonth.military,
+    technology,
     regime: stability.regime,
     randomSeed: stability.seed,
     calendar: { month, year },
@@ -199,7 +212,7 @@ export function advanceMonth(state) {
 export function hydrateGameState(serialized) {
   try {
     const parsed = JSON.parse(serialized);
-    if (![1, STATE_VERSION].includes(parsed?.version) || !getCountryById(parsed?.country?.id)) {
+    if (![1, 2, STATE_VERSION].includes(parsed?.version) || !getCountryById(parsed?.country?.id)) {
       return createGameState();
     }
 
@@ -220,6 +233,7 @@ export function hydrateGameState(serialized) {
         healthSpend: Number.isFinite(Number(parsed.budget?.healthSpend)) ? Math.max(0, Number(parsed.budget.healthSpend)) : base.budget.healthSpend,
         educationSpend: Number.isFinite(Number(parsed.budget?.educationSpend)) ? Math.max(0, Number(parsed.budget.educationSpend)) : base.budget.educationSpend,
         infrastructureSpend: Number.isFinite(Number(parsed.budget?.infrastructureSpend)) ? Math.max(0, Number(parsed.budget.infrastructureSpend)) : base.budget.infrastructureSpend,
+        scienceSpend: Number.isFinite(Number(parsed.budget?.scienceSpend)) ? Math.max(0, Number(parsed.budget.scienceSpend)) : base.budget.scienceSpend,
         defenseSpend: Number.isFinite(Number(parsed.budget?.defenseSpend)) ? Math.max(0, Number(parsed.budget.defenseSpend)) : base.budget.defenseSpend,
       },
       economy: {
@@ -230,9 +244,10 @@ export function hydrateGameState(serialized) {
         popularity: clamp(Number(economy.popularity) || base.economy.popularity, 0, 100),
         cash: Number.isFinite(Number(economy.cash)) ? Number(economy.cash) : base.economy.cash,
       },
-      geopolitics: parsed.version === STATE_VERSION && Array.isArray(parsed.geopolitics?.contacts) ? parsed.geopolitics : base.geopolitics,
-      military: parsed.version === STATE_VERSION && parsed.military?.nuclear && Number.isFinite(parsed.military.power) && Number.isFinite(parsed.military.support) ? parsed.military : base.military,
-      regime: parsed.version === STATE_VERSION && parsed.regime && typeof parsed.regime === 'object' ? { ...base.regime, ...parsed.regime } : base.regime,
+      geopolitics: parsed.version >= 2 && Array.isArray(parsed.geopolitics?.contacts) ? parsed.geopolitics : base.geopolitics,
+      military: parsed.version >= 2 && parsed.military?.nuclear && Number.isFinite(parsed.military.power) && Number.isFinite(parsed.military.support) ? parsed.military : base.military,
+      technology: parsed.version === STATE_VERSION && Array.isArray(parsed.technology?.unlocked) ? { points: Math.max(0, Number(parsed.technology.points) || 0), unlocked: parsed.technology.unlocked.filter((id) => typeof id === 'string') } : base.technology,
+      regime: parsed.version >= 2 && parsed.regime && typeof parsed.regime === 'object' ? { ...base.regime, ...parsed.regime } : base.regime,
       randomSeed: Number.isFinite(parsed.randomSeed) ? parsed.randomSeed : base.randomSeed,
       congress: isValidCongress(parsed.congress) ? parsed.congress : base.congress,
       laws: {

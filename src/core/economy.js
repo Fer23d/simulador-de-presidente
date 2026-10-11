@@ -4,6 +4,7 @@ export const DEFAULT_BUDGET = Object.freeze({
   healthSpend: 0.045,
   educationSpend: 0.04,
   infrastructureSpend: 0.03,
+  scienceSpend: 0.02,
   defenseSpend: 0.035,
   socialSpend: 0.055,
   securitySpend: 0.025,
@@ -21,6 +22,7 @@ export const BUDGET_LIMITS = Object.freeze({
   healthSpend: Object.freeze({ minimum: SPENDING_MINIMUM, maximum: SPENDING_MAXIMUM }),
   educationSpend: Object.freeze({ minimum: SPENDING_MINIMUM, maximum: SPENDING_MAXIMUM }),
   infrastructureSpend: Object.freeze({ minimum: SPENDING_MINIMUM, maximum: SPENDING_MAXIMUM }),
+  scienceSpend: Object.freeze({ minimum: SPENDING_MINIMUM, maximum: SPENDING_MAXIMUM }),
   defenseSpend: Object.freeze({ minimum: SPENDING_MINIMUM, maximum: SPENDING_MAXIMUM }),
 });
 
@@ -65,6 +67,7 @@ export function projectBudget(economy, budget, modifiers = {}) {
     normalizedRate(budget.healthSpend),
     normalizedRate(budget.educationSpend),
     normalizedRate(budget.infrastructureSpend) * infrastructureCostMultiplier,
+    normalizedRate(budget.scienceSpend),
     normalizedRate(budget.defenseSpend),
     normalizedRate(budget.socialSpend),
     normalizedRate(budget.securitySpend),

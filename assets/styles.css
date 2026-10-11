@@ -114,6 +114,13 @@ h2 { margin-bottom: 0; font-size: 18px; line-height: 1.2; letter-spacing: 0; }
 .bloc-row strong { font-size: 13px; }
 .bloc-row span { color: var(--muted); font-size: 11px; }
 .bloc-row .quiet-action { white-space: nowrap; }
+.technology-panel { max-width: 1000px; }
+.technology-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.technology-card { min-width: 0; border: 1px solid var(--line); border-radius: 5px; padding: 15px; background: #17231f; }
+.technology-card.unlocked { border-color: var(--green-deep); }
+.technology-card h3 { margin: 0 0 8px; font-size: 15px; }
+.technology-card p:not(.eyebrow) { min-height: 40px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.technology-card > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--green); font-size: 12px; }
 
 .countries-panel { max-width: 1000px; }
 .country-table { max-height: 620px; overflow: auto; border-top: 1px solid var(--line); }
