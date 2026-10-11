@@ -4,6 +4,8 @@ MVP web de um jogo de estrategia politica e economica. O jogador escolhe uma
 nacao, ajusta Imposto de Renda e IVA, negocia apoio parlamentar e decide o
 destino de uma Lei Trabalhista enquanto acompanha os indicadores mensais.
 
+Jogue em: https://fer23d.github.io/simulador-de-presidente/
+
 ## Sistemas incluidos
 
 - Seed local com 200 nacoes jogaveis e area territorial em km2.
