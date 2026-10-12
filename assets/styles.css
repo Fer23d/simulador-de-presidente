@@ -142,6 +142,20 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .peace-dialog { width: min(530px, 100%); border: 4px double var(--phosphor); border-radius: 0; padding: 22px; background: #101914; box-shadow: 9px 9px 0 #020403, inset 0 0 0 1px var(--line); }
 .peace-dialog h2 { margin-bottom: 12px; }
 .peace-dialog .action-row { margin-top: 20px; justify-content: flex-end; flex-wrap: wrap; }
+.modal-arcade[hidden] { display: none; }
+.modal-arcade { position: fixed; z-index: 30; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(0, 0, 0, .88); }
+.modal-arcade-dialog { width: min(560px, 100%); padding: 24px; border: 2px double #ffd700; background: #0a0a0a; box-shadow: 0 0 15px rgba(255, 215, 0, .4), 8px 8px 0 var(--shadow); text-align: center; }
+.modal-arcade-header { color: var(--amber); font-family: "Press Start 2P", monospace; font-size: 10px; line-height: 1.7; }
+.modal-arcade-dialog h2 { margin: 14px 0 8px; color: var(--amber); }
+.modal-arcade-dialog .notice { max-width: 450px; margin: 0 auto; }
+#ascii-urna { margin: 22px auto; color: #39ff14; font-family: "Share Tech Mono", monospace; font-size: 16px; line-height: 1.08; text-align: left; text-shadow: 0 0 8px rgba(57, 255, 20, .65); }
+.modal-arcade-dialog .action-row { justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+.arcade-vote-yes, .arcade-vote-abandon { min-height: 38px; padding: 8px 10px; border-radius: 0; font-family: "Press Start 2P", monospace; font-size: 10px; box-shadow: 4px 4px 0 var(--shadow); }
+.arcade-vote-yes { border: 2px solid #39ff14; background: #39ff14; color: #050805; }
+.arcade-vote-yes:hover { background: #050805; color: #39ff14; }
+.arcade-vote-abandon { border: 2px solid #ff003c; background: #0a0a0a; color: #ff003c; }
+.arcade-vote-abandon:hover { background: #ff003c; color: #0a0a0a; }
+.arcade-vote-yes:active, .arcade-vote-abandon:active { transform: translate(4px, 4px); box-shadow: none; }
 .crisis-dialog { border-color: var(--danger); }
 .un-dialog { border-color: var(--amber); }
 .soft-power-dialog { border-color: var(--cyan); }

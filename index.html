@@ -17,6 +17,24 @@
     <div id="modal-crise" class="peace-modal" role="presentation" hidden></div>
     <div id="modal-onu" class="peace-modal" role="presentation" hidden></div>
     <div id="modal-soft-power" class="peace-modal" role="presentation" hidden></div>
+    <div id="modal-congresso" class="modal-arcade" role="presentation" hidden>
+      <section class="modal-arcade-dialog" role="dialog" aria-modal="true" aria-labelledby="congresso-lei-titulo">
+        <p class="modal-arcade-header">/// SESSAO DO CONGRESSO NACIONAL ///</p>
+        <h2 id="congresso-lei-titulo">PROJETO DE LEI</h2>
+        <p id="congresso-lei-descricao" class="notice"></p>
+        <pre id="ascii-urna" aria-label="Urna eletronica">  _________________
+ |  VOTO SECRETO   |
+ |  [=======]      |
+ |  (1) (2) (3)    |
+ |  (4) (5) (6)    |
+ |  [ CONFIRMA ]   |
+ |_________________|</pre>
+        <div class="action-row">
+          <button type="button" class="arcade-vote-yes" data-action="confirm-congress-vote">[ VOTAR SIM ]</button>
+          <button type="button" class="arcade-vote-abandon" data-action="abandon-congress-vote">[ ABANDONAR PROJETO ]</button>
+        </div>
+      </section>
+    </div>
     <script type="module" src="src/main.js"></script>
   </body>
 </html>

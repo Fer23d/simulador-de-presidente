@@ -435,6 +435,11 @@ export function voteLaw(state, lawId) {
   }, notice);
 }
 
+// A confirmation modal precedes the vote; the Congress engine still decides approval.
+export function confirmarVotoSim(state, lawId) {
+  return voteLaw(state, lawId);
+}
+
 export function voteLaborLaw(state) {
   return voteLaw(state, LAW_LABOR_REFORM.id);
 }

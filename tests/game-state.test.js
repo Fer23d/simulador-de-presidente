@@ -19,6 +19,7 @@ import {
   lancarAtaqueNuclear,
   resolvePeaceTreaty,
   createLeague,
+  confirmarVotoSim,
   inviteToLeague,
 } from '../src/core/game-state.js';
 
@@ -129,6 +130,14 @@ test('tracks separate votes for multiple congressional laws', () => {
 
   assert.equal(updated.laws.taxReform.voteCompleted, true);
   assert.equal(updated.laws.laborReform.voteCompleted, false);
+});
+
+test('confirms a congressional law through the same voting rules', () => {
+  const state = createGameState('bra');
+  const result = confirmarVotoSim(state, 'tax-reform');
+
+  assert.equal(result.laws.taxReform.voteCompleted, true);
+  assert.equal(result.activeLawIds.includes('tax-reform'), result.laws.taxReform.approved);
 });
 
 test('migrates a version 1 save with negative cash intact', () => {

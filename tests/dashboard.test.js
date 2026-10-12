@@ -35,7 +35,7 @@ test('renders dynamic law rows and a blocking peace treaty dialog', async () => 
     geopolitics: { ...state.geopolitics, peaceTreaty: { targetId: 'arg', status: 'pending' } },
   };
 
-  assert.match(renderCongress(state), /data-action="vote-law"/);
+  assert.match(renderCongress(state), /data-action="open-law-vote"/);
   assert.match(renderPeaceTreaty(treatyState), /Tratado de Paz Obrigatorio/);
 });
 

@@ -39,7 +39,7 @@ import {
   setBudget,
   startWar,
   voteLaborLaw,
-  voteLaw,
+  confirmarVotoSim as confirmarVotoLei,
   votarNaONU,
   lancarCiberataque,
   automatizarIndustria,
@@ -177,7 +177,7 @@ export function renderCongress(state) {
     const lawState = state.laws[law.stateKey] ?? { approved: false, voteCompleted: false };
     const approved = lawState.approved;
     const completed = lawState.voteCompleted;
-    return `<article class="law-row"><div><strong>${law.title}</strong><span>${law.description}</span></div><span class="bill-state ${approved ? 'approved' : completed ? 'rejected' : ''}">${approved ? 'Aprovada' : completed ? 'Rejeitada' : 'Em pauta'}</span><button type="button" class="quiet-action" data-action="vote-law" data-law="${law.id}" ${completed ? 'disabled' : ''}>${completed ? 'Encerrada' : 'Votar'}</button></article>`;
+    return `<article class="law-row"><div><strong>${law.title}</strong><span>${law.description}</span></div><span class="bill-state ${approved ? 'approved' : completed ? 'rejected' : ''}">${approved ? 'Aprovada' : completed ? 'Rejeitada' : 'Em pauta'}</span><button type="button" class="quiet-action" data-action="open-law-vote" data-law="${law.id}" ${completed ? 'disabled' : ''}>${completed ? 'Encerrada' : 'Colocar em votacao'}</button></article>`;
   }).join('');
 }
 
@@ -321,6 +321,10 @@ export function mountDashboard(root) {
   const crisisModal = document.getElementById('modal-crise');
   const unModal = document.getElementById('modal-onu');
   const softPowerModal = document.getElementById('modal-soft-power');
+  const congressModal = document.getElementById('modal-congresso');
+  const congressLawTitle = document.getElementById('congresso-lei-titulo');
+  const congressLawDescription = document.getElementById('congresso-lei-descricao');
+  let pendingCongressLawId = null;
 
   function render() {
     const projection = projectBudget(state.economy, state.budget);
@@ -379,6 +383,32 @@ export function mountDashboard(root) {
     render();
   }
 
+  function fecharModalVotacao() {
+    pendingCongressLawId = null;
+    if (congressModal) congressModal.hidden = true;
+  }
+
+  function abrirModalVotacao(lawId) {
+    const law = LAWS.find((item) => item.id === lawId);
+    const lawState = law ? state.laws[law.stateKey] : null;
+    if (!law || lawState?.voteCompleted || !congressModal) return;
+
+    pendingCongressLawId = lawId;
+    congressLawTitle.textContent = law.title;
+    congressLawDescription.textContent = law.description;
+    congressModal.hidden = false;
+  }
+
+  function confirmarVotoCongresso() {
+    if (!pendingCongressLawId) return;
+    const lawId = pendingCongressLawId;
+    fecharModalVotacao();
+    commit(confirmarVotoLei(state, lawId));
+  }
+
+  window.abrirModalVotacao = abrirModalVotacao;
+  window.confirmarVotoSim = confirmarVotoCongresso;
+
   function resolvePendingTreaty(choice) {
     const targetId = state.geopolitics.peaceTreaty?.targetId;
     if (targetId) commit(resolvePeaceTreaty(state, targetId, choice));
@@ -409,6 +439,12 @@ export function mountDashboard(root) {
     const action = event.target.closest('[data-action]')?.dataset.action;
     if (action === 'global-games-bid') commit(candidatarJogosMundiais(state));
     if (action === 'global-games-decline') commit(recusarJogosMundiais(state));
+  });
+
+  congressModal?.addEventListener('click', (event) => {
+    const action = event.target.closest('[data-action]')?.dataset.action;
+    if (action === 'confirm-congress-vote') window.confirmarVotoSim();
+    if (action === 'abandon-congress-vote') fecharModalVotacao();
   });
 
   root.addEventListener('click', (event) => {
@@ -447,7 +483,7 @@ export function mountDashboard(root) {
     if (action === 'nationalize-megacorps') { commit(estatizarMegacorporacoes(state)); return; }
     if (action === 'negotiate') { commit(negotiate(state, control.dataset.bloc)); return; }
     if (action === 'vote') { commit(voteLaborLaw(state)); return; }
-    if (action === 'vote-law') { commit(voteLaw(state, control.dataset.law)); return; }
+    if (action === 'open-law-vote') { window.abrirModalVotacao(control.dataset.law); return; }
     if (action === 'advance') { commit(advanceMonth(state)); return; }
     if (action === 'country') { activeTab = 'overview'; commit(createGameState(control.dataset.country)); return; }
     if (action === 'reset') { activeTab = 'overview'; commit(createGameState(state.country.id)); }
