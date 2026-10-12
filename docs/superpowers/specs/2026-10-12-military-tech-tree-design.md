@@ -1,7 +1,7 @@
 # Árvore de Tecnologia Militar
 
-**Status:** aprovado para planejamento  
-**Data:** 2026-10-12  
+**Status:** aprovado para planejamento
+**Data:** 2026-10-12
 **Escopo:** desbloqueios militares estratégicos, pesquisa militar mensal e bloqueios de ações de fim de jogo.
 
 ## Objetivo

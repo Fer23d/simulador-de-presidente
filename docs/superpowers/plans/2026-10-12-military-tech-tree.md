@@ -55,7 +55,7 @@ Inclua casos para custo insuficiente, compra duplicada, `nuke` sem `missiles` e 
 
 - [ ] **Step 2: Executar o teste para confirmar a falha**
 
-Run: `node --test tests/tech-tree.test.js`  
+Run: `node --test tests/tech-tree.test.js`
 Expected: FAIL porque `tech_tree.js` ainda não existe.
 
 - [ ] **Step 3: Implementar `src/core/tech_tree.js`**
@@ -64,7 +64,7 @@ Defina as cinco entradas imutáveis da especificação e valide dependências po
 
 - [ ] **Step 4: Executar os testes unitários do módulo**
 
-Run: `node --test tests/tech-tree.test.js`  
+Run: `node --test tests/tech-tree.test.js`
 Expected: PASS.
 
 - [ ] **Step 5: Commitar o núcleo da árvore**
@@ -105,7 +105,7 @@ Inclua hidratação de save versão 10 sem campos militares, valores negativos/I
 
 - [ ] **Step 2: Executar os testes para confirmar a falha**
 
-Run: `node --test tests/game-state.test.js`  
+Run: `node --test tests/game-state.test.js`
 Expected: FAIL porque os campos e o comando ainda não existem.
 
 - [ ] **Step 3: Integrar a pesquisa militar em `game-state.js`**
@@ -114,7 +114,7 @@ Suba `STATE_VERSION` para `11`, inicialize os dois campos, some os PP após o c�
 
 - [ ] **Step 4: Executar os testes de estado**
 
-Run: `node --test tests/game-state.test.js tests/tech-tree.test.js`  
+Run: `node --test tests/game-state.test.js tests/tech-tree.test.js`
 Expected: PASS.
 
 - [ ] **Step 5: Commitar integração e migração**
@@ -153,7 +153,7 @@ Para cada caso, compare os saldos e o contato alvo com o estado de entrada; acre
 
 - [ ] **Step 2: Executar os testes para confirmar a falha**
 
-Run: `node --test tests/cyber-warfare.test.js tests/black-ops.test.js tests/megaprojects.test.js tests/game-state.test.js`  
+Run: `node --test tests/cyber-warfare.test.js tests/black-ops.test.js tests/megaprojects.test.js tests/game-state.test.js`
 Expected: FAIL porque as ações ainda verificam tecnologias civis ou não verificam a árvore militar.
 
 - [ ] **Step 3: Trocar os guardas de domínio pela árvore militar**
@@ -162,7 +162,7 @@ Expected: FAIL porque as ações ainda verificam tecnologias civis ou não verif
 
 - [ ] **Step 4: Executar os testes dos bloqueios**
 
-Run: `node --test tests/cyber-warfare.test.js tests/black-ops.test.js tests/megaprojects.test.js tests/game-state.test.js`  
+Run: `node --test tests/cyber-warfare.test.js tests/black-ops.test.js tests/megaprojects.test.js tests/game-state.test.js`
 Expected: PASS.
 
 - [ ] **Step 5: Commitar os guardas estratégicos**
@@ -195,7 +195,7 @@ Inclua estado com PP suficiente e `cyber`/`bio`/`nuke` desbloqueados para provar
 
 - [ ] **Step 2: Executar os testes para confirmar a falha**
 
-Run: `node --test tests/dashboard.test.js`  
+Run: `node --test tests/dashboard.test.js`
 Expected: FAIL porque a seção e os novos filtros ainda não existem.
 
 - [ ] **Step 3: Renderizar e conectar a árvore militar**
@@ -204,12 +204,12 @@ Crie um helper local de renderização que use os dados do catálogo, liste cust
 
 - [ ] **Step 4: Executar testes de UI e regressão completa**
 
-Run: `npm test`  
+Run: `npm test`
 Expected: PASS com todos os testes existentes e os novos.
 
 - [ ] **Step 5: Revisar o diff e commit final da interface**
 
-Run: `git diff --check`  
+Run: `git diff --check`
 Expected: saída vazia.
 
 ```powershell
