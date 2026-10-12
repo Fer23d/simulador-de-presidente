@@ -22,6 +22,9 @@ import {
   confirmarVotoSim,
   autorizarAniquilacaoNuclear,
   inviteToLeague,
+  fugirEmSilencio,
+  afundarComONavio,
+  destruirDoHelicoptero,
 } from '../src/core/game-state.js';
 
 test('creates a game state for Brazil', () => {
@@ -185,6 +188,56 @@ test('blocks progression after a terminal regime outcome', () => {
   };
 
   assert.deepEqual(advanceMonth(state).calendar, state.calendar);
+});
+
+test('opens a final dilemma when both Caixa 2 and Dead Hand are eligible', () => {
+  const state = createGameState('bra');
+  const terminalState = {
+    ...state,
+    slush_fund: 50_000_000_000,
+    dead_hand_active: true,
+    regime: { ...state.regime, gameOver: true, outcome: 'golpe-militar' },
+  };
+
+  const result = advanceMonth(terminalState);
+
+  assert.equal(result.pendingFinalDilemma, true);
+  assert.equal(result.dead_hand_triggered, false);
+  assert.equal(result.escape_ending_triggered, false);
+});
+
+test('final dilemma choices resolve to escape, retaliation, or both in that order', () => {
+  const state = createGameState('bra');
+  const dilemma = {
+    ...state,
+    slush_fund: 50_000_000_000,
+    dead_hand_active: true,
+    megaprojects: { deadHand: { uraniumReserve: 250, remainingMonths: 0, completed: true } },
+    regime: { ...state.regime, gameOver: true, outcome: 'revolucao-popular' },
+    pendingFinalDilemma: true,
+  };
+
+  assert.equal(fugirEmSilencio(dilemma).escape_ending_triggered, true);
+  assert.equal(afundarComONavio(dilemma).dead_hand_triggered, true);
+  const combined = destruirDoHelicoptero(dilemma);
+  assert.equal(combined.dead_hand_triggered, true);
+  assert.equal(combined.escape_ending_triggered, true);
+});
+
+test('persists pending final dilemmas and personal escape endings', () => {
+  const state = {
+    ...createGameState('bra'),
+    slush_fund: 50_000_000_000,
+    pendingFinalDilemma: true,
+    escape_ending_triggered: true,
+    regime: { ...createGameState('bra').regime, gameOver: true, outcome: 'fuga-offshore' },
+  };
+
+  const hydrated = hydrateGameState(JSON.stringify(state));
+
+  assert.equal(hydrated.pendingFinalDilemma, true);
+  assert.equal(hydrated.escape_ending_triggered, true);
+  assert.equal(hydrated.slush_fund, 50_000_000_000);
 });
 
 test('monthly terminal defeat triggers an active Dead Hand network', () => {

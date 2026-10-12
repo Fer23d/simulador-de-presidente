@@ -21,9 +21,9 @@ import { advanceDefcon, applyDefconEconomicShock, markAnnexationTension } from '
 import { injetarVirusSintetico, orquestrarFalsaBandeira, processarInfeccoesBiologicas } from './black_ops.js';
 import { aplicarModificadoresConstitucionais, promulgarConstituicao } from './constitution.js';
 import { iniciarProjetoMaoMorta as startDeadHandProject, interceptarGameOverComMaoMorta, processarMegaprojetos } from './megaprojects.js';
-import { desviarFundos } from './corruption.js';
+import { desviarFundos, interceptarFinalCaixa2, isEscapeEligible } from './corruption.js';
 
-const STATE_VERSION = 9;
+const STATE_VERSION = 10;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 
 function clamp(value, minimum, maximum) {
@@ -66,6 +66,24 @@ function interceptDeadHandGameOver(state) {
   return result.dead_hand_triggered && !state.dead_hand_triggered
     ? addNews(syncWorld(result), 'Diretriz Omega executada: os silos da Mao Morta lancaram contra todos os alvos.')
     : result;
+}
+
+function resolverFinalDeJogo(state) {
+  if (!state.regime?.gameOver || state.pendingFinalDilemma || state.escape_ending_triggered || state.dead_hand_triggered) return state;
+  if (isEscapeEligible(state) && state.dead_hand_active) {
+    return {
+      ...state,
+      pendingFinalDilemma: true,
+      notice: 'Colapso iminente: escolha entre fuga pessoal e a Diretriz Omega.',
+    };
+  }
+  if (isEscapeEligible(state)) {
+    const result = interceptarFinalCaixa2(state);
+    return result.escape_ending_triggered && !state.escape_ending_triggered
+      ? addNews(result, 'O pais caiu, mas o helicoptero privado decolou.')
+      : result;
+  }
+  return interceptDeadHandGameOver(state);
 }
 
 function isValidCongress(congress) {
@@ -135,6 +153,12 @@ export function createGameState(countryId = 'bra') {
     megaprojects: { deadHand: null },
     dead_hand_active: false,
     dead_hand_triggered: false,
+    slush_fund: 0,
+    slushFundTransfersThisMonth: 0,
+    escape_ending_triggered: false,
+    pendingFinalDilemma: false,
+    double_agent_active: false,
+    pendingInterrogation: null,
     notice: 'Gabinete iniciado. O primeiro mes de governo comeca agora.',
   };
 }
@@ -165,6 +189,22 @@ export function desviarFundosParaCaixa2(state) {
   return result.slush_fund !== state.slush_fund
     ? addNews(result, `Caixa 2 atualizado: R$ ${result.slush_fund.toLocaleString('pt-BR')}.`)
     : result;
+}
+
+export function fugirEmSilencio(state) {
+  if (!state.pendingFinalDilemma) return { ...state, notice: 'Nenhum dilema final aguarda decisao.' };
+  return interceptarFinalCaixa2({ ...state, pendingFinalDilemma: false });
+}
+
+export function afundarComONavio(state) {
+  if (!state.pendingFinalDilemma) return { ...state, notice: 'Nenhum dilema final aguarda decisao.' };
+  return interceptDeadHandGameOver({ ...state, pendingFinalDilemma: false });
+}
+
+export function destruirDoHelicoptero(state) {
+  if (!state.pendingFinalDilemma) return { ...state, notice: 'Nenhum dilema final aguarda decisao.' };
+  const retaliation = interceptDeadHandGameOver({ ...state, pendingFinalDilemma: false });
+  return interceptarFinalCaixa2(retaliation);
 }
 
 function applyGeopoliticalAction(state, action) {
@@ -553,7 +593,7 @@ export function voteLaborLaw(state) {
 }
 
 export function advanceMonth(state) {
-  if (state.regime?.gameOver) return interceptDeadHandGameOver({ ...state, notice: 'A partida foi encerrada.' });
+  if (state.regime?.gameOver) return resolverFinalDeJogo({ ...state, notice: 'A partida foi encerrada.' });
   if (state.geopolitics.peaceTreaty?.status === 'pending') return { ...state, notice: 'Resolva o Tratado de Paz antes de avancar o mes.' };
   if (state.pendingEvent) return { ...state, notice: 'Resolva a crise nacional antes de avancar o mes.' };
   if (state.pendingUnVote) return { ...state, notice: 'Registre seu voto na Assembleia da ONU antes de avancar o mes.' };
@@ -629,13 +669,14 @@ export function advanceMonth(state) {
     calendar: { month, year },
     monthCounter: (Number(state.monthCounter) || 0) + 1,
     megacorp_power: corporateState.megacorp_power,
+    slushFundTransfersThisMonth: 0,
     activeLawIds: corporateState.activeLawIds,
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
   });
   const megaprojectState = processarMegaprojetos(completedState);
-  const terminalState = interceptDeadHandGameOver(megaprojectState);
-  if (terminalState.dead_hand_triggered) return terminalState;
+  const terminalState = resolverFinalDeJogo(megaprojectState);
+  if (terminalState.dead_hand_triggered || terminalState.escape_ending_triggered || terminalState.pendingFinalDilemma) return terminalState;
   const resolvedState = aplicarEfeitosSoftPower(processarMigracoes(aplicarResolucoes(processarInfeccoesBiologicas(advanceCyberWarfare(megaprojectState)))));
   const bioAlert = Boolean(resolvedState.country?.bio_infected) || Boolean(completedState.country?.bio_infected);
   const withNews = bioAlert
@@ -659,7 +700,7 @@ export function advanceMonth(state) {
 export function hydrateGameState(serialized) {
   try {
     const parsed = JSON.parse(serialized);
-    if (![1, 2, 3, 4, 5, 6, 7, 8, STATE_VERSION].includes(parsed?.version) || !getCountryById(parsed?.country?.id)) {
+    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, STATE_VERSION].includes(parsed?.version) || !getCountryById(parsed?.country?.id)) {
       return createGameState();
     }
 
@@ -774,6 +815,12 @@ export function hydrateGameState(serialized) {
       },
       dead_hand_active: Boolean(parsed.dead_hand_active),
       dead_hand_triggered: Boolean(parsed.dead_hand_triggered),
+      slush_fund: Math.max(0, Number(parsed.slush_fund) || 0),
+      slushFundTransfersThisMonth: Math.max(0, Math.floor(Number(parsed.slushFundTransfersThisMonth) || 0)),
+      escape_ending_triggered: Boolean(parsed.escape_ending_triggered),
+      pendingFinalDilemma: Boolean(parsed.pendingFinalDilemma),
+      double_agent_active: Boolean(parsed.double_agent_active),
+      pendingInterrogation: null,
     });
   } catch {
     return createGameState();
