@@ -1,3 +1,5 @@
+import { adjustFactions } from './factions.js';
+
 export const EVENTS = Object.freeze([
   Object.freeze({
     id: 'corruption-scandal',
@@ -31,7 +33,6 @@ export const EVENTS = Object.freeze([
 function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
 }
-
 function nextRandom(seed) {
   const nextSeed = (Math.imul(Number(seed) >>> 0, 1664525) + 1013904223) >>> 0;
   return { seed: nextSeed, value: nextSeed / 4_294_967_296 };
@@ -55,10 +56,14 @@ export function applyEventOption(state, optionId) {
     economy: {
       ...state.economy,
       cash: state.economy.cash + (Number(effects.cash) || 0),
-      popularity: clamp(state.economy.popularity + (Number(effects.popularity) || 0), 0, 100),
       inflation: clamp(state.economy.inflation + (Number(effects.inflation) || 0), 0, 0.8),
       unemployment: clamp(state.economy.unemployment + (Number(effects.unemployment) || 0), 0.02, 0.45),
     },
+    factions: adjustFactions(state.factions, {
+      trabalhadores: Number(effects.popularity) || 0,
+      religiosos: (Number(effects.popularity) || 0) * 0.5,
+      elite: (Number(effects.popularity) || 0) * 0.25,
+    }),
     geopolitics: {
       ...state.geopolitics,
       onuScore,

@@ -259,14 +259,14 @@ export function getGeopoliticalModifiers(geopolitics, military) {
     tradeRevenueRate: geopolitics.internationalSanctions ? 0 : treatyCount * 0.002,
     growthModifier: (Number(geopolitics.tradeGrowthBonus) || 0) + (treatyCount * 0.00035) + (nuclear.civilOnline ? 0.0007 : 0) - (geopolitics.sanctionSeverity * 0.0015) - (geopolitics.internationalSanctions ? 0.012 : 0),
     infrastructureCostModifier: nuclear.civilOnline ? -0.1 : 0,
-    popularityModifier: (treatyCount * 0.03) - (warCount * 0.35),
+    factionModifier: (treatyCount * 0.03) - (warCount * 0.35),
   };
 }
 
 export function advanceGeopolitics(geopolitics, military, economy, seed) {
   let random = nextRandom(seed);
   let militaryPowerLoss = 0;
-  let popularityDelta = 0;
+  let factionDelta = 0;
   const events = [];
   const cashCost = economy.gdp / 12 * 0.006;
   let cash = economy.cash;
@@ -282,7 +282,7 @@ export function advanceGeopolitics(geopolitics, military, economy, seed) {
     random = nextRandom(random.seed);
     const won = playerScore >= contact.militaryPower;
     militaryPowerLoss += won ? 0.8 : 2.4;
-    popularityDelta += won ? 0.45 : -0.8;
+    factionDelta += won ? 0.45 : -0.8;
     events.push(won ? `Vitoria taticas contra ${contact.name}.` : `Reves militar contra ${contact.name}.`);
     if (!won) return { ...contact, relation: -100 };
     const damage = Math.max(2, Math.round((playerScore / Math.max(1, contact.militaryPower)) * 4));
@@ -301,8 +301,9 @@ export function advanceGeopolitics(geopolitics, military, economy, seed) {
       peaceTreaty,
       sanctionSeverity: Math.max(0, geopolitics.sanctionSeverity - 0.015),
     },
-    economy: { ...economy, cash, popularity: clamp(economy.popularity + popularityDelta, 0, 100) },
-    militaryDelta: { powerLoss: militaryPowerLoss, supportDelta: popularityDelta * 0.35 },
+    economy: { ...economy, cash },
+    militaryDelta: { powerLoss: militaryPowerLoss, supportDelta: factionDelta * 0.35 },
+    factionDelta,
     seed: random.seed,
     events,
   };

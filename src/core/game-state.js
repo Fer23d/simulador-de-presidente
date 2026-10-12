@@ -8,6 +8,9 @@ import { advanceTechnology, createTechnology, getTechnologyModifiers, purchaseTe
 import { getTraitModifiers } from './traits.js';
 import { EVENTS, applyEventOption, rollMonthlyEvent } from './events.js';
 import { createMinisters, dismissMinister as dismissCabinetMinister, getMinisterModifiers, hireMinister as hireCabinetMinister } from './ministers.js';
+import { advanceFactions, createFactions, getFactionModifiers, getFactionSupport, normalizeFactions } from './factions.js';
+import { absorverPaisParaUniao as absorbIntoUnion, decretarRevolucaoSocialista as decreeSocialistRevolution } from './revolution.js';
+import { financiarRebeldes as fundRebels } from './espionage.js';
 
 const STATE_VERSION = 6;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
@@ -26,7 +29,6 @@ function createEconomy(country) {
     gdp: country.pib_base,
     inflation: 0.035 + ((seed % 40) / 1_000),
     unemployment: 0.05 + ((seed % 80) / 1_000),
-    popularity: 54,
     cash: Math.round(country.pib_base * 0.06),
   };
 }
@@ -84,6 +86,7 @@ export function createGameState(countryId = 'bra') {
     world: geopolitics.contacts,
     military: createMilitary(country),
     technology: createTechnology(),
+    factions: createFactions(),
     ministers: createMinisters(),
     regime: createRegime(),
     randomSeed: countrySeed(country.id) || 1,
@@ -172,7 +175,23 @@ export function hireMinister(state, ministerId) {
 export function dismissMinister(state, ministerId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = dismissCabinetMinister(state.ministers, state.economy, ministerId);
-  return addNews({ ...state, ministers: result.ministers, economy: result.economy, notice: result.reason }, result.reason);
+  const factions = { ...state.factions, trabalhadores: Math.min(100, state.factions.trabalhadores + 3), religiosos: Math.min(100, state.factions.religiosos + 2) };
+  return addNews({ ...state, ministers: result.ministers, economy: result.economy, factions, notice: result.reason }, result.reason);
+}
+
+export function decretarRevolucaoSocialista(state) {
+  const result = decreeSocialistRevolution(state);
+  return result.regime === state.regime ? result : addNews(syncWorld(result), result.notice);
+}
+
+export function absorverPaisParaUniao(state, contactId) {
+  const result = absorbIntoUnion(state, contactId);
+  return result.geopolitics === state.geopolitics ? result : addNews(syncWorld(result), result.notice);
+}
+
+export function financiarRebeldes(state, contactId) {
+  const result = fundRebels(state, contactId);
+  return result.geopolitics === state.geopolitics ? result : addNews(syncWorld(result), result.notice);
 }
 
 export function resolveEvent(state, optionId) {
@@ -302,7 +321,7 @@ export function researchTechnology(state, technologyId) {
 }
 
 export function negotiate(state, blocId) {
-  const result = negotiateSupport(state.congress, state.economy, blocId);
+  const result = negotiateSupport(state.congress, state.economy, blocId, state.factions);
   return {
     ...state,
     congress: result.congress,
@@ -329,7 +348,7 @@ export function voteLaw(state, lawId) {
     return { ...state, notice: `${law.title} ja foi votada nesta legislatura.` };
   }
 
-  const result = voteOnLaw(state.congress, law, state.economy.popularity);
+  const result = voteOnLaw(state.congress, law, state.factions);
   const notice = result.approved
     ? `${law.title} aprovada por ${result.votesFor} votos.`
     : `${law.title} rejeitada: ${result.votesFor}/${result.requiredVotes} votos.`;
@@ -350,6 +369,7 @@ export function advanceMonth(state) {
   if (state.geopolitics.peaceTreaty?.status === 'pending') return { ...state, notice: 'Resolva o Tratado de Paz antes de avancar o mes.' };
   if (state.pendingEvent) return { ...state, notice: 'Resolva a crise nacional antes de avancar o mes.' };
   const effects = aggregateActiveLawEffects(state.laws);
+  const factionModifiers = getFactionModifiers(state.factions);
   const ministerModifiers = getMinisterModifiers(state.ministers);
   const monthlyEffects = { ...effects, taxRevenueModifier: (effects.taxRevenueModifier ?? 0) + ministerModifiers.taxRevenueModifier };
   const technology = advanceTechnology(state.technology, state.economy, state.budget, state.country.trait);
@@ -358,9 +378,9 @@ export function advanceMonth(state) {
   const traitModifiers = getTraitModifiers(state.country, state.geopolitics);
   const modifiers = {
     ...geopoliticalModifiers,
-    growthModifier: geopoliticalModifiers.growthModifier + technologyModifiers.growthModifier,
+    growthModifier: geopoliticalModifiers.growthModifier + technologyModifiers.growthModifier + factionModifiers.growthModifier,
     infrastructureCostModifier: geopoliticalModifiers.infrastructureCostModifier + technologyModifiers.infrastructureCostModifier,
-    popularityModifier: geopoliticalModifiers.popularityModifier + technologyModifiers.popularityModifier,
+    popularityModifier: geopoliticalModifiers.factionModifier + technologyModifiers.popularityModifier,
     tradeRevenueRate: geopoliticalModifiers.tradeRevenueRate + traitModifiers.exportRevenueRate,
     inflationModifier: traitModifiers.foodInflationModifier + technologyModifiers.foodInflationModifier,
   };
@@ -368,13 +388,14 @@ export function advanceMonth(state) {
   const traitInterest = economyAfterPolicy.cash > 0 ? economyAfterPolicy.cash * traitModifiers.cashInterest : 0;
   const economicMonth = { ...economyAfterPolicy, cash: economyAfterPolicy.cash + traitInterest };
   const nuclear = applyNuclearCompletion(changeOnuScore(state.geopolitics, effects.onuModifier ?? 0), state.military);
-  const preparedMilitary = advanceMilitary(nuclear.military, economicMonth, state.budget);
+  const preparedMilitary = advanceMilitary(nuclear.military, economicMonth, state.budget, {}, state.factions);
   preparedMilitary.military.infantryMultiplier = technologyModifiers.infantryMultiplier;
   preparedMilitary.military.support = clamp(preparedMilitary.military.support + (effects.militarySupportModifier ?? 0), 0, 100);
   preparedMilitary.military.power = Math.min(100, preparedMilitary.military.power * (1 + technologyModifiers.militaryEffectiveness));
   const geopoliticalMonth = advanceGeopolitics(nuclear.geopolitics, preparedMilitary.military, economicMonth, state.randomSeed);
-  const militaryMonth = advanceMilitary(preparedMilitary.military, geopoliticalMonth.economy, { defenseSpend: 0 }, geopoliticalMonth);
-  const stability = evaluateRegime(state.regime, militaryMonth.economy, militaryMonth.military, geopoliticalMonth.geopolitics, geopoliticalMonth.seed);
+  const militaryMonth = advanceMilitary(preparedMilitary.military, geopoliticalMonth.economy, { defenseSpend: 0 }, geopoliticalMonth, state.factions);
+  const factions = advanceFactions(state.factions, state.economy, militaryMonth.economy, state.budget, effects, { popularityModifier: modifiers.popularityModifier + (geopoliticalMonth.factionDelta ?? 0) });
+  const stability = evaluateRegime(state.regime, militaryMonth.economy, militaryMonth.military, geopoliticalMonth.geopolitics, geopoliticalMonth.seed, factions);
   const month = state.calendar.month === 12 ? 1 : state.calendar.month + 1;
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? `Mes encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superavit' : 'com deficit'}.`;
@@ -384,6 +405,7 @@ export function advanceMonth(state) {
     economy: militaryMonth.economy,
     geopolitics: geopoliticalMonth.geopolitics,
     military: militaryMonth.military,
+    factions,
     technology,
     regime: { ...stability.regime, coupRisk: clamp(stability.regime.coupRisk + (effects.coupRiskModifier ?? 0), 0, 0.8) },
     randomSeed: stability.seed,
@@ -441,7 +463,6 @@ export function hydrateGameState(serialized) {
         gdp: Math.max(1, Number(economy.gdp) || base.economy.gdp),
         inflation: clamp(Number(economy.inflation) || 0, 0, 0.8),
         unemployment: clamp(Number(economy.unemployment) || base.economy.unemployment, 0.02, 0.45),
-        popularity: clamp(Number(economy.popularity) || base.economy.popularity, 0, 100),
         cash: Number.isFinite(Number(economy.cash)) ? Number(economy.cash) : base.economy.cash,
       },
       geopolitics: parsed.version >= 2 && Array.isArray(parsed.geopolitics?.contacts) ? {
@@ -456,6 +477,12 @@ export function hydrateGameState(serialized) {
         ? normalizeMilitary({ ...base.military, ...parsed.military, nuclear: { ...base.military.nuclear, ...parsed.military.nuclear } })
         : base.military,
       technology: parsed.version >= 3 && Array.isArray(parsed.technology?.unlocked) ? { points: Math.max(0, Number(parsed.technology.points) || 0), unlocked: parsed.technology.unlocked.filter((id) => typeof id === 'string') } : base.technology,
+      factions: parsed.factions ? normalizeFactions(parsed.factions) : normalizeFactions({
+        elite: Number(parsed.economy?.popularity) || 50,
+        trabalhadores: Number(parsed.economy?.popularity) || 50,
+        militares: Number(parsed.military?.support) || 50,
+        religiosos: Number(parsed.economy?.popularity) || 50,
+      }),
       regime: parsed.version >= 2 && parsed.regime && typeof parsed.regime === 'object' ? { ...base.regime, ...parsed.regime } : base.regime,
       randomSeed: Number.isFinite(parsed.randomSeed) ? parsed.randomSeed : base.randomSeed,
       congress: isValidCongress(parsed.congress) ? parsed.congress : base.congress,

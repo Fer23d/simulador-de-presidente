@@ -4,8 +4,10 @@ import { BUDGET_LIMITS, projectBudget } from '../core/economy.js';
 import { LAWS } from '../core/laws.js';
 import { TECHNOLOGIES } from '../core/technology.js';
 import { MINISTERS } from '../core/ministers.js';
+import { getFactionSupport } from '../core/factions.js';
 import {
   advanceMonth,
+  absorverPaisParaUniao,
   dismissMinister,
   comprarBlindado,
   comprarCaca,
@@ -14,6 +16,8 @@ import {
   attemptAutogolpe,
   changeTax,
   createGameState,
+  decretarRevolucaoSocialista,
+  financiarRebeldes,
   fundNuclear,
   hireMinister,
   resolvePeaceTreaty,
@@ -174,12 +178,13 @@ function congressView(state) {
       ...bloc,
       support: bloc.baseSupport ? Math.min(1, 0.01 + (bloc.id === 'left' ? 0.82 : bloc.id === 'center' ? 0.58 : bloc.id === 'right' ? 0.28 : 0.36) + bloc.support) : bloc.support,
     })),
-  }, state.economy.popularity);
+  }, state.factions);
+  const revolutionReady = state.regime.type === 'democracy' && state.factions.trabalhadores > 80 && state.factions.militares > 60 && state.factions.elite < 40;
   return `<section class="view-grid congress-grid">
     <section class="panel bill-panel"><div class="panel-heading"><div><p class="eyebrow">Projetos de lei</p><h2>Pauta do Congresso</h2></div></div><div id="lista-leis" class="law-list">${renderCongress(state)}</div><div class="vote-meter"><div class="meter-track"><span style="width:${percentage((forecast.votesFor / forecast.requiredVotes) * 100)}%"></span></div><strong>${forecast.votesFor} / ${forecast.requiredVotes} votos estimados</strong></div></section>
     <section class="panel bloc-panel">
       <div class="panel-heading"><div><p class="eyebrow">Bancadas</p><h2>Articulacao</h2></div></div>
-      <div class="bloc-list">${state.congress.blocs.map((bloc) => `<article class="bloc-row"><div><strong>${bloc.label}</strong><span>${bloc.seats} assentos</span></div><button type="button" class="quiet-action" data-action="negotiate" data-bloc="${bloc.id}" ${bloc.negotiated ? 'disabled' : ''}>${bloc.negotiated ? 'Apoio obtido' : `Negociar ${formatMoney(bloc.negotiationCost)}`}</button></article>`).join('')}</div>
+      <div class="bloc-list">${state.congress.blocs.map((bloc) => `<article class="bloc-row"><div><strong>${bloc.label}</strong><span>${bloc.seats} assentos</span></div><button type="button" class="quiet-action" data-action="negotiate" data-bloc="${bloc.id}" ${bloc.negotiated ? 'disabled' : ''}>${bloc.negotiated ? 'Apoio obtido' : `Negociar ${formatMoney(bloc.negotiationCost)}`}</button></article>`).join('')}</div><div class="ledger-row"><span>Elite / Trabalhadores</span><strong>${state.factions.elite.toFixed(0)} / ${state.factions.trabalhadores.toFixed(0)}</strong></div><div class="ledger-row"><span>Militares / Religiosos</span><strong>${state.factions.militares.toFixed(0)} / ${state.factions.religiosos.toFixed(0)}</strong></div><button type="button" class="quiet-action danger-action" data-action="socialist-revolution" ${revolutionReady ? '' : 'disabled'}>Decretar Revolucao Socialista</button>
     </section>
   </section>`;
 }
@@ -207,9 +212,10 @@ export function diplomacyView(state, searchQuery = '') {
     .filter((contact) => !contact.destruido && contact.id !== state.country.id)
     .filter((contact) => !query || contact.name.toLocaleLowerCase('pt-BR').includes(query));
   const league = state.geopolitics.league;
+  const union = state.regime.type === 'communist_dictatorship';
   const peacePanel = target ? '<p class="notice">Um tratado de paz aguarda decisao no painel bloqueante.</p>' : '';
   const leaguePanel = league ? `<div class="ledger-row"><span>${league.name}</span><strong>${league.memberIds.length} membros</strong></div>` : `<button type="button" class="quiet-action" data-action="league-create">Criar Nova Liga Global</button>`;
-  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relacoes Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}<label class="diplomacy-search"><span>Buscar pais</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de paises diplomaticos">${contacts.map((contact) => `<article class="bloc-row"><div><strong>${contact.name}</strong><span>Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | ${contact.trait}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button>${league && !league.memberIds.includes(contact.id) ? `<button type="button" class="quiet-action" data-action="league-invite" data-contact="${contact.id}">Convidar</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('') || '<p class="notice">Nenhum pais corresponde a busca.</p>'}</div></section>`;
+  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relacoes Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}<label class="diplomacy-search"><span>Buscar pais</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de paises diplomaticos">${contacts.map((contact) => `<article class="bloc-row"><div><strong>${contact.name}</strong><span>Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | ${contact.trait}${contact.puppet ? ' | Fantoche' : ''}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button>${union ? `<button type="button" class="quiet-action" data-action="union-absorb" data-contact="${contact.id}" ${contact.relation > 80 || contact.puppet ? '' : 'disabled'}>Absorver pela Uniao</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="fund-rebels" data-contact="${contact.id}">Financiar Rebeldes</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('') || '<p class="notice">Nenhum pais corresponde a busca.</p>'}</div></section>`;
 }
 
 function legacyMilitaryView(state) {
@@ -308,7 +314,7 @@ export function mountDashboard(root) {
     root.innerHTML = `<div class="app-shell">
       <aside class="sidebar"><div class="brand"><span class="brand-mark">SP</span><div><strong>Simulador</strong><small>de Presidente</small></div></div><nav class="tab-list" aria-label="Navegacao principal">${tabs.map(([id, label]) => `<button type="button" class="tab-button ${activeTab === id ? 'active' : ''}" data-action="tab" data-tab="${id}">${label}</button>`).join('')}</nav><div class="sidebar-footer"><span>Mandato em curso</span><strong>${state.calendar.year}</strong></div></aside>
       <section class="workspace"><header class="topbar"><div><p class="eyebrow">Mandato presidencial</p><h1>${MONTHS[state.calendar.month - 1]} de ${state.calendar.year}</h1></div><div class="topbar-actions"><label class="country-picker"><span>Pais</span><select data-action="select-country" aria-label="Selecionar pais">${COUNTRIES.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((country) => `<option value="${country.id}" ${country.id === state.country.id ? 'selected' : ''}>${country.nome}</option>`).join('')}</select></label><button type="button" class="quiet-action" data-action="reset">Reiniciar</button></div></header>
-      <section class="metrics">${metric('PIB', formatMoney(state.economy.gdp))}${metric('Inflacao', formatPercent(state.economy.inflation), state.economy.inflation > 0.1 ? 'negative' : '')}${metric('Desemprego', formatPercent(state.economy.unemployment))}${metric('Popularidade', `${state.economy.popularity.toFixed(0)}%`, state.economy.popularity >= 55 ? 'positive' : '')}${metric('Caixa nacional', formatMoney(state.economy.cash))}${metric('Saldo projetado', formatMoney(projection.monthlyBalance), projection.monthlyBalance >= 0 ? 'positive' : 'negative')}</section>
+      <section class="metrics">${metric('PIB', formatMoney(state.economy.gdp))}${metric('Inflacao', formatPercent(state.economy.inflation), state.economy.inflation > 0.1 ? 'negative' : '')}${metric('Desemprego', formatPercent(state.economy.unemployment))}${metric('Apoio interno', `${getFactionSupport(state.factions).toFixed(0)}%`, getFactionSupport(state.factions) >= 55 ? 'positive' : '')}${metric('Caixa nacional', formatMoney(state.economy.cash))}${metric('Saldo projetado', formatMoney(projection.monthlyBalance), projection.monthlyBalance >= 0 ? 'positive' : 'negative')}</section>
       ${storageNotice ? `<p class="storage-notice">${storageNotice}</p>` : ''}
       <section class="content-area">${content}</section>${renderNews(state)}
     </section></div>`;
@@ -363,6 +369,9 @@ export function mountDashboard(root) {
     if (action === 'league-create') { commit(createLeague(state, 'Liga Global')); return; }
     if (action === 'league-invite') { commit(inviteToLeague(state, control.dataset.contact)); return; }
     if (action === 'sabotage') { commit(sabotar(state, control.dataset.contact)); return; }
+    if (action === 'fund-rebels') { commit(financiarRebeldes(state, control.dataset.contact)); return; }
+    if (action === 'union-absorb') { commit(absorverPaisParaUniao(state, control.dataset.contact)); return; }
+    if (action === 'socialist-revolution') { commit(decretarRevolucaoSocialista(state)); return; }
     if (action === 'sanction') { commit(imporSancao(state, control.dataset.contact)); return; }
     if (action === 'ultimatum') { commit(exigirAnexacao(state, control.dataset.contact)); return; }
     if (action === 'nuclear-strike') { commit(lancarAtaqueNuclear(state, control.dataset.contact)); return; }

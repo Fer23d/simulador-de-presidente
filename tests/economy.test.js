@@ -51,7 +51,7 @@ test('keeps bounded indicators after a monthly update', () => {
 
   assert.ok(result.inflation >= 0 && result.inflation <= 0.8);
   assert.ok(result.unemployment >= 0.02 && result.unemployment <= 0.45);
-  assert.ok(result.popularity >= 0 && result.popularity <= 100);
+  assert.equal(Object.hasOwn(result, 'popularity'), false);
 });
 
 test('applies high-tax and civil-energy modifiers during an economic month', () => {

@@ -80,13 +80,14 @@ export function createMilitary(country) {
   });
 }
 
-export function advanceMilitary(military, economy, budget, geopoliticalResult = {}) {
+export function advanceMilitary(military, economy, budget, geopoliticalResult = {}, factions = {}) {
   const normalized = normalizeMilitary(military);
   const defenseSpend = clamp(Number(budget.defenseSpend) || 0, 0, 0.15);
   const warDelta = geopoliticalResult.militaryDelta ?? {};
   const deficitPenalty = economy.cash < 0 ? 0.8 : 0;
   const powerGain = defenseSpend * 18;
-  const supportShift = (economy.popularity - 50) * 0.015 + (defenseSpend * 8) + (warDelta.supportDelta ?? 0) - deficitPenalty;
+  const militaryFaction = Number(factions.militares) || 50;
+  const supportShift = (militaryFaction - 50) * 0.015 + (defenseSpend * 8) + (warDelta.supportDelta ?? 0) - deficitPenalty;
   const maintenance = (normalized.exercito.soldados * 180)
     + (normalized.exercito.blindados * 6_000_000)
     + (normalized.marinha.navios * 12_000_000)
@@ -205,15 +206,22 @@ export function createRegime() {
   return { type: 'democracy', coupRisk: 0, revolutionRisk: 0, electionsSuspended: false, gameOver: false, outcome: null };
 }
 
-export function evaluateRegime(regime, economy, military, geopolitics, seed) {
+export function evaluateRegime(regime, economy, military, geopolitics, seed, factions = {}) {
   if (regime.gameOver) return { regime, seed, event: null };
+  if ((Number(factions.militares) || 50) < 20) {
+    return {
+      seed,
+      event: 'Golpe militar encerrou o mandato por perda de apoio nas Forcas Armadas.',
+      regime: { ...regime, coupRisk: 1, gameOver: true, outcome: 'golpe-militar', electionsSuspended: true },
+    };
+  }
   const atWar = geopolitics.contacts?.some((contact) => contact.atWar) ? 1 : 0;
   const sanctions = clamp(Number(geopolitics.sanctionSeverity) || 0, 0, 1);
   const random = nextRandom(seed);
-  if (regime.type === 'dictatorship') {
+  if (regime.type === 'dictatorship' || regime.type === 'communist_dictatorship') {
     const revolutionRisk = clamp(
       (Number(regime.revolutionRisk) || 0) + 0.015
-        + ((100 - clamp(Number(economy.popularity) || 0, 0, 100)) / 100) * 0.12
+        + ((100 - (Number(factions.trabalhadores) || 50)) / 100) * 0.12
         + (Number(economy.inflation) || 0) * 0.3
         + (Number(economy.unemployment) || 0) * 0.2
         + (atWar * 0.1)
@@ -228,9 +236,9 @@ export function evaluateRegime(regime, economy, military, geopolitics, seed) {
       regime: { ...regime, coupRisk: 0, revolutionRisk, gameOver, outcome: gameOver ? 'revolucao-popular' : null, electionsSuspended: true },
     };
   }
-  const severeCrisis = economy.popularity <= 10 && economy.cash < 0;
+  const severeCrisis = (Number(factions.trabalhadores) || 50) <= 10 && economy.cash < 0;
   const coupRisk = severeCrisis
-    ? clamp(0.22 + ((10 - economy.popularity) * 0.025) + (atWar * 0.12) + (Math.max(0, military.support - 60) * 0.006), 0, 0.8)
+    ? clamp(0.22 + (atWar * 0.12) + (Math.max(0, military.support - 60) * 0.006), 0, 0.8)
     : 0;
   const gameOver = severeCrisis && random.value < coupRisk;
   return {

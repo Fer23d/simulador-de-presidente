@@ -89,6 +89,7 @@ export function projectBudget(economy, budget, modifiers = {}) {
 }
 
 export function advanceEconomy(economy, budget, lawEffects = {}, modifiers = {}) {
+  const { popularity: _legacyPopularity, ...currentEconomy } = economy;
   const projection = projectBudget(economy, budget, { ...modifiers, taxRevenueModifier: lawEffects.taxRevenueModifier });
   const totalTaxRate = clampTaxRate(budget.incomeTaxRate) + clampTaxRate(budget.vatRate);
   const deficitPressure = -projection.monthlyBalance / projection.monthlyGdp;
@@ -125,24 +126,11 @@ export function advanceEconomy(economy, budget, lawEffects = {}, modifiers = {})
     0.02,
     0.45,
   );
-  const popularity = clamp(
-    economy.popularity
-      + (projection.monthlyBalance >= 0 ? 0.25 : -0.25)
-      - (inflation * 0.45)
-      - (unemployment * 0.2)
-      - (taxPressure * 5)
-      + (lawEffects.popularityModifier ?? 0)
-      + (modifiers.popularityModifier ?? 0),
-    0,
-    100,
-  );
-
   return {
-    ...economy,
+    ...currentEconomy,
     gdp: Math.round(economy.gdp * (1 + growthRate)),
     inflation,
     unemployment,
-    popularity,
     cash: economy.cash + projection.monthlyBalance + (lawEffects.cashModifier ?? 0),
     ...projection,
   };

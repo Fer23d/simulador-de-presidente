@@ -39,6 +39,9 @@ export function dismissMinister(ministers, economy, ministerId) {
     ok: true,
     reason: `${definition.title} foi demitido; a opiniao publica reagiu positivamente.`,
     ministers: { ...createMinisters(), ...ministers, [ministerId]: null },
-    economy: { ...economy, popularity: Math.min(100, (Number(economy.popularity) || 0) + 3) },
+    economy: (() => {
+      const { popularity: _legacyPopularity, ...cleanEconomy } = economy;
+      return cleanEconomy;
+    })(),
   };
 }

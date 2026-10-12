@@ -13,10 +13,10 @@ test('hires an economy minister and applies the tax revenue bonus', () => {
   assert.ok(hired.economy.cash < economy.cash);
 });
 
-test('dismisses a minister for an immediate popularity boost', () => {
+test('dismisses a minister without reintroducing a popularity field', () => {
   const ministers = { economy: { id: 'economy' }, defense: null };
   const result = dismissMinister(ministers, { cash: 1, popularity: 42 }, 'economy');
 
   assert.equal(result.ministers.economy, null);
-  assert.ok(result.economy.popularity > 42);
+  assert.equal(Object.hasOwn(result.economy, 'popularity'), false);
 });

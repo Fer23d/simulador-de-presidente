@@ -25,16 +25,23 @@ export function createCongress(seed = 1) {
   };
 }
 
-function blocVoteShare(bloc, popularity) {
+function publicSupport(value) {
+  if (Number.isFinite(value)) return value;
+  const values = Object.entries(value ?? {}).filter(([key, score]) => key !== 'elite' || Number(score) > 0).map(([, score]) => Number(score) || 0);
+  return values.length ? values.reduce((total, score) => total + score, 0) / values.length : 50;
+}
+
+function blocVoteShare(bloc, supportScore) {
   const support = clamp(Number(bloc.support) || 0, 0, 1);
-  const popularityEffect = support > 0 && support < 1 ? clamp((popularity - 50) / 500, -0.1, 0.1) : 0;
+  const popularityEffect = support > 0 && support < 1 ? clamp((supportScore - 50) / 500, -0.1, 0.1) : 0;
   return clamp(support + popularityEffect, 0, 1);
 }
 
-export function getVoteForecast(congress, popularity) {
+export function getVoteForecast(congress, factions) {
+  const supportScore = publicSupport(factions);
   const totalSeats = congress.totalSeats ?? congress.blocs.reduce((total, bloc) => total + bloc.seats, 0);
   const votesFor = congress.blocs.reduce(
-    (total, bloc) => total + Math.round(bloc.seats * blocVoteShare(bloc, popularity)),
+    (total, bloc) => total + Math.round(bloc.seats * blocVoteShare(bloc, supportScore)),
     0,
   );
 
@@ -45,7 +52,7 @@ export function getVoteForecast(congress, popularity) {
   };
 }
 
-export function negotiateSupport(congress, economy, blocId) {
+export function negotiateSupport(congress, economy, blocId, factions) {
   const bloc = congress.blocs.find((candidate) => candidate.id === blocId);
   if (!bloc || bloc.negotiated) {
     return { ok: false, reason: 'Bloco indisponivel para nova negociacao.', congress, economy };
@@ -56,7 +63,7 @@ export function negotiateSupport(congress, economy, blocId) {
 
   const updatedBloc = {
     ...bloc,
-    support: clamp(bloc.support + 0.22 + ((economy.popularity - 50) / 1_000), 0, 0.95),
+    support: clamp(bloc.support + 0.22 + ((publicSupport(factions) - 50) / 1_000), 0, 0.95),
     negotiated: true,
   };
   return {
@@ -67,7 +74,7 @@ export function negotiateSupport(congress, economy, blocId) {
   };
 }
 
-export function voteOnLaw(congress, law, popularity) {
+export function voteOnLaw(congress, law, factions) {
   const adjustedCongress = {
     ...congress,
     blocs: congress.blocs.map((bloc) => ({
@@ -77,7 +84,7 @@ export function voteOnLaw(congress, law, popularity) {
         : bloc.support,
     })),
   };
-  const forecast = getVoteForecast(adjustedCongress, popularity);
+  const forecast = getVoteForecast(adjustedCongress, factions);
 
   return {
     ...forecast,

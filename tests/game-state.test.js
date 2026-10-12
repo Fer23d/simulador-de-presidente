@@ -27,6 +27,8 @@ test('creates a game state for Brazil', () => {
   assert.equal(state.country.id, 'bra');
   assert.deepEqual(state.news, []);
   assert.ok(state.ministers);
+  assert.deepEqual(state.factions, { elite: 50, trabalhadores: 50, militares: 50, religiosos: 50 });
+  assert.equal(Object.hasOwn(state.economy, 'popularity'), false);
 });
 
 test('keeps the five most recent news headlines', async () => {
