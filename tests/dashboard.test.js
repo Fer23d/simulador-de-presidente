@@ -102,6 +102,20 @@ test('renders false flag, Dead Hand project, and the terminal overlay', async ()
   assert.match(renderDeadHandTerminal({ dead_hand_triggered: true }), /DIRETRIZ ÔMEGA/);
 });
 
+test('renders final dilemma, escape, interrogation terminals, and Deep State controls', async () => {
+  const { budgetView, diplomacyView, renderEscapeEnding, renderFinalDilemma, renderInterrogation } = await import('../src/ui/dashboard.js');
+  const { createGameState } = await import('../src/core/game-state.js');
+  const { projectBudget } = await import('../src/core/economy.js');
+  const state = createGameState('bra');
+
+  assert.match(renderFinalDilemma({ pendingFinalDilemma: true }), /FUGIR EM SILENCIO/);
+  assert.match(renderFinalDilemma({ pendingFinalDilemma: true }), /DESTRUIR O MUNDO DO HELICOPTERO/);
+  assert.match(renderEscapeEnding({ escape_ending_triggered: true, slush_fund: 50_000_000_000 }), /HELICOPTERO PRIVADO/);
+  assert.match(renderInterrogation({ pendingInterrogation: { phase: 'choice' } }), /PRISIONEIRO #847/);
+  assert.match(budgetView(state, projectBudget(state.economy, state.budget)), /Ilhas Cayman/);
+  assert.match(diplomacyView(state, 'argentina'), /Infiltrar Sosia do Lider/);
+});
+
 test('renders nuclear codes only for a ready arsenal and an active war target', async () => {
   const { diplomacyView } = await import('../src/ui/dashboard.js');
   const { createGameState } = await import('../src/core/game-state.js');

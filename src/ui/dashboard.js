@@ -53,6 +53,13 @@ import {
   candidatarJogosMundiais,
   estatizarMegacorporacoes,
   recusarJogosMundiais,
+  desviarFundosParaCaixa2,
+  destruirDoHelicoptero,
+  fugirEmSilencio,
+  afundarComONavio,
+  infiltrarSosiaLider,
+  resolverSitioNegro,
+  reivindicarSitioNegro,
 } from '../core/game-state.js';
 
 const STORAGE_KEY = 'simulador-presidente-state-v1';
@@ -125,7 +132,7 @@ function taxControl(label, key, value) {
 
 function overviewView(state, projection) {
   const budgetTone = projection.monthlyBalance >= 0 ? 'positive' : 'negative';
-  const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid);
+  const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid) || Boolean(state.pendingFinalDilemma) || Boolean(state.pendingInterrogation);
   return `<section class="view-grid overview-grid">
     <section class="panel agenda-panel">
       <div class="panel-heading"><div><p class="eyebrow">Agenda presidencial</p><h2>Proximo movimento</h2></div><span class="status-dot"></span></div>
@@ -175,6 +182,8 @@ export function budgetView(state, projection) {
       <div class="ledger-row total"><span>${projection.monthlyBalance >= 0 ? 'Superavit' : 'Deficit'}</span><strong class="${projection.monthlyBalance >= 0 ? 'positive' : 'negative'}">${formatMoney(projection.monthlyBalance)}</strong></div>
       <div class="ledger-row"><span>Forca corporativa</span><strong class="${Number(state.megacorp_power || 0) > 80 ? 'negative' : ''}">${Number(state.megacorp_power || 0).toFixed(0)} / 100</strong></div>
       <button type="button" class="quiet-action danger-action" data-action="nationalize-megacorps" ${Number(state.megacorp_power || 0) > 0 ? '' : 'disabled'}>Estatizar Megacorporacoes</button>
+      <div class="ledger-row"><span>Caixa 2</span><strong>${formatMoney(state.slush_fund || 0)}</strong></div>
+      <button type="button" class="quiet-action danger-action" data-action="slush-fund">Desviar Fundos para as Ilhas Cayman</button>
     </section>
   </section>`;
 }
@@ -238,7 +247,7 @@ export function diplomacyView(state, searchQuery = '') {
   const union = state.regime.type === 'communist_dictatorship';
   const nuclearReady = canAutorizarAniquilacaoNuclear(state);
   const bioReady = state.technology.unlocked.includes('advanced-bioengineering');
-  const peacePanel = target ? '<p class="notice">Um tratado de paz aguarda decisao no painel bloqueante.</p>' : '';
+  const peacePanel = `${target ? '<p class="notice">Um tratado de paz aguarda decisao no painel bloqueante.</p>' : ''}<p class="notice">Operacao: Infiltrar Sosia do Lider em regimes nao democraticos.</p>`;
   const leaguePanel = league ? `<div class="ledger-row"><span>${league.name}</span><strong>${league.memberIds.length} membros</strong></div>` : `<button type="button" class="quiet-action" data-action="league-create">Criar Nova Liga Global</button>`;
   return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relacoes Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}<label class="diplomacy-search"><span>Buscar pais</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de paises diplomaticos">${contacts.map((contact) => `<article class="bloc-row ${contact.wasteland ? 'wasteland-contact' : ''}"><div><strong>${contact.name}</strong><span>${contact.wasteland ? 'ZONA DE ANIQUILACAO NUCLEAR' : `Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | Defesa digital ${Number(contact.cyber_defense).toFixed(0)} | ${contact.trait}${contact.puppet ? ' | Fantoche' : ''}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.wasteland || contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button><button type="button" class="quiet-action" data-action="resource-import" data-contact="${contact.id}" data-resource="steel" data-amount="500" ${contact.wasteland || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Importar aco</button><button type="button" class="quiet-action danger-action" data-action="cyber-attack" data-contact="${contact.id}" ${contact.wasteland || (Number(contact.cyber_paralyzed_until) || 0) > (Number(state.monthCounter) || 0) ? 'disabled' : ''}>Lancar Ciberataque</button><button type="button" class="quiet-action danger-action" data-action="synthetic-virus" data-contact="${contact.id}" ${!bioReady || contact.wasteland || contact.bio_infected ? 'disabled' : ''}>Lancar Virus Sintetico</button><button type="button" class="quiet-action danger-action" data-action="false-flag" data-contact="${contact.id}" ${contact.wasteland || contact.atWar || contact.anexado ? 'disabled' : ''}>Orquestrar Falsa Bandeira</button>${union ? `<button type="button" class="quiet-action" data-action="union-absorb" data-contact="${contact.id}" ${contact.wasteland || contact.relation > 80 || contact.puppet ? '' : 'disabled'}>Absorver pela Uniao</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="fund-rebels" data-contact="${contact.id}" ${contact.wasteland ? 'disabled' : ''}>Financiar Rebeldes</button>${nuclearReady && contact.atWar && !contact.wasteland ? `<button type="button" class="quiet-action nuclear-action" data-action="nuclear-codes" data-contact="${contact.id}">CODIGOS NUCLEARES</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.wasteland || contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('') || '<p class="notice">Nenhum pais corresponde a busca.</p>'}</div></section>`;
 }
@@ -263,6 +272,31 @@ INICIANDO DIRETRIZ ÔMEGA: "MÃO MORTA"
 &gt; ALVOS: TODOS.
 &gt; STATUS: LANÇAMENTO MÚLTIPLO EFETUADO.
 DESTRUIÇÃO MÚTUA ASSEGURADA. FIM DE JOGO.</pre><button type="button" class="arcade-nuke-launch" data-action="dead-hand-reset">[ REINICIAR SIMULACAO ]</button></section>`;
+}
+
+export function renderEscapeEnding(state) {
+  if (!state.escape_ending_triggered) return '';
+  return `<section class="escape-dialog" role="dialog" aria-modal="true"><pre>       __|__
+--o--o--(_)--o--o--
+     /     \\</pre><p class="escape-status">&gt; O PAIS CAIU. MAS O SEU HELICOPTERO PRIVADO DECOLOU.</p><p class="escape-status">&gt; CONTA OFFSHORE: ${formatMoney(state.slush_fund)}. VITORIA PESSOAL ATINGIDA.</p><button type="button" class="arcade-vote-yes" data-action="escape-reset">[ REINICIAR SIMULACAO ]</button></section>`;
+}
+
+export function renderFinalDilemma(state) {
+  if (!state.pendingFinalDilemma) return '';
+  return `<section class="modal-arcade-dialog" role="dialog" aria-modal="true"><pre class="ascii-constitution">/!\\ COLAPSO EMINENTE DO GOVERNO /!\\
+O INIMIGO ESTA NOS PORTOES.
+SEU HELICOPTERO ESTA NO TELHADO COM R$ 50 BILHOES.
+A IA "MAO MORTA" AGUARDA SUA ORDEM FINAL.</pre><div class="action-row"><button type="button" class="arcade-vote-yes" data-action="final-escape">[ FUGIR EM SILENCIO ]</button><button type="button" class="arcade-vote-abandon" data-action="final-dead-hand">[ AFUNDAR COM O NAVIO ]</button><button type="button" class="arcade-nuke-launch" data-action="final-both">[ DESTRUIR O MUNDO DO HELICOPTERO ]</button></div></section>`;
+}
+
+export function renderInterrogation(state) {
+  const pending = state.pendingInterrogation;
+  if (!pending) return '';
+  const actions = pending.phase === 'reward'
+    ? '<button type="button" class="arcade-vote-yes" data-action="interrogation-reward" data-reward="extract-secrets">[ EXTRAIR SEGREDOS ]</button><button type="button" class="quiet-action" data-action="interrogation-reward" data-reward="turn-double-agent">[ RECRUTAR AGENTE DUPLO ]</button>'
+    : '<button type="button" class="arcade-vote-yes" data-action="interrogation-method" data-method="truth-serum">[ SORO DA VERDADE ]</button><button type="button" class="quiet-action" data-action="interrogation-method" data-method="psychological-pressure">[ TORTURA PSICOLOGICA ]</button><button type="button" class="quiet-action" data-action="interrogation-method" data-method="bribe">[ SUBORNO: R$ 1 BI ]</button>';
+  return `<section class="terminal-dialog" role="dialog" aria-modal="true"><pre>&gt; PRISIONEIRO #847 ADQUIRIDO.
+&gt; INICIANDO INTERROGATORIO.</pre><div class="action-row">${actions}</div></section>`;
 }
 
 function legacyMilitaryView(state) {
@@ -358,6 +392,9 @@ export function mountDashboard(root) {
   const congressModal = document.getElementById('modal-congresso');
   const constitutionModal = document.getElementById('modal-constituicao');
   const deadHandModal = document.getElementById('modal-dead-hand');
+  const escapeModal = document.getElementById('modal-fuga');
+  const dilemmaModal = document.getElementById('modal-dilema-final');
+  const interrogationModal = document.getElementById('modal-interrogatorio');
   const congressLawTitle = document.getElementById('congresso-lei-titulo');
   const congressLawDescription = document.getElementById('congresso-lei-descricao');
   let pendingCongressLawId = null;
@@ -417,6 +454,9 @@ export function mountDashboard(root) {
       deadHandModal.hidden = !deadHandMarkup;
       deadHandModal.innerHTML = deadHandMarkup;
     }
+    if (escapeModal) { const markup = renderEscapeEnding(state); escapeModal.hidden = !markup; escapeModal.innerHTML = markup; }
+    if (dilemmaModal) { const markup = renderFinalDilemma(state); dilemmaModal.hidden = !markup; dilemmaModal.innerHTML = markup; }
+    if (interrogationModal) { const markup = renderInterrogation(state); interrogationModal.hidden = !markup; interrogationModal.innerHTML = markup; }
   }
 
   function commit(nextState) {
@@ -556,6 +596,19 @@ export function mountDashboard(root) {
     }
   });
 
+  escapeModal?.addEventListener('click', (event) => { if (event.target.closest('[data-action="escape-reset"]')) { activeTab = 'overview'; commit(createGameState(state.country.id)); } });
+  dilemmaModal?.addEventListener('click', (event) => {
+    const action = event.target.closest('[data-action]')?.dataset.action;
+    if (action === 'final-escape') commit(fugirEmSilencio(state));
+    if (action === 'final-dead-hand') commit(afundarComONavio(state));
+    if (action === 'final-both') commit(destruirDoHelicoptero(state));
+  });
+  interrogationModal?.addEventListener('click', (event) => {
+    const control = event.target.closest('[data-action]');
+    if (control?.dataset.action === 'interrogation-method') commit(resolverSitioNegro(state, control.dataset.method));
+    if (control?.dataset.action === 'interrogation-reward') commit(reivindicarSitioNegro(state, control.dataset.reward));
+  });
+
   root.addEventListener('click', (event) => {
     const control = event.target.closest('[data-action]');
     if (!control || control.disabled) return;
@@ -563,6 +616,8 @@ export function mountDashboard(root) {
     if (action === 'tab') { activeTab = control.dataset.tab; render(); return; }
     if (action === 'map-country') { state = { ...state, ui: { ...state.ui, selectedMapCountryId: control.dataset.country } }; render(); return; }
     if (action === 'tax') { commit(changeTax(state, control.dataset.tax, Number(control.dataset.delta))); return; }
+    if (action === 'slush-fund') { commit(desviarFundosParaCaixa2(state)); return; }
+    if (action === 'leader-double') { commit(infiltrarSosiaLider(state, control.dataset.contact)); return; }
     if (action === 'treaty') { commit(proposeTreaty(state, control.dataset.contact)); return; }
     if (action === 'resource-import') { commit(importarRecursos(state, control.dataset.contact, control.dataset.resource, Number(control.dataset.amount))); return; }
     if (action === 'alliance') { commit(proposeAlliance(state, control.dataset.contact)); return; }
