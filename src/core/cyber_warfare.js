@@ -11,8 +11,8 @@ function resourceOutput(contact, resource) {
   return Math.max(1, Math.floor((Number(contact.uranium) || 0) * 0.001));
 }
 
-export function getCyberTech(technology) {
-  return (technology?.unlocked ?? []).includes('state-hackers') ? 85 : 25;
+export function getCyberTech(unlockedTechs = []) {
+  return unlockedTechs.includes('cyber') ? 85 : 25;
 }
 
 export function lancarCiberataque(state, alvoId) {
@@ -22,7 +22,7 @@ export function lancarCiberataque(state, alvoId) {
   if ((Number(target.cyber_paralyzed_until) || 0) > (Number(state.monthCounter) || 0)) {
     return { ...state, notice: `${target.name} ja esta com a infraestrutura digital paralisada.` };
   }
-  const cyberTech = getCyberTech(state.technology);
+  const cyberTech = getCyberTech(state.unlocked_techs ?? []);
   const guaranteed = Boolean(state.double_agent_active);
   const chance = guaranteed ? 1 : clamp(0.2 + ((cyberTech - (Number(target.cyber_defense) || 0)) / 100), 0.05, 0.95);
   const random = nextRandom(state.randomSeed);

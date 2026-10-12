@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGameState } from '../src/core/game-state.js';
-import { advanceCyberWarfare, lancarCiberataque } from '../src/core/cyber_warfare.js';
+import { advanceCyberWarfare, getCyberTech, lancarCiberataque } from '../src/core/cyber_warfare.js';
+
+test('derives cyber attack effectiveness from military cyber research only', () => {
+  assert.equal(getCyberTech(['cyber']), 85);
+  assert.equal(getCyberTech(['state-hackers']), 25);
+});
 
 test('a successful zero-day paralyzes a target for six months without starting a war', () => {
   const state = createGameState('bra');
