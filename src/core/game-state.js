@@ -22,6 +22,7 @@ import { injetarVirusSintetico, infiltrarSosia, orquestrarFalsaBandeira, process
 import { aplicarModificadoresConstitucionais, promulgarConstituicao } from './constitution.js';
 import { iniciarProjetoMaoMorta as startDeadHandProject, interceptarGameOverComMaoMorta, processarMegaprojetos } from './megaprojects.js';
 import { desviarFundos, interceptarFinalCaixa2, isEscapeEligible } from './corruption.js';
+import { reivindicarInterrogatorio as claimInterrogation, resolverInterrogatorio as resolveInterrogation, sortearCapturaAgente } from './interrogation.js';
 
 const STATE_VERSION = 10;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
@@ -212,6 +213,16 @@ export function destruirDoHelicoptero(state) {
   if (!state.pendingFinalDilemma) return { ...state, notice: 'Nenhum dilema final aguarda decisao.' };
   const retaliation = interceptDeadHandGameOver({ ...state, pendingFinalDilemma: false });
   return interceptarFinalCaixa2(retaliation);
+}
+
+export function resolverSitioNegro(state, method) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return resolveInterrogation(state, method);
+}
+
+export function reivindicarSitioNegro(state, reward) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return claimInterrogation(state, reward);
 }
 
 function applyGeopoliticalAction(state, action) {
@@ -611,6 +622,7 @@ export function advanceMonth(state) {
   if (state.pendingEvent) return { ...state, notice: 'Resolva a crise nacional antes de avancar o mes.' };
   if (state.pendingUnVote) return { ...state, notice: 'Registre seu voto na Assembleia da ONU antes de avancar o mes.' };
   if (state.pendingGlobalBid) return { ...state, notice: 'Decida a candidatura aos Jogos Mundiais antes de avancar o mes.' };
+  if (state.pendingInterrogation) return { ...state, notice: 'Resolva o interrogatorio antes de avancar o mes.' };
   if (state.nuclearSanctionsPending) {
     state = {
       ...state,
@@ -702,7 +714,7 @@ export function advanceMonth(state) {
   const assemblyState = verificarAssembleia(defconState);
   if (assemblyState.pendingUnVote) return addNews(assemblyState, assemblyState.notice);
   const eventRoll = rollMonthlyEvent(stability.seed);
-  if (!eventRoll.event) return { ...assemblyState, randomSeed: eventRoll.seed };
+  if (!eventRoll.event) return sortearCapturaAgente({ ...assemblyState, randomSeed: eventRoll.seed });
   return addNews({
     ...assemblyState,
     randomSeed: eventRoll.seed,
@@ -834,7 +846,9 @@ export function hydrateGameState(serialized) {
       escape_ending_triggered: Boolean(parsed.escape_ending_triggered),
       pendingFinalDilemma: Boolean(parsed.pendingFinalDilemma),
       double_agent_active: Boolean(parsed.double_agent_active),
-      pendingInterrogation: null,
+      pendingInterrogation: parsed.pendingInterrogation?.phase === 'choice' || parsed.pendingInterrogation?.phase === 'reward'
+        ? { phase: parsed.pendingInterrogation.phase, prisonerId: 847 }
+        : null,
     });
   } catch {
     return createGameState();
