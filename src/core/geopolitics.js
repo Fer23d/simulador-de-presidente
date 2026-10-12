@@ -33,6 +33,7 @@ export function createGeopolitics(playerId = 'bra') {
       uranium: country.uranium,
       steel: country.steel,
       rare_earths: country.rare_earths,
+      cyber_defense: country.trait === 'tech_giant' ? 70 : country.trait === 'financial_hub' ? 55 : country.trait === 'military_tradition' ? 45 : 30,
       trait: country.trait,
       military: {
         exercito: { soldados: Math.max(2_000, Math.round(country.populacao_base * 0.00022)), blindados: Math.max(1, Math.floor(Math.log10(country.pib_base) - 6)) },

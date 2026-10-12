@@ -41,6 +41,8 @@ import {
   voteLaborLaw,
   voteLaw,
   votarNaONU,
+  lancarCiberataque,
+  automatizarIndustria,
 } from '../core/game-state.js';
 
 const STORAGE_KEY = 'simulador-presidente-state-v1';
@@ -218,7 +220,13 @@ export function diplomacyView(state, searchQuery = '') {
   const union = state.regime.type === 'communist_dictatorship';
   const peacePanel = target ? '<p class="notice">Um tratado de paz aguarda decisao no painel bloqueante.</p>' : '';
   const leaguePanel = league ? `<div class="ledger-row"><span>${league.name}</span><strong>${league.memberIds.length} membros</strong></div>` : `<button type="button" class="quiet-action" data-action="league-create">Criar Nova Liga Global</button>`;
-  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relacoes Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}<label class="diplomacy-search"><span>Buscar pais</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de paises diplomaticos">${contacts.map((contact) => `<article class="bloc-row"><div><strong>${contact.name}</strong><span>Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | ${contact.trait}${contact.puppet ? ' | Fantoche' : ''}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button><button type="button" class="quiet-action" data-action="resource-import" data-contact="${contact.id}" data-resource="steel" data-amount="500" ${contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Importar aco</button>${union ? `<button type="button" class="quiet-action" data-action="union-absorb" data-contact="${contact.id}" ${contact.relation > 80 || contact.puppet ? '' : 'disabled'}>Absorver pela Uniao</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="fund-rebels" data-contact="${contact.id}">Financiar Rebeldes</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('') || '<p class="notice">Nenhum pais corresponde a busca.</p>'}</div></section>`;
+  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relacoes Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}<label class="diplomacy-search"><span>Buscar pais</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de paises diplomaticos">${contacts.map((contact) => `<article class="bloc-row"><div><strong>${contact.name}</strong><span>Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | Defesa digital ${Number(contact.cyber_defense).toFixed(0)} | ${contact.trait}${contact.puppet ? ' | Fantoche' : ''}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button><button type="button" class="quiet-action" data-action="resource-import" data-contact="${contact.id}" data-resource="steel" data-amount="500" ${contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Importar aco</button><button type="button" class="quiet-action danger-action" data-action="cyber-attack" data-contact="${contact.id}" ${(Number(contact.cyber_paralyzed_until) || 0) > (Number(state.monthCounter) || 0) ? 'disabled' : ''}>Lancar Ciberataque</button>${union ? `<button type="button" class="quiet-action" data-action="union-absorb" data-contact="${contact.id}" ${contact.relation > 80 || contact.puppet ? '' : 'disabled'}>Absorver pela Uniao</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="fund-rebels" data-contact="${contact.id}">Financiar Rebeldes</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('') || '<p class="notice">Nenhum pais corresponde a busca.</p>'}</div></section>`;
+}
+
+export function projectsView(state) {
+  const automated = Boolean(state.country.industry_automated);
+  const canAutomate = state.economy.cash >= 200_000_000_000 && state.technology.points >= 250;
+  return `<section class="panel projects-panel"><div class="panel-heading"><div><p class="eyebrow">Capacidade nacional</p><h2>Projetos Internos</h2></div><span class="country-code">ACO ${formatNumber.format(state.country.steel)}</span></div><article class="project-row ${automated ? 'completed' : ''}"><div><strong>Automatizar Parque Industrial</strong><span>${automated ? 'Industria 4.0 ativa: +3.000 aco por mes e pressao constante sobre trabalhadores.' : 'Custo: R$ 200 bi e 250 PP. Triplica a producao mensal de aco.'}</span></div><button type="button" class="${automated ? 'quiet-action' : 'primary-action'}" data-action="automate-industry" ${automated || !canAutomate ? 'disabled' : ''}>${automated ? 'Automatizado' : 'Automatizar'}</button></article></section>`;
 }
 
 function legacyMilitaryView(state) {
@@ -311,6 +319,7 @@ export function mountDashboard(root) {
       ['military', 'Forcas Armadas'],
       ['cabinet', 'Gabinete'],
       ['technology', 'Tecnologia'],
+      ['projects', 'Projetos Internos'],
       ['congress', 'Congresso'],
       ['countries', 'Paises'],
     ];
@@ -319,6 +328,7 @@ export function mountDashboard(root) {
         : activeTab === 'military' ? militaryView(state)
           : activeTab === 'cabinet' ? cabinetView(state)
           : activeTab === 'technology' ? technologyView(state)
+            : activeTab === 'projects' ? projectsView(state)
       : activeTab === 'congress' ? congressView(state)
         : activeTab === 'countries' ? countriesView(state)
           : overviewView(state, projection);
@@ -394,6 +404,7 @@ export function mountDashboard(root) {
     if (action === 'league-invite') { commit(inviteToLeague(state, control.dataset.contact)); return; }
     if (action === 'sabotage') { commit(sabotar(state, control.dataset.contact)); return; }
     if (action === 'fund-rebels') { commit(financiarRebeldes(state, control.dataset.contact)); return; }
+    if (action === 'cyber-attack') { commit(lancarCiberataque(state, control.dataset.contact)); return; }
     if (action === 'union-absorb') { commit(absorverPaisParaUniao(state, control.dataset.contact)); return; }
     if (action === 'socialist-revolution') { commit(decretarRevolucaoSocialista(state)); return; }
     if (action === 'sanction') { commit(imporSancao(state, control.dataset.contact)); return; }
@@ -409,6 +420,7 @@ export function mountDashboard(root) {
     if (action === 'minister-dismiss') { commit(dismissMinister(state, control.dataset.minister)); return; }
     if (action === 'coup') { commit(attemptAutogolpe(state)); return; }
     if (action === 'research') { commit(researchTechnology(state, control.dataset.technology)); return; }
+    if (action === 'automate-industry') { commit(automatizarIndustria(state)); return; }
     if (action === 'negotiate') { commit(negotiate(state, control.dataset.bloc)); return; }
     if (action === 'vote') { commit(voteLaborLaw(state)); return; }
     if (action === 'vote-law') { commit(voteLaw(state, control.dataset.law)); return; }

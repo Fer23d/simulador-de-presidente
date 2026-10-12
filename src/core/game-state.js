@@ -13,6 +13,8 @@ import { absorverPaisParaUniao as absorbIntoUnion, decretarRevolucaoSocialista a
 import { financiarRebeldes as fundRebels } from './espionage.js';
 import { aplicarResolucoes, registrarVotoONU, verificarAssembleia } from './un_assembly.js';
 import { processarMigracoes } from './demographics.js';
+import { advanceCyberWarfare, lancarCiberataque as launchCyberAttack } from './cyber_warfare.js';
+import { automatizarIndustria as automateIndustry, processarAutomacaoIndustrial } from './infrastructure.js';
 
 const STATE_VERSION = 6;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
@@ -99,6 +101,7 @@ export function createGameState(countryId = 'bra') {
     pendingEvent: null,
     pendingUnVote: null,
     activeGlobalResolutions: [],
+    monthCounter: 0,
     notice: 'Gabinete iniciado. O primeiro mes de governo comeca agora.',
   };
 }
@@ -167,6 +170,18 @@ export function sabotar(state, contactId) {
   const technology = getTechnologyModifiers(state.technology);
   const result = sabotageCountry(state.geopolitics, contactId, state.economy, state.randomSeed, { guaranteedSuccess: technology.guaranteedSabotage });
   return syncWorld({ ...state, geopolitics: result.geopolitics, economy: result.economy, randomSeed: result.seed, notice: result.reason });
+}
+
+export function lancarCiberataque(state, contactId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = launchCyberAttack(state, contactId);
+  return result.geopolitics === state.geopolitics ? result : addNews(syncWorld(result), result.notice);
+}
+
+export function automatizarIndustria(state) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = automateIndustry(state);
+  return result.country === state.country ? result : addNews(result, result.notice);
 }
 
 export function recrutarSoldado(state, amount = 5_000) {
@@ -414,7 +429,8 @@ export function advanceMonth(state) {
   const geopoliticalMonth = advanceGeopolitics(nuclear.geopolitics, preparedMilitary.military, economicMonth, state.randomSeed);
   const militaryMonth = advanceMilitary(preparedMilitary.military, geopoliticalMonth.economy, { defenseSpend: 0 }, geopoliticalMonth, state.factions);
   const factions = advanceFactions(state.factions, state.economy, militaryMonth.economy, state.budget, effects, { popularityModifier: modifiers.popularityModifier + (geopoliticalMonth.factionDelta ?? 0) });
-  const stability = evaluateRegime(state.regime, militaryMonth.economy, militaryMonth.military, geopoliticalMonth.geopolitics, geopoliticalMonth.seed, factions);
+  const infrastructureState = processarAutomacaoIndustrial({ ...state, country: state.country, factions });
+  const stability = evaluateRegime(state.regime, militaryMonth.economy, militaryMonth.military, geopoliticalMonth.geopolitics, geopoliticalMonth.seed, infrastructureState.factions);
   const month = state.calendar.month === 12 ? 1 : state.calendar.month + 1;
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? `Mes encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superavit' : 'com deficit'}.`;
@@ -424,15 +440,17 @@ export function advanceMonth(state) {
     economy: militaryMonth.economy,
     geopolitics: geopoliticalMonth.geopolitics,
     military: militaryMonth.military,
-    factions,
+    country: infrastructureState.country,
+    factions: infrastructureState.factions,
     technology,
     regime: { ...stability.regime, coupRisk: clamp(stability.regime.coupRisk + (effects.coupRiskModifier ?? 0), 0, 0.8) },
     randomSeed: stability.seed,
     calendar: { month, year },
+    monthCounter: (Number(state.monthCounter) || 0) + 1,
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
   });
-  const resolvedState = processarMigracoes(aplicarResolucoes(completedState));
+  const resolvedState = processarMigracoes(aplicarResolucoes(advanceCyberWarfare(completedState)));
   const withNews = addNews(syncWorld(resolvedState), notice);
   const assemblyState = verificarAssembleia(withNews);
   if (assemblyState.pendingUnVote) return addNews(assemblyState, assemblyState.notice);
@@ -468,6 +486,7 @@ export function hydrateGameState(serialized) {
         uranium: Number.isFinite(Number(parsed.country?.uranium)) ? Math.max(0, Number(parsed.country.uranium)) : base.country.uranium,
         steel: Number.isFinite(Number(parsed.country?.steel)) ? Math.max(0, Number(parsed.country.steel)) : base.country.steel,
         rare_earths: Number.isFinite(Number(parsed.country?.rare_earths)) ? Math.max(0, Number(parsed.country.rare_earths)) : base.country.rare_earths,
+        industry_automated: Boolean(parsed.country?.industry_automated),
       },
       calendar: {
         month: clamp(Math.floor(Number(calendar.month) || 1), 1, 12),
@@ -510,6 +529,7 @@ export function hydrateGameState(serialized) {
       }),
       regime: parsed.version >= 2 && parsed.regime && typeof parsed.regime === 'object' ? { ...base.regime, ...parsed.regime } : base.regime,
       randomSeed: Number.isFinite(parsed.randomSeed) ? parsed.randomSeed : base.randomSeed,
+      monthCounter: Math.max(0, Math.floor(Number(parsed.monthCounter) || 0)),
       congress: isValidCongress(parsed.congress) ? parsed.congress : base.congress,
       laws: Object.fromEntries(LAWS.map((law) => {
         const savedLaw = law.stateKey === 'laborReform' ? laws : parsed.laws?.[law.stateKey];

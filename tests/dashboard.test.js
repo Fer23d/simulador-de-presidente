@@ -68,3 +68,12 @@ test('renders a blocking UN Assembly voting dialog', async () => {
   assert.match(markup, /data-vote="yes"/);
   assert.match(markup, /data-vote="abstain"/);
 });
+
+test('renders cyber operations in diplomacy and the internal projects tab', async () => {
+  const { diplomacyView, projectsView } = await import('../src/ui/dashboard.js');
+  const { createGameState } = await import('../src/core/game-state.js');
+  const state = createGameState('bra');
+
+  assert.match(diplomacyView(state), /Lancar Ciberataque/);
+  assert.match(projectsView(state), /Automatizar Parque Industrial/);
+});
