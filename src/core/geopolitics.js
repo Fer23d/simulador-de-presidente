@@ -30,6 +30,9 @@ export function createGeopolitics(playerId = 'bra') {
       area_km2: country.area_km2,
       pib_base: country.pib_base,
       cash: Math.max(1_000_000_000, Math.round(country.pib_base * 0.015)),
+      uranium: country.uranium,
+      steel: country.steel,
+      rare_earths: country.rare_earths,
       trait: country.trait,
       military: {
         exercito: { soldados: Math.max(2_000, Math.round(country.populacao_base * 0.00022)), blindados: Math.max(1, Math.floor(Math.log10(country.pib_base) - 6)) },
@@ -81,6 +84,29 @@ export function sabotar(geopolitics, contactId, economy, seed, options = {}) {
 
 function rejected(geopolitics, reason) {
   return { ok: false, reason, geopolitics };
+}
+
+const RESOURCE_PRICES = Object.freeze({ uranium: 15_000_000, steel: 500_000, rare_earths: 6_000_000 });
+
+export function importarRecursos(geopolitics, economy, country, contactId, resource, amount) {
+  const quantity = Math.max(1, Math.floor(Number(amount) || 0));
+  const price = RESOURCE_PRICES[resource];
+  const contact = geopolitics.contacts.find((item) => item.id === contactId && !item.destruido && !item.anexado);
+  if (!price || !contact) return { ok: false, reason: 'Recurso ou pais fornecedor invalido.', geopolitics, economy, country };
+  if (contact.atWar || contact.relation <= 20) return { ok: false, reason: 'Importacao exige paz e relacao diplomatica acima de 20.', geopolitics, economy, country };
+  if ((Number(contact[resource]) || 0) < quantity) return { ok: false, reason: `${contact.name} nao possui estoque suficiente.`, geopolitics, economy, country };
+  const cost = quantity * price;
+  if ((Number(economy.cash) || 0) < cost) return { ok: false, reason: 'Caixa insuficiente para a importacao.', geopolitics, economy, country };
+  return {
+    ok: true,
+    reason: `${quantity.toLocaleString('pt-BR')} unidades de ${resource} importadas de ${contact.name}.`,
+    geopolitics: {
+      ...geopolitics,
+      contacts: geopolitics.contacts.map((item) => item.id === contactId ? { ...item, [resource]: item[resource] - quantity, cash: item.cash + cost, relation: clamp(item.relation + 1, -100, 100) } : item),
+    },
+    economy: { ...economy, cash: economy.cash - cost },
+    country: { ...country, [resource]: (Number(country[resource]) || 0) + quantity },
+  };
 }
 
 export function proposeTradeTreaty(geopolitics, contactId) {
@@ -212,12 +238,12 @@ export function anexarPais(state) {
     annexedCountryIds: [...new Set([...(state.geopolitics.annexedCountryIds ?? []), target.id])],
     peaceTreaty: null,
     contacts: state.geopolitics.contacts.map((contact) => contact.id === target.id
-      ? { ...contact, anexado: true, destruido: true, atWar: false, alliance: false, tradeTreaty: false, militaryPower: 0, population: 0, populacao_base: 0, area_km2: 0, pib_base: 0, cash: 0 }
+      ? { ...contact, anexado: true, destruido: true, atWar: false, alliance: false, tradeTreaty: false, militaryPower: 0, population: 0, populacao_base: 0, area_km2: 0, pib_base: 0, cash: 0, uranium: 0, steel: 0, rare_earths: 0 }
       : contact),
   }, -45);
   return {
     ...state,
-    country: { ...state.country, area_km2: area, populacao: population, populacao_base: population, pib_base: gdp },
+    country: { ...state.country, area_km2: area, populacao: population, populacao_base: population, pib_base: gdp, uranium: (Number(state.country.uranium) || 0) + (Number(target.uranium) || 0), steel: (Number(state.country.steel) || 0) + (Number(target.steel) || 0), rare_earths: (Number(state.country.rare_earths) || 0) + (Number(target.rare_earths) || 0) },
     economy: { ...state.economy, gdp: state.economy.gdp + (Number(target.pib_base) || 0), cash: state.economy.cash + cash },
     military,
     geopolitics,
@@ -235,6 +261,38 @@ export function saquearTesouro(state) {
     contacts: state.geopolitics.contacts.map((contact) => contact.id === target.id ? { ...contact, cash: Math.max(0, contact.cash - loot), relation: -100, atWar: false } : contact),
   }, -8);
   return { ...state, economy: { ...state.economy, cash: state.economy.cash + loot }, geopolitics, notice: `${target.name} foi saqueado; recursos foram transferidos ao Tesouro.` };
+}
+
+export function desmilitarizarPais(state) {
+  const target = treatyTarget(state);
+  if (!target || Number(target.militaryPower) > 0) return { ...state, notice: 'Desmilitarizacao exige tratado pendente com alvo derrotado.' };
+  return {
+    ...state,
+    geopolitics: {
+      ...state.geopolitics,
+      peaceTreaty: null,
+      contacts: state.geopolitics.contacts.map((contact) => contact.id === target.id
+        ? { ...contact, atWar: false, militaryPower: 0, military: { exercito: { soldados: 0, blindados: 0 }, marinha: { navios: 0 }, aeronautica: { cacas: 0 } }, demilitarizedMonths: 120 }
+        : contact),
+    },
+    notice: `${target.name} foi desmilitarizado por 120 meses.`,
+  };
+}
+
+export function aplicarReparacoes(state) {
+  const target = treatyTarget(state);
+  if (!target || Number(target.militaryPower) > 0) return { ...state, notice: 'Reparacoes exigem tratado pendente com alvo derrotado.' };
+  return {
+    ...state,
+    geopolitics: {
+      ...state.geopolitics,
+      peaceTreaty: null,
+      contacts: state.geopolitics.contacts.map((contact) => contact.id === target.id
+        ? { ...contact, atWar: false, relation: -100, warReparations: { rate: 0.15, remainingMonths: 120 } }
+        : contact),
+    },
+    notice: `${target.name} pagara 15% da arrecadacao estimada por 120 meses.`,
+  };
 }
 
 export function criarLiga(state, nome = 'Liga Global') {
@@ -273,25 +331,34 @@ export function advanceGeopolitics(geopolitics, military, economy, seed) {
   let peaceTreaty = geopolitics.peaceTreaty ?? null;
 
   const contacts = geopolitics.contacts.map((contact) => {
-    if (!contact.atWar) return contact;
+    let updated = contact;
+    if (updated.warReparations?.remainingMonths > 0) {
+      const estimatedRevenue = Math.max(0, Number(updated.pib_base) || 0) * 0.12 / 12;
+      const payment = Math.min(Math.max(0, Number(updated.cash) || 0), estimatedRevenue * updated.warReparations.rate);
+      cash += payment;
+      updated = { ...updated, cash: updated.cash - payment, warReparations: { ...updated.warReparations, remainingMonths: updated.warReparations.remainingMonths - 1 } };
+      if (updated.warReparations.remainingMonths <= 0) updated = { ...updated, warReparations: null };
+    }
+    if (updated.demilitarizedMonths > 0) updated = { ...updated, demilitarizedMonths: updated.demilitarizedMonths - 1 };
+    if (!updated.atWar) return updated;
     cash -= cashCost;
     const alliedPower = geopolitics.contacts
       .filter((candidate) => candidate.alliance && !candidate.atWar)
       .reduce((total, candidate) => total + (candidate.militaryPower * 0.08), 0);
     const playerScore = (military.power * (military.equipmentMultiplier ?? 1)) + alliedPower + ((random.value - 0.5) * 12);
     random = nextRandom(random.seed);
-    const won = playerScore >= contact.militaryPower;
+    const won = playerScore >= updated.militaryPower;
     militaryPowerLoss += won ? 0.8 : 2.4;
     factionDelta += won ? 0.45 : -0.8;
-    events.push(won ? `Vitoria taticas contra ${contact.name}.` : `Reves militar contra ${contact.name}.`);
-    if (!won) return { ...contact, relation: -100 };
-    const damage = Math.max(2, Math.round((playerScore / Math.max(1, contact.militaryPower)) * 4));
-    const militaryPower = Math.max(0, contact.militaryPower - damage);
+    events.push(won ? `Vitoria taticas contra ${updated.name}.` : `Reves militar contra ${updated.name}.`);
+    if (!won) return { ...updated, relation: -100 };
+    const damage = Math.max(2, Math.round((playerScore / Math.max(1, updated.militaryPower)) * 4));
+    const militaryPower = Math.max(0, updated.militaryPower - damage);
     if (militaryPower === 0 && !peaceTreaty) {
-      peaceTreaty = { targetId: contact.id, status: 'pending' };
-      events.push(`${contact.name} foi derrotado; tratado de paz pendente.`);
+      peaceTreaty = { targetId: updated.id, status: 'pending' };
+      events.push(`${updated.name} foi derrotado; tratado de paz pendente.`);
     }
-    return { ...contact, relation: -85, atWar: militaryPower > 0, militaryPower };
+    return { ...updated, relation: -85, atWar: militaryPower > 0, militaryPower };
   });
 
   return {

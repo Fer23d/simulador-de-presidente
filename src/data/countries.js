@@ -1042,7 +1042,19 @@ function traitForCountry(id) {
   return TRAIT_OVERRIDES[id] ?? GENERIC_TRAITS[hash(id) % GENERIC_TRAITS.length];
 }
 
-export const COUNTRIES = Object.freeze(COUNTRY_SEED.map((country) => Object.freeze({ ...country, trait: traitForCountry(country.id) })));
+function resourcesForCountry(country) {
+  const seed = hash(country.id);
+  const areaFactor = Math.max(1, Math.round(country.area_km2 / 10_000));
+  const uraniumRich = new Set(['aus', 'bra', 'can', 'kaz', 'nam', 'ner', 'rus', 'usa']);
+  const rareEarthRich = new Set(['aus', 'bra', 'chn', 'ind', 'rus', 'vnm']);
+  return {
+    steel: (areaFactor * 1_100) + ((seed >>> 4) % 80_000),
+    uranium: uraniumRich.has(country.id) ? 8_000 + ((seed >>> 9) % 28_000) : (seed % 2_500),
+    rare_earths: rareEarthRich.has(country.id) ? 5_000 + ((seed >>> 12) % 20_000) : ((seed >>> 6) % 1_400),
+  };
+}
+
+export const COUNTRIES = Object.freeze(COUNTRY_SEED.map((country) => Object.freeze({ ...country, trait: traitForCountry(country.id), ...resourcesForCountry(country) })));
 
 export function validateCountries(countries) {
   if (!Array.isArray(countries) || countries.length !== 200) {
@@ -1051,8 +1063,8 @@ export function validateCountries(countries) {
 
   const ids = new Set();
   for (const country of countries) {
-    if (!country?.id || !country.nome || !country.trait || !Number.isFinite(country.area_km2) || country.area_km2 <= 0) {
-      throw new Error('Cada pais precisa de id, nome, trait e area positiva.');
+    if (!country?.id || !country.nome || !country.trait || !Number.isFinite(country.area_km2) || country.area_km2 <= 0 || !Number.isFinite(country.uranium) || !Number.isFinite(country.steel) || !Number.isFinite(country.rare_earths)) {
+      throw new Error('Cada pais precisa de id, nome, trait, recursos e area positiva.');
     }
     if (ids.has(country.id)) {
       throw new Error(`ID de pais duplicado: ${country.id}`);

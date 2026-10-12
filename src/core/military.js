@@ -5,6 +5,14 @@ function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+function available(resources, key) {
+  return Math.max(0, Number(resources?.[key]) || 0);
+}
+
+function consume(resources, key, amount) {
+  return { ...resources, [key]: available(resources, key) - amount };
+}
+
 function nuclearDefaults(nuclear = {}) {
   return {
     civilProgress: clamp(Number(nuclear.civilProgress) || 0, 0, 100),
@@ -104,11 +112,13 @@ export function advanceMilitary(military, economy, budget, geopoliticalResult = 
   };
 }
 
-export function recrutarSoldado(military, economy, amount = 5_000) {
+export function recrutarSoldado(military, economy, amount = 5_000, resources = {}) {
   const soldiers = Math.max(1, Math.floor(Number(amount) || 0));
   const cost = soldiers * 12_000 * getRecruitmentCostMultiplier(military?.trait);
+  const steelCost = Math.ceil(soldiers / 100);
   const cash = Number(economy?.cash) || 0;
   if (cash < cost) return { ok: false, reason: 'Caixa insuficiente para recrutamento.', military, economy };
+  if (available(resources, 'steel') < steelCost) return { ok: false, reason: 'Aco insuficiente para recrutamento.', military, economy, resources };
 
   const normalized = normalizeMilitary(military);
   return {
@@ -116,48 +126,54 @@ export function recrutarSoldado(military, economy, amount = 5_000) {
     reason: `${soldiers.toLocaleString('pt-BR')} soldados recrutados.`,
     military: normalizeMilitary({ ...normalized, exercito: { ...normalized.exercito, soldados: normalized.exercito.soldados + soldiers } }),
     economy: { ...economy, cash: cash - cost },
+    resources: consume(resources, 'steel', steelCost),
   };
 }
 
-function comprarUnidade(military, economy, branch, field, amount, unit) {
+function comprarUnidade(military, economy, branch, field, amount, unit, resources = {}) {
   const quantity = Math.max(1, Math.floor(Number(amount) || 0));
   const totalCost = quantity * unit.cost;
   const cash = Number(economy?.cash) || 0;
   if (cash < totalCost) return { ok: false, reason: `Caixa insuficiente para ${unit.label.toLowerCase()}.`, military, economy };
+  const steelCost = quantity * unit.steel;
+  if (available(resources, 'steel') < steelCost) return { ok: false, reason: `Aco insuficiente para ${unit.label.toLowerCase()}.`, military, economy, resources };
   const normalized = normalizeMilitary(military);
   return {
     ok: true,
     reason: `${quantity} ${unit.label.toLowerCase()} adquiridos.`,
     military: normalizeMilitary({ ...normalized, [branch]: { ...normalized[branch], [field]: normalized[branch][field] + quantity } }),
     economy: { ...economy, cash: cash - totalCost },
+    resources: consume(resources, 'steel', steelCost),
   };
 }
 
-export function comprarBlindados(military, economy, amount = 1) {
-  return comprarUnidade(military, economy, 'exercito', 'blindados', amount, { label: 'Blindados', cost: 4_000_000_000 });
+export function comprarBlindados(military, economy, amount = 1, resources = {}) {
+  return comprarUnidade(military, economy, 'exercito', 'blindados', amount, { label: 'Blindados', cost: 4_000_000_000, steel: 2_000 }, resources);
 }
 
-export function comprarNavios(military, economy, amount = 1) {
-  return comprarUnidade(military, economy, 'marinha', 'navios', amount, { label: 'Navios', cost: 8_000_000_000 });
+export function comprarNavios(military, economy, amount = 1, resources = {}) {
+  return comprarUnidade(military, economy, 'marinha', 'navios', amount, { label: 'Navios', cost: 8_000_000_000, steel: 10_000 }, resources);
 }
 
-export function comprarCacas(military, economy, amount = 1) {
-  return comprarUnidade(military, economy, 'aeronautica', 'cacas', amount, { label: 'Cacas', cost: 7_000_000_000 });
+export function comprarCacas(military, economy, amount = 1, resources = {}) {
+  return comprarUnidade(military, economy, 'aeronautica', 'cacas', amount, { label: 'Cacas', cost: 7_000_000_000, steel: 1_500 }, resources);
 }
 
-export function comprarEquipamento(military, economy, kind) {
-  if (kind === 'tanks') return comprarBlindados(military, economy);
-  if (kind === 'jets') return comprarCacas(military, economy);
-  if (kind === 'ships') return comprarNavios(military, economy);
+export function comprarEquipamento(military, economy, kind, resources = {}) {
+  if (kind === 'tanks') return comprarBlindados(military, economy, 1, resources);
+  if (kind === 'jets') return comprarCacas(military, economy, 1, resources);
+  if (kind === 'ships') return comprarNavios(military, economy, 1, resources);
   return { ok: false, reason: 'Equipamento invalido.', military, economy };
 }
 
-export function fundNuclearProject(military, economy, kind, amount) {
+export function fundNuclearProject(military, economy, kind, amount, resources = {}) {
   const cost = Number(amount);
   if (!['civil', 'military'].includes(kind) || !Number.isFinite(cost) || cost <= 0) {
     return { ok: false, reason: 'Projeto nuclear invalido.', military, economy };
   }
   if (economy.cash < cost) return { ok: false, reason: 'Caixa insuficiente para o projeto.', military, economy };
+  const uraniumCost = Math.ceil(cost / 100_000_000);
+  if (available(resources, 'uranium') < uraniumCost) return { ok: false, reason: 'Uranio insuficiente para o projeto.', military, economy, resources };
   const nuclear = nuclearDefaults(military.nuclear);
   const progressKey = kind === 'civil' ? 'civilProgress' : 'militaryProgress';
   const nextProgress = clamp(nuclear[progressKey] + ((cost / 1_000_000_000) * 5), 0, 100);
@@ -172,6 +188,7 @@ export function fundNuclearProject(military, economy, kind, amount) {
     reason: `Investimento nuclear de ${Math.round(cost / 1_000_000_000)} bi autorizado.`,
     military: normalizeMilitary({ ...military, armasNucleares: nextNuclear.arsenal, nuclear: nextNuclear }),
     economy: { ...economy, cash: economy.cash - cost },
+    resources: consume(resources, 'uranium', uraniumCost),
   };
 }
 

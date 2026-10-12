@@ -19,6 +19,7 @@ import {
   decretarRevolucaoSocialista,
   financiarRebeldes,
   fundNuclear,
+  importarRecursos,
   hireMinister,
   resolvePeaceTreaty,
   createLeague,
@@ -215,7 +216,7 @@ export function diplomacyView(state, searchQuery = '') {
   const union = state.regime.type === 'communist_dictatorship';
   const peacePanel = target ? '<p class="notice">Um tratado de paz aguarda decisao no painel bloqueante.</p>' : '';
   const leaguePanel = league ? `<div class="ledger-row"><span>${league.name}</span><strong>${league.memberIds.length} membros</strong></div>` : `<button type="button" class="quiet-action" data-action="league-create">Criar Nova Liga Global</button>`;
-  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relacoes Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}<label class="diplomacy-search"><span>Buscar pais</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de paises diplomaticos">${contacts.map((contact) => `<article class="bloc-row"><div><strong>${contact.name}</strong><span>Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | ${contact.trait}${contact.puppet ? ' | Fantoche' : ''}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button>${union ? `<button type="button" class="quiet-action" data-action="union-absorb" data-contact="${contact.id}" ${contact.relation > 80 || contact.puppet ? '' : 'disabled'}>Absorver pela Uniao</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="fund-rebels" data-contact="${contact.id}">Financiar Rebeldes</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('') || '<p class="notice">Nenhum pais corresponde a busca.</p>'}</div></section>`;
+  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relacoes Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}<label class="diplomacy-search"><span>Buscar pais</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de paises diplomaticos">${contacts.map((contact) => `<article class="bloc-row"><div><strong>${contact.name}</strong><span>Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | ${contact.trait}${contact.puppet ? ' | Fantoche' : ''}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button><button type="button" class="quiet-action" data-action="resource-import" data-contact="${contact.id}" data-resource="steel" data-amount="500" ${contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Importar aco</button>${union ? `<button type="button" class="quiet-action" data-action="union-absorb" data-contact="${contact.id}" ${contact.relation > 80 || contact.puppet ? '' : 'disabled'}>Absorver pela Uniao</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="fund-rebels" data-contact="${contact.id}">Financiar Rebeldes</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('') || '<p class="notice">Nenhum pais corresponde a busca.</p>'}</div></section>`;
 }
 
 function legacyMilitaryView(state) {
@@ -270,7 +271,7 @@ export function renderPeaceTreaty(state) {
     <p class="eyebrow">Tratado de Paz Obrigatorio</p>
     <h2 id="tratado-titulo">${target.name} foi derrotado</h2>
     <p class="notice">Decida o destino do territorio antes de encerrar outro mes.</p>
-    <div class="action-row"><button type="button" class="quiet-action danger-action" data-action="ui-annex">Anexar</button><button type="button" class="primary-action" data-action="ui-loot">Saquear Tesouro</button></div>
+    <div class="action-row"><button type="button" class="quiet-action danger-action" data-action="ui-annex">Anexar</button><button type="button" class="primary-action" data-action="ui-loot">Saquear Tesouro</button><button type="button" class="quiet-action" data-action="ui-demilitarize">Desmilitarizar</button><button type="button" class="quiet-action" data-action="ui-reparations">Reparacoes</button></div>
   </section>`;
 }
 
@@ -348,6 +349,8 @@ export function mountDashboard(root) {
     const action = event.target.closest('[data-action]')?.dataset.action;
     if (action === 'ui-annex') window.uiAnexar();
     if (action === 'ui-loot') window.uiSaquear();
+    if (action === 'ui-demilitarize') resolvePendingTreaty('demilitarize');
+    if (action === 'ui-reparations') resolvePendingTreaty('reparations');
   });
 
   crisisModal?.addEventListener('click', (event) => {
@@ -363,6 +366,7 @@ export function mountDashboard(root) {
     if (action === 'map-country') { state = { ...state, ui: { ...state.ui, selectedMapCountryId: control.dataset.country } }; render(); return; }
     if (action === 'tax') { commit(changeTax(state, control.dataset.tax, Number(control.dataset.delta))); return; }
     if (action === 'treaty') { commit(proposeTreaty(state, control.dataset.contact)); return; }
+    if (action === 'resource-import') { commit(importarRecursos(state, control.dataset.contact, control.dataset.resource, Number(control.dataset.amount))); return; }
     if (action === 'alliance') { commit(proposeAlliance(state, control.dataset.contact)); return; }
     if (action === 'war') { commit(startWar(state, control.dataset.contact)); return; }
     if (action === 'peace') { commit(resolvePeaceTreaty(state, control.dataset.contact, control.dataset.choice)); return; }

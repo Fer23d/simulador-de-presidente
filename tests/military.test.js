@@ -17,7 +17,7 @@ import {
   recrutarSoldado,
 } from '../src/core/military.js';
 
-const country = { populacao_base: 210_000_000, pib_base: 2_000_000_000_000 };
+const country = { populacao_base: 210_000_000, pib_base: 2_000_000_000_000, steel: 1_000_000, uranium: 10_000 };
 const economy = {
   gdp: 2_000_000_000_000,
   cash: 150_000_000_000,
@@ -35,8 +35,8 @@ test('raises military power after a month of defense investment', () => {
 
 test('funds a civil nuclear project only when the treasury can cover it', () => {
   const initial = createMilitary(country);
-  const rejected = fundNuclearProject(initial, { ...economy, cash: 0 }, 'civil', 5_000_000_000);
-  const funded = fundNuclearProject(initial, economy, 'civil', 5_000_000_000);
+  const rejected = fundNuclearProject(initial, { ...economy, cash: 0 }, 'civil', 5_000_000_000, country);
+  const funded = fundNuclearProject(initial, economy, 'civil', 5_000_000_000, country);
 
   assert.equal(rejected.ok, false);
   assert.equal(rejected.military, initial);
@@ -83,8 +83,8 @@ test('marks a dictatorship as game over when a forced revolution roll succeeds',
 
 test('recruits soldiers and purchases equipment when treasury can pay', () => {
   const initial = createMilitary(country);
-  const recruited = recrutarSoldado(initial, economy, 10_000);
-  const equipped = comprarEquipamento(recruited.military, recruited.economy, 'tanks');
+  const recruited = recrutarSoldado(initial, economy, 10_000, country);
+  const equipped = comprarEquipamento(recruited.military, recruited.economy, 'tanks', recruited.resources);
 
   assert.ok(recruited.military.soldiers > initial.soldiers);
   assert.ok(equipped.military.equipmentMultiplier > recruited.military.equipmentMultiplier);
@@ -93,7 +93,7 @@ test('recruits soldiers and purchases equipment when treasury can pay', () => {
 
 test('leaves state untouched when a military purchase cannot be funded', () => {
   const initial = createMilitary(country);
-  const result = comprarEquipamento(initial, { ...economy, cash: 1 }, 'jets');
+  const result = comprarEquipamento(initial, { ...economy, cash: 1 }, 'jets', country);
 
   assert.equal(result.ok, false);
   assert.equal(result.military, initial);
@@ -102,9 +102,9 @@ test('leaves state untouched when a military purchase cannot be funded', () => {
 
 test('manages army, navy and air force as separate military branches', () => {
   const initial = createMilitary(country);
-  const withTanks = comprarBlindados(initial, economy, 2);
-  const withShips = comprarNavios(withTanks.military, withTanks.economy, 1);
-  const withJets = comprarCacas(withShips.military, withShips.economy, 2);
+  const withTanks = comprarBlindados(initial, economy, 2, country);
+  const withShips = comprarNavios(withTanks.military, withTanks.economy, 1, withTanks.resources);
+  const withJets = comprarCacas(withShips.military, withShips.economy, 2, withShips.resources);
 
   assert.equal(withTanks.military.exercito.blindados, initial.exercito.blindados + 2);
   assert.equal(withShips.military.marinha.navios, initial.marinha.navios + 1);
