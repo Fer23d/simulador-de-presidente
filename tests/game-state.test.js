@@ -234,6 +234,20 @@ test('false flag grants ONU amnesty only for its marked war target', () => {
   assert.equal(unmarked.geopolitics.onuScore, state.geopolitics.onuScore - 18);
 });
 
+test('a refused false-flag ultimatum also preserves ONU reputation', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    just_war_target: 'arg',
+    randomSeed: 1714,
+    military: { ...state.military, exercito: { ...state.military.exercito, soldados: 3_000_000 } },
+  };
+  const result = exigirAnexacao(prepared, 'arg');
+
+  assert.equal(result.geopolitics.onuScore, state.geopolitics.onuScore);
+  assert.equal(result.geopolitics.contacts.find((contact) => contact.id === 'arg').atWar, true);
+});
+
 test('every peace treaty outcome consumes false flag legitimacy', () => {
   const state = createGameState('bra');
   for (const choice of ['annex', 'loot', 'demilitarize', 'reparations']) {
@@ -300,6 +314,22 @@ test('migrates an older military save with army management defaults', () => {
   assert.ok(hydrated.military.exercito);
   assert.ok(hydrated.military.marinha);
   assert.ok(hydrated.military.aeronautica);
+});
+
+test('preserves the Dead Hand wasteland state when reloading a terminal save', () => {
+  const state = createGameState('bra');
+  const destroyed = {
+    ...state,
+    dead_hand_triggered: true,
+    country: { ...state.country, wasteland: true, populacao: 0, populacao_base: 0, pib_base: 0 },
+    economy: { ...state.economy, gdp: 0, cash: 0 },
+  };
+  const hydrated = hydrateGameState(JSON.stringify(destroyed));
+
+  assert.equal(hydrated.country.wasteland, true);
+  assert.equal(hydrated.country.populacao_base, 0);
+  assert.equal(hydrated.country.pib_base, 0);
+  assert.equal(hydrated.economy.gdp, 0);
 });
 
 test('annexation transfers target territory, population and GDP and records the target as annexed', () => {

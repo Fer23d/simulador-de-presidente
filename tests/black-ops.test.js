@@ -74,3 +74,18 @@ test('false flag rejects an active war target without charging resources', () =>
   assert.equal(result.country, prepared.country);
   assert.equal(result.just_war_target, null);
 });
+
+test('false flag does not restore purged workers in a theocratic state', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    economy: { ...state.economy, cash: 100_000_000_000 },
+    regime: { ...state.regime, constitution: 'theocratic' },
+    factions: { militares: 55, religiosos: 55 },
+  };
+
+  const result = orquestrarFalsaBandeira(prepared, 'arg');
+
+  assert.equal(result.factions.militares, 100);
+  assert.equal(Object.hasOwn(result.factions, 'trabalhadores'), false);
+});

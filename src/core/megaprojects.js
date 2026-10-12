@@ -40,7 +40,7 @@ export function iniciarProjetoMaoMorta(state) {
     economy: { ...state.economy, cash: state.economy.cash - DEAD_HAND_CASH_COST },
     technology: { ...state.technology, points: state.technology.points - DEAD_HAND_RESEARCH_COST },
     country: { ...state.country, uranium: state.country.uranium - DEAD_HAND_URANIUM_COST },
-    megaprojects: { ...(state.megaprojects ?? {}), deadHand: { remainingMonths: DEAD_HAND_DURATION } },
+    megaprojects: { ...(state.megaprojects ?? {}), deadHand: { remainingMonths: DEAD_HAND_DURATION, uraniumReserve: DEAD_HAND_URANIUM_COST } },
     notice: 'Rede Mao Morta iniciada: conclusao prevista em doze meses.',
   };
 }
@@ -49,31 +49,38 @@ export function processarMegaprojetos(state) {
   const remainingMonths = Number(state.megaprojects?.deadHand?.remainingMonths) || 0;
   if (state.dead_hand_active || remainingMonths <= 0) return state;
   if (remainingMonths > 1) {
-    return { ...state, megaprojects: { ...state.megaprojects, deadHand: { remainingMonths: remainingMonths - 1 } } };
+    return { ...state, megaprojects: { ...state.megaprojects, deadHand: { ...state.megaprojects.deadHand, remainingMonths: remainingMonths - 1 } } };
   }
   return {
     ...state,
     dead_hand_active: true,
-    megaprojects: { ...state.megaprojects, deadHand: { remainingMonths: 0, completed: true } },
+    megaprojects: { ...state.megaprojects, deadHand: { ...state.megaprojects.deadHand, remainingMonths: 0, completed: true } },
     notice: 'Rede Mao Morta ativa: os silos respondem a perda do governo.',
   };
 }
 
 export function interceptarGameOverComMaoMorta(state) {
   if (!state.dead_hand_active || !state.regime?.gameOver || state.dead_hand_triggered) return state;
-  let uranium = Math.max(0, Number(state.country?.uranium) || 0);
+  const reserve = Math.max(0, Number(state.megaprojects?.deadHand?.uraniumReserve) || 0);
+  const countryUranium = Math.max(0, Number(state.country?.uranium) || 0);
+  let uranium = countryUranium + reserve;
+  let strikes = 0;
   const contacts = (state.geopolitics?.contacts ?? []).map((contact) => {
     if (contact.destruido || contact.anexado || contact.wasteland || uranium < 1) return contact;
     uranium -= 1;
+    strikes += 1;
     return wasteContact(contact);
   });
+  const reserveRemaining = Math.max(0, reserve - strikes);
+  const countryUraniumRemaining = Math.max(0, countryUranium - Math.max(0, strikes - reserve));
   return {
     ...state,
     dead_hand_triggered: true,
-    country: { ...state.country, wasteland: true, populacao: 0, populacao_base: 0, pib_base: 0, uranium },
+    country: { ...state.country, wasteland: true, populacao: 0, populacao_base: 0, pib_base: 0, uranium: countryUraniumRemaining },
     economy: { ...state.economy, gdp: 0, cash: 0 },
     military: zeroMilitary(state.military),
     geopolitics: { ...state.geopolitics, contacts },
+    megaprojects: { ...state.megaprojects, deadHand: { ...state.megaprojects?.deadHand, uraniumReserve: reserveRemaining } },
     regime: { ...state.regime, gameOver: true, outcome: 'mao-morta' },
     notice: 'DIRETRIZ OMEGA EXECUTADA: destruicao mutua assegurada.',
   };

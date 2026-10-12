@@ -362,6 +362,7 @@ export function resolvePeaceTreaty(state, contactId, choice) {
 
 export function exigirAnexacao(state, contactId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const legitimateDefense = isLegitimateDefenseTarget(state, contactId);
   const result = demandAnnexation(state.geopolitics, contactId, getPoderTotal(state.military), state.randomSeed);
   if (!result.ok) return { ...state, notice: result.reason };
   if (result.accepted) {
@@ -369,9 +370,9 @@ export function exigirAnexacao(state, contactId) {
   }
   return syncWorld({
     ...state,
-    geopolitics: changeOnuScore(result.geopolitics, -18),
+    geopolitics: legitimateDefense ? result.geopolitics : changeOnuScore(result.geopolitics, -18),
     randomSeed: result.seed,
-    notice: result.reason,
+    notice: legitimateDefense ? `${result.reason} A ONU reconheceu a alegacao de legitima defesa.` : result.reason,
   });
 }
 
@@ -656,14 +657,16 @@ export function hydrateGameState(serialized) {
     const economy = parsed.economy ?? {};
     const calendar = parsed.calendar ?? {};
     const laws = parsed.laws?.laborReform ?? {};
+    const countryIsWasteland = Boolean(parsed.country?.wasteland);
     const hydrated = {
       ...base,
       country: {
         ...base.country,
-        area_km2: Number.isFinite(Number(parsed.country?.area_km2)) ? Math.max(1, Number(parsed.country.area_km2)) : base.country.area_km2,
-        populacao: Number.isFinite(Number(parsed.country?.populacao ?? parsed.country?.populacao_base)) ? Math.max(1, Number(parsed.country.populacao ?? parsed.country.populacao_base)) : base.country.populacao,
-        populacao_base: Number.isFinite(Number(parsed.country?.populacao_base ?? parsed.country?.populacao)) ? Math.max(1, Number(parsed.country.populacao_base ?? parsed.country.populacao)) : base.country.populacao_base,
-        pib_base: Number.isFinite(Number(parsed.country?.pib_base)) ? Math.max(1, Number(parsed.country.pib_base)) : base.country.pib_base,
+        area_km2: countryIsWasteland ? 0 : (Number.isFinite(Number(parsed.country?.area_km2)) ? Math.max(1, Number(parsed.country.area_km2)) : base.country.area_km2),
+        populacao: countryIsWasteland ? 0 : (Number.isFinite(Number(parsed.country?.populacao ?? parsed.country?.populacao_base)) ? Math.max(1, Number(parsed.country.populacao ?? parsed.country.populacao_base)) : base.country.populacao),
+        populacao_base: countryIsWasteland ? 0 : (Number.isFinite(Number(parsed.country?.populacao_base ?? parsed.country?.populacao)) ? Math.max(1, Number(parsed.country.populacao_base ?? parsed.country.populacao)) : base.country.populacao_base),
+        pib_base: countryIsWasteland ? 0 : (Number.isFinite(Number(parsed.country?.pib_base)) ? Math.max(1, Number(parsed.country.pib_base)) : base.country.pib_base),
+        wasteland: countryIsWasteland,
         uranium: Number.isFinite(Number(parsed.country?.uranium)) ? Math.max(0, Number(parsed.country.uranium)) : base.country.uranium,
         steel: Number.isFinite(Number(parsed.country?.steel)) ? Math.max(0, Number(parsed.country.steel)) : base.country.steel,
         rare_earths: Number.isFinite(Number(parsed.country?.rare_earths)) ? Math.max(0, Number(parsed.country.rare_earths)) : base.country.rare_earths,
@@ -687,7 +690,7 @@ export function hydrateGameState(serialized) {
       },
       economy: {
         ...base.economy,
-        gdp: Math.max(1, Number(economy.gdp) || base.economy.gdp),
+        gdp: countryIsWasteland ? 0 : Math.max(1, Number(economy.gdp) || base.economy.gdp),
         inflation: clamp(Number(economy.inflation) || 0, 0, 0.8),
         unemployment: clamp(Number(economy.unemployment) || base.economy.unemployment, 0.02, 0.45),
         cash: Number.isFinite(Number(economy.cash)) ? Number(economy.cash) : base.economy.cash,
@@ -751,8 +754,12 @@ export function hydrateGameState(serialized) {
       onuReputationPermanentlyZero: Boolean(parsed.onuReputationPermanentlyZero),
       just_war_target: typeof parsed.just_war_target === 'string' ? parsed.just_war_target : null,
       megaprojects: {
-        deadHand: parsed.megaprojects?.deadHand && !Boolean(parsed.dead_hand_active)
-          ? { remainingMonths: Math.max(1, Math.min(12, Math.floor(Number(parsed.megaprojects.deadHand.remainingMonths) || 12))) }
+        deadHand: parsed.megaprojects?.deadHand
+          ? {
+            remainingMonths: Boolean(parsed.dead_hand_active) ? 0 : Math.max(1, Math.min(12, Math.floor(Number(parsed.megaprojects.deadHand.remainingMonths) || 12))),
+            uraniumReserve: Math.max(0, Number(parsed.megaprojects.deadHand.uraniumReserve) || 0),
+            completed: Boolean(parsed.megaprojects.deadHand.completed),
+          }
           : null,
       },
       dead_hand_active: Boolean(parsed.dead_hand_active),

@@ -8,14 +8,15 @@ test('Dead Hand charges once and completes after twelve project ticks', () => {
   const prepared = {
     ...state,
     economy: { ...state.economy, cash: 1_000_000_000_000 },
-    country: { ...state.country, uranium: 300 },
+    country: { ...state.country, uranium: 250 },
     technology: { ...state.technology, points: 1_000 },
   };
   const started = iniciarProjetoMaoMorta(prepared);
   const completed = Array.from({ length: 12 }).reduce((next) => processarMegaprojetos(next), started);
 
   assert.equal(started.economy.cash, 0);
-  assert.equal(started.country.uranium, 50);
+  assert.equal(started.country.uranium, 0);
+  assert.equal(started.megaprojects.deadHand.uraniumReserve, 250);
   assert.equal(started.technology.points, 0);
   assert.equal(started.megaprojects.deadHand.remainingMonths, 12);
   assert.equal(completed.dead_hand_active, true);

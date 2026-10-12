@@ -52,12 +52,14 @@ export function orquestrarFalsaBandeira(state, alvoId) {
 
   const population = Math.max(1, Math.floor((Number(state.country.populacao_base ?? state.country.populacao) || 1) * 0.98));
   const gdpBase = Math.max(1, Math.floor((Number(state.country.pib_base) || 1) * 0.99));
+  const factions = { ...state.factions, militares: 100 };
+  if (Object.hasOwn(state.factions ?? {}, 'trabalhadores')) factions.trabalhadores = 100;
   return {
     ...state,
     just_war_target: alvoId,
     economy: { ...state.economy, cash: state.economy.cash - FALSE_FLAG_CASH_COST },
     country: { ...state.country, populacao: population, populacao_base: population, pib_base: gdpBase },
-    factions: { ...state.factions, militares: 100, trabalhadores: 100 },
+    factions,
     notice: `Falsa Bandeira orquestrada. A opiniao publica exige guerra contra ${target.name}.`,
   };
 }
