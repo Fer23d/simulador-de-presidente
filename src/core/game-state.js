@@ -18,7 +18,7 @@ import { automatizarIndustria as automateIndustry, processarAutomacaoIndustrial 
 import { aplicarEfeitosSoftPower, candidatarJogosMundiais as bidForGlobalGames, getSoftPowerModifiers, recusarCandidaturaGlobal, verificarSedeGlobal } from './soft_power.js';
 import { estatizarMegacorporacoes as nationalizeMegacorps, getMegacorpModifiers, isLobbyBlocked, processarMegacorporacoes } from './megacorps.js';
 import { advanceDefcon, applyDefconEconomicShock, markAnnexationTension } from './defcon.js';
-import { injetarVirusSintetico, processarInfeccoesBiologicas } from './black_ops.js';
+import { injetarVirusSintetico, orquestrarFalsaBandeira, processarInfeccoesBiologicas } from './black_ops.js';
 import { aplicarModificadoresConstitucionais, promulgarConstituicao } from './constitution.js';
 
 const STATE_VERSION = 8;
@@ -202,6 +202,12 @@ export function lancarVirusSintetico(state, contactId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = injetarVirusSintetico(state, contactId);
   return result.geopolitics === state.geopolitics ? result : addNews(syncWorld(result), result.notice);
+}
+
+export function executarFalsaBandeira(state, contactId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = orquestrarFalsaBandeira(state, contactId);
+  return result.just_war_target === contactId ? addNews(syncWorld(result), result.notice) : result;
 }
 
 export function promulgarNovaConstituicao(state, pillar) {
