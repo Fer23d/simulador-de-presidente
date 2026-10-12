@@ -5,6 +5,7 @@ import { advanceGeopolitics, anexarPais as annexTreatyTarget, alterarNotaONU as 
 import { advanceMilitary, applyNuclearCompletion, canAutogolpe, comprarBlindados, comprarCacas, comprarEquipamento, comprarNavios, createMilitary, createRegime, evaluateRegime, fundNuclearProject, getPoderTotal, normalizeMilitary, recrutarSoldado as recruitSoldiers } from './military.js';
 import { aggregateActiveLawEffects, LAWS, LAW_LABOR_REFORM } from './laws.js';
 import { advanceTechnology, createTechnology, getTechnologyModifiers, purchaseTechnology } from './technology.js';
+import { calculateMilitaryResearchPoints, getMilitaryTechnology, pesquisarTecnologia } from './tech_tree.js';
 import { getTraitModifiers } from './traits.js';
 import { EVENTS, applyEventOption, rollMonthlyEvent } from './events.js';
 import { createMinisters, dismissMinister as dismissCabinetMinister, getMinisterModifiers, hireMinister as hireCabinetMinister } from './ministers.js';
@@ -24,7 +25,7 @@ import { iniciarProjetoMaoMorta as startDeadHandProject, interceptarGameOverComM
 import { desviarFundos, interceptarFinalCaixa2, isEscapeEligible } from './corruption.js';
 import { escolherInterrogatorio as chooseInterrogation, reivindicarInterrogatorio as claimInterrogation, resolverInterrogatorio as resolveInterrogation, sortearCapturaAgente } from './interrogation.js';
 
-const STATE_VERSION = 10;
+const STATE_VERSION = 11;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 
 function clamp(value, minimum, maximum) {
@@ -134,6 +135,8 @@ export function createGameState(countryId = 'bra') {
     world: geopolitics.contacts,
     military: createMilitary(country),
     technology: createTechnology(),
+    military_research_points: 0,
+    unlocked_techs: [],
     factions: createFactions(),
     ministers: createMinisters(),
     regime: createRegime(),
@@ -559,6 +562,14 @@ export function researchTechnology(state, technologyId) {
   return { ...state, technology: result.technology, notice: result.reason };
 }
 
+export function pesquisarTecnologiaMilitar(state, technologyId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = pesquisarTecnologia(state, technologyId);
+  return result.unlocked_techs.length > (state.unlocked_techs?.length ?? 0)
+    ? addNews(result, result.notice)
+    : result;
+}
+
 export function negotiate(state, blocId) {
   const result = negotiateSupport(state.congress, state.economy, blocId, state.factions);
   return {
@@ -646,6 +657,7 @@ export function advanceMonth(state) {
   const technology = state.regime?.constitution === 'theocratic'
     ? { ...state.technology, generated: 0 }
     : advanceTechnology(state.technology, state.economy, state.budget, state.country.trait);
+  const militaryResearchGenerated = calculateMilitaryResearchPoints(state.economy, state.budget);
   const technologyModifiers = getTechnologyModifiers(technology);
   const geopoliticalModifiers = getGeopoliticalModifiers(state.geopolitics, state.military);
   const traitModifiers = getTraitModifiers(state.country, state.geopolitics);
@@ -695,6 +707,8 @@ export function advanceMonth(state) {
     country: infrastructureState.country,
     factions: constitutionalState.factions,
     technology: constitutionalState.technology,
+    military_research_points: Math.max(0, Number(state.military_research_points) || 0) + militaryResearchGenerated,
+    unlocked_techs: Array.isArray(state.unlocked_techs) ? state.unlocked_techs : [],
     regime: { ...stability.regime, coupRisk: clamp(stability.regime.coupRisk + (effects.coupRiskModifier ?? 0), 0, 0.8) },
     randomSeed: stability.seed,
     calendar: { month, year },
@@ -731,7 +745,7 @@ export function advanceMonth(state) {
 export function hydrateGameState(serialized) {
   try {
     const parsed = JSON.parse(serialized);
-    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, STATE_VERSION].includes(parsed?.version) || !getCountryById(parsed?.country?.id)) {
+    if (!Number.isInteger(parsed?.version) || parsed.version < 1 || parsed.version > STATE_VERSION || !getCountryById(parsed?.country?.id)) {
       return createGameState();
     }
 
@@ -789,6 +803,10 @@ export function hydrateGameState(serialized) {
         ? normalizeMilitary({ ...base.military, ...parsed.military, nuclear: { ...base.military.nuclear, ...parsed.military.nuclear } })
         : base.military,
       technology: parsed.version >= 3 && Array.isArray(parsed.technology?.unlocked) ? { points: Math.max(0, Number(parsed.technology.points) || 0), unlocked: parsed.technology.unlocked.filter((id) => typeof id === 'string') } : base.technology,
+      military_research_points: Math.max(0, Number(parsed.military_research_points) || 0),
+      unlocked_techs: Array.isArray(parsed.unlocked_techs)
+        ? parsed.unlocked_techs.filter((id) => typeof id === 'string' && getMilitaryTechnology(id))
+        : base.unlocked_techs,
       factions: parsed.factions ? normalizeFactions(parsed.factions) : normalizeFactions({
         elite: Number(parsed.economy?.popularity) || 50,
         trabalhadores: Number(parsed.economy?.popularity) || 50,

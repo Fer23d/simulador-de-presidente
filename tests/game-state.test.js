@@ -25,6 +25,7 @@ import {
   fugirEmSilencio,
   afundarComONavio,
   destruirDoHelicoptero,
+  pesquisarTecnologiaMilitar,
 } from '../src/core/game-state.js';
 
 test('creates a game state for Brazil', () => {
@@ -34,6 +35,31 @@ test('creates a game state for Brazil', () => {
   assert.ok(state.ministers);
   assert.deepEqual(state.factions, { elite: 50, trabalhadores: 50, militares: 50, religiosos: 50 });
   assert.equal(Object.hasOwn(state.economy, 'popularity'), false);
+  assert.equal(state.military_research_points, 0);
+  assert.deepEqual(state.unlocked_techs, []);
+});
+
+test('generates military research from defense spending without changing civilian research', () => {
+  const state = {
+    ...createGameState('bra'),
+    economy: { ...createGameState('bra').economy, gdp: 2_200_000_000_000 },
+    budget: { ...createGameState('bra').budget, defenseSpend: 0.06 },
+  };
+
+  const result = advanceMonth(state);
+
+  assert.equal(result.military_research_points, 132);
+  assert.equal(result.technology.points, result.technology.generated);
+});
+
+test('purchases military research through the public state command', () => {
+  const state = { ...createGameState('bra'), military_research_points: 1_000 };
+
+  const result = pesquisarTecnologiaMilitar(state, 'missiles');
+
+  assert.equal(result.military_research_points, 0);
+  assert.deepEqual(result.unlocked_techs, ['missiles']);
+  assert.equal(result.news[0].text.includes('MÍSSEIS'), true);
 });
 
 test('keeps the five most recent news headlines', async () => {
@@ -341,6 +367,25 @@ test('keeps a saved zero spending rate and recovers malformed military data', ()
 
   assert.equal(hydrated.budget.defenseSpend, 0);
   assert.ok(hydrated.military.nuclear);
+});
+
+test('migrates version ten saves and normalizes military research fields', () => {
+  const legacy = createGameState('bra');
+  legacy.version = 10;
+  delete legacy.military_research_points;
+  delete legacy.unlocked_techs;
+  const hydratedLegacy = hydrateGameState(JSON.stringify(legacy));
+  const malformed = hydrateGameState(JSON.stringify({
+    ...createGameState('bra'),
+    version: 11,
+    military_research_points: -200,
+    unlocked_techs: ['cyber', 'unknown', 3],
+  }));
+
+  assert.equal(hydratedLegacy.military_research_points, 0);
+  assert.deepEqual(hydratedLegacy.unlocked_techs, []);
+  assert.equal(malformed.military_research_points, 0);
+  assert.deepEqual(malformed.unlocked_techs, ['cyber']);
 });
 
 test('preserves the cabinet, news and a pending crisis in a saved game', () => {
