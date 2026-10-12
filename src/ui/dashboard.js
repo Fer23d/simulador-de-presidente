@@ -43,6 +43,8 @@ import {
   votarNaONU,
   lancarCiberataque,
   automatizarIndustria,
+  autorizarAniquilacaoNuclear,
+  canAutorizarAniquilacaoNuclear,
   candidatarJogosMundiais,
   estatizarMegacorporacoes,
   recusarJogosMundiais,
@@ -224,9 +226,10 @@ export function diplomacyView(state, searchQuery = '') {
     .filter((contact) => !query || contact.name.toLocaleLowerCase('pt-BR').includes(query));
   const league = state.geopolitics.league;
   const union = state.regime.type === 'communist_dictatorship';
+  const nuclearReady = canAutorizarAniquilacaoNuclear(state);
   const peacePanel = target ? '<p class="notice">Um tratado de paz aguarda decisao no painel bloqueante.</p>' : '';
   const leaguePanel = league ? `<div class="ledger-row"><span>${league.name}</span><strong>${league.memberIds.length} membros</strong></div>` : `<button type="button" class="quiet-action" data-action="league-create">Criar Nova Liga Global</button>`;
-  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relacoes Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}<label class="diplomacy-search"><span>Buscar pais</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de paises diplomaticos">${contacts.map((contact) => `<article class="bloc-row"><div><strong>${contact.name}</strong><span>Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | Defesa digital ${Number(contact.cyber_defense).toFixed(0)} | ${contact.trait}${contact.puppet ? ' | Fantoche' : ''}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button><button type="button" class="quiet-action" data-action="resource-import" data-contact="${contact.id}" data-resource="steel" data-amount="500" ${contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Importar aco</button><button type="button" class="quiet-action danger-action" data-action="cyber-attack" data-contact="${contact.id}" ${(Number(contact.cyber_paralyzed_until) || 0) > (Number(state.monthCounter) || 0) ? 'disabled' : ''}>Lancar Ciberataque</button>${union ? `<button type="button" class="quiet-action" data-action="union-absorb" data-contact="${contact.id}" ${contact.relation > 80 || contact.puppet ? '' : 'disabled'}>Absorver pela Uniao</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="fund-rebels" data-contact="${contact.id}">Financiar Rebeldes</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('') || '<p class="notice">Nenhum pais corresponde a busca.</p>'}</div></section>`;
+  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relacoes Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}<label class="diplomacy-search"><span>Buscar pais</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de paises diplomaticos">${contacts.map((contact) => `<article class="bloc-row ${contact.wasteland ? 'wasteland-contact' : ''}"><div><strong>${contact.name}</strong><span>${contact.wasteland ? 'ZONA DE ANIQUILACAO NUCLEAR' : `Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | Defesa digital ${Number(contact.cyber_defense).toFixed(0)} | ${contact.trait}${contact.puppet ? ' | Fantoche' : ''}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.wasteland || contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button><button type="button" class="quiet-action" data-action="resource-import" data-contact="${contact.id}" data-resource="steel" data-amount="500" ${contact.wasteland || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Importar aco</button><button type="button" class="quiet-action danger-action" data-action="cyber-attack" data-contact="${contact.id}" ${contact.wasteland || (Number(contact.cyber_paralyzed_until) || 0) > (Number(state.monthCounter) || 0) ? 'disabled' : ''}>Lancar Ciberataque</button>${union ? `<button type="button" class="quiet-action" data-action="union-absorb" data-contact="${contact.id}" ${contact.wasteland || contact.relation > 80 || contact.puppet ? '' : 'disabled'}>Absorver pela Uniao</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="fund-rebels" data-contact="${contact.id}" ${contact.wasteland ? 'disabled' : ''}>Financiar Rebeldes</button>${nuclearReady && contact.atWar && !contact.wasteland ? `<button type="button" class="quiet-action nuclear-action" data-action="nuclear-codes" data-contact="${contact.id}">CODIGOS NUCLEARES</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.wasteland || contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('') || '<p class="notice">Nenhum pais corresponde a busca.</p>'}</div></section>`;
 }
 
 export function projectsView(state) {
@@ -321,10 +324,15 @@ export function mountDashboard(root) {
   const crisisModal = document.getElementById('modal-crise');
   const unModal = document.getElementById('modal-onu');
   const softPowerModal = document.getElementById('modal-soft-power');
+  const nukeModal = document.getElementById('modal-nuke');
+  const nukeTarget = document.getElementById('nuke-target');
+  const nukeCode = document.getElementById('nuke-code');
+  const nukeFeedback = document.getElementById('nuke-feedback');
   const congressModal = document.getElementById('modal-congresso');
   const congressLawTitle = document.getElementById('congresso-lei-titulo');
   const congressLawDescription = document.getElementById('congresso-lei-descricao');
   let pendingCongressLawId = null;
+  let pendingNukeTargetId = null;
 
   function render() {
     const projection = projectBudget(state.economy, state.budget);
@@ -351,7 +359,7 @@ export function mountDashboard(root) {
     root.innerHTML = `<div class="app-shell">
       <aside class="sidebar"><div class="brand"><span class="brand-mark">SP</span><div><strong>Simulador</strong><small>de Presidente</small></div></div><nav class="tab-list" aria-label="Navegacao principal">${tabs.map(([id, label]) => `<button type="button" class="tab-button ${activeTab === id ? 'active' : ''}" data-action="tab" data-tab="${id}">${label}</button>`).join('')}</nav><div class="sidebar-footer"><span>Mandato em curso</span><strong>${state.calendar.year}</strong></div></aside>
       <section class="workspace"><header class="topbar"><div><p class="eyebrow">Mandato presidencial</p><h1>${MONTHS[state.calendar.month - 1]} de ${state.calendar.year}</h1></div><div class="topbar-actions"><label class="country-picker"><span>Pais</span><select data-action="select-country" aria-label="Selecionar pais">${COUNTRIES.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((country) => `<option value="${country.id}" ${country.id === state.country.id ? 'selected' : ''}>${country.nome}</option>`).join('')}</select></label><button type="button" class="quiet-action" data-action="reset">Reiniciar</button></div></header>
-      <section class="metrics">${metric('PIB', formatMoney(state.economy.gdp))}${metric('Inflacao', formatPercent(state.economy.inflation), state.economy.inflation > 0.1 ? 'negative' : '')}${metric('Desemprego', formatPercent(state.economy.unemployment))}${metric('Apoio interno', `${getFactionSupport(state.factions).toFixed(0)}%`, getFactionSupport(state.factions) >= 55 ? 'positive' : '')}${metric('Caixa nacional', formatMoney(state.economy.cash))}${metric('Saldo projetado', formatMoney(projection.monthlyBalance), projection.monthlyBalance >= 0 ? 'positive' : 'negative')}</section>
+      <section class="metrics">${metric('PIB', formatMoney(state.economy.gdp))}${metric('Inflacao', formatPercent(state.economy.inflation), state.economy.inflation > 0.1 ? 'negative' : '')}${metric('Desemprego', formatPercent(state.economy.unemployment))}${metric('Apoio interno', `${getFactionSupport(state.factions).toFixed(0)}%`, getFactionSupport(state.factions) >= 55 ? 'positive' : '')}${metric('Caixa nacional', formatMoney(state.economy.cash))}${metric('DEFCON', `DEFCON: ${state.global_defcon}`, `defcon-${state.global_defcon}`)}${metric('Saldo projetado', formatMoney(projection.monthlyBalance), projection.monthlyBalance >= 0 ? 'positive' : 'negative')}</section>
       ${storageNotice ? `<p class="storage-notice">${storageNotice}</p>` : ''}
       <section class="content-area">${content}</section>${renderNews(state)}
     </section></div>`;
@@ -409,6 +417,41 @@ export function mountDashboard(root) {
   window.abrirModalVotacao = abrirModalVotacao;
   window.confirmarVotoSim = confirmarVotoCongresso;
 
+  function fecharModalNuclear() {
+    pendingNukeTargetId = null;
+    if (nukeModal) nukeModal.hidden = true;
+  }
+
+  function abrirCodigosNucleares(contactId) {
+    const target = state.geopolitics.contacts.find((contact) => contact.id === contactId);
+    if (!target?.atWar || !canAutorizarAniquilacaoNuclear(state) || !nukeModal) return;
+
+    pendingNukeTargetId = contactId;
+    nukeTarget.textContent = target.name;
+    nukeCode.value = '';
+    nukeFeedback.textContent = '';
+    nukeModal.hidden = false;
+    nukeCode.focus();
+  }
+
+  function confirmarAniquilacaoNuclear() {
+    if (!pendingNukeTargetId) return;
+    if (nukeCode.value.trim() !== 'KABOOM') {
+      nukeFeedback.textContent = 'CODIGO INVALIDO. SISTEMA BLOQUEADO.';
+      return;
+    }
+
+    const nextState = autorizarAniquilacaoNuclear(state, pendingNukeTargetId, nukeCode.value.trim());
+    const target = nextState.geopolitics.contacts.find((contact) => contact.id === pendingNukeTargetId);
+    if (!target?.wasteland) {
+      nukeFeedback.textContent = nextState.notice;
+      return;
+    }
+
+    fecharModalNuclear();
+    commit(nextState);
+  }
+
   function resolvePendingTreaty(choice) {
     const targetId = state.geopolitics.peaceTreaty?.targetId;
     if (targetId) commit(resolvePeaceTreaty(state, targetId, choice));
@@ -447,6 +490,12 @@ export function mountDashboard(root) {
     if (action === 'abandon-congress-vote') fecharModalVotacao();
   });
 
+  nukeModal?.addEventListener('click', (event) => {
+    const action = event.target.closest('[data-action]')?.dataset.action;
+    if (action === 'confirm-nuke-launch') confirmarAniquilacaoNuclear();
+    if (action === 'cancel-nuke-launch') fecharModalNuclear();
+  });
+
   root.addEventListener('click', (event) => {
     const control = event.target.closest('[data-action]');
     if (!control || control.disabled) return;
@@ -464,6 +513,7 @@ export function mountDashboard(root) {
     if (action === 'sabotage') { commit(sabotar(state, control.dataset.contact)); return; }
     if (action === 'fund-rebels') { commit(financiarRebeldes(state, control.dataset.contact)); return; }
     if (action === 'cyber-attack') { commit(lancarCiberataque(state, control.dataset.contact)); return; }
+    if (action === 'nuclear-codes') { abrirCodigosNucleares(control.dataset.contact); return; }
     if (action === 'union-absorb') { commit(absorverPaisParaUniao(state, control.dataset.contact)); return; }
     if (action === 'socialist-revolution') { commit(decretarRevolucaoSocialista(state)); return; }
     if (action === 'sanction') { commit(imporSancao(state, control.dataset.contact)); return; }

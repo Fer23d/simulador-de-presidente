@@ -20,6 +20,7 @@ import {
   resolvePeaceTreaty,
   createLeague,
   confirmarVotoSim,
+  autorizarAniquilacaoNuclear,
   inviteToLeague,
 } from '../src/core/game-state.js';
 
@@ -138,6 +139,35 @@ test('confirms a congressional law through the same voting rules', () => {
 
   assert.equal(result.laws.taxReform.voteCompleted, true);
   assert.equal(result.activeLawIds.includes('tax-reform'), result.laws.taxReform.approved);
+});
+
+test('obliterates an active war target only after nuclear authorization', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    country: { ...state.country, uranium: 101 },
+    technology: { ...state.technology, unlocked: ['efficient-fission'] },
+    military: { ...state.military, nuclear: { ...state.military.nuclear, bombBuilt: true } },
+    geopolitics: {
+      ...state.geopolitics,
+      contacts: state.geopolitics.contacts.map((contact) => contact.id === 'arg'
+        ? { ...contact, atWar: true, population: 1_000_000, populacao_base: 1_000_000, pib_base: 500_000_000_000, militaryPower: 80, military: { exercito: { soldados: 20_000, blindados: 8 }, marinha: { navios: 3 }, aeronautica: { cacas: 5 } } }
+        : contact),
+    },
+  };
+
+  const blocked = autorizarAniquilacaoNuclear(prepared, 'arg', 'NAO');
+  const result = autorizarAniquilacaoNuclear(prepared, 'arg', 'KABOOM');
+  const target = result.geopolitics.contacts.find((contact) => contact.id === 'arg');
+
+  assert.equal(blocked.geopolitics, prepared.geopolitics);
+  assert.equal(target.wasteland, true);
+  assert.equal(target.population, 0);
+  assert.equal(target.populacao_base, 0);
+  assert.equal(target.pib_base, 0);
+  assert.equal(target.militaryPower, 0);
+  assert.equal(result.geopolitics.onuScore, 0);
+  assert.equal(result.nuclearSanctionsPending, true);
 });
 
 test('migrates a version 1 save with negative cash intact', () => {

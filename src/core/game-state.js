@@ -17,8 +17,9 @@ import { advanceCyberWarfare, lancarCiberataque as launchCyberAttack } from './c
 import { automatizarIndustria as automateIndustry, processarAutomacaoIndustrial } from './infrastructure.js';
 import { aplicarEfeitosSoftPower, candidatarJogosMundiais as bidForGlobalGames, getSoftPowerModifiers, recusarCandidaturaGlobal, verificarSedeGlobal } from './soft_power.js';
 import { estatizarMegacorporacoes as nationalizeMegacorps, getMegacorpModifiers, isLobbyBlocked, processarMegacorporacoes } from './megacorps.js';
+import { advanceDefcon, applyDefconEconomicShock, markAnnexationTension } from './defcon.js';
 
-const STATE_VERSION = 6;
+const STATE_VERSION = 7;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 
 function clamp(value, minimum, maximum) {
@@ -114,6 +115,11 @@ export function createGameState(countryId = 'bra') {
     host_global_event: false,
     globalEventTourismUntil: 0,
     onuReputationLockedUntil: 0,
+    global_defcon: 5,
+    defconPeacefulMonths: 0,
+    defconAnnexationMonths: 0,
+    nuclearSanctionsPending: false,
+    onuReputationPermanentlyZero: false,
     notice: 'Gabinete iniciado. O primeiro mes de governo comeca agora.',
   };
 }
@@ -292,7 +298,7 @@ export function anexarPais(state, contactId) {
     ? state
     : { ...state, geopolitics: { ...state.geopolitics, peaceTreaty: { targetId, status: 'pending' } } };
   const annexed = annexTreatyTarget(prepared);
-  return syncWorld({ ...annexed, military: normalizeMilitary(annexed.military) });
+  return markAnnexationTension(syncWorld({ ...annexed, military: normalizeMilitary(annexed.military) }));
 }
 
 export function resolvePeaceTreaty(state, contactId, choice) {
@@ -354,6 +360,51 @@ export function lancarAtaqueNuclear(state, contactId) {
     geopolitics: { ...state.geopolitics, contacts, onuScore: 0, internationalSanctions: true, sanctionSeverity: 1 },
     notice: `Ataque nuclear contra ${contact.name}: reputacao na ONU colapsou.`,
   });
+}
+
+export function canAutorizarAniquilacaoNuclear(state) {
+  return Number(state.country?.uranium) > 100
+    && Boolean(state.military?.nuclear?.bombBuilt)
+    && Boolean(state.technology?.unlocked?.includes('efficient-fission'));
+}
+
+export function autorizarAniquilacaoNuclear(state, contactId, authorizationCode) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  if (authorizationCode !== 'KABOOM') return { ...state, notice: 'Codigo de autorizacao invalido.' };
+  if (!canAutorizarAniquilacaoNuclear(state)) {
+    return { ...state, notice: 'Codigos nucleares exigem uranio, arma nuclear e Fissao Nuclear Eficiente.' };
+  }
+
+  const target = state.geopolitics.contacts.find((contact) => contact.id === contactId);
+  if (!target?.atWar || target.wasteland) {
+    return { ...state, notice: 'Aniquilacao nuclear exige um alvo em guerra ativa.' };
+  }
+
+  const contacts = state.geopolitics.contacts.map((contact) => contact.id === contactId
+    ? {
+      ...contact,
+      wasteland: true,
+      atWar: false,
+      population: 0,
+      populacao_base: 0,
+      pib_base: 0,
+      militaryPower: 0,
+      military: { exercito: { soldados: 0, blindados: 0 }, marinha: { navios: 0 }, aeronautica: { cacas: 0 } },
+      alliance: false,
+      tradeTreaty: false,
+      relation: -100,
+    }
+    : { ...contact, alliance: false });
+  return addNews(syncWorld({
+    ...state,
+    country: { ...state.country, uranium: Number(state.country.uranium) - 100 },
+    geopolitics: { ...state.geopolitics, contacts, onuScore: 0, internationalSanctions: true, sanctionSeverity: 1 },
+    global_defcon: 1,
+    defconPeacefulMonths: 0,
+    nuclearSanctionsPending: true,
+    onuReputationPermanentlyZero: true,
+    notice: `${target.name} foi reduzido a uma zona de aniquilacao nuclear.`,
+  }), `${target.name} foi reduzido a uma zona de aniquilacao nuclear.`);
 }
 
 export function fundNuclear(state, kind, amount) {
@@ -450,6 +501,14 @@ export function advanceMonth(state) {
   if (state.pendingEvent) return { ...state, notice: 'Resolva a crise nacional antes de avancar o mes.' };
   if (state.pendingUnVote) return { ...state, notice: 'Registre seu voto na Assembleia da ONU antes de avancar o mes.' };
   if (state.pendingGlobalBid) return { ...state, notice: 'Decida a candidatura aos Jogos Mundiais antes de avancar o mes.' };
+  if (state.nuclearSanctionsPending) {
+    state = {
+      ...state,
+      country: { ...state.country, pib_base: Math.round(state.country.pib_base * 0.7) },
+      economy: { ...state.economy, gdp: Math.round(state.economy.gdp * 0.7) },
+      nuclearSanctionsPending: false,
+    };
+  }
   const corporateState = processarMegacorporacoes({ ...state, activeLawIds: getActiveLawIds(state.laws) });
   const effects = aggregateActiveLawEffects(state.laws);
   const factionModifiers = getFactionModifiers(state.factions);
@@ -473,7 +532,10 @@ export function advanceMonth(state) {
   const economyAfterPolicy = advanceEconomy(state.economy, state.budget, monthlyEffects, modifiers);
   const traitInterest = economyAfterPolicy.cash > 0 ? economyAfterPolicy.cash * traitModifiers.cashInterest : 0;
   const economicMonth = { ...economyAfterPolicy, cash: economyAfterPolicy.cash + traitInterest };
-  const nuclear = applyNuclearCompletion(changeOnuScore(state.geopolitics, effects.onuModifier ?? 0), state.military);
+  const nuclearResult = applyNuclearCompletion(changeOnuScore(state.geopolitics, effects.onuModifier ?? 0), state.military);
+  const nuclear = state.onuReputationPermanentlyZero
+    ? { ...nuclearResult, geopolitics: { ...nuclearResult.geopolitics, onuScore: 0, internationalSanctions: true, sanctionSeverity: 1 } }
+    : nuclearResult;
   const preparedMilitary = advanceMilitary(nuclear.military, economicMonth, state.budget, {}, state.factions);
   preparedMilitary.military.infantryMultiplier = technologyModifiers.infantryMultiplier;
   preparedMilitary.military.support = clamp(preparedMilitary.military.support + (effects.militarySupportModifier ?? 0), 0, 100);
@@ -506,14 +568,15 @@ export function advanceMonth(state) {
   });
   const resolvedState = aplicarEfeitosSoftPower(processarMigracoes(aplicarResolucoes(advanceCyberWarfare(completedState))));
   const withNews = addNews(syncWorld(resolvedState), notice);
-  const globalBidState = verificarSedeGlobal(withNews);
+  const defconState = applyDefconEconomicShock(advanceDefcon(withNews));
+  const globalBidState = verificarSedeGlobal(defconState);
   if (globalBidState.pendingGlobalBid) return addNews(globalBidState, globalBidState.notice);
-  const assemblyState = verificarAssembleia(withNews);
+  const assemblyState = verificarAssembleia(defconState);
   if (assemblyState.pendingUnVote) return addNews(assemblyState, assemblyState.notice);
   const eventRoll = rollMonthlyEvent(stability.seed);
-  if (!eventRoll.event) return { ...withNews, randomSeed: eventRoll.seed };
+  if (!eventRoll.event) return { ...assemblyState, randomSeed: eventRoll.seed };
   return addNews({
-    ...withNews,
+    ...assemblyState,
     randomSeed: eventRoll.seed,
     pendingEvent: eventRoll.event,
     notice: `Crise nacional: ${eventRoll.event.title}.`,
@@ -523,7 +586,7 @@ export function advanceMonth(state) {
 export function hydrateGameState(serialized) {
   try {
     const parsed = JSON.parse(serialized);
-    if (![1, 2, 3, 4, 5, STATE_VERSION].includes(parsed?.version) || !getCountryById(parsed?.country?.id)) {
+    if (![1, 2, 3, 4, 5, 6, STATE_VERSION].includes(parsed?.version) || !getCountryById(parsed?.country?.id)) {
       return createGameState();
     }
 
@@ -613,6 +676,11 @@ export function hydrateGameState(serialized) {
       host_global_event: Boolean(parsed.host_global_event),
       globalEventTourismUntil: Math.max(0, Math.floor(Number(parsed.globalEventTourismUntil) || 0)),
       onuReputationLockedUntil: Math.max(0, Math.floor(Number(parsed.onuReputationLockedUntil) || 0)),
+      global_defcon: clamp(Math.floor(Number(parsed.global_defcon) || base.global_defcon), 1, 5),
+      defconPeacefulMonths: Math.max(0, Math.floor(Number(parsed.defconPeacefulMonths) || 0)),
+      defconAnnexationMonths: Math.max(0, Math.floor(Number(parsed.defconAnnexationMonths) || 0)),
+      nuclearSanctionsPending: Boolean(parsed.nuclearSanctionsPending),
+      onuReputationPermanentlyZero: Boolean(parsed.onuReputationPermanentlyZero),
     });
   } catch {
     return createGameState();

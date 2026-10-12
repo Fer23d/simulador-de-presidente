@@ -17,6 +17,23 @@
     <div id="modal-crise" class="peace-modal" role="presentation" hidden></div>
     <div id="modal-onu" class="peace-modal" role="presentation" hidden></div>
     <div id="modal-soft-power" class="peace-modal" role="presentation" hidden></div>
+    <div id="modal-nuke" class="modal-arcade-danger" role="presentation" hidden>
+      <section class="modal-nuke-dialog" role="dialog" aria-modal="true" aria-labelledby="nuke-title">
+        <p id="nuke-title" class="modal-arcade-header">/!\ ALERTA DE SISTEMA - AUTORIZACAO NECESSARIA /!\</p>
+        <pre class="ascii-nuke">[================================================]
+DESTINO: <span id="nuke-target">NAO DEFINIDO</span>
+PERDAS CIVIS ESTIMADAS: 100%
+
+INSERIR CODIGO DE AUTORIZACAO DE LANCAMENTO (KABOOM)</pre>
+        <label class="nuke-code-label" for="nuke-code">CODIGO DE LANCAMENTO</label>
+        <input id="nuke-code" class="nuke-code-input" type="text" maxlength="6" autocomplete="off" spellcheck="false" aria-describedby="nuke-feedback">
+        <p id="nuke-feedback" class="nuke-feedback" aria-live="polite"></p>
+        <div class="action-row">
+          <button type="button" class="arcade-nuke-launch" data-action="confirm-nuke-launch">[ GIRAR CHAVE ]</button>
+          <button type="button" class="arcade-vote-abandon" data-action="cancel-nuke-launch">[ CANCELAR ]</button>
+        </div>
+      </section>
+    </div>
     <div id="modal-congresso" class="modal-arcade" role="presentation" hidden>
       <section class="modal-arcade-dialog" role="dialog" aria-modal="true" aria-labelledby="congresso-lei-titulo">
         <p class="modal-arcade-header">/// SESSAO DO CONGRESSO NACIONAL ///</p>

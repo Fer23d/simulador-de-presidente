@@ -78,6 +78,23 @@ test('renders cyber operations in diplomacy and the internal projects tab', asyn
   assert.match(projectsView(state), /Automatizar Parque Industrial/);
 });
 
+test('renders nuclear codes only for a ready arsenal and an active war target', async () => {
+  const { diplomacyView } = await import('../src/ui/dashboard.js');
+  const { createGameState } = await import('../src/core/game-state.js');
+  const state = createGameState('bra');
+  const contacts = state.geopolitics.contacts.map((contact) => contact.id === 'arg' ? { ...contact, atWar: true } : contact);
+  const prepared = {
+    ...state,
+    country: { ...state.country, uranium: 101 },
+    technology: { ...state.technology, unlocked: ['efficient-fission'] },
+    military: { ...state.military, nuclear: { ...state.military.nuclear, bombBuilt: true } },
+    geopolitics: { ...state.geopolitics, contacts },
+    world: contacts,
+  };
+
+  assert.match(diplomacyView(prepared, 'argentina'), /data-action="nuclear-codes"/);
+});
+
 test('renders the global games bid dialog and corporate nationalization control', async () => {
   const { budgetView, renderSoftPower } = await import('../src/ui/dashboard.js');
   const { createGameState } = await import('../src/core/game-state.js');
