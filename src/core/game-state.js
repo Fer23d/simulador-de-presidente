@@ -1,7 +1,7 @@
 import { createCongress, negotiateSupport, voteOnLaw } from './congress.js';
 import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countries.js';
 import { DEFAULT_BUDGET, advanceEconomy, clampTaxRate, setBudgetRate } from './economy.js';
-import { advanceGeopolitics, anexarPais as annexTreatyTarget, alterarNotaONU as changeOnuScore, aplicarReparacoes as applyReparationsTreaty, createGeopolitics, criarLiga as createLeagueState, desmilitarizarPais as demilitarizeTreatyTarget, declareWar, exigirAnexacao as demandAnnexation, getGeopoliticalModifiers, importarRecursos as importResources, imporSancao as imposeSanction, inviteToLeague as inviteLeagueMember, proposeAlliance as formAlliance, proposeTradeTreaty, sabotar as sabotageCountry, saquearTesouro as lootTreatyTarget } from './geopolitics.js';
+import { advanceGeopolitics, anexarPais as annexTreatyTarget, alterarNotaONU as changeOnuScore, aplicarReparacoes as applyReparationsTreaty, createGeopolitics, criarLiga as createLeagueState, desmilitarizarPais as demilitarizeTreatyTarget, declareWar, exigirAnexacao as demandAnnexation, getGeopoliticalModifiers, importarRecursos as importResources, imporSancao as imposeSanction, inviteToLeague as inviteLeagueMember, isLegitimateDefenseTarget, proposeAlliance as formAlliance, proposeTradeTreaty, sabotar as sabotageCountry, saquearTesouro as lootTreatyTarget } from './geopolitics.js';
 import { advanceMilitary, applyNuclearCompletion, canAutogolpe, comprarBlindados, comprarCacas, comprarEquipamento, comprarNavios, createMilitary, createRegime, evaluateRegime, fundNuclearProject, getPoderTotal, normalizeMilitary, recrutarSoldado as recruitSoldiers } from './military.js';
 import { aggregateActiveLawEffects, LAWS, LAW_LABOR_REFORM } from './laws.js';
 import { advanceTechnology, createTechnology, getTechnologyModifiers, purchaseTechnology } from './technology.js';
@@ -178,7 +178,12 @@ export function startWar(state, contactId) {
   const next = applyGeopoliticalAction(state, (geopolitics) => declareWar(geopolitics, contactId));
   if (next.geopolitics === state.geopolitics) return next;
   const target = next.geopolitics.contacts.find((contact) => contact.id === contactId);
-  return addNews(syncWorld({ ...next, geopolitics: changeOnuScore(next.geopolitics, -18) }), `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'}.`);
+  const legitimateDefense = isLegitimateDefenseTarget(state, contactId);
+  const geopolitics = legitimateDefense ? next.geopolitics : changeOnuScore(next.geopolitics, -18);
+  const notice = legitimateDefense
+    ? `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'} sob alegacao de legitima defesa.`
+    : `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'}.`;
+  return addNews(syncWorld({ ...next, geopolitics, notice }), notice);
 }
 
 export function declararGuerra(state, contactId) {
@@ -327,10 +332,13 @@ export function resolvePeaceTreaty(state, contactId, choice) {
   if (!treaty || treaty.targetId !== contactId || !contact || contact.militaryPower > 0) {
     return { ...state, notice: 'Nenhum tratado de paz valido para este alvo.' };
   }
-  if (choice === 'annex') return anexarPais(state, contactId);
-  if (choice === 'loot') return syncWorld(lootTreatyTarget(state));
-  if (choice === 'demilitarize') return syncWorld(demilitarizeTreatyTarget(state));
-  if (choice === 'reparations') return syncWorld(applyReparationsTreaty(state));
+  const consumeLegitimacy = (result) => state.just_war_target === contactId
+    ? { ...result, just_war_target: null }
+    : result;
+  if (choice === 'annex') return consumeLegitimacy(anexarPais(state, contactId));
+  if (choice === 'loot') return consumeLegitimacy(syncWorld(lootTreatyTarget(state)));
+  if (choice === 'demilitarize') return consumeLegitimacy(syncWorld(demilitarizeTreatyTarget(state)));
+  if (choice === 'reparations') return consumeLegitimacy(syncWorld(applyReparationsTreaty(state)));
   return { ...state, notice: 'Termo de tratado invalido.' };
 }
 

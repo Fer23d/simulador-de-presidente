@@ -151,6 +151,10 @@ export function declareWar(geopolitics, contactId) {
   };
 }
 
+export function isLegitimateDefenseTarget(state, targetId) {
+  return Boolean(state?.just_war_target && state.just_war_target === targetId);
+}
+
 export function exigirAnexacao(geopolitics, contactId, playerPower, seed) {
   const contact = geopolitics.contacts.find((item) => item.id === contactId);
   if (!contact || contact.anexado) return { ok: false, accepted: false, reason: 'Pais nao encontrado ou ja anexado.', geopolitics, seed };
@@ -241,14 +245,16 @@ export function anexarPais(state) {
     contacts: state.geopolitics.contacts.map((contact) => contact.id === target.id
       ? { ...contact, anexado: true, destruido: true, atWar: false, alliance: false, tradeTreaty: false, militaryPower: 0, population: 0, populacao_base: 0, area_km2: 0, pib_base: 0, cash: 0, uranium: 0, steel: 0, rare_earths: 0 }
       : contact),
-  }, -45);
+  }, isLegitimateDefenseTarget(state, target.id) ? 0 : -45);
   return {
     ...state,
     country: { ...state.country, area_km2: area, populacao: population, populacao_base: population, pib_base: gdp, uranium: (Number(state.country.uranium) || 0) + (Number(target.uranium) || 0), steel: (Number(state.country.steel) || 0) + (Number(target.steel) || 0), rare_earths: (Number(state.country.rare_earths) || 0) + (Number(target.rare_earths) || 0) },
     economy: { ...state.economy, gdp: state.economy.gdp + (Number(target.pib_base) || 0), cash: state.economy.cash + cash },
     military,
     geopolitics,
-    notice: `${target.name} foi anexado; a ONU condenou a medida.`,
+    notice: isLegitimateDefenseTarget(state, target.id)
+      ? `${target.name} foi anexado sob alegacao de legitima defesa.`
+      : `${target.name} foi anexado; a ONU condenou a medida.`,
   };
 }
 

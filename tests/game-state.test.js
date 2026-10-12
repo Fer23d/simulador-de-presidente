@@ -211,6 +211,31 @@ test('integrates diplomatic, nuclear, and war commands', () => {
   assert.ok(nuclear.military.nuclear.civilProgress > 0);
 });
 
+test('false flag grants ONU amnesty only for its marked war target', () => {
+  const state = createGameState('bra');
+  const marked = startWar({ ...state, just_war_target: 'arg' }, 'arg');
+  const unmarked = startWar({ ...state, just_war_target: 'arg' }, 'usa');
+
+  assert.equal(marked.geopolitics.onuScore, state.geopolitics.onuScore);
+  assert.equal(unmarked.geopolitics.onuScore, state.geopolitics.onuScore - 18);
+});
+
+test('every peace treaty outcome consumes false flag legitimacy', () => {
+  const state = createGameState('bra');
+  for (const choice of ['annex', 'loot', 'demilitarize', 'reparations']) {
+    const prepared = {
+      ...state,
+      just_war_target: 'arg',
+      geopolitics: {
+        ...state.geopolitics,
+        peaceTreaty: { targetId: 'arg', status: 'pending' },
+        contacts: state.geopolitics.contacts.map((contact) => contact.id === 'arg' ? { ...contact, militaryPower: 0 } : contact),
+      },
+    };
+    assert.equal(resolvePeaceTreaty(prepared, 'arg', choice).just_war_target, null);
+  }
+});
+
 test('can change to dictatorship only after the military conditions are met', () => {
   const state = createGameState('bra');
   const eligible = { ...state, military: { ...state.military, support: 61, exercito: { soldados: 200_000, blindados: 25 } } };
