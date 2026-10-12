@@ -92,6 +92,16 @@ test('renders biological warfare and the constitutional action when they are unl
   assert.match(congressView(prepared), /Promulgar Nova Constituicao/);
 });
 
+test('renders false flag, Dead Hand project, and the terminal overlay', async () => {
+  const { diplomacyView, projectsView, renderDeadHandTerminal } = await import('../src/ui/dashboard.js');
+  const { createGameState } = await import('../src/core/game-state.js');
+  const state = createGameState('bra');
+
+  assert.match(diplomacyView(state, 'argentina'), /Orquestrar Falsa Bandeira/);
+  assert.match(projectsView(state), /Construir Rede Mao Morta/);
+  assert.match(renderDeadHandTerminal({ dead_hand_triggered: true }), /DIRETRIZ ÔMEGA/);
+});
+
 test('renders nuclear codes only for a ready arsenal and an active war target', async () => {
   const { diplomacyView } = await import('../src/ui/dashboard.js');
   const { createGameState } = await import('../src/core/game-state.js');

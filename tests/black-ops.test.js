@@ -72,5 +72,5 @@ test('false flag rejects an active war target without charging resources', () =>
 
   assert.equal(result.economy, prepared.economy);
   assert.equal(result.country, prepared.country);
-  assert.equal(result.just_war_target, undefined);
+  assert.equal(result.just_war_target, null);
 });
