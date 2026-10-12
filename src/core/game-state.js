@@ -21,6 +21,7 @@ import { advanceDefcon, applyDefconEconomicShock, markAnnexationTension } from '
 import { injetarVirusSintetico, orquestrarFalsaBandeira, processarInfeccoesBiologicas } from './black_ops.js';
 import { aplicarModificadoresConstitucionais, promulgarConstituicao } from './constitution.js';
 import { iniciarProjetoMaoMorta as startDeadHandProject, interceptarGameOverComMaoMorta, processarMegaprojetos } from './megaprojects.js';
+import { desviarFundos } from './corruption.js';
 
 const STATE_VERSION = 9;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
@@ -155,6 +156,15 @@ export function setBudget(state, budgetKey, value) {
   const budget = setBudgetRate(state.budget, budgetKey, value);
   if (budget === state.budget) return { ...state, notice: 'Controle orcamentario invalido.' };
   return { ...state, budget, notice: 'Orcamento atualizado.' };
+}
+
+export function desviarFundosParaCaixa2(state) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  if (state.pendingFinalDilemma) return { ...state, notice: 'Resolva o dilema final antes de executar novas acoes.' };
+  const result = desviarFundos(state);
+  return result.slush_fund !== state.slush_fund
+    ? addNews(result, `Caixa 2 atualizado: R$ ${result.slush_fund.toLocaleString('pt-BR')}.`)
+    : result;
 }
 
 function applyGeopoliticalAction(state, action) {
