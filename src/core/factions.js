@@ -14,7 +14,10 @@ export function normalizeFactions(factions = {}) {
 
 export function getFactionSupport(factions, { includePurged = false } = {}) {
   const normalized = normalizeFactions(factions);
-  const active = includePurged || !normalized.elite ? FACTION_KEYS.filter((key) => key !== 'elite') : FACTION_KEYS;
+  const presentKeys = FACTION_KEYS.filter((key) => Object.hasOwn(factions ?? {}, key));
+  const active = includePurged || presentKeys.length === FACTION_KEYS.length
+    ? FACTION_KEYS
+    : (presentKeys.length ? presentKeys : FACTION_KEYS);
   return active.reduce((total, key) => total + normalized[key], 0) / active.length;
 }
 

@@ -78,6 +78,20 @@ test('renders cyber operations in diplomacy and the internal projects tab', asyn
   assert.match(projectsView(state), /Automatizar Parque Industrial/);
 });
 
+test('renders biological warfare and the constitutional action when they are unlocked', async () => {
+  const { congressView, diplomacyView } = await import('../src/ui/dashboard.js');
+  const { createGameState } = await import('../src/core/game-state.js');
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    factions: { ...state.factions, militares: 100 },
+    technology: { ...state.technology, unlocked: ['advanced-bioengineering'] },
+  };
+
+  assert.match(diplomacyView(prepared, 'argentina'), /Lancar Virus Sintetico/);
+  assert.match(congressView(prepared), /Promulgar Nova Constituicao/);
+});
+
 test('renders nuclear codes only for a ready arsenal and an active war target', async () => {
   const { diplomacyView } = await import('../src/ui/dashboard.js');
   const { createGameState } = await import('../src/core/game-state.js');

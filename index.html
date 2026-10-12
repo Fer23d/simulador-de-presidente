@@ -52,6 +52,21 @@ INSERIR CODIGO DE AUTORIZACAO DE LANCAMENTO (KABOOM)</pre>
         </div>
       </section>
     </div>
+    <div id="modal-constituicao" class="modal-arcade-gold" role="presentation" hidden>
+      <section class="modal-constitution-dialog" role="dialog" aria-modal="true" aria-labelledby="constitution-title">
+        <pre id="constitution-title" class="ascii-constitution">╔══════════════════════════════════════════╗
+║       A NOVA ORDEM ESTABELECIDA          ║
+║  O PODER EMANA DE UMA ÚNICA VONTADE      ║
+╚══════════════════════════════════════════╝</pre>
+        <p class="modal-arcade-header">ESCOLHA O PILAR DA NOVA REPUBLICA:</p>
+        <div class="constitution-options">
+          <button type="button" class="constitution-choice" data-action="constitution-select" data-pillar="stratocratic">[ 1 ] ESTADO ESTRATOCRATICO<span>Forca armada de massa. Inflacao de guerra permanente.</span></button>
+          <button type="button" class="constitution-choice" data-action="constitution-select" data-pillar="technocratic">[ 2 ] TECNOCRACIA ABSOLUTA<span>Faccoes protegidas. Arrecadacao reduzida em 30%.</span></button>
+          <button type="button" class="constitution-choice" data-action="constitution-select" data-pillar="theocratic">[ 3 ] ESTADO TEOCRATICO<span>Estabilidade absoluta. Pesquisa cientifica interrompida.</span></button>
+        </div>
+        <button type="button" class="arcade-vote-abandon" data-action="constitution-cancel">[ ADIAR NOVA ORDEM ]</button>
+      </section>
+    </div>
     <script type="module" src="src/main.js"></script>
   </body>
 </html>

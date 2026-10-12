@@ -5,6 +5,7 @@ import { LAWS } from '../core/laws.js';
 import { TECHNOLOGIES } from '../core/technology.js';
 import { MINISTERS } from '../core/ministers.js';
 import { getFactionSupport } from '../core/factions.js';
+import { canPromulgarConstituicao } from '../core/constitution.js';
 import { RESOLUTIONS } from '../core/un_assembly.js';
 import {
   advanceMonth,
@@ -43,6 +44,8 @@ import {
   votarNaONU,
   lancarCiberataque,
   automatizarIndustria,
+  lancarVirusSintetico,
+  promulgarNovaConstituicao,
   autorizarAniquilacaoNuclear,
   canAutorizarAniquilacaoNuclear,
   candidatarJogosMundiais,
@@ -183,7 +186,7 @@ export function renderCongress(state) {
   }).join('');
 }
 
-function congressView(state) {
+export function congressView(state) {
   if (state.regime.type === 'dictatorship') return `<section class="panel"><p class="eyebrow">Instituicoes</p><h2>Congresso suspenso</h2><p class="notice">Leis sao aprovadas por decreto enquanto durar o estado de sitio.</p></section>`;
   const forecast = getVoteForecast({
     ...state.congress,
@@ -193,11 +196,16 @@ function congressView(state) {
     })),
   }, state.factions);
   const revolutionReady = state.regime.type === 'democracy' && state.factions.trabalhadores > 80 && state.factions.militares > 60 && state.factions.elite < 40;
+  const constitutionReady = canPromulgarConstituicao(state);
+  const elite = Number(state.factions.elite || 0).toFixed(0);
+  const workers = Number(state.factions.trabalhadores || 0).toFixed(0);
+  const military = Number(state.factions.militares || 0).toFixed(0);
+  const religious = Number(state.factions.religiosos || 0).toFixed(0);
   return `<section class="view-grid congress-grid">
     <section class="panel bill-panel"><div class="panel-heading"><div><p class="eyebrow">Projetos de lei</p><h2>Pauta do Congresso</h2></div></div><div id="lista-leis" class="law-list">${renderCongress(state)}</div><div class="vote-meter"><div class="meter-track"><span style="width:${percentage((forecast.votesFor / forecast.requiredVotes) * 100)}%"></span></div><strong>${forecast.votesFor} / ${forecast.requiredVotes} votos estimados</strong></div></section>
     <section class="panel bloc-panel">
       <div class="panel-heading"><div><p class="eyebrow">Bancadas</p><h2>Articulacao</h2></div></div>
-      <div class="bloc-list">${state.congress.blocs.map((bloc) => `<article class="bloc-row"><div><strong>${bloc.label}</strong><span>${bloc.seats} assentos</span></div><button type="button" class="quiet-action" data-action="negotiate" data-bloc="${bloc.id}" ${bloc.negotiated ? 'disabled' : ''}>${bloc.negotiated ? 'Apoio obtido' : `Negociar ${formatMoney(bloc.negotiationCost)}`}</button></article>`).join('')}</div><div class="ledger-row"><span>Elite / Trabalhadores</span><strong>${state.factions.elite.toFixed(0)} / ${state.factions.trabalhadores.toFixed(0)}</strong></div><div class="ledger-row"><span>Militares / Religiosos</span><strong>${state.factions.militares.toFixed(0)} / ${state.factions.religiosos.toFixed(0)}</strong></div><button type="button" class="quiet-action danger-action" data-action="socialist-revolution" ${revolutionReady ? '' : 'disabled'}>Decretar Revolucao Socialista</button>
+      <div class="bloc-list">${state.congress.blocs.map((bloc) => `<article class="bloc-row"><div><strong>${bloc.label}</strong><span>${bloc.seats} assentos</span></div><button type="button" class="quiet-action" data-action="negotiate" data-bloc="${bloc.id}" ${bloc.negotiated ? 'disabled' : ''}>${bloc.negotiated ? 'Apoio obtido' : `Negociar ${formatMoney(bloc.negotiationCost)}`}</button></article>`).join('')}</div><div class="ledger-row"><span>Elite / Trabalhadores</span><strong>${elite} / ${workers}</strong></div><div class="ledger-row"><span>Militares / Religiosos</span><strong>${military} / ${religious}</strong></div><button type="button" class="quiet-action danger-action" data-action="socialist-revolution" ${revolutionReady ? '' : 'disabled'}>Decretar Revolucao Socialista</button><button type="button" class="quiet-action constitution-action" data-action="constitution-open" ${constitutionReady ? '' : 'disabled'}>Promulgar Nova Constituicao</button>
     </section>
   </section>`;
 }
@@ -227,9 +235,10 @@ export function diplomacyView(state, searchQuery = '') {
   const league = state.geopolitics.league;
   const union = state.regime.type === 'communist_dictatorship';
   const nuclearReady = canAutorizarAniquilacaoNuclear(state);
+  const bioReady = state.technology.unlocked.includes('advanced-bioengineering');
   const peacePanel = target ? '<p class="notice">Um tratado de paz aguarda decisao no painel bloqueante.</p>' : '';
   const leaguePanel = league ? `<div class="ledger-row"><span>${league.name}</span><strong>${league.memberIds.length} membros</strong></div>` : `<button type="button" class="quiet-action" data-action="league-create">Criar Nova Liga Global</button>`;
-  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relacoes Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}<label class="diplomacy-search"><span>Buscar pais</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de paises diplomaticos">${contacts.map((contact) => `<article class="bloc-row ${contact.wasteland ? 'wasteland-contact' : ''}"><div><strong>${contact.name}</strong><span>${contact.wasteland ? 'ZONA DE ANIQUILACAO NUCLEAR' : `Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | Defesa digital ${Number(contact.cyber_defense).toFixed(0)} | ${contact.trait}${contact.puppet ? ' | Fantoche' : ''}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.wasteland || contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button><button type="button" class="quiet-action" data-action="resource-import" data-contact="${contact.id}" data-resource="steel" data-amount="500" ${contact.wasteland || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Importar aco</button><button type="button" class="quiet-action danger-action" data-action="cyber-attack" data-contact="${contact.id}" ${contact.wasteland || (Number(contact.cyber_paralyzed_until) || 0) > (Number(state.monthCounter) || 0) ? 'disabled' : ''}>Lancar Ciberataque</button>${union ? `<button type="button" class="quiet-action" data-action="union-absorb" data-contact="${contact.id}" ${contact.wasteland || contact.relation > 80 || contact.puppet ? '' : 'disabled'}>Absorver pela Uniao</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="fund-rebels" data-contact="${contact.id}" ${contact.wasteland ? 'disabled' : ''}>Financiar Rebeldes</button>${nuclearReady && contact.atWar && !contact.wasteland ? `<button type="button" class="quiet-action nuclear-action" data-action="nuclear-codes" data-contact="${contact.id}">CODIGOS NUCLEARES</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.wasteland || contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('') || '<p class="notice">Nenhum pais corresponde a busca.</p>'}</div></section>`;
+  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relacoes Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}<label class="diplomacy-search"><span>Buscar pais</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de paises diplomaticos">${contacts.map((contact) => `<article class="bloc-row ${contact.wasteland ? 'wasteland-contact' : ''}"><div><strong>${contact.name}</strong><span>${contact.wasteland ? 'ZONA DE ANIQUILACAO NUCLEAR' : `Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | Defesa digital ${Number(contact.cyber_defense).toFixed(0)} | ${contact.trait}${contact.puppet ? ' | Fantoche' : ''}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.wasteland || contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button><button type="button" class="quiet-action" data-action="resource-import" data-contact="${contact.id}" data-resource="steel" data-amount="500" ${contact.wasteland || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Importar aco</button><button type="button" class="quiet-action danger-action" data-action="cyber-attack" data-contact="${contact.id}" ${contact.wasteland || (Number(contact.cyber_paralyzed_until) || 0) > (Number(state.monthCounter) || 0) ? 'disabled' : ''}>Lancar Ciberataque</button><button type="button" class="quiet-action danger-action" data-action="synthetic-virus" data-contact="${contact.id}" ${!bioReady || contact.wasteland || contact.bio_infected ? 'disabled' : ''}>Lancar Virus Sintetico</button>${union ? `<button type="button" class="quiet-action" data-action="union-absorb" data-contact="${contact.id}" ${contact.wasteland || contact.relation > 80 || contact.puppet ? '' : 'disabled'}>Absorver pela Uniao</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="fund-rebels" data-contact="${contact.id}" ${contact.wasteland ? 'disabled' : ''}>Financiar Rebeldes</button>${nuclearReady && contact.atWar && !contact.wasteland ? `<button type="button" class="quiet-action nuclear-action" data-action="nuclear-codes" data-contact="${contact.id}">CODIGOS NUCLEARES</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.wasteland || contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('') || '<p class="notice">Nenhum pais corresponde a busca.</p>'}</div></section>`;
 }
 
 export function projectsView(state) {
@@ -329,6 +338,7 @@ export function mountDashboard(root) {
   const nukeCode = document.getElementById('nuke-code');
   const nukeFeedback = document.getElementById('nuke-feedback');
   const congressModal = document.getElementById('modal-congresso');
+  const constitutionModal = document.getElementById('modal-constituicao');
   const congressLawTitle = document.getElementById('congresso-lei-titulo');
   const congressLawDescription = document.getElementById('congresso-lei-descricao');
   let pendingCongressLawId = null;
@@ -417,6 +427,15 @@ export function mountDashboard(root) {
   window.abrirModalVotacao = abrirModalVotacao;
   window.confirmarVotoSim = confirmarVotoCongresso;
 
+  function fecharModalConstituicao() {
+    if (constitutionModal) constitutionModal.hidden = true;
+  }
+
+  function abrirModalConstituicao() {
+    if (!canPromulgarConstituicao(state) || !constitutionModal) return;
+    constitutionModal.hidden = false;
+  }
+
   function fecharModalNuclear() {
     pendingNukeTargetId = null;
     if (nukeModal) nukeModal.hidden = true;
@@ -490,6 +509,16 @@ export function mountDashboard(root) {
     if (action === 'abandon-congress-vote') fecharModalVotacao();
   });
 
+  constitutionModal?.addEventListener('click', (event) => {
+    const control = event.target.closest('[data-action]');
+    if (!control) return;
+    if (control.dataset.action === 'constitution-cancel') fecharModalConstituicao();
+    if (control.dataset.action === 'constitution-select') {
+      fecharModalConstituicao();
+      commit(promulgarNovaConstituicao(state, control.dataset.pillar));
+    }
+  });
+
   nukeModal?.addEventListener('click', (event) => {
     const action = event.target.closest('[data-action]')?.dataset.action;
     if (action === 'confirm-nuke-launch') confirmarAniquilacaoNuclear();
@@ -513,9 +542,11 @@ export function mountDashboard(root) {
     if (action === 'sabotage') { commit(sabotar(state, control.dataset.contact)); return; }
     if (action === 'fund-rebels') { commit(financiarRebeldes(state, control.dataset.contact)); return; }
     if (action === 'cyber-attack') { commit(lancarCiberataque(state, control.dataset.contact)); return; }
+    if (action === 'synthetic-virus') { commit(lancarVirusSintetico(state, control.dataset.contact)); return; }
     if (action === 'nuclear-codes') { abrirCodigosNucleares(control.dataset.contact); return; }
     if (action === 'union-absorb') { commit(absorverPaisParaUniao(state, control.dataset.contact)); return; }
     if (action === 'socialist-revolution') { commit(decretarRevolucaoSocialista(state)); return; }
+    if (action === 'constitution-open') { abrirModalConstituicao(); return; }
     if (action === 'sanction') { commit(imporSancao(state, control.dataset.contact)); return; }
     if (action === 'ultimatum') { commit(exigirAnexacao(state, control.dataset.contact)); return; }
     if (action === 'nuclear-strike') { commit(lancarAtaqueNuclear(state, control.dataset.contact)); return; }

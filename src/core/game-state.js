@@ -18,8 +18,10 @@ import { automatizarIndustria as automateIndustry, processarAutomacaoIndustrial 
 import { aplicarEfeitosSoftPower, candidatarJogosMundiais as bidForGlobalGames, getSoftPowerModifiers, recusarCandidaturaGlobal, verificarSedeGlobal } from './soft_power.js';
 import { estatizarMegacorporacoes as nationalizeMegacorps, getMegacorpModifiers, isLobbyBlocked, processarMegacorporacoes } from './megacorps.js';
 import { advanceDefcon, applyDefconEconomicShock, markAnnexationTension } from './defcon.js';
+import { injetarVirusSintetico, processarInfeccoesBiologicas } from './black_ops.js';
+import { aplicarModificadoresConstitucionais, promulgarConstituicao } from './constitution.js';
 
-const STATE_VERSION = 7;
+const STATE_VERSION = 8;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 
 function clamp(value, minimum, maximum) {
@@ -194,6 +196,18 @@ export function lancarCiberataque(state, contactId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = launchCyberAttack(state, contactId);
   return result.geopolitics === state.geopolitics ? result : addNews(syncWorld(result), result.notice);
+}
+
+export function lancarVirusSintetico(state, contactId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = injetarVirusSintetico(state, contactId);
+  return result.geopolitics === state.geopolitics ? result : addNews(syncWorld(result), result.notice);
+}
+
+export function promulgarNovaConstituicao(state, pillar) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = promulgarConstituicao(state, pillar);
+  return result.regime === state.regime ? result : addNews(syncWorld(result), result.notice);
 }
 
 export function automatizarIndustria(state) {
@@ -516,7 +530,9 @@ export function advanceMonth(state) {
   const corporateModifiers = getMegacorpModifiers(corporateState.megacorp_power);
   const softPowerModifiers = getSoftPowerModifiers(corporateState);
   const monthlyEffects = { ...effects, taxRevenueModifier: (effects.taxRevenueModifier ?? 0) + ministerModifiers.taxRevenueModifier + corporateModifiers.taxRevenueModifier };
-  const technology = advanceTechnology(state.technology, state.economy, state.budget, state.country.trait);
+  const technology = state.regime?.constitution === 'theocratic'
+    ? { ...state.technology, generated: 0 }
+    : advanceTechnology(state.technology, state.economy, state.budget, state.country.trait);
   const technologyModifiers = getTechnologyModifiers(technology);
   const geopoliticalModifiers = getGeopoliticalModifiers(state.geopolitics, state.military);
   const traitModifiers = getTraitModifiers(state.country, state.geopolitics);
@@ -544,19 +560,27 @@ export function advanceMonth(state) {
   const militaryMonth = advanceMilitary(preparedMilitary.military, geopoliticalMonth.economy, { defenseSpend: 0 }, geopoliticalMonth, state.factions);
   const factions = advanceFactions(state.factions, state.economy, militaryMonth.economy, state.budget, effects, { popularityModifier: modifiers.popularityModifier + (geopoliticalMonth.factionDelta ?? 0) });
   const infrastructureState = processarAutomacaoIndustrial({ ...state, country: state.country, factions });
-  const stability = evaluateRegime(state.regime, militaryMonth.economy, militaryMonth.military, geopoliticalMonth.geopolitics, geopoliticalMonth.seed, infrastructureState.factions);
+  const constitutionalState = aplicarModificadoresConstitucionais(state, {
+    economy: militaryMonth.economy,
+    military: militaryMonth.military,
+    factions: infrastructureState.factions,
+    technology,
+  });
+  const stability = state.regime?.stabilityLocked
+    ? { regime: { ...state.regime, coupRisk: 0, revolutionRisk: 0, gameOver: false, outcome: null }, seed: geopoliticalMonth.seed, event: null }
+    : evaluateRegime(state.regime, constitutionalState.economy, constitutionalState.military, geopoliticalMonth.geopolitics, geopoliticalMonth.seed, constitutionalState.factions);
   const month = state.calendar.month === 12 ? 1 : state.calendar.month + 1;
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? `Mes encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superavit' : 'com deficit'}.`;
 
   const completedState = syncWorld({
     ...state,
-    economy: militaryMonth.economy,
+    economy: constitutionalState.economy,
     geopolitics: geopoliticalMonth.geopolitics,
-    military: militaryMonth.military,
+    military: normalizeMilitary(constitutionalState.military),
     country: infrastructureState.country,
-    factions: infrastructureState.factions,
-    technology,
+    factions: constitutionalState.factions,
+    technology: constitutionalState.technology,
     regime: { ...stability.regime, coupRisk: clamp(stability.regime.coupRisk + (effects.coupRiskModifier ?? 0), 0, 0.8) },
     randomSeed: stability.seed,
     calendar: { month, year },
@@ -566,8 +590,11 @@ export function advanceMonth(state) {
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
   });
-  const resolvedState = aplicarEfeitosSoftPower(processarMigracoes(aplicarResolucoes(advanceCyberWarfare(completedState))));
-  const withNews = addNews(syncWorld(resolvedState), notice);
+  const resolvedState = aplicarEfeitosSoftPower(processarMigracoes(aplicarResolucoes(processarInfeccoesBiologicas(advanceCyberWarfare(completedState)))));
+  const bioAlert = Boolean(resolvedState.country?.bio_infected) || Boolean(completedState.country?.bio_infected);
+  const withNews = bioAlert
+    ? addNews(addNews(syncWorld(resolvedState), notice), 'Alerta sanitario: o pais esta sob ataque biologico silencioso.')
+    : addNews(syncWorld(resolvedState), notice);
   const defconState = applyDefconEconomicShock(advanceDefcon(withNews));
   const globalBidState = verificarSedeGlobal(defconState);
   if (globalBidState.pendingGlobalBid) return addNews(globalBidState, globalBidState.notice);
@@ -586,7 +613,7 @@ export function advanceMonth(state) {
 export function hydrateGameState(serialized) {
   try {
     const parsed = JSON.parse(serialized);
-    if (![1, 2, 3, 4, 5, 6, STATE_VERSION].includes(parsed?.version) || !getCountryById(parsed?.country?.id)) {
+    if (![1, 2, 3, 4, 5, 6, 7, STATE_VERSION].includes(parsed?.version) || !getCountryById(parsed?.country?.id)) {
       return createGameState();
     }
 
@@ -606,6 +633,8 @@ export function hydrateGameState(serialized) {
         steel: Number.isFinite(Number(parsed.country?.steel)) ? Math.max(0, Number(parsed.country.steel)) : base.country.steel,
         rare_earths: Number.isFinite(Number(parsed.country?.rare_earths)) ? Math.max(0, Number(parsed.country.rare_earths)) : base.country.rare_earths,
         industry_automated: Boolean(parsed.country?.industry_automated),
+        bio_infected: Boolean(parsed.country?.bio_infected),
+        bio_timer: Math.max(0, Math.floor(Number(parsed.country?.bio_timer) || 0)),
       },
       calendar: {
         month: clamp(Math.floor(Number(calendar.month) || 1), 1, 12),
@@ -668,8 +697,12 @@ export function hydrateGameState(serialized) {
       activeGlobalResolutions: Array.isArray(parsed.activeGlobalResolutions) ? parsed.activeGlobalResolutions.filter((id) => typeof id === 'string') : base.activeGlobalResolutions,
       notice: typeof parsed.notice === 'string' ? parsed.notice : base.notice,
     };
+    const normalizedFactions = hydrated.regime?.constitution === 'theocratic'
+      ? Object.fromEntries(Object.entries(hydrated.factions).filter(([key]) => key !== 'elite' && key !== 'trabalhadores'))
+      : hydrated.factions;
     return syncWorld({
       ...hydrated,
+      factions: normalizedFactions,
       activeLawIds: getActiveLawIds(hydrated.laws),
       megacorp_power: clamp(Number(parsed.megacorp_power) || 0, 0, 100),
       pendingGlobalBid: parsed.pendingGlobalBid?.status === 'pending' ? { status: 'pending' } : null,

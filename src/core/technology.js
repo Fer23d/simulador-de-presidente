@@ -7,6 +7,7 @@ export const TECHNOLOGIES = Object.freeze([
   Object.freeze({ id: 'genetic-therapy', branch: 'Saude', title: 'Terapia Genetica', cost: 250, description: 'Eleva permanentemente a popularidade de base.', effects: { popularityModifier: 0.5 } }),
   Object.freeze({ id: 'ai-logistics', branch: 'Civil', title: 'IA Logistica', cost: 140, description: 'Melhora crescimento e infraestrutura.', effects: { growthModifier: 0.0008, infrastructureCostModifier: -0.08 } }),
   Object.freeze({ id: 'genetic-medicine', branch: 'Saude e Social', title: 'Medicina Genetica', cost: 130, description: 'Eleva a popularidade de base.', effects: { popularityModifier: 0.35 } }),
+  Object.freeze({ id: 'advanced-bioengineering', branch: 'Biotecnologia', title: 'Engenharia Biologica Avancada', cost: 280, description: 'Libera operacoes biologicas clandestinas.', effects: {} }),
 ]);
 
 function clamp(value, minimum, maximum) {

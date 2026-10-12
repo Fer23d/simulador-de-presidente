@@ -152,6 +152,8 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .modal-arcade { position: fixed; z-index: 30; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(0, 0, 0, .88); }
 .modal-arcade-danger[hidden] { display: none; }
 .modal-arcade-danger { position: fixed; z-index: 40; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(64, 0, 0, .91); }
+.modal-arcade-gold[hidden] { display: none; }
+.modal-arcade-gold { position: fixed; z-index: 45; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(20, 14, 0, .92); }
 .modal-nuke-dialog { width: min(620px, 100%); padding: 24px; border: 3px double #ff003c; background: #120303; box-shadow: 0 0 26px rgba(255, 0, 60, .72), 9px 9px 0 #160000; text-align: center; }
 .modal-nuke-dialog .modal-arcade-header { color: #ff4a68; }
 .ascii-nuke { margin: 20px auto; color: #ffb000; font-family: "Share Tech Mono", monospace; font-size: 16px; line-height: 1.35; text-align: left; text-shadow: 0 0 8px rgba(255, 176, 0, .7); white-space: pre-wrap; }
@@ -178,6 +180,16 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .crisis-dialog { border-color: var(--danger); }
 .un-dialog { border-color: var(--amber); }
 .soft-power-dialog { border-color: var(--cyan); }
+.modal-constitution-dialog { width: min(660px, 100%); padding: 24px; border: 4px double #ffd700; background: #0c0a02; box-shadow: 0 0 24px rgba(255, 215, 0, .55), 9px 9px 0 #171103; text-align: center; }
+.ascii-constitution { margin: 0 auto 18px; color: #ffd700; font-family: "Share Tech Mono", monospace; font-size: 15px; line-height: 1.28; text-shadow: 0 0 8px rgba(255, 215, 0, .65); white-space: pre-wrap; }
+.constitution-options { display: grid; gap: 10px; margin: 17px 0; }
+.constitution-choice { display: grid; gap: 7px; width: 100%; border: 2px solid #ffd700; border-radius: 0; padding: 12px; background: #141103; color: #ffd700; font-family: "Press Start 2P", monospace; font-size: 10px; line-height: 1.6; text-align: left; box-shadow: 4px 4px 0 #030301; }
+.constitution-choice span { color: var(--muted); font-family: "Share Tech Mono", monospace; font-size: 15px; line-height: 1.25; }
+.constitution-choice:hover { background: #ffd700; color: #0b0901; }
+.constitution-choice:hover span { color: #0b0901; }
+.constitution-choice:active { transform: translate(4px, 4px); box-shadow: none; }
+.constitution-action { margin-top: 10px; border-color: #ffd700; color: #ffd700; }
+.constitution-action:hover:not(:disabled) { border-color: #ffd700; background: #ffd700; color: #0a0902; }
 
 .diplomacy-search { display: grid; gap: 6px; margin: 16px 0 10px; color: var(--muted); font-size: 13px; text-transform: uppercase; }
 .diplomacy-list, .country-table { max-height: 540px; overflow-y: auto; border-top: 2px solid var(--line); padding-right: 6px; }
