@@ -20,8 +20,9 @@ import { estatizarMegacorporacoes as nationalizeMegacorps, getMegacorpModifiers,
 import { advanceDefcon, applyDefconEconomicShock, markAnnexationTension } from './defcon.js';
 import { injetarVirusSintetico, orquestrarFalsaBandeira, processarInfeccoesBiologicas } from './black_ops.js';
 import { aplicarModificadoresConstitucionais, promulgarConstituicao } from './constitution.js';
+import { iniciarProjetoMaoMorta as startDeadHandProject, interceptarGameOverComMaoMorta, processarMegaprojetos } from './megaprojects.js';
 
-const STATE_VERSION = 8;
+const STATE_VERSION = 9;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 
 function clamp(value, minimum, maximum) {
@@ -57,6 +58,13 @@ function syncWorld(state) {
 export function addNews(state, text) {
   const item = { text, calendar: { ...state.calendar } };
   return { ...state, news: [item, ...(state.news ?? [])].slice(0, 5) };
+}
+
+function interceptDeadHandGameOver(state) {
+  const result = interceptarGameOverComMaoMorta(state);
+  return result.dead_hand_triggered && !state.dead_hand_triggered
+    ? addNews(syncWorld(result), 'Diretriz Omega executada: os silos da Mao Morta lancaram contra todos os alvos.')
+    : result;
 }
 
 function isValidCongress(congress) {
@@ -122,6 +130,10 @@ export function createGameState(countryId = 'bra') {
     defconAnnexationMonths: 0,
     nuclearSanctionsPending: false,
     onuReputationPermanentlyZero: false,
+    just_war_target: null,
+    megaprojects: { deadHand: null },
+    dead_hand_active: false,
+    dead_hand_triggered: false,
     notice: 'Gabinete iniciado. O primeiro mes de governo comeca agora.',
   };
 }
@@ -240,7 +252,13 @@ export function recusarJogosMundiais(state) {
 export function estatizarMegacorporacoes(state) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = nationalizeMegacorps(state);
-  return addNews(result, result.notice);
+  return addNews(interceptDeadHandGameOver(result), result.notice);
+}
+
+export function iniciarProjetoMaoMorta(state) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = startDeadHandProject(state);
+  return result.megaprojects !== state.megaprojects ? addNews(result, result.notice) : result;
 }
 
 export function recrutarSoldado(state, amount = 5_000) {
@@ -524,7 +542,7 @@ export function voteLaborLaw(state) {
 }
 
 export function advanceMonth(state) {
-  if (state.regime?.gameOver) return { ...state, notice: 'A partida foi encerrada.' };
+  if (state.regime?.gameOver) return interceptDeadHandGameOver({ ...state, notice: 'A partida foi encerrada.' });
   if (state.geopolitics.peaceTreaty?.status === 'pending') return { ...state, notice: 'Resolva o Tratado de Paz antes de avancar o mes.' };
   if (state.pendingEvent) return { ...state, notice: 'Resolva a crise nacional antes de avancar o mes.' };
   if (state.pendingUnVote) return { ...state, notice: 'Registre seu voto na Assembleia da ONU antes de avancar o mes.' };
@@ -604,7 +622,10 @@ export function advanceMonth(state) {
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
   });
-  const resolvedState = aplicarEfeitosSoftPower(processarMigracoes(aplicarResolucoes(processarInfeccoesBiologicas(advanceCyberWarfare(completedState)))));
+  const megaprojectState = processarMegaprojetos(completedState);
+  const terminalState = interceptDeadHandGameOver(megaprojectState);
+  if (terminalState.dead_hand_triggered) return terminalState;
+  const resolvedState = aplicarEfeitosSoftPower(processarMigracoes(aplicarResolucoes(processarInfeccoesBiologicas(advanceCyberWarfare(megaprojectState)))));
   const bioAlert = Boolean(resolvedState.country?.bio_infected) || Boolean(completedState.country?.bio_infected);
   const withNews = bioAlert
     ? addNews(addNews(syncWorld(resolvedState), notice), 'Alerta sanitario: o pais esta sob ataque biologico silencioso.')
@@ -627,7 +648,7 @@ export function advanceMonth(state) {
 export function hydrateGameState(serialized) {
   try {
     const parsed = JSON.parse(serialized);
-    if (![1, 2, 3, 4, 5, 6, 7, STATE_VERSION].includes(parsed?.version) || !getCountryById(parsed?.country?.id)) {
+    if (![1, 2, 3, 4, 5, 6, 7, 8, STATE_VERSION].includes(parsed?.version) || !getCountryById(parsed?.country?.id)) {
       return createGameState();
     }
 
@@ -728,6 +749,14 @@ export function hydrateGameState(serialized) {
       defconAnnexationMonths: Math.max(0, Math.floor(Number(parsed.defconAnnexationMonths) || 0)),
       nuclearSanctionsPending: Boolean(parsed.nuclearSanctionsPending),
       onuReputationPermanentlyZero: Boolean(parsed.onuReputationPermanentlyZero),
+      just_war_target: typeof parsed.just_war_target === 'string' ? parsed.just_war_target : null,
+      megaprojects: {
+        deadHand: parsed.megaprojects?.deadHand && !Boolean(parsed.dead_hand_active)
+          ? { remainingMonths: Math.max(1, Math.min(12, Math.floor(Number(parsed.megaprojects.deadHand.remainingMonths) || 12))) }
+          : null,
+      },
+      dead_hand_active: Boolean(parsed.dead_hand_active),
+      dead_hand_triggered: Boolean(parsed.dead_hand_triggered),
     });
   } catch {
     return createGameState();

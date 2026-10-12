@@ -187,6 +187,20 @@ test('blocks progression after a terminal regime outcome', () => {
   assert.deepEqual(advanceMonth(state).calendar, state.calendar);
 });
 
+test('monthly terminal defeat triggers an active Dead Hand network', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    dead_hand_active: true,
+    country: { ...state.country, uranium: 1 },
+    factions: { ...state.factions, militares: 10 },
+  };
+  const result = advanceMonth(prepared);
+
+  assert.equal(result.dead_hand_triggered, true);
+  assert.equal(result.country.wasteland, true);
+});
+
 test('updates a spending slider through the state command', () => {
   assert.equal(setBudget(createGameState('bra'), 'defenseSpend', 0.07).budget.defenseSpend, 0.07);
 });
