@@ -69,12 +69,14 @@ test('renders a blocking UN Assembly voting dialog', async () => {
   assert.match(markup, /data-vote="abstain"/);
 });
 
-test('renders cyber operations in diplomacy and the internal projects tab', async () => {
+test('renders cyber operations only after military research and the internal projects tab', async () => {
   const { diplomacyView, projectsView } = await import('../src/ui/dashboard.js');
   const { createGameState } = await import('../src/core/game-state.js');
   const state = createGameState('bra');
+  const unlocked = { ...state, unlocked_techs: ['cyber'] };
 
-  assert.match(diplomacyView(state), /Lancar Ciberataque/);
+  assert.doesNotMatch(diplomacyView(state), /Lancar Ciberataque/);
+  assert.match(diplomacyView(unlocked), /Lancar Ciberataque/);
   assert.match(projectsView(state), /Automatizar Parque Industrial/);
 });
 
@@ -85,21 +87,36 @@ test('renders biological warfare and the constitutional action when they are unl
   const prepared = {
     ...state,
     factions: { ...state.factions, militares: 100 },
-    technology: { ...state.technology, unlocked: ['advanced-bioengineering'] },
+    unlocked_techs: ['bio'],
   };
 
   assert.match(diplomacyView(prepared, 'argentina'), /Lancar Virus Sintetico/);
   assert.match(congressView(prepared), /Promulgar Nova Constituicao/);
 });
 
-test('renders false flag, Dead Hand project, and the terminal overlay', async () => {
+test('renders false flag, unlocked Dead Hand project, and the terminal overlay', async () => {
   const { diplomacyView, projectsView, renderDeadHandTerminal } = await import('../src/ui/dashboard.js');
   const { createGameState } = await import('../src/core/game-state.js');
   const state = createGameState('bra');
+  const unlocked = { ...state, unlocked_techs: ['dead_hand'] };
 
   assert.match(diplomacyView(state, 'argentina'), /Orquestrar Falsa Bandeira/);
-  assert.match(projectsView(state), /Construir Rede Mao Morta/);
+  assert.doesNotMatch(projectsView(state), /Construir Rede Mao Morta/);
+  assert.match(projectsView(unlocked), /Construir Rede Mao Morta/);
   assert.match(renderDeadHandTerminal({ dead_hand_triggered: true }), /DIRETRIZ ÔMEGA/);
+});
+
+test('renders military special projects with affordable CRT controls', async () => {
+  const { militaryView } = await import('../src/ui/dashboard.js');
+  const { createGameState } = await import('../src/core/game-state.js');
+  const state = createGameState('bra');
+  const funded = { ...state, military_research_points: 2_500, unlocked_techs: ['missiles'] };
+
+  assert.match(militaryView(state), /PROJETOS ESPECIAIS/);
+  assert.match(militaryView(state), /PONTOS DE PESQUISA MILITAR DISPONIVEIS: 0/);
+  assert.match(militaryView(funded), /data-action="military-research" data-technology="cyber"/);
+  assert.match(militaryView(funded), /\[ INICIAR PROJETO \]/);
+  assert.match(militaryView(funded), /MÍSSEIS BALÍSTICOS.*CONCLUÍDO/s);
 });
 
 test('renders final dilemma, escape, interrogation terminals, and Deep State controls', async () => {
