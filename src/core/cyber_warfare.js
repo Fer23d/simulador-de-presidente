@@ -22,7 +22,8 @@ export function lancarCiberataque(state, alvoId) {
     return { ...state, notice: `${target.name} ja esta com a infraestrutura digital paralisada.` };
   }
   const cyberTech = getCyberTech(state.technology);
-  const chance = clamp(0.2 + ((cyberTech - (Number(target.cyber_defense) || 0)) / 100), 0.05, 0.95);
+  const guaranteed = Boolean(state.double_agent_active);
+  const chance = guaranteed ? 1 : clamp(0.2 + ((cyberTech - (Number(target.cyber_defense) || 0)) / 100), 0.05, 0.95);
   const random = nextRandom(state.randomSeed);
   if (random.value >= chance) {
     return { ...state, randomSeed: random.seed, notice: `O Zero-Day contra ${target.name} foi bloqueado pela defesa digital.` };
@@ -30,13 +31,14 @@ export function lancarCiberataque(state, alvoId) {
   return {
     ...state,
     randomSeed: random.seed,
+    double_agent_active: guaranteed ? false : state.double_agent_active,
     geopolitics: {
       ...state.geopolitics,
       contacts: state.geopolitics.contacts.map((contact) => contact.id === alvoId
         ? { ...contact, cyber_paralyzed_until: (Number(state.monthCounter) || 0) + CYBER_ATTACK_DURATION }
         : contact),
     },
-    notice: `Zero-Day executado: ${target.name} ficara paralisado por seis meses.`,
+    notice: guaranteed ? `Agente duplo ativado: Zero-Day executado contra ${target.name}.` : `Zero-Day executado: ${target.name} ficara paralisado por seis meses.`,
   };
 }
 

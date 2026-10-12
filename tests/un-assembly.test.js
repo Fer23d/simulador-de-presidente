@@ -23,6 +23,19 @@ test('records the player vote and activates an approved global resolution', () =
   assert.equal(result.activeGlobalResolutions.includes('humanitarian-aid'), true);
 });
 
+test('counts leader-double puppets exactly with the player vote', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    pendingUnVote: { resolutionId: 'humanitarian-aid', npcVotes: { yes: 99, no: 100, abstain: 0 } },
+    geopolitics: { ...state.geopolitics, contacts: state.geopolitics.contacts.map((contact) => contact.id === 'arg' ? { ...contact, is_puppet_of: 'jogador' } : contact) },
+  };
+
+  const result = registrarVotoONU(prepared, 'yes');
+
+  assert.equal(result.activeGlobalResolutions.includes('humanitarian-aid'), true);
+});
+
 test('applies carbon tax pressure to oil rich nations without mutating the source state', () => {
   const state = {
     ...createGameState('bra'),

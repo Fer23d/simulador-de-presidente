@@ -18,7 +18,7 @@ import { automatizarIndustria as automateIndustry, processarAutomacaoIndustrial 
 import { aplicarEfeitosSoftPower, candidatarJogosMundiais as bidForGlobalGames, getSoftPowerModifiers, recusarCandidaturaGlobal, verificarSedeGlobal } from './soft_power.js';
 import { estatizarMegacorporacoes as nationalizeMegacorps, getMegacorpModifiers, isLobbyBlocked, processarMegacorporacoes } from './megacorps.js';
 import { advanceDefcon, applyDefconEconomicShock, markAnnexationTension } from './defcon.js';
-import { injetarVirusSintetico, orquestrarFalsaBandeira, processarInfeccoesBiologicas } from './black_ops.js';
+import { injetarVirusSintetico, infiltrarSosia, orquestrarFalsaBandeira, processarInfeccoesBiologicas } from './black_ops.js';
 import { aplicarModificadoresConstitucionais, promulgarConstituicao } from './constitution.js';
 import { iniciarProjetoMaoMorta as startDeadHandProject, interceptarGameOverComMaoMorta, processarMegaprojetos } from './megaprojects.js';
 import { desviarFundos, interceptarFinalCaixa2, isEscapeEligible } from './corruption.js';
@@ -111,6 +111,13 @@ function isValidHistory(history) {
 
 function getActiveLawIds(laws) {
   return LAWS.filter((law) => laws[law.stateKey]?.approved).map((law) => law.id);
+}
+
+function collectPuppetTribute(economy, geopolitics) {
+  const tribute = (geopolitics.contacts ?? []).reduce((total, contact) => total + (contact.is_puppet_of === 'jogador'
+    ? Math.floor(Math.max(0, Number(contact.pib_base) || 0) * 0.2)
+    : 0), 0);
+  return tribute > 0 ? { ...economy, cash: economy.cash + tribute } : economy;
 }
 
 export function createGameState(countryId = 'bra') {
@@ -275,6 +282,12 @@ export function executarFalsaBandeira(state, contactId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = orquestrarFalsaBandeira(state, contactId);
   return result.just_war_target === contactId ? addNews(syncWorld(result), result.notice) : result;
+}
+
+export function infiltrarSosiaLider(state, contactId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = infiltrarSosia(state, contactId);
+  return result.geopolitics === state.geopolitics ? result : addNews(syncWorld(result), result.notice);
 }
 
 export function promulgarNovaConstituicao(state, pillar) {
@@ -641,10 +654,11 @@ export function advanceMonth(state) {
   preparedMilitary.military.power = Math.min(100, preparedMilitary.military.power * (1 + technologyModifiers.militaryEffectiveness));
   const geopoliticalMonth = advanceGeopolitics(nuclear.geopolitics, preparedMilitary.military, economicMonth, state.randomSeed);
   const militaryMonth = advanceMilitary(preparedMilitary.military, geopoliticalMonth.economy, { defenseSpend: 0 }, geopoliticalMonth, state.factions);
-  const factions = advanceFactions(state.factions, state.economy, militaryMonth.economy, state.budget, effects, { popularityModifier: modifiers.popularityModifier + (geopoliticalMonth.factionDelta ?? 0) });
+  const economyWithPuppetTribute = collectPuppetTribute(militaryMonth.economy, geopoliticalMonth.geopolitics);
+  const factions = advanceFactions(state.factions, state.economy, economyWithPuppetTribute, state.budget, effects, { popularityModifier: modifiers.popularityModifier + (geopoliticalMonth.factionDelta ?? 0) });
   const infrastructureState = processarAutomacaoIndustrial({ ...state, country: state.country, factions });
   const constitutionalState = aplicarModificadoresConstitucionais(state, {
-    economy: militaryMonth.economy,
+    economy: economyWithPuppetTribute,
     military: militaryMonth.military,
     factions: infrastructureState.factions,
     technology,

@@ -24,6 +24,7 @@ export function createGeopolitics(playerId = 'bra') {
     return {
       id: country.id,
       name: country.nome,
+      tipo_governo: country.tipo_governo,
       relation: country.id === 'arg' ? 50 : country.id === 'chn' ? 5 : country.id === 'usa' ? -10 : ((country.id.charCodeAt(0) * 7 + country.id.charCodeAt(1)) % 61) - 20,
       militaryPower: country.id === 'usa' ? 92 : country.id === 'chn' ? 88 : country.id === 'rus' ? 86 : Math.max(8, Math.min(76, Math.round((Math.log10(country.populacao_base) * 3) + (Math.log10(country.pib_base) * 1.5) - 20))),
       population: country.populacao_base,

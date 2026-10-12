@@ -45,7 +45,8 @@ export function registrarVotoONU(state, vote) {
   const pending = state.pendingUnVote;
   const resolution = getResolution(pending?.resolutionId);
   if (!resolution || !['yes', 'no', 'abstain'].includes(vote)) return { ...state, notice: 'Voto da ONU invalido.' };
-  const votes = { ...pending.npcVotes, [vote]: (pending.npcVotes?.[vote] ?? 0) + 1 };
+  const puppetVotes = state.geopolitics?.contacts?.filter((contact) => contact.is_puppet_of === 'jogador' && !contact.destruido && !contact.anexado).length ?? 0;
+  const votes = { ...pending.npcVotes, [vote]: (pending.npcVotes?.[vote] ?? 0) + 1 + puppetVotes };
   const total = votes.yes + votes.no + votes.abstain;
   const approved = votes.yes > Math.floor(total / 2);
   return {

@@ -65,3 +65,18 @@ test('cyber paralysis restores the original GDP after its deadline', () => {
   assert.equal(target.pib_base, 1_000_000);
   assert.equal(target.cyber_paralyzed_until, undefined);
 });
+
+test('uses and clears a double agent on the next cyber attack', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    double_agent_active: true,
+    monthCounter: 10,
+    geopolitics: { ...state.geopolitics, contacts: state.geopolitics.contacts.map((contact) => contact.id === 'arg' ? { ...contact, cyber_defense: 100 } : contact) },
+  };
+
+  const result = lancarCiberataque(prepared, 'arg');
+
+  assert.equal(result.double_agent_active, false);
+  assert.equal(result.geopolitics.contacts.find((contact) => contact.id === 'arg').cyber_paralyzed_until, 16);
+});

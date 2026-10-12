@@ -2,6 +2,8 @@ const VIRUS_CASH_COST = 20_000_000_000;
 const VIRUS_RARE_EARTH_COST = 120;
 const VIRUS_DURATION_MONTHS = 12;
 export const FALSE_FLAG_CASH_COST = 75_000_000_000;
+export const LEADER_DOUBLE_CASH_COST = 200_000_000_000;
+export const LEADER_DOUBLE_RESEARCH_COST = 500;
 
 function hasBioengineering(technology) {
   return Boolean(technology?.unlocked?.includes('advanced-bioengineering'));
@@ -60,7 +62,48 @@ export function orquestrarFalsaBandeira(state, alvoId) {
     economy: { ...state.economy, cash: state.economy.cash - FALSE_FLAG_CASH_COST },
     country: { ...state.country, populacao: population, populacao_base: population, pib_base: gdpBase },
     factions,
+    double_agent_active: state.double_agent_active ? false : state.double_agent_active,
     notice: `Falsa Bandeira orquestrada. A opiniao publica exige guerra contra ${target.name}.`,
+  };
+}
+
+export function infiltrarSosia(state, alvoId) {
+  const target = state.geopolitics?.contacts?.find((contact) => contact.id === alvoId
+    && !contact.destruido && !contact.anexado && !contact.wasteland);
+  if (!target) return { ...state, notice: 'Alvo para sosia invalido.' };
+  if (String(target.tipo_governo ?? '').toLowerCase().includes('democr')) {
+    return { ...state, notice: 'Sosias so podem infiltrar regimes nao democraticos.' };
+  }
+  if ((Number(state.economy?.cash) || 0) < LEADER_DOUBLE_CASH_COST) return { ...state, notice: 'Caixa insuficiente para infiltrar o sosia.' };
+  if ((Number(state.technology?.points) || 0) < LEADER_DOUBLE_RESEARCH_COST) return { ...state, notice: 'Pontos de Pesquisa insuficientes para criar o sosia.' };
+
+  const random = nextRandom(state.randomSeed);
+  const paidState = {
+    ...state,
+    randomSeed: random.seed,
+    economy: { ...state.economy, cash: state.economy.cash - LEADER_DOUBLE_CASH_COST },
+    technology: { ...state.technology, points: state.technology.points - LEADER_DOUBLE_RESEARCH_COST },
+  };
+  if (random.value < 0.6) {
+    return {
+      ...paidState,
+      geopolitics: {
+        ...state.geopolitics,
+        contacts: state.geopolitics.contacts.map((contact) => contact.id === alvoId ? { ...contact, is_puppet_of: 'jogador' } : contact),
+      },
+      notice: `Sosia infiltrado em ${target.name}. O governo agora responde ao jogador.`,
+    };
+  }
+  return {
+    ...paidState,
+    global_defcon: 1,
+    geopolitics: {
+      ...state.geopolitics,
+      contacts: state.geopolitics.contacts.map((contact) => contact.id === alvoId
+        ? { ...contact, atWar: true, alliance: false, relation: -100 }
+        : contact),
+    },
+    notice: `O sosia foi descoberto em ${target.name}. Guerra total e DEFCON 1.`,
   };
 }
 
@@ -87,4 +130,6 @@ export function processarInfeccoesBiologicas(state) {
     geopolitics: { ...state.geopolitics, contacts },
   };
 }
+
+import { nextRandom } from './geopolitics.js';
 

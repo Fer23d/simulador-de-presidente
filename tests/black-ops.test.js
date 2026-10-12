@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createGameState } from '../src/core/game-state.js';
-import { injetarVirusSintetico, orquestrarFalsaBandeira, processarInfeccoesBiologicas } from '../src/core/black_ops.js';
+import { injetarVirusSintetico, infiltrarSosia, orquestrarFalsaBandeira, processarInfeccoesBiologicas } from '../src/core/black_ops.js';
 
 test('injects a synthetic virus only after research and resource payment', () => {
   const state = createGameState('bra');
@@ -88,4 +88,37 @@ test('false flag does not restore purged workers in a theocratic state', () => {
 
   assert.equal(result.factions.militares, 100);
   assert.equal(Object.hasOwn(result.factions, 'trabalhadores'), false);
+});
+
+test('turns an eligible authoritarian target into a puppet after paying the operation cost', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    randomSeed: 1,
+    economy: { ...state.economy, cash: 200_000_000_000 },
+    technology: { ...state.technology, points: 500 },
+    geopolitics: { ...state.geopolitics, contacts: state.geopolitics.contacts.map((contact) => contact.id === 'arg' ? { ...contact, tipo_governo: 'Autocracia' } : contact) },
+  };
+
+  const result = infiltrarSosia(prepared, 'arg');
+
+  assert.equal(result.economy.cash, 0);
+  assert.equal(result.technology.points, 0);
+  assert.equal(result.geopolitics.contacts.find((contact) => contact.id === 'arg').is_puppet_of, 'jogador');
+});
+
+test('a failed leader-double infiltration starts war and escalates DEFCON', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    randomSeed: 1_000,
+    economy: { ...state.economy, cash: 200_000_000_000 },
+    technology: { ...state.technology, points: 500 },
+    geopolitics: { ...state.geopolitics, contacts: state.geopolitics.contacts.map((contact) => contact.id === 'arg' ? { ...contact, tipo_governo: 'Autocracia' } : contact) },
+  };
+
+  const result = infiltrarSosia(prepared, 'arg');
+
+  assert.equal(result.global_defcon, 1);
+  assert.equal(result.geopolitics.contacts.find((contact) => contact.id === 'arg').atWar, true);
 });
