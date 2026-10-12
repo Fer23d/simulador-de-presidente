@@ -58,3 +58,13 @@ test('renders the news feed and a blocking crisis dialog', async () => {
   assert.match(renderNews(state), /Giro de Noticias/);
   assert.match(renderCrisis(state), /Escandalo de Corrupcao/);
 });
+
+test('renders a blocking UN Assembly voting dialog', async () => {
+  const { renderUnAssembly } = await import('../src/ui/dashboard.js');
+
+  const markup = renderUnAssembly({ pendingUnVote: { resolutionId: 'carbon-tax' } });
+
+  assert.match(markup, /Taxa Global de Carbono/);
+  assert.match(markup, /data-vote="yes"/);
+  assert.match(markup, /data-vote="abstain"/);
+});

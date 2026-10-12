@@ -11,6 +11,8 @@ import { createMinisters, dismissMinister as dismissCabinetMinister, getMinister
 import { advanceFactions, createFactions, getFactionModifiers, getFactionSupport, normalizeFactions } from './factions.js';
 import { absorverPaisParaUniao as absorbIntoUnion, decretarRevolucaoSocialista as decreeSocialistRevolution } from './revolution.js';
 import { financiarRebeldes as fundRebels } from './espionage.js';
+import { aplicarResolucoes, registrarVotoONU, verificarAssembleia } from './un_assembly.js';
+import { processarMigracoes } from './demographics.js';
 
 const STATE_VERSION = 6;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
@@ -95,6 +97,8 @@ export function createGameState(countryId = 'bra') {
     history: [],
     news: [],
     pendingEvent: null,
+    pendingUnVote: null,
+    activeGlobalResolutions: [],
     notice: 'Gabinete iniciado. O primeiro mes de governo comeca agora.',
   };
 }
@@ -204,6 +208,12 @@ export function resolveEvent(state, optionId) {
   if (!state.pendingEvent) return { ...state, notice: 'Nenhuma crise aguarda resposta.' };
   const resolved = applyEventOption(state, optionId);
   return addNews(resolved, `Crise resolvida: ${state.pendingEvent.title}.`);
+}
+
+export function votarNaONU(state, vote) {
+  if (!state.pendingUnVote) return { ...state, notice: 'Nenhuma votacao da ONU aguarda resposta.' };
+  const result = registrarVotoONU(state, vote);
+  return addNews(syncWorld(result), result.notice);
 }
 
 export function comprarMaterialMilitar(state, kind) {
@@ -376,6 +386,7 @@ export function advanceMonth(state) {
   if (state.regime?.gameOver) return { ...state, notice: 'A partida foi encerrada.' };
   if (state.geopolitics.peaceTreaty?.status === 'pending') return { ...state, notice: 'Resolva o Tratado de Paz antes de avancar o mes.' };
   if (state.pendingEvent) return { ...state, notice: 'Resolva a crise nacional antes de avancar o mes.' };
+  if (state.pendingUnVote) return { ...state, notice: 'Registre seu voto na Assembleia da ONU antes de avancar o mes.' };
   const effects = aggregateActiveLawEffects(state.laws);
   const factionModifiers = getFactionModifiers(state.factions);
   const ministerModifiers = getMinisterModifiers(state.ministers);
@@ -421,7 +432,10 @@ export function advanceMonth(state) {
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
   });
-  const withNews = addNews(completedState, notice);
+  const resolvedState = processarMigracoes(aplicarResolucoes(completedState));
+  const withNews = addNews(syncWorld(resolvedState), notice);
+  const assemblyState = verificarAssembleia(withNews);
+  if (assemblyState.pendingUnVote) return addNews(assemblyState, assemblyState.notice);
   const eventRoll = rollMonthlyEvent(stability.seed);
   if (!eventRoll.event) return { ...withNews, randomSeed: eventRoll.seed };
   return addNews({
@@ -511,6 +525,8 @@ export function hydrateGameState(serialized) {
         ? parsed.news.filter((item) => typeof item?.text === 'string' && item.calendar).slice(0, 5)
         : base.news,
       pendingEvent: EVENTS.find((event) => event.id === parsed.pendingEvent?.id) ?? null,
+      pendingUnVote: parsed.pendingUnVote && typeof parsed.pendingUnVote.resolutionId === 'string' ? parsed.pendingUnVote : null,
+      activeGlobalResolutions: Array.isArray(parsed.activeGlobalResolutions) ? parsed.activeGlobalResolutions.filter((id) => typeof id === 'string') : base.activeGlobalResolutions,
       notice: typeof parsed.notice === 'string' ? parsed.notice : base.notice,
     };
     return syncWorld(hydrated);

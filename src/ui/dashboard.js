@@ -5,6 +5,7 @@ import { LAWS } from '../core/laws.js';
 import { TECHNOLOGIES } from '../core/technology.js';
 import { MINISTERS } from '../core/ministers.js';
 import { getFactionSupport } from '../core/factions.js';
+import { RESOLUTIONS } from '../core/un_assembly.js';
 import {
   advanceMonth,
   absorverPaisParaUniao,
@@ -39,6 +40,7 @@ import {
   startWar,
   voteLaborLaw,
   voteLaw,
+  votarNaONU,
 } from '../core/game-state.js';
 
 const STORAGE_KEY = 'simulador-presidente-state-v1';
@@ -111,7 +113,7 @@ function taxControl(label, key, value) {
 
 function overviewView(state, projection) {
   const budgetTone = projection.monthlyBalance >= 0 ? 'positive' : 'negative';
-  const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent);
+  const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote);
   return `<section class="view-grid overview-grid">
     <section class="panel agenda-panel">
       <div class="panel-heading"><div><p class="eyebrow">Agenda presidencial</p><h2>Proximo movimento</h2></div><span class="status-dot"></span></div>
@@ -281,6 +283,13 @@ export function renderCrisis(state) {
   return `<section class="peace-dialog crisis-dialog" role="dialog" aria-modal="true" aria-labelledby="crise-titulo"><p class="eyebrow">Crise Nacional</p><h2 id="crise-titulo">${event.title}</h2><p class="notice">${event.description}</p><div class="action-row">${event.options.map((option) => `<button type="button" class="${option.id === 'protect' || option.id === 'enforce-operation' ? 'quiet-action danger-action' : 'primary-action'}" data-action="crisis-option" data-option="${option.id}">${option.label}</button>`).join('')}</div></section>`;
 }
 
+export function renderUnAssembly(state) {
+  const pending = state.pendingUnVote;
+  const resolution = RESOLUTIONS.find((item) => item.id === pending?.resolutionId);
+  if (!resolution) return '';
+  return `<section class="peace-dialog un-dialog" role="dialog" aria-modal="true" aria-labelledby="onu-titulo"><p class="eyebrow">Assembleia Geral da ONU</p><h2 id="onu-titulo">${resolution.title}</h2><p class="notice">${resolution.description}</p><p class="notice">O Secretario da ONU chamou a votacao. Registre a posicao do seu governo.</p><div class="action-row"><button type="button" class="primary-action" data-action="un-vote" data-vote="yes">Votar SIM</button><button type="button" class="quiet-action danger-action" data-action="un-vote" data-vote="no">Votar NAO</button><button type="button" class="quiet-action" data-action="un-vote" data-vote="abstain">ABSTER</button></div></section>`;
+}
+
 export function mountDashboard(root) {
   if (!root) {
     throw new Error('Elemento raiz do dashboard nao encontrado.');
@@ -291,6 +300,7 @@ export function mountDashboard(root) {
   let diplomacyQuery = '';
   const treatyModal = document.getElementById('modal-tratado');
   const crisisModal = document.getElementById('modal-crise');
+  const unModal = document.getElementById('modal-onu');
 
   function render() {
     const projection = projectBudget(state.economy, state.budget);
@@ -329,6 +339,11 @@ export function mountDashboard(root) {
       crisisModal.hidden = !crisisMarkup;
       crisisModal.innerHTML = crisisMarkup;
     }
+    if (unModal) {
+      const unMarkup = renderUnAssembly(state);
+      unModal.hidden = !unMarkup;
+      unModal.innerHTML = unMarkup;
+    }
   }
 
   function commit(nextState) {
@@ -356,6 +371,11 @@ export function mountDashboard(root) {
   crisisModal?.addEventListener('click', (event) => {
     const optionId = event.target.closest('[data-action="crisis-option"]')?.dataset.option;
     if (optionId) commit(resolveEvent(state, optionId));
+  });
+
+  unModal?.addEventListener('click', (event) => {
+    const vote = event.target.closest('[data-action="un-vote"]')?.dataset.vote;
+    if (vote) commit(votarNaONU(state, vote));
   });
 
   root.addEventListener('click', (event) => {
