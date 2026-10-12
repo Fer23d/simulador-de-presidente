@@ -60,6 +60,7 @@ import {
   infiltrarSosiaLider,
   resolverSitioNegro,
   reivindicarSitioNegro,
+  escolherSitioNegro,
 } from '../core/game-state.js';
 
 const STORAGE_KEY = 'simulador-presidente-state-v1';
@@ -294,7 +295,7 @@ export function renderInterrogation(state) {
   if (!pending) return '';
   const actions = pending.phase === 'reward'
     ? '<button type="button" class="arcade-vote-yes" data-action="interrogation-reward" data-reward="extract-secrets">[ EXTRAIR SEGREDOS ]</button><button type="button" class="quiet-action" data-action="interrogation-reward" data-reward="turn-double-agent">[ RECRUTAR AGENTE DUPLO ]</button>'
-    : '<button type="button" class="arcade-vote-yes" data-action="interrogation-method" data-method="truth-serum">[ SORO DA VERDADE ]</button><button type="button" class="quiet-action" data-action="interrogation-method" data-method="psychological-pressure">[ TORTURA PSICOLOGICA ]</button><button type="button" class="quiet-action" data-action="interrogation-method" data-method="bribe">[ SUBORNO: R$ 1 BI ]</button>';
+    : '<button type="button" class="arcade-vote-yes" data-action="interrogation-method" data-method="soro">[ SORO DA VERDADE ]</button><button type="button" class="quiet-action" data-action="interrogation-method" data-method="tortura">[ TORTURA PSICOLOGICA ]</button><button type="button" class="quiet-action" data-action="interrogation-method" data-method="suborno">[ SUBORNO: R$ 1 BI ]</button>';
   return `<section class="terminal-dialog" role="dialog" aria-modal="true"><pre>&gt; PRISIONEIRO #847 ADQUIRIDO.
 &gt; INICIANDO INTERROGATORIO.</pre><div class="action-row">${actions}</div></section>`;
 }
@@ -456,7 +457,7 @@ export function mountDashboard(root) {
     }
     if (escapeModal) { const markup = renderEscapeEnding(state); escapeModal.hidden = !markup; escapeModal.innerHTML = markup; }
     if (dilemmaModal) { const markup = renderFinalDilemma(state); dilemmaModal.hidden = !markup; dilemmaModal.innerHTML = markup; }
-    if (interrogationModal) { const markup = renderInterrogation(state); interrogationModal.hidden = !markup; interrogationModal.innerHTML = markup; }
+    if (interrogationModal) { const markup = renderInterrogation(state); interrogationModal.hidden = !markup; interrogationModal.style.display = markup ? '' : 'none'; interrogationModal.innerHTML = markup; }
   }
 
   function commit(nextState) {
@@ -605,7 +606,10 @@ export function mountDashboard(root) {
   });
   interrogationModal?.addEventListener('click', (event) => {
     const control = event.target.closest('[data-action]');
-    if (control?.dataset.action === 'interrogation-method') commit(resolverSitioNegro(state, control.dataset.method));
+    if (control?.dataset.action === 'interrogation-method') {
+      interrogationModal.style.display = 'none';
+      commit(escolherSitioNegro(state, control.dataset.method));
+    }
     if (control?.dataset.action === 'interrogation-reward') commit(reivindicarSitioNegro(state, control.dataset.reward));
   });
 

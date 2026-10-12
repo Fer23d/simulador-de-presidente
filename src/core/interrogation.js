@@ -48,6 +48,27 @@ export function resolverInterrogatorio(state, method) {
   };
 }
 
+export function escolherInterrogatorio(state, action) {
+  const method = { soro: 'truth-serum', tortura: 'psychological-pressure' }[action];
+  if (action === 'suborno') {
+    const cost = 1_000_000_000;
+    if (state.pendingInterrogation?.phase !== 'choice') return { ...state, notice: 'Nenhum interrogatorio aguarda escolha.' };
+    if ((Number(state.economy?.cash) || 0) < cost) return { ...state, notice: 'Caixa insuficiente para subornar o agente.' };
+    return {
+      ...state,
+      economy: { ...state.economy, cash: state.economy.cash - cost },
+      double_agent_active: true,
+      pendingInterrogation: null,
+      notice: 'Suborno aceito. Agente estrangeiro convertido em agente duplo.',
+    };
+  }
+  if (!method) return { ...state, notice: 'Acao de interrogatorio invalida.' };
+  const resolved = resolverInterrogatorio(state, method);
+  return resolved.pendingInterrogation?.phase === 'reward'
+    ? reivindicarInterrogatorio(resolved, 'extract-secrets')
+    : resolved;
+}
+
 export function reivindicarInterrogatorio(state, reward) {
   if (state.pendingInterrogation?.phase !== 'reward') return { ...state, notice: 'Nenhuma recompensa de interrogatorio esta disponivel.' };
   if (reward === 'extract-secrets') {

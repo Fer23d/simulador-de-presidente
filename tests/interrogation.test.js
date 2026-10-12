@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createGameState } from '../src/core/game-state.js';
-import { reivindicarInterrogatorio, resolverInterrogatorio, sortearCapturaAgente } from '../src/core/interrogation.js';
+import { escolherInterrogatorio, reivindicarInterrogatorio, resolverInterrogatorio, sortearCapturaAgente } from '../src/core/interrogation.js';
 
 test('opens an interrogation from a deterministic five-percent capture roll', () => {
   const result = sortearCapturaAgente({ ...createGameState('bra'), randomSeed: 1_972 });
@@ -36,4 +36,18 @@ test('rejects a bribe when the treasury cannot pay and grants a double agent rew
 
   assert.equal(rejected.pendingInterrogation.phase, 'choice');
   assert.equal(reward.double_agent_active, true);
+});
+
+test('a completed interrogation clears its blocking flag and bribe recruits a double agent', () => {
+  const state = {
+    ...createGameState('bra'),
+    economy: { ...createGameState('bra').economy, cash: 1_000_000_000 },
+    pendingInterrogation: { phase: 'choice', prisonerId: 847 },
+  };
+
+  const result = escolherInterrogatorio(state, 'suborno');
+
+  assert.equal(result.economy.cash, 0);
+  assert.equal(result.double_agent_active, true);
+  assert.equal(result.pendingInterrogation, null);
 });

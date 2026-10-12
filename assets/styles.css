@@ -159,6 +159,7 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .terminal-dialog, .escape-dialog { width: min(620px, 100%); padding: 24px; border: 3px double var(--phosphor); background: #030806; box-shadow: 0 0 22px rgba(57, 255, 20, .45), 8px 8px 0 #010201; text-align: center; }
 .escape-dialog { border-color: #ffd700; background: #0d0a02; }
 .terminal-dialog pre, .escape-dialog pre { margin: 18px auto; color: var(--phosphor); font-family: "Share Tech Mono", monospace; font-size: 16px; line-height: 1.35; text-align: left; text-shadow: 0 0 8px rgba(57, 255, 20, .7); white-space: pre-wrap; }
+#modal-interrogatorio button { white-space: nowrap; padding: 10px 12px; }
 .escape-dialog .escape-status { color: var(--phosphor); animation: escape-pulse .8s steps(2, end) infinite; }
 @keyframes escape-pulse { 50% { opacity: .45; } }
 .modal-dead-hand[hidden] { display: none; }

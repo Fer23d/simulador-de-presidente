@@ -22,7 +22,7 @@ import { injetarVirusSintetico, infiltrarSosia, orquestrarFalsaBandeira, process
 import { aplicarModificadoresConstitucionais, promulgarConstituicao } from './constitution.js';
 import { iniciarProjetoMaoMorta as startDeadHandProject, interceptarGameOverComMaoMorta, processarMegaprojetos } from './megaprojects.js';
 import { desviarFundos, interceptarFinalCaixa2, isEscapeEligible } from './corruption.js';
-import { reivindicarInterrogatorio as claimInterrogation, resolverInterrogatorio as resolveInterrogation, sortearCapturaAgente } from './interrogation.js';
+import { escolherInterrogatorio as chooseInterrogation, reivindicarInterrogatorio as claimInterrogation, resolverInterrogatorio as resolveInterrogation, sortearCapturaAgente } from './interrogation.js';
 
 const STATE_VERSION = 10;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
@@ -218,6 +218,11 @@ export function destruirDoHelicoptero(state) {
 export function resolverSitioNegro(state, method) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   return resolveInterrogation(state, method);
+}
+
+export function escolherSitioNegro(state, action) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return chooseInterrogation(state, action);
 }
 
 export function reivindicarSitioNegro(state, reward) {
