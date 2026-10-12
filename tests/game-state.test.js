@@ -72,6 +72,13 @@ test('advancing a month updates the calendar and records history', () => {
   assert.equal(updated.history.length, 1);
 });
 
+test('opens the global games decision at the 120th monthly turn', () => {
+  const state = { ...createGameState('bra'), monthCounter: 119 };
+  const result = advanceMonth(state);
+
+  assert.equal(result.pendingGlobalBid.status, 'pending');
+});
+
 test('blocks the monthly simulation while a peace treaty needs a decision', () => {
   const state = createGameState('bra');
   const prepared = { ...state, geopolitics: { ...state.geopolitics, peaceTreaty: { targetId: 'arg', status: 'pending' } } };

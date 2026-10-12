@@ -72,6 +72,8 @@ export const LAW_GREEN_ENERGY = policy('green-energy', 'greenEnergy', 'Transicao
 export const LAW_FOREST_PROTECTION = policy('forest-protection', 'forestProtection', 'Protecao Florestal', 'Ambiente', { growthModifier: -0.00015, onuModifier: 0.9, popularityModifier: 0.06 });
 export const LAW_ANTI_CORRUPTION = policy('anti-corruption', 'antiCorruption', 'Lei Anticorrupcao', 'Seguranca', { popularityModifier: 0.11, onuModifier: 0.5, cashModifier: 250_000_000 });
 export const LAW_EXPORT_INCENTIVE = policy('export-incentive', 'exportIncentive', 'Incentivo a Exportacoes', 'Economia', { growthModifier: 0.0004, inflationModifier: -0.0001 });
+export const LAW_DEREGULATION = policy('deregulation', 'deregulation', 'Desregulamentacao Empresarial', 'Economia', { growthModifier: 0.00055, popularityModifier: -0.08 });
+export const LAW_PRIVATIZATION = policy('privatization', 'privatization', 'Programa de Privatizacao', 'Economia', { cashModifier: 1_500_000_000, growthModifier: 0.0003, popularityModifier: -0.1 });
 
 export const LAWS = Object.freeze([
   LAW_LABOR_REFORM,
@@ -89,6 +91,8 @@ export const LAWS = Object.freeze([
   LAW_FOREST_PROTECTION,
   LAW_ANTI_CORRUPTION,
   LAW_EXPORT_INCENTIVE,
+  LAW_DEREGULATION,
+  LAW_PRIVATIZATION,
 ]);
 
 export function aggregateActiveLawEffects(lawsState = {}) {

@@ -15,6 +15,8 @@ import { aplicarResolucoes, registrarVotoONU, verificarAssembleia } from './un_a
 import { processarMigracoes } from './demographics.js';
 import { advanceCyberWarfare, lancarCiberataque as launchCyberAttack } from './cyber_warfare.js';
 import { automatizarIndustria as automateIndustry, processarAutomacaoIndustrial } from './infrastructure.js';
+import { aplicarEfeitosSoftPower, candidatarJogosMundiais as bidForGlobalGames, getSoftPowerModifiers, recusarCandidaturaGlobal, verificarSedeGlobal } from './soft_power.js';
+import { estatizarMegacorporacoes as nationalizeMegacorps, getMegacorpModifiers, isLobbyBlocked, processarMegacorporacoes } from './megacorps.js';
 
 const STATE_VERSION = 6;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
@@ -77,6 +79,10 @@ function isValidHistory(history) {
       && Number.isFinite(entry.calendar.year));
 }
 
+function getActiveLawIds(laws) {
+  return LAWS.filter((law) => laws[law.stateKey]?.approved).map((law) => law.id);
+}
+
 export function createGameState(countryId = 'bra') {
   const country = createCountryProfile(getCountryById(countryId) ?? COUNTRIES.find((item) => item.id === 'bra'));
   const geopolitics = createGeopolitics(country.id);
@@ -102,6 +108,12 @@ export function createGameState(countryId = 'bra') {
     pendingUnVote: null,
     activeGlobalResolutions: [],
     monthCounter: 0,
+    activeLawIds: [],
+    megacorp_power: 0,
+    pendingGlobalBid: null,
+    host_global_event: false,
+    globalEventTourismUntil: 0,
+    onuReputationLockedUntil: 0,
     notice: 'Gabinete iniciado. O primeiro mes de governo comeca agora.',
   };
 }
@@ -182,6 +194,22 @@ export function automatizarIndustria(state) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = automateIndustry(state);
   return result.country === state.country ? result : addNews(result, result.notice);
+}
+
+export function candidatarJogosMundiais(state) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = bidForGlobalGames(state);
+  return result.host_global_event && !state.host_global_event ? addNews(syncWorld(result), result.notice) : syncWorld(result);
+}
+
+export function recusarJogosMundiais(state) {
+  return syncWorld(recusarCandidaturaGlobal(state));
+}
+
+export function estatizarMegacorporacoes(state) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = nationalizeMegacorps(state);
+  return addNews(result, result.notice);
 }
 
 export function recrutarSoldado(state, amount = 5_000) {
@@ -343,6 +371,7 @@ export function attemptAutogolpe(state) {
     ...state,
     regime: { ...state.regime, type: 'dictatorship', electionsSuspended: true, coupRisk: 0, revolutionRisk: 0.015 },
     laws: Object.fromEntries(LAWS.map((law) => [law.stateKey, { approved: true, voteCompleted: true }])),
+    activeLawIds: LAWS.map((law) => law.id),
     notice: 'Estado de sitio decretado. Congresso dissolvido e leis aprovadas por decreto.',
   });
 }
@@ -372,6 +401,7 @@ export function voteLaw(state, lawId) {
     return addNews(syncWorld({
       ...state,
       laws: { ...state.laws, [law.stateKey]: { approved: true, voteCompleted: true } },
+      activeLawIds: [...new Set([...(state.activeLawIds ?? []), law.id])],
       notice,
       history: addHistory(state, { type: 'decree', message: notice, calendar: state.calendar }),
     }), notice);
@@ -381,13 +411,25 @@ export function voteLaw(state, lawId) {
     return { ...state, notice: `${law.title} ja foi votada nesta legislatura.` };
   }
 
+  if (isLobbyBlocked(law, state.megacorp_power)) {
+    const notice = 'Acao bloqueada: O lobby das Megacorporacoes comprou os votos.';
+    return addNews({
+      ...state,
+      laws: { ...state.laws, [law.stateKey]: { approved: false, voteCompleted: true } },
+      notice,
+      history: addHistory(state, { type: 'lobby', message: notice, calendar: state.calendar }),
+    }, notice);
+  }
+
   const result = voteOnLaw(state.congress, law, state.factions);
   const notice = result.approved
     ? `${law.title} aprovada por ${result.votesFor} votos.`
     : `${law.title} rejeitada: ${result.votesFor}/${result.requiredVotes} votos.`;
+  const laws = { ...state.laws, [law.stateKey]: { approved: result.approved, voteCompleted: true } };
   return addNews({
     ...state,
-    laws: { ...state.laws, [law.stateKey]: { approved: result.approved, voteCompleted: true } },
+    laws,
+    activeLawIds: getActiveLawIds(laws),
     notice,
     history: addHistory(state, { type: 'vote', message: notice, calendar: state.calendar }),
   }, notice);
@@ -402,10 +444,14 @@ export function advanceMonth(state) {
   if (state.geopolitics.peaceTreaty?.status === 'pending') return { ...state, notice: 'Resolva o Tratado de Paz antes de avancar o mes.' };
   if (state.pendingEvent) return { ...state, notice: 'Resolva a crise nacional antes de avancar o mes.' };
   if (state.pendingUnVote) return { ...state, notice: 'Registre seu voto na Assembleia da ONU antes de avancar o mes.' };
+  if (state.pendingGlobalBid) return { ...state, notice: 'Decida a candidatura aos Jogos Mundiais antes de avancar o mes.' };
+  const corporateState = processarMegacorporacoes({ ...state, activeLawIds: getActiveLawIds(state.laws) });
   const effects = aggregateActiveLawEffects(state.laws);
   const factionModifiers = getFactionModifiers(state.factions);
   const ministerModifiers = getMinisterModifiers(state.ministers);
-  const monthlyEffects = { ...effects, taxRevenueModifier: (effects.taxRevenueModifier ?? 0) + ministerModifiers.taxRevenueModifier };
+  const corporateModifiers = getMegacorpModifiers(corporateState.megacorp_power);
+  const softPowerModifiers = getSoftPowerModifiers(corporateState);
+  const monthlyEffects = { ...effects, taxRevenueModifier: (effects.taxRevenueModifier ?? 0) + ministerModifiers.taxRevenueModifier + corporateModifiers.taxRevenueModifier };
   const technology = advanceTechnology(state.technology, state.economy, state.budget, state.country.trait);
   const technologyModifiers = getTechnologyModifiers(technology);
   const geopoliticalModifiers = getGeopoliticalModifiers(state.geopolitics, state.military);
@@ -417,6 +463,7 @@ export function advanceMonth(state) {
     popularityModifier: geopoliticalModifiers.factionModifier + technologyModifiers.popularityModifier,
     tradeRevenueRate: geopoliticalModifiers.tradeRevenueRate + traitModifiers.exportRevenueRate,
     inflationModifier: traitModifiers.foodInflationModifier + technologyModifiers.foodInflationModifier,
+    cashRevenueModifier: softPowerModifiers.cashRevenueModifier,
   };
   const economyAfterPolicy = advanceEconomy(state.economy, state.budget, monthlyEffects, modifiers);
   const traitInterest = economyAfterPolicy.cash > 0 ? economyAfterPolicy.cash * traitModifiers.cashInterest : 0;
@@ -447,11 +494,15 @@ export function advanceMonth(state) {
     randomSeed: stability.seed,
     calendar: { month, year },
     monthCounter: (Number(state.monthCounter) || 0) + 1,
+    megacorp_power: corporateState.megacorp_power,
+    activeLawIds: corporateState.activeLawIds,
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
   });
-  const resolvedState = processarMigracoes(aplicarResolucoes(advanceCyberWarfare(completedState)));
+  const resolvedState = aplicarEfeitosSoftPower(processarMigracoes(aplicarResolucoes(advanceCyberWarfare(completedState))));
   const withNews = addNews(syncWorld(resolvedState), notice);
+  const globalBidState = verificarSedeGlobal(withNews);
+  if (globalBidState.pendingGlobalBid) return addNews(globalBidState, globalBidState.notice);
   const assemblyState = verificarAssembleia(withNews);
   if (assemblyState.pendingUnVote) return addNews(assemblyState, assemblyState.notice);
   const eventRoll = rollMonthlyEvent(stability.seed);
@@ -549,7 +600,15 @@ export function hydrateGameState(serialized) {
       activeGlobalResolutions: Array.isArray(parsed.activeGlobalResolutions) ? parsed.activeGlobalResolutions.filter((id) => typeof id === 'string') : base.activeGlobalResolutions,
       notice: typeof parsed.notice === 'string' ? parsed.notice : base.notice,
     };
-    return syncWorld(hydrated);
+    return syncWorld({
+      ...hydrated,
+      activeLawIds: getActiveLawIds(hydrated.laws),
+      megacorp_power: clamp(Number(parsed.megacorp_power) || 0, 0, 100),
+      pendingGlobalBid: parsed.pendingGlobalBid?.status === 'pending' ? { status: 'pending' } : null,
+      host_global_event: Boolean(parsed.host_global_event),
+      globalEventTourismUntil: Math.max(0, Math.floor(Number(parsed.globalEventTourismUntil) || 0)),
+      onuReputationLockedUntil: Math.max(0, Math.floor(Number(parsed.onuReputationLockedUntil) || 0)),
+    });
   } catch {
     return createGameState();
   }

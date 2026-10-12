@@ -77,3 +77,13 @@ test('renders cyber operations in diplomacy and the internal projects tab', asyn
   assert.match(diplomacyView(state), /Lancar Ciberataque/);
   assert.match(projectsView(state), /Automatizar Parque Industrial/);
 });
+
+test('renders the global games bid dialog and corporate nationalization control', async () => {
+  const { budgetView, renderSoftPower } = await import('../src/ui/dashboard.js');
+  const { createGameState } = await import('../src/core/game-state.js');
+  const { projectBudget } = await import('../src/core/economy.js');
+  const state = createGameState('bra');
+
+  assert.match(renderSoftPower({ ...state, pendingGlobalBid: { status: 'pending' } }), /Jogos Mundiais/);
+  assert.match(budgetView({ ...state, megacorp_power: 15 }, projectBudget(state.economy, state.budget)), /Estatizar Megacorporacoes/);
+});

@@ -75,7 +75,8 @@ export function projectBudget(economy, budget, modifiers = {}) {
     normalizedRate(budget.debtService),
   ].reduce((total, rate) => total + rate, 0);
   const expenses = monthlyGdp * spendingRate;
-  const revenue = incomeTax + vat + tradeRevenue;
+  const cashRevenueMultiplier = Math.max(0, 1 + (Number(modifiers.cashRevenueModifier) || 0));
+  const revenue = (incomeTax + vat + tradeRevenue) * cashRevenueMultiplier;
 
   return {
     monthlyGdp,

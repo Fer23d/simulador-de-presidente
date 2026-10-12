@@ -43,6 +43,9 @@ import {
   votarNaONU,
   lancarCiberataque,
   automatizarIndustria,
+  candidatarJogosMundiais,
+  estatizarMegacorporacoes,
+  recusarJogosMundiais,
 } from '../core/game-state.js';
 
 const STORAGE_KEY = 'simulador-presidente-state-v1';
@@ -115,7 +118,7 @@ function taxControl(label, key, value) {
 
 function overviewView(state, projection) {
   const budgetTone = projection.monthlyBalance >= 0 ? 'positive' : 'negative';
-  const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote);
+  const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid);
   return `<section class="view-grid overview-grid">
     <section class="panel agenda-panel">
       <div class="panel-heading"><div><p class="eyebrow">Agenda presidencial</p><h2>Proximo movimento</h2></div><span class="status-dot"></span></div>
@@ -124,6 +127,7 @@ function overviewView(state, projection) {
         <div><span>Saldo mensal</span><strong class="${budgetTone}">${formatMoney(projection.monthlyBalance)}</strong></div>
         <div><span>Maioria exigida</span><strong>${Math.floor(state.congress.totalSeats / 2) + 1} votos</strong></div>
         <div><span>Lei Trabalhista</span><strong>${state.laws.laborReform.approved ? 'Aprovada' : state.laws.laborReform.voteCompleted ? 'Rejeitada' : 'Pendente'}</strong></div>
+        <div><span>Forca corporativa</span><strong>${Number(state.megacorp_power || 0).toFixed(0)} / 100</strong></div>
       </div>
       <button type="button" class="primary-action" data-action="advance" ${treatyPending ? 'disabled' : ''}>Avancar mes <span aria-hidden="true">→</span></button>
     </section>
@@ -143,7 +147,7 @@ function overviewView(state, projection) {
   </section>`;
 }
 
-function budgetView(state, projection) {
+export function budgetView(state, projection) {
   return `<section class="view-grid budget-grid">
     <section class="panel budget-controls">
       <div class="panel-heading"><div><p class="eyebrow">Arrecadacao</p><h2>Politica tributaria</h2></div></div>
@@ -162,6 +166,8 @@ function budgetView(state, projection) {
       <div class="ledger-row"><span>IVA</span><strong>${formatMoney(projection.vat)}</strong></div>
       <div class="ledger-row"><span>Despesa publica</span><strong>${formatMoney(projection.expenses)}</strong></div>
       <div class="ledger-row total"><span>${projection.monthlyBalance >= 0 ? 'Superavit' : 'Deficit'}</span><strong class="${projection.monthlyBalance >= 0 ? 'positive' : 'negative'}">${formatMoney(projection.monthlyBalance)}</strong></div>
+      <div class="ledger-row"><span>Forca corporativa</span><strong class="${Number(state.megacorp_power || 0) > 80 ? 'negative' : ''}">${Number(state.megacorp_power || 0).toFixed(0)} / 100</strong></div>
+      <button type="button" class="quiet-action danger-action" data-action="nationalize-megacorps" ${Number(state.megacorp_power || 0) > 0 ? '' : 'disabled'}>Estatizar Megacorporacoes</button>
     </section>
   </section>`;
 }
@@ -298,6 +304,11 @@ export function renderUnAssembly(state) {
   return `<section class="peace-dialog un-dialog" role="dialog" aria-modal="true" aria-labelledby="onu-titulo"><p class="eyebrow">Assembleia Geral da ONU</p><h2 id="onu-titulo">${resolution.title}</h2><p class="notice">${resolution.description}</p><p class="notice">O Secretario da ONU chamou a votacao. Registre a posicao do seu governo.</p><div class="action-row"><button type="button" class="primary-action" data-action="un-vote" data-vote="yes">Votar SIM</button><button type="button" class="quiet-action danger-action" data-action="un-vote" data-vote="no">Votar NAO</button><button type="button" class="quiet-action" data-action="un-vote" data-vote="abstain">ABSTER</button></div></section>`;
 }
 
+export function renderSoftPower(state) {
+  if (!state.pendingGlobalBid) return '';
+  return `<section class="peace-dialog soft-power-dialog" role="dialog" aria-modal="true" aria-labelledby="jogos-titulo"><p class="eyebrow">Diplomacia Cultural</p><h2 id="jogos-titulo">Candidatura para os Jogos Mundiais</h2><p class="notice">A ONU abriu a selecao da proxima sede. A candidatura custa R$ 50 bi; vencer garante turismo por 12 meses e reputacao ONU de 100 por 36 meses.</p><div class="action-row"><button type="button" class="primary-action" data-action="global-games-bid">Candidatar R$ 50 bi</button><button type="button" class="quiet-action" data-action="global-games-decline">Recusar</button></div></section>`;
+}
+
 export function mountDashboard(root) {
   if (!root) {
     throw new Error('Elemento raiz do dashboard nao encontrado.');
@@ -309,6 +320,7 @@ export function mountDashboard(root) {
   const treatyModal = document.getElementById('modal-tratado');
   const crisisModal = document.getElementById('modal-crise');
   const unModal = document.getElementById('modal-onu');
+  const softPowerModal = document.getElementById('modal-soft-power');
 
   function render() {
     const projection = projectBudget(state.economy, state.budget);
@@ -354,6 +366,11 @@ export function mountDashboard(root) {
       unModal.hidden = !unMarkup;
       unModal.innerHTML = unMarkup;
     }
+    if (softPowerModal) {
+      const softPowerMarkup = renderSoftPower(state);
+      softPowerModal.hidden = !softPowerMarkup;
+      softPowerModal.innerHTML = softPowerMarkup;
+    }
   }
 
   function commit(nextState) {
@@ -386,6 +403,12 @@ export function mountDashboard(root) {
   unModal?.addEventListener('click', (event) => {
     const vote = event.target.closest('[data-action="un-vote"]')?.dataset.vote;
     if (vote) commit(votarNaONU(state, vote));
+  });
+
+  softPowerModal?.addEventListener('click', (event) => {
+    const action = event.target.closest('[data-action]')?.dataset.action;
+    if (action === 'global-games-bid') commit(candidatarJogosMundiais(state));
+    if (action === 'global-games-decline') commit(recusarJogosMundiais(state));
   });
 
   root.addEventListener('click', (event) => {
@@ -421,6 +444,7 @@ export function mountDashboard(root) {
     if (action === 'coup') { commit(attemptAutogolpe(state)); return; }
     if (action === 'research') { commit(researchTechnology(state, control.dataset.technology)); return; }
     if (action === 'automate-industry') { commit(automatizarIndustria(state)); return; }
+    if (action === 'nationalize-megacorps') { commit(estatizarMegacorporacoes(state)); return; }
     if (action === 'negotiate') { commit(negotiate(state, control.dataset.bloc)); return; }
     if (action === 'vote') { commit(voteLaborLaw(state)); return; }
     if (action === 'vote-law') { commit(voteLaw(state, control.dataset.law)); return; }

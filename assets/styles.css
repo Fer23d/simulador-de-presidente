@@ -135,6 +135,7 @@ h2 { margin-bottom: 0; font-size: 18px; line-height: 1.2; letter-spacing: 0; }
 .peace-dialog h2 { margin-bottom: 10px; }
 .peace-dialog .action-row { margin-top: 20px; justify-content: flex-end; flex-wrap: wrap; }
 .un-dialog { border-color: var(--amber); }
+.soft-power-dialog { border-color: #4ca4d8; }
 .vote-meter strong { font-size: 12px; }
 .bloc-list { display: grid; }
 .diplomacy-search { display: grid; gap: 6px; margin: 16px 0 10px; color: var(--muted); font-size: 12px; }
