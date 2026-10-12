@@ -32,6 +32,7 @@ function wasteContact(contact) {
 export function iniciarProjetoMaoMorta(state) {
   const deadHand = state.megaprojects?.deadHand;
   if (state.dead_hand_active || deadHand?.remainingMonths > 0) return { ...state, notice: 'A Rede Mao Morta ja esta em construcao ou ativa.' };
+  if (!state.unlocked_techs?.includes('dead_hand')) return { ...state, notice: 'O projeto exige [ I.A. MÃO MORTA ].' };
   if ((Number(state.economy?.cash) || 0) < DEAD_HAND_CASH_COST) return { ...state, notice: 'Caixa insuficiente para a Rede Mao Morta.' };
   if ((Number(state.technology?.points) || 0) < DEAD_HAND_RESEARCH_COST) return { ...state, notice: 'Pontos de Pesquisa insuficientes para a Rede Mao Morta.' };
   if ((Number(state.country?.uranium) || 0) < DEAD_HAND_URANIUM_COST) return { ...state, notice: 'Uranio insuficiente para a Rede Mao Morta.' };

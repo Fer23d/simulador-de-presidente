@@ -9,7 +9,7 @@ test('a successful zero-day paralyzes a target for six months without starting a
     ...state,
     randomSeed: 1,
     monthCounter: 10,
-    technology: { ...state.technology, unlocked: ['state-hackers'] },
+    unlocked_techs: ['cyber'],
     geopolitics: {
       ...state.geopolitics,
       contacts: state.geopolitics.contacts.map((contact) => contact.id === 'arg'
@@ -23,6 +23,15 @@ test('a successful zero-day paralyzes a target for six months without starting a
 
   assert.equal(target.cyber_paralyzed_until, 16);
   assert.equal(target.atWar, false);
+});
+
+test('rejects a zero-day without military cyber research', () => {
+  const state = createGameState('bra');
+
+  const result = lancarCiberataque(state, 'arg');
+
+  assert.equal(result.geopolitics, state.geopolitics);
+  assert.match(result.notice, /Ciber-Guerra/i);
 });
 
 test('cyber paralysis blocks resource output and temporarily halves GDP', () => {
@@ -71,6 +80,7 @@ test('uses and clears a double agent on the next cyber attack', () => {
   const prepared = {
     ...state,
     double_agent_active: true,
+    unlocked_techs: ['cyber'],
     monthCounter: 10,
     geopolitics: { ...state.geopolitics, contacts: state.geopolitics.contacts.map((contact) => contact.id === 'arg' ? { ...contact, cyber_defense: 100 } : contact) },
   };

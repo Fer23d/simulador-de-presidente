@@ -124,7 +124,7 @@ test('renders nuclear codes only for a ready arsenal and an active war target', 
   const prepared = {
     ...state,
     country: { ...state.country, uranium: 101 },
-    technology: { ...state.technology, unlocked: ['efficient-fission'] },
+    unlocked_techs: ['nuke'],
     military: { ...state.military, nuclear: { ...state.military.nuclear, bombBuilt: true } },
     geopolitics: { ...state.geopolitics, contacts },
     world: contacts,

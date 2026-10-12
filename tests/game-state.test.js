@@ -26,6 +26,7 @@ import {
   afundarComONavio,
   destruirDoHelicoptero,
   pesquisarTecnologiaMilitar,
+  canAutorizarAniquilacaoNuclear,
 } from '../src/core/game-state.js';
 
 test('creates a game state for Brazil', () => {
@@ -175,7 +176,7 @@ test('obliterates an active war target only after nuclear authorization', () => 
   const prepared = {
     ...state,
     country: { ...state.country, uranium: 101 },
-    technology: { ...state.technology, unlocked: ['efficient-fission'] },
+    unlocked_techs: ['nuke'],
     military: { ...state.military, nuclear: { ...state.military.nuclear, bombBuilt: true } },
     geopolitics: {
       ...state.geopolitics,
@@ -456,7 +457,7 @@ test('turns a refused annexation ultimatum into war and accepts overwhelming pea
 });
 
 test('nuclear strike devastates an active war target and ends every alliance', () => {
-  const state = startWar(createGameState('bra'), 'arg');
+  const state = { ...startWar(createGameState('bra'), 'arg'), unlocked_techs: ['nuke'] };
   const armed = { ...state, military: { ...state.military, armasNucleares: 1 } };
   const target = armed.geopolitics.contacts.find((contact) => contact.id === 'arg');
   const result = lancarAtaqueNuclear(armed, 'arg');
@@ -466,6 +467,19 @@ test('nuclear strike devastates an active war target and ends every alliance', (
   assert.equal(attacked.population, Math.floor(target.population * 0.2));
   assert.equal(result.geopolitics.onuScore, 0);
   assert.ok(result.geopolitics.contacts.every((contact) => contact.alliance === false));
+});
+
+test('nuclear authorization requires military uranium enrichment instead of civil fission', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    country: { ...state.country, uranium: 101 },
+    military: { ...state.military, nuclear: { ...state.military.nuclear, bombBuilt: true } },
+    technology: { ...state.technology, unlocked: ['efficient-fission'] },
+  };
+
+  assert.equal(canAutorizarAniquilacaoNuclear(prepared), false);
+  assert.equal(canAutorizarAniquilacaoNuclear({ ...prepared, unlocked_techs: ['nuke'] }), true);
 });
 
 test('transfers an annexed target and removes it from active diplomacy', () => {

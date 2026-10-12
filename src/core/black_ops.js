@@ -5,8 +5,8 @@ export const FALSE_FLAG_CASH_COST = 75_000_000_000;
 export const LEADER_DOUBLE_CASH_COST = 200_000_000_000;
 export const LEADER_DOUBLE_RESEARCH_COST = 500;
 
-function hasBioengineering(technology) {
-  return Boolean(technology?.unlocked?.includes('advanced-bioengineering'));
+function hasBioengineering(state) {
+  return Boolean(state?.unlocked_techs?.includes('bio'));
 }
 
 function reduceTarget(target) {
@@ -24,7 +24,7 @@ function reduceTarget(target) {
 export function injetarVirusSintetico(state, alvoId) {
   const target = state.geopolitics?.contacts?.find((contact) => contact.id === alvoId && !contact.destruido && !contact.anexado && !contact.wasteland);
   if (!target) return { ...state, notice: 'Alvo biologico invalido.' };
-  if (!hasBioengineering(state.technology)) return { ...state, notice: 'A operacao exige Engenharia Biologica Avancada.' };
+  if (!hasBioengineering(state)) return { ...state, notice: 'A operacao exige [ ENGENHARIA PATOGÉNICA (VÍRUS) ].' };
   if (target.bio_infected) return { ...state, notice: `${target.name} ja esta sob infeccao biologica.` };
   if ((Number(state.economy?.cash) || 0) < VIRUS_CASH_COST) return { ...state, notice: 'Caixa insuficiente para a operacao biologica.' };
   if ((Number(state.country?.rare_earths) || 0) < VIRUS_RARE_EARTH_COST) return { ...state, notice: 'Terras raras insuficientes para sintetizar o agente.' };

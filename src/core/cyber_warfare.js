@@ -18,6 +18,7 @@ export function getCyberTech(technology) {
 export function lancarCiberataque(state, alvoId) {
   const target = state.geopolitics.contacts.find((contact) => contact.id === alvoId && !contact.destruido && !contact.anexado);
   if (!target) return { ...state, notice: 'Alvo cibernetico invalido.' };
+  if (!state.unlocked_techs?.includes('cyber')) return { ...state, notice: 'A operacao exige [ CIBER-GUERRA ZERO-DAY ].' };
   if ((Number(target.cyber_paralyzed_until) || 0) > (Number(state.monthCounter) || 0)) {
     return { ...state, notice: `${target.name} ja esta com a infraestrutura digital paralisada.` };
   }

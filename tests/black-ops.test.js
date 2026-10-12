@@ -9,7 +9,7 @@ test('injects a synthetic virus only after research and resource payment', () =>
     ...state,
     economy: { ...state.economy, cash: 30_000_000_000 },
     country: { ...state.country, rare_earths: 500 },
-    technology: { ...state.technology, unlocked: ['advanced-bioengineering'] },
+    unlocked_techs: ['bio'],
   };
 
   const result = injetarVirusSintetico(prepared, 'arg');
@@ -19,6 +19,21 @@ test('injects a synthetic virus only after research and resource payment', () =>
   assert.equal(target.bio_timer, 12);
   assert.ok(result.economy.cash < prepared.economy.cash);
   assert.ok(result.country.rare_earths < prepared.country.rare_earths);
+});
+
+test('rejects a synthetic virus without military pathogenic research', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    economy: { ...state.economy, cash: 30_000_000_000 },
+    country: { ...state.country, rare_earths: 500 },
+  };
+
+  const result = injetarVirusSintetico(prepared, 'arg');
+
+  assert.equal(result.economy, prepared.economy);
+  assert.equal(result.country, prepared.country);
+  assert.match(result.notice, /Patog.nica/i);
 });
 
 test('biological infections degrade population and GDP for twelve monthly turns', () => {

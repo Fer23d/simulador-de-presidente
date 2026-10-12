@@ -10,6 +10,7 @@ test('Dead Hand charges once and completes after twelve project ticks', () => {
     economy: { ...state.economy, cash: 1_000_000_000_000 },
     country: { ...state.country, uranium: 250 },
     technology: { ...state.technology, points: 1_000 },
+    unlocked_techs: ['dead_hand'],
   };
   const started = iniciarProjetoMaoMorta(prepared);
   const completed = Array.from({ length: 12 }).reduce((next) => processarMegaprojetos(next), started);
@@ -21,6 +22,22 @@ test('Dead Hand charges once and completes after twelve project ticks', () => {
   assert.equal(started.megaprojects.deadHand.remainingMonths, 12);
   assert.equal(completed.dead_hand_active, true);
   assert.equal(iniciarProjetoMaoMorta(completed).economy, completed.economy);
+});
+
+test('does not start Dead Hand without its military technology', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    economy: { ...state.economy, cash: 1_000_000_000_000 },
+    country: { ...state.country, uranium: 250 },
+    technology: { ...state.technology, points: 1_000 },
+  };
+
+  const result = iniciarProjetoMaoMorta(prepared);
+
+  assert.equal(result.economy, prepared.economy);
+  assert.equal(result.country, prepared.country);
+  assert.match(result.notice, /I.A. M.o Morta/i);
 });
 
 test('Dead Hand devastates the player and uranium-funded foreign targets in contact order', () => {

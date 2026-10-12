@@ -477,6 +477,7 @@ export function inviteToLeague(state, contactId) {
 
 export function lancarAtaqueNuclear(state, contactId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  if (!state.unlocked_techs?.includes('nuke')) return { ...state, notice: 'Ataque nuclear exige [ ENRIQUECIMENTO DE URÂNIO ].' };
   const contact = state.geopolitics.contacts.find((item) => item.id === contactId);
   const arsenal = Math.max(0, Math.floor(Number(state.military.armasNucleares) || 0));
   if (!contact?.atWar || arsenal < 1) return { ...state, notice: 'Ataque nuclear exige guerra ativa e uma arma nuclear operacional.' };
@@ -494,14 +495,14 @@ export function lancarAtaqueNuclear(state, contactId) {
 export function canAutorizarAniquilacaoNuclear(state) {
   return Number(state.country?.uranium) > 100
     && Boolean(state.military?.nuclear?.bombBuilt)
-    && Boolean(state.technology?.unlocked?.includes('efficient-fission'));
+    && Boolean(state.unlocked_techs?.includes('nuke'));
 }
 
 export function autorizarAniquilacaoNuclear(state, contactId, authorizationCode) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   if (authorizationCode !== 'KABOOM') return { ...state, notice: 'Codigo de autorizacao invalido.' };
   if (!canAutorizarAniquilacaoNuclear(state)) {
-    return { ...state, notice: 'Codigos nucleares exigem uranio, arma nuclear e Fissao Nuclear Eficiente.' };
+    return { ...state, notice: 'Codigos nucleares exigem uranio, arma nuclear e [ ENRIQUECIMENTO DE URÂNIO ].' };
   }
 
   const target = state.geopolitics.contacts.find((contact) => contact.id === contactId);
