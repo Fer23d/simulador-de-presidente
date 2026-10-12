@@ -27,6 +27,7 @@ import {
   destruirDoHelicoptero,
   pesquisarTecnologiaMilitar,
   canAutorizarAniquilacaoNuclear,
+  desviarFundosParaCaixa2,
 } from '../src/core/game-state.js';
 
 test('creates a game state for Brazil', () => {
@@ -38,6 +39,9 @@ test('creates a game state for Brazil', () => {
   assert.equal(Object.hasOwn(state.economy, 'popularity'), false);
   assert.equal(state.military_research_points, 0);
   assert.deepEqual(state.unlocked_techs, []);
+  assert.deepEqual(state.seen_stories, []);
+  assert.equal(state.pendingStory, false);
+  assert.equal(state.currentStory, null);
 });
 
 test('generates military research from defense spending without changing civilian research', () => {
@@ -61,6 +65,17 @@ test('purchases military research through the public state command', () => {
   assert.equal(result.military_research_points, 0);
   assert.deepEqual(result.unlocked_techs, ['missiles']);
   assert.equal(result.news[0].text.includes('MÍSSEIS'), true);
+});
+
+test('opens narrative cards after first nuclear research and first Caixa 2 diversion', () => {
+  const researchState = { ...createGameState('bra'), military_research_points: 11_000, unlocked_techs: ['missiles'] };
+  const nuke = pesquisarTecnologiaMilitar(researchState, 'nuke');
+  const diversion = desviarFundosParaCaixa2(createGameState('bra'));
+
+  assert.equal(nuke.currentStory, 'first_nuke');
+  assert.equal(nuke.pendingStory, true);
+  assert.equal(diversion.currentStory, 'first_slush_fund');
+  assert.equal(diversion.pendingStory, true);
 });
 
 test('keeps the five most recent news headlines', async () => {
@@ -400,6 +415,21 @@ test('preserves the cabinet, news and a pending crisis in a saved game', () => {
   assert.equal(hydrated.ministers.economy.id, 'economy');
   assert.equal(hydrated.news[0].text, 'Manchete persistida.');
   assert.equal(hydrated.pendingEvent.id, 'severe-drought');
+});
+
+test('does not reopen a story already archived in a saved game', () => {
+  const saved = {
+    ...createGameState('bra'),
+    seen_stories: ['first_nuke'],
+    pendingStory: true,
+    currentStory: 'first_nuke',
+  };
+
+  const hydrated = hydrateGameState(JSON.stringify(saved));
+
+  assert.equal(hydrated.pendingStory, false);
+  assert.equal(hydrated.currentStory, null);
+  assert.deepEqual(hydrated.seen_stories, ['first_nuke']);
 });
 
 test('migrates an older military save with army management defaults', () => {

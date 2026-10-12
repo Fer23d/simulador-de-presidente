@@ -59,6 +59,16 @@ test('renders the news feed and a blocking crisis dialog', async () => {
   assert.match(renderCrisis(state), /Escandalo de Corrupcao/);
 });
 
+test('renders a blocking confidential story dossier', async () => {
+  const { renderStoryCard } = await import('../src/ui/dashboard.js');
+
+  const markup = renderStoryCard({ pendingStory: true, currentStory: 'first_nuke' });
+
+  assert.match(markup, /DOSSIÊ CONFIDENCIAL/);
+  assert.match(markup, /O NASCIMENTO DE UM DEUS/);
+  assert.match(markup, /data-action="dismiss-story"/);
+});
+
 test('renders a blocking UN Assembly voting dialog', async () => {
   const { renderUnAssembly } = await import('../src/ui/dashboard.js');
 

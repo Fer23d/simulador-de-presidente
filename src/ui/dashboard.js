@@ -8,6 +8,7 @@ import { MINISTERS } from '../core/ministers.js';
 import { getFactionSupport } from '../core/factions.js';
 import { canPromulgarConstituicao } from '../core/constitution.js';
 import { RESOLUTIONS } from '../core/un_assembly.js';
+import { getStoryEvent } from '../core/story_engine.js';
 import {
   advanceMonth,
   absorverPaisParaUniao,
@@ -63,6 +64,7 @@ import {
   reivindicarSitioNegro,
   escolherSitioNegro,
   pesquisarTecnologiaMilitar,
+  dispensarHistoria,
 } from '../core/game-state.js';
 
 const STORAGE_KEY = 'simulador-presidente-state-v1';
@@ -135,7 +137,7 @@ function taxControl(label, key, value) {
 
 function overviewView(state, projection) {
   const budgetTone = projection.monthlyBalance >= 0 ? 'positive' : 'negative';
-  const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid) || Boolean(state.pendingFinalDilemma) || Boolean(state.pendingInterrogation);
+  const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid) || Boolean(state.pendingFinalDilemma) || Boolean(state.pendingInterrogation) || Boolean(state.pendingStory);
   return `<section class="view-grid overview-grid">
     <section class="panel agenda-panel">
       <div class="panel-heading"><div><p class="eyebrow">Agenda presidencial</p><h2>Proximo movimento</h2></div><span class="status-dot"></span></div>
@@ -393,6 +395,17 @@ export function renderSoftPower(state) {
   return `<section class="peace-dialog soft-power-dialog" role="dialog" aria-modal="true" aria-labelledby="jogos-titulo"><p class="eyebrow">Diplomacia Cultural</p><h2 id="jogos-titulo">Candidatura para os Jogos Mundiais</h2><p class="notice">A ONU abriu a selecao da proxima sede. A candidatura custa R$ 50 bi; vencer garante turismo por 12 meses e reputacao ONU de 100 por 36 meses.</p><div class="action-row"><button type="button" class="primary-action" data-action="global-games-bid">Candidatar R$ 50 bi</button><button type="button" class="quiet-action" data-action="global-games-decline">Recusar</button></div></section>`;
 }
 
+export function renderStoryCard(state) {
+  const story = state.pendingStory ? getStoryEvent(state.currentStory) : null;
+  if (!story) return '';
+  return `<section class="story-dialog" role="dialog" aria-modal="true" aria-labelledby="story-title">
+    <p class="story-classification">/// DOSSIÊ CONFIDENCIAL // NÍVEL ÔMEGA ///</p>
+    <h2 id="story-title">${escapeHtml(story.title)}</h2>
+    <p class="story-typewriter">${escapeHtml(story.text)}</p>
+    <button type="button" class="arcade-vote-yes story-dismiss" data-action="dismiss-story">${escapeHtml(story.button_label)}</button>
+  </section>`;
+}
+
 export function mountDashboard(root) {
   if (!root) {
     throw new Error('Elemento raiz do dashboard nao encontrado.');
@@ -415,6 +428,7 @@ export function mountDashboard(root) {
   const escapeModal = document.getElementById('modal-fuga');
   const dilemmaModal = document.getElementById('modal-dilema-final');
   const interrogationModal = document.getElementById('modal-interrogatorio');
+  const storyModal = document.getElementById('modal-historia');
   const congressLawTitle = document.getElementById('congresso-lei-titulo');
   const congressLawDescription = document.getElementById('congresso-lei-descricao');
   let pendingCongressLawId = null;
@@ -477,6 +491,7 @@ export function mountDashboard(root) {
     if (escapeModal) { const markup = renderEscapeEnding(state); escapeModal.hidden = !markup; escapeModal.innerHTML = markup; }
     if (dilemmaModal) { const markup = renderFinalDilemma(state); dilemmaModal.hidden = !markup; dilemmaModal.innerHTML = markup; }
     if (interrogationModal) { const markup = renderInterrogation(state); interrogationModal.hidden = !markup; interrogationModal.style.display = markup ? '' : 'none'; interrogationModal.innerHTML = markup; }
+    if (storyModal) { const markup = renderStoryCard(state); storyModal.hidden = !markup; storyModal.innerHTML = markup; }
   }
 
   function commit(nextState) {
@@ -630,6 +645,10 @@ export function mountDashboard(root) {
       commit(escolherSitioNegro(state, control.dataset.method));
     }
     if (control?.dataset.action === 'interrogation-reward') commit(reivindicarSitioNegro(state, control.dataset.reward));
+  });
+
+  storyModal?.addEventListener('click', (event) => {
+    if (event.target.closest('[data-action="dismiss-story"]')) commit(dispensarHistoria(state));
   });
 
   root.addEventListener('click', (event) => {

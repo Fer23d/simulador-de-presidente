@@ -24,8 +24,9 @@ import { aplicarModificadoresConstitucionais, promulgarConstituicao } from './co
 import { iniciarProjetoMaoMorta as startDeadHandProject, interceptarGameOverComMaoMorta, processarMegaprojetos } from './megaprojects.js';
 import { desviarFundos, interceptarFinalCaixa2, isEscapeEligible } from './corruption.js';
 import { escolherInterrogatorio as chooseInterrogation, reivindicarInterrogatorio as claimInterrogation, resolverInterrogatorio as resolveInterrogation, sortearCapturaAgente } from './interrogation.js';
+import { checkStoryEvents, dismissStory as dismissNarrativeStory, getStoryEvent } from './story_engine.js';
 
-const STATE_VERSION = 11;
+const STATE_VERSION = 12;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 
 function clamp(value, minimum, maximum) {
@@ -170,6 +171,9 @@ export function createGameState(countryId = 'bra') {
     pendingFinalDilemma: false,
     double_agent_active: false,
     pendingInterrogation: null,
+    seen_stories: [],
+    pendingStory: false,
+    currentStory: null,
     notice: 'Gabinete iniciado. O primeiro mes de governo comeca agora.',
   };
 }
@@ -198,7 +202,7 @@ export function desviarFundosParaCaixa2(state) {
   if (state.pendingFinalDilemma) return { ...state, notice: 'Resolva o dilema final antes de executar novas acoes.' };
   const result = desviarFundos(state);
   return result.slush_fund !== state.slush_fund
-    ? addNews(result, `Caixa 2 atualizado: R$ ${result.slush_fund.toLocaleString('pt-BR')}.`)
+    ? checkStoryEvents(addNews(result, `Caixa 2 atualizado: R$ ${result.slush_fund.toLocaleString('pt-BR')}.`))
     : result;
 }
 
@@ -567,8 +571,12 @@ export function pesquisarTecnologiaMilitar(state, technologyId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = pesquisarTecnologia(state, technologyId);
   return result.unlocked_techs.length > (state.unlocked_techs?.length ?? 0)
-    ? addNews(result, result.notice)
+    ? checkStoryEvents(addNews(result, result.notice))
     : result;
+}
+
+export function dispensarHistoria(state) {
+  return dismissNarrativeStory(state);
 }
 
 export function negotiate(state, blocId) {
@@ -640,6 +648,7 @@ export function advanceMonth(state) {
   if (state.pendingUnVote) return { ...state, notice: 'Registre seu voto na Assembleia da ONU antes de avancar o mes.' };
   if (state.pendingGlobalBid) return { ...state, notice: 'Decida a candidatura aos Jogos Mundiais antes de avancar o mes.' };
   if (state.pendingInterrogation) return { ...state, notice: 'Resolva o interrogatorio antes de avancar o mes.' };
+  if (state.pendingStory) return { ...state, notice: 'Leia o dossie confidencial antes de avancar o mes.' };
   if (state.nuclearSanctionsPending) {
     state = {
       ...state,
@@ -734,13 +743,13 @@ export function advanceMonth(state) {
   const assemblyState = verificarAssembleia(defconState);
   if (assemblyState.pendingUnVote) return addNews(assemblyState, assemblyState.notice);
   const eventRoll = rollMonthlyEvent(stability.seed);
-  if (!eventRoll.event) return sortearCapturaAgente({ ...assemblyState, randomSeed: eventRoll.seed });
-  return addNews({
+  if (!eventRoll.event) return checkStoryEvents(sortearCapturaAgente({ ...assemblyState, randomSeed: eventRoll.seed }));
+  return checkStoryEvents(addNews({
     ...assemblyState,
     randomSeed: eventRoll.seed,
     pendingEvent: eventRoll.event,
     notice: `Crise nacional: ${eventRoll.event.title}.`,
-  }, `Alerta: ${eventRoll.event.title}.`);
+  }, `Alerta: ${eventRoll.event.title}.`));
 }
 
 export function hydrateGameState(serialized) {
@@ -839,6 +848,12 @@ export function hydrateGameState(serialized) {
     const normalizedFactions = hydrated.regime?.constitution === 'theocratic'
       ? Object.fromEntries(Object.entries(hydrated.factions).filter(([key]) => key !== 'elite' && key !== 'trabalhadores'))
       : hydrated.factions;
+    const seenStories = Array.isArray(parsed.seen_stories)
+      ? [...new Set(parsed.seen_stories.filter((id) => typeof id === 'string' && getStoryEvent(id)))]
+      : [];
+    const pendingStoryId = Boolean(parsed.pendingStory) && getStoryEvent(parsed.currentStory) && !seenStories.includes(parsed.currentStory)
+      ? parsed.currentStory
+      : null;
     return syncWorld({
       ...hydrated,
       factions: normalizedFactions,
@@ -873,6 +888,9 @@ export function hydrateGameState(serialized) {
       pendingInterrogation: parsed.pendingInterrogation?.phase === 'choice' || parsed.pendingInterrogation?.phase === 'reward'
         ? { phase: parsed.pendingInterrogation.phase, prisonerId: 847 }
         : null,
+      seen_stories: seenStories,
+      pendingStory: Boolean(pendingStoryId),
+      currentStory: pendingStoryId,
     });
   } catch {
     return createGameState();
