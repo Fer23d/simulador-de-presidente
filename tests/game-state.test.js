@@ -28,6 +28,8 @@ import {
   pesquisarTecnologiaMilitar,
   canAutorizarAniquilacaoNuclear,
   desviarFundosParaCaixa2,
+  registrarEventoHistorico,
+  researchTechnology,
 } from '../src/core/game-state.js';
 
 test('creates a game state for Brazil', () => {
@@ -42,6 +44,15 @@ test('creates a game state for Brazil', () => {
   assert.deepEqual(state.seen_stories, []);
   assert.equal(state.pendingStory, false);
   assert.equal(state.currentStory, null);
+  assert.deepEqual(state.history_log, []);
+});
+
+test('adds timestamped narrative records without mutating the prior state', () => {
+  const state = createGameState('bra');
+  const logged = registrarEventoHistorico(state, 'guerra', 'Declarada guerra contra a Argentina.');
+
+  assert.equal(state.history_log.length, 0);
+  assert.deepEqual(logged.history_log, [{ month: 1, year: 2026, type: 'guerra', text: 'Declarada guerra contra a Argentina.' }]);
 });
 
 test('generates military research from defense spending without changing civilian research', () => {
@@ -76,6 +87,30 @@ test('opens narrative cards after first nuclear research and first Caixa 2 diver
   assert.equal(nuke.pendingStory, true);
   assert.equal(diversion.currentStory, 'first_slush_fund');
   assert.equal(diversion.pendingStory, true);
+});
+
+test('chronicles wars, approved laws, military research, Caixa 2, and game over', () => {
+  const state = createGameState('bra');
+  const war = startWar(state, 'arg');
+  const decree = voteLaw({ ...state, regime: { ...state.regime, type: 'dictatorship' } }, 'tax-reform');
+  const research = pesquisarTecnologiaMilitar({ ...state, military_research_points: 1_000 }, 'missiles');
+  const slush = desviarFundosParaCaixa2(state);
+  const collapse = advanceMonth({ ...state, regime: { ...state.regime, gameOver: true, outcome: 'golpe-militar' } });
+
+  assert.equal(war.history_log.at(-1).type, 'guerra');
+  assert.equal(decree.history_log.at(-1).type, 'lei');
+  assert.equal(research.history_log.at(-1).type, 'tecnologia');
+  assert.equal(slush.history_log.at(-1).type, 'corrupcao');
+  assert.equal(collapse.history_log.at(-1).type, 'game_over');
+});
+
+test('chronicles completed civilian research', () => {
+  const state = { ...createGameState('bra'), technology: { points: 140, unlocked: [] } };
+
+  const result = researchTechnology(state, 'ai-logistics');
+
+  assert.equal(result.history_log.at(-1).type, 'tecnologia');
+  assert.match(result.history_log.at(-1).text, /IA Logistica/);
 });
 
 test('keeps the five most recent news headlines', async () => {

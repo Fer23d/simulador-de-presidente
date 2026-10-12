@@ -69,6 +69,21 @@ test('renders a blocking confidential story dossier', async () => {
   assert.match(markup, /data-action="dismiss-story"/);
 });
 
+test('renders the historical register as a CRT terminal log', async () => {
+  const { historyView } = await import('../src/ui/dashboard.js');
+  const { createGameState } = await import('../src/core/game-state.js');
+  const state = {
+    ...createGameState('bra'),
+    history_log: [{ month: 10, year: 2028, type: 'guerra', text: 'Declarada guerra contra a URSS.' }],
+  };
+
+  const markup = historyView(state);
+
+  assert.match(markup, /id="tab-historico"/);
+  assert.match(markup, /OUTUBRO, ANO 3/);
+  assert.match(markup, /history-entry--guerra/);
+});
+
 test('renders a blocking UN Assembly voting dialog', async () => {
   const { renderUnAssembly } = await import('../src/ui/dashboard.js');
 

@@ -65,6 +65,7 @@ import {
   escolherSitioNegro,
   pesquisarTecnologiaMilitar,
   dispensarHistoria,
+  registrarEventoHistorico,
 } from '../core/game-state.js';
 
 const STORAGE_KEY = 'simulador-presidente-state-v1';
@@ -358,6 +359,16 @@ function countriesView(state) {
   return `<section class="panel countries-panel"><div class="panel-heading"><div><p class="eyebrow">Banco mundial</p><h2>200 nacoes jogaveis</h2></div><span class="country-code">${selection.length}</span></div><div class="country-table"><div class="country-table-head"><span>Pais</span><span>Area territorial</span><span></span></div>${selection.map((country) => `<div class="country-row ${country.id === state.country.id ? 'selected' : ''}"><span><strong>${country.nome}</strong><small>${country.id.toUpperCase()}</small></span><span>${formatNumber.format(country.area_km2)} km²</span><button type="button" class="quiet-action" data-action="country" data-country="${country.id}">Governar</button></div>`).join('')}</div></section>`;
 }
 
+export function historyView(state) {
+  const entries = state.history_log ?? [];
+  return `<section id="tab-historico" class="panel historical-register"><div class="panel-heading"><div><p class="eyebrow">Arquivo presidencial</p><h2>&gt; REGISTRO HISTORICO</h2></div><span class="country-code">${entries.length} EVENTOS</span></div><div id="history-log" class="history-terminal" aria-live="polite">${entries.length ? entries.map((entry) => {
+    const month = MONTHS[(entry.month ?? 1) - 1]?.toUpperCase() ?? 'MES DESCONHECIDO';
+    const mandateYear = Math.max(1, (entry.year ?? 2026) - 2025);
+    const type = escapeHtml(entry.type);
+    return `<article class="history-entry history-entry--${type}"><p>[ ${month}, ANO ${mandateYear} ] -- ${type.toUpperCase()}</p><span>&gt; ${escapeHtml(entry.text)}</span></article>`;
+  }).join('') : '<p class="notice">&gt; Nenhum evento marcante foi registrado.</p>'}</div></section>`;
+}
+
 export function renderNews(state) {
   const news = (state.news ?? []).slice(0, 5);
   return `<aside class="news-feed" aria-label="Giro de Noticias"><div class="panel-heading"><div><p class="eyebrow">Giro de Noticias</p><h2>Ultimas manchetes</h2></div></div><ol>${news.length ? news.map((item) => `<li><span>${MONTHS[(item.calendar?.month ?? 1) - 1]} ${item.calendar?.year ?? ''}</span>${item.text}</li>`).join('') : '<li><span>Agora</span>O gabinete aguarda a primeira decisao.</li>'}</ol></aside>`;
@@ -445,6 +456,7 @@ export function mountDashboard(root) {
       ['technology', 'Tecnologia'],
       ['projects', 'Projetos Internos'],
       ['congress', 'Congresso'],
+      ['history', '> REGISTRO HISTORICO'],
       ['countries', 'Paises'],
     ];
     const content = activeTab === 'budget' ? budgetView(state, projection)
@@ -454,6 +466,7 @@ export function mountDashboard(root) {
           : activeTab === 'technology' ? technologyView(state)
             : activeTab === 'projects' ? projectsView(state)
       : activeTab === 'congress' ? congressView(state)
+        : activeTab === 'history' ? historyView(state)
         : activeTab === 'countries' ? countriesView(state)
           : overviewView(state, projection);
     root.innerHTML = `<div class="app-shell">
@@ -492,6 +505,10 @@ export function mountDashboard(root) {
     if (dilemmaModal) { const markup = renderFinalDilemma(state); dilemmaModal.hidden = !markup; dilemmaModal.innerHTML = markup; }
     if (interrogationModal) { const markup = renderInterrogation(state); interrogationModal.hidden = !markup; interrogationModal.style.display = markup ? '' : 'none'; interrogationModal.innerHTML = markup; }
     if (storyModal) { const markup = renderStoryCard(state); storyModal.hidden = !markup; storyModal.innerHTML = markup; }
+    if (activeTab === 'history') {
+      const historyLog = root.querySelector('#history-log');
+      if (historyLog) historyLog.scrollTop = historyLog.scrollHeight;
+    }
   }
 
   function commit(nextState) {
@@ -499,6 +516,8 @@ export function mountDashboard(root) {
     storageNotice = saveState(state);
     render();
   }
+
+  window.logHistoryEvent = (type, text) => commit(registrarEventoHistorico(state, type, text));
 
   function fecharModalVotacao() {
     pendingCongressLawId = null;

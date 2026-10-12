@@ -26,7 +26,7 @@ import { desviarFundos, interceptarFinalCaixa2, isEscapeEligible } from './corru
 import { escolherInterrogatorio as chooseInterrogation, reivindicarInterrogatorio as claimInterrogation, resolverInterrogatorio as resolveInterrogation, sortearCapturaAgente } from './interrogation.js';
 import { checkStoryEvents, dismissStory as dismissNarrativeStory, getStoryEvent } from './story_engine.js';
 
-const STATE_VERSION = 12;
+const STATE_VERSION = 13;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 
 function clamp(value, minimum, maximum) {
@@ -51,6 +51,22 @@ function addHistory(state, entry) {
   return [entry, ...state.history].slice(0, 12);
 }
 
+export function registrarEventoHistorico(state, type, text) {
+  if (typeof type !== 'string' || !type || typeof text !== 'string' || !text) return state;
+  const entry = {
+    month: state.calendar?.month ?? 1,
+    year: state.calendar?.year ?? 2026,
+    type,
+    text,
+  };
+  return { ...state, history_log: [...(state.history_log ?? []), entry] };
+}
+
+function registrarGameOver(state) {
+  if (!state.regime?.gameOver || state.history_log?.some((entry) => entry.type === 'game_over')) return state;
+  return registrarEventoHistorico(state, 'game_over', `O governo chegou ao fim: ${state.regime.outcome ?? 'colapso nacional'}.`);
+}
+
 function isGameOver(state) {
   return Boolean(state.regime?.gameOver);
 }
@@ -72,7 +88,9 @@ function interceptDeadHandGameOver(state) {
 }
 
 function resolverFinalDeJogo(state) {
-  if (!state.regime?.gameOver || state.pendingFinalDilemma || state.escape_ending_triggered || state.dead_hand_triggered) return state;
+  if (!state.regime?.gameOver) return state;
+  state = registrarGameOver(state);
+  if (state.pendingFinalDilemma || state.escape_ending_triggered || state.dead_hand_triggered) return state;
   if (isEscapeEligible(state) && state.dead_hand_active) {
     return {
       ...state,
@@ -112,6 +130,17 @@ function isValidHistory(history) {
       && Number.isFinite(entry.calendar.year));
 }
 
+function isValidHistoryLog(historyLog) {
+  return Array.isArray(historyLog)
+    && historyLog.every((entry) => entry
+      && Number.isInteger(entry.month)
+      && entry.month >= 1
+      && entry.month <= 12
+      && Number.isInteger(entry.year)
+      && typeof entry.type === 'string'
+      && typeof entry.text === 'string');
+}
+
 function getActiveLawIds(laws) {
   return LAWS.filter((law) => laws[law.stateKey]?.approved).map((law) => law.id);
 }
@@ -145,6 +174,7 @@ export function createGameState(countryId = 'bra') {
     congress: createCongress(countrySeed(country.id)),
     laws: Object.fromEntries(LAWS.map((law) => [law.stateKey, { approved: false, voteCompleted: false }])),
     history: [],
+    history_log: [],
     news: [],
     pendingEvent: null,
     pendingUnVote: null,
@@ -202,7 +232,7 @@ export function desviarFundosParaCaixa2(state) {
   if (state.pendingFinalDilemma) return { ...state, notice: 'Resolva o dilema final antes de executar novas acoes.' };
   const result = desviarFundos(state);
   return result.slush_fund !== state.slush_fund
-    ? checkStoryEvents(addNews(result, `Caixa 2 atualizado: R$ ${result.slush_fund.toLocaleString('pt-BR')}.`))
+    ? checkStoryEvents(registrarEventoHistorico(addNews(result, `Caixa 2 atualizado: R$ ${result.slush_fund.toLocaleString('pt-BR')}.`), 'corrupcao', 'Fundos foram desviados para uma conta offshore.'))
     : result;
 }
 
@@ -275,7 +305,7 @@ export function startWar(state, contactId) {
   const notice = legitimateDefense
     ? `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'} sob alegacao de legitima defesa.`
     : `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'}.`;
-  return addNews(syncWorld({ ...next, geopolitics, notice }), notice);
+  return registrarEventoHistorico(addNews(syncWorld({ ...next, geopolitics, notice }), notice), 'guerra', `Declarada guerra contra ${target?.name ?? 'um alvo estrangeiro'}. O mundo sustem a respiracao.`);
 }
 
 export function declararGuerra(state, contactId) {
@@ -564,14 +594,15 @@ export function attemptAutogolpe(state) {
 export function researchTechnology(state, technologyId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = purchaseTechnology(state.technology, technologyId);
-  return { ...state, technology: result.technology, notice: result.reason };
+  const nextState = { ...state, technology: result.technology, notice: result.reason };
+  return result.ok ? registrarEventoHistorico(nextState, 'tecnologia', result.reason) : nextState;
 }
 
 export function pesquisarTecnologiaMilitar(state, technologyId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = pesquisarTecnologia(state, technologyId);
   return result.unlocked_techs.length > (state.unlocked_techs?.length ?? 0)
-    ? checkStoryEvents(addNews(result, result.notice))
+    ? checkStoryEvents(registrarEventoHistorico(addNews(result, result.notice), 'tecnologia', result.notice))
     : result;
 }
 
@@ -595,13 +626,13 @@ export function voteLaw(state, lawId) {
   if (!law) return { ...state, notice: 'Projeto de lei nao encontrado.' };
   if (state.regime?.type === 'dictatorship') {
     const notice = `${law.title} aprovada por decreto.`;
-    return addNews(syncWorld({
+    return registrarEventoHistorico(addNews(syncWorld({
       ...state,
       laws: { ...state.laws, [law.stateKey]: { approved: true, voteCompleted: true } },
       activeLawIds: [...new Set([...(state.activeLawIds ?? []), law.id])],
       notice,
       history: addHistory(state, { type: 'decree', message: notice, calendar: state.calendar }),
-    }), notice);
+    }), notice), 'lei', `${law.title} foi aprovada por decreto.`);
   }
   const lawState = state.laws[law.stateKey] ?? { approved: false, voteCompleted: false };
   if (lawState.voteCompleted) {
@@ -623,13 +654,16 @@ export function voteLaw(state, lawId) {
     ? `${law.title} aprovada por ${result.votesFor} votos.`
     : `${law.title} rejeitada: ${result.votesFor}/${result.requiredVotes} votos.`;
   const laws = { ...state.laws, [law.stateKey]: { approved: result.approved, voteCompleted: true } };
-  return addNews({
+  const nextState = addNews({
     ...state,
     laws,
     activeLawIds: getActiveLawIds(laws),
     notice,
     history: addHistory(state, { type: 'vote', message: notice, calendar: state.calendar }),
   }, notice);
+  return result.approved
+    ? registrarEventoHistorico(nextState, 'lei', `${law.title} foi aprovada pelo Congresso.`)
+    : nextState;
 }
 
 // A confirmation modal precedes the vote; the Congress engine still decides approval.
@@ -832,6 +866,7 @@ export function hydrateGameState(serialized) {
         return [law.stateKey, { approved: Boolean(savedLaw?.approved), voteCompleted: Boolean(savedLaw?.voteCompleted) }];
       })),
       history: isValidHistory(parsed.history) ? parsed.history.slice(0, 12) : [],
+      history_log: isValidHistoryLog(parsed.history_log) ? parsed.history_log : [],
       ministers: {
         ...base.ministers,
         economy: parsed.ministers?.economy?.id === 'economy' ? { id: 'economy' } : null,

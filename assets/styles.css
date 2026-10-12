@@ -248,6 +248,20 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .news-feed li { min-width: 0; border: 1px dashed var(--line); border-left: 4px solid var(--amber); padding: 8px; background: #0b100e; color: var(--muted); font-size: 13px; line-height: 1.35; }
 .news-feed li span { display: block; margin-bottom: 5px; color: var(--cyan); font-size: 12px; text-transform: uppercase; }
 
+.historical-register { max-width: 1080px; }
+.history-terminal { max-height: 560px; overflow-y: auto; border: 2px solid var(--line-hot); padding: 12px; background: #030806; box-shadow: inset 0 0 20px rgba(57, 255, 20, .08); scrollbar-color: var(--phosphor) #07100b; scrollbar-width: thin; }
+.history-terminal::-webkit-scrollbar { width: 12px; }
+.history-terminal::-webkit-scrollbar-track { border-left: 1px solid var(--line); background: #07100b; }
+.history-terminal::-webkit-scrollbar-thumb { border: 2px solid #07100b; background: var(--phosphor); box-shadow: 0 0 8px rgba(57, 255, 20, .8); }
+.history-entry { margin: 0; border-bottom: 1px dashed var(--line); padding: 13px 4px; font-family: "Share Tech Mono", monospace; font-size: 17px; line-height: 1.35; }
+.history-entry:last-child { border-bottom: 0; }
+.history-entry p { margin: 0 0 4px; color: var(--cyan); }
+.history-entry span { color: var(--muted); }
+.history-entry--guerra p, .history-entry--game_over p { color: var(--danger); text-shadow: 0 0 8px rgba(255, 0, 60, .65); }
+.history-entry--tecnologia p { color: var(--cyan); }
+.history-entry--corrupcao p, .history-entry--black_ops p { color: var(--amber); text-shadow: 0 0 7px rgba(255, 176, 0, .6); }
+.history-entry--lei p { color: var(--phosphor); }
+
 .country-table-head, .country-row { display: grid; grid-template-columns: minmax(200px, 1fr) 180px 100px; align-items: center; gap: 12px; }
 .country-table-head { position: sticky; top: 0; z-index: 1; padding: 10px 0; border-bottom: 2px solid var(--line-hot); background: var(--panel); color: var(--amber); font-size: 12px; text-transform: uppercase; }
 .country-row { min-height: 54px; border-bottom: 1px dashed var(--line); color: var(--muted); font-size: 13px; }
