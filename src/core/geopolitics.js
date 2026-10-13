@@ -44,6 +44,7 @@ export function createGeopolitics(playerId = 'bra') {
       tradeTreaty: false,
       alliance: false,
       atWar: false,
+      atWarAgainst: null,
       sancionado_por_jogador: false,
     };
   };
@@ -131,7 +132,7 @@ export function proposeAlliance(geopolitics, contactId) {
   const contact = geopolitics.contacts.find((item) => item.id === contactId);
   if (!contact) return rejected(geopolitics, 'Pais nao encontrado.');
   if (contact.atWar) return rejected(geopolitics, 'Nao e possivel formar alianca durante uma guerra.');
-  if (!contact.tradeTreaty || contact.relation <= 45) return rejected(geopolitics, 'Alianca exige acordo comercial e relacao acima de 45.');
+  if (!contact.tradeTreaty || contact.relation < 50) return rejected(geopolitics, 'Alianca exige acordo comercial e relacao de ao menos 50.');
   if (contact.alliance) return rejected(geopolitics, 'Alianca ja esta em vigor.');
   return {
     ok: true,
@@ -140,7 +141,7 @@ export function proposeAlliance(geopolitics, contactId) {
   };
 }
 
-export function declareWar(geopolitics, contactId) {
+export function declareWar(geopolitics, contactId, attackerId = 'player') {
   const contact = geopolitics.contacts.find((item) => item.id === contactId);
   if (!contact) return rejected(geopolitics, 'Pais nao encontrado.');
   if (contact.anexado) return rejected(geopolitics, 'Este territorio ja foi anexado.');
@@ -148,7 +149,90 @@ export function declareWar(geopolitics, contactId) {
   return {
     ok: true,
     reason: `Guerra declarada contra ${contact.name}.`,
-    geopolitics: updateContact(geopolitics, contactId, (item) => ({ ...item, atWar: true, alliance: false, relation: -100 })),
+    geopolitics: updateContact(geopolitics, contactId, (item) => ({ ...item, atWar: true, atWarAgainst: attackerId, alliance: false, relation: -100 })),
+  };
+}
+
+export function interceptArticle5(state) {
+  if (state.pendingAllianceInvocation) return state;
+  const alliedIds = new Set([
+    ...(state.player_alliance ?? []),
+    ...(state.liga_membros ?? []),
+    ...((state.geopolitics?.contacts ?? []).filter((contact) => contact.alliance).map((contact) => contact.id)),
+  ]);
+  const attackedAlly = (state.geopolitics?.contacts ?? []).find((contact) => (
+    alliedIds.has(contact.id)
+      && contact.atWar
+      && contact.atWarAgainst
+  ));
+  if (!attackedAlly) return state;
+  const attacker = state.geopolitics.contacts.find((contact) => contact.id === attackedAlly.atWarAgainst);
+  return {
+    ...state,
+    pendingAllianceInvocation: {
+      allyId: attackedAlly.id,
+      allyName: attackedAlly.name,
+      attackerId: attackedAlly.atWarAgainst,
+      attackerName: attacker?.name ?? attackedAlly.atWarAgainst,
+    },
+    notice: `Artigo 5 invocado: ${attackedAlly.name} foi atacado por ${attacker?.name ?? 'um agressor estrangeiro'}.`,
+  };
+}
+
+export function respondArticle5(state, decision) {
+  const pending = state.pendingAllianceInvocation;
+  if (!pending) return { ...state, notice: 'Nao existe uma invocacao do Artigo 5 pendente.' };
+  const ally = state.geopolitics.contacts.find((contact) => contact.id === pending.allyId);
+  if (!ally) return { ...state, pendingAllianceInvocation: null, notice: 'O aliado nao esta mais disponivel.' };
+  const attackerIsPlayer = pending.attackerId === state.country?.id || pending.attackerId === 'player';
+
+  if (decision === 'verbal-condemnation') {
+    const geopolitics = alterarNotaONU({
+      ...state.geopolitics,
+      contacts: state.geopolitics.contacts.map((contact) => contact.id === ally.id
+        ? { ...contact, alliance: false, ...(attackerIsPlayer ? { atWar: false, atWarAgainst: null } : {}) }
+        : contact),
+    }, -30);
+    return {
+      ...state,
+      geopolitics,
+      player_alliance: (state.player_alliance ?? []).filter((id) => id !== ally.id),
+      pendingAllianceInvocation: null,
+      notice: `O governo abandonou ${ally.name}. A alianca foi rompida e a ONU registrou a traicao.`,
+    };
+  }
+
+  if (decision !== 'send-troops' && decision !== 'fulfill-duty') {
+    return { ...state, notice: 'Resposta do Artigo 5 invalida.' };
+  }
+
+  const troopCost = Math.max(1_000, Math.floor((Number(state.military?.exercito?.soldados) || 0) * 0.05));
+  const cashCost = 5_000_000_000;
+  if (decision === 'send-troops' && ((Number(state.military?.exercito?.soldados) || 0) < troopCost || (Number(state.economy?.cash) || 0) < cashCost)) {
+    return { ...state, notice: 'Recursos insuficientes para enviar tropas ao front.' };
+  }
+  const geopolitics = {
+    ...state.geopolitics,
+    contacts: state.geopolitics.contacts.map((contact) => {
+      if (attackerIsPlayer && contact.id === ally.id) return { ...contact, alliance: true, atWar: false, atWarAgainst: null, relation: decision === 'send-troops' ? 100 : contact.relation };
+      if (!attackerIsPlayer && contact.id === pending.attackerId) return { ...contact, atWar: true, atWarAgainst: state.country.id, relation: -100 };
+      if (contact.id === ally.id && decision === 'send-troops') return { ...contact, relation: 100 };
+      return contact;
+    }),
+  };
+  return {
+    ...state,
+    geopolitics,
+    economy: decision === 'send-troops' ? { ...state.economy, cash: state.economy.cash - cashCost } : state.economy,
+    military: decision === 'send-troops'
+      ? { ...state.military, exercito: { ...state.military.exercito, soldados: state.military.exercito.soldados - troopCost } }
+      : state.military,
+    pendingAllianceInvocation: null,
+    notice: attackerIsPlayer
+      ? `A ordem de guerra contra ${ally.name} foi revertida pela alianca.`
+      : decision === 'send-troops'
+      ? `Tropas e caixa enviados para defender ${ally.name}. Guerra aberta contra ${pending.attackerName}.`
+      : `${ally.name} foi defendido. O governo cumpre o dever sem mobilizacao adicional.`,
   };
 }
 

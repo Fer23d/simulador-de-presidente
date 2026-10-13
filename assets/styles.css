@@ -158,6 +158,11 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .modal-arcade-terminal { position: fixed; z-index: 48; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(0, 12, 8, .94); }
 .modal-arcade-story[hidden] { display: none; }
 .modal-arcade-story { position: fixed; z-index: 52; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(1, 8, 6, .94); }
+.alliance-invocation { width: min(680px, 100%); border: 3px double var(--amber); padding: 24px; background: #0a0a0a; box-shadow: 0 0 22px rgba(255, 206, 102, .45), 8px 8px 0 var(--shadow); text-align: center; }
+.alliance-invocation h2 { margin: 14px 0; color: var(--amber); }
+.alliance-invocation pre { margin: 20px auto; color: var(--phosphor); font: 17px/1.45 "Share Tech Mono", monospace; text-align: left; white-space: pre-wrap; text-shadow: 0 0 8px rgba(141, 255, 174, .6); }
+.alliance-invocation .modal-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
+.alliance-invocation .modal-actions button { white-space: nowrap; }
 .story-dialog { width: min(650px, 100%); padding: 26px; border: 4px double var(--amber); background: #080d09; box-shadow: 0 0 26px rgba(255, 176, 0, .32), 9px 9px 0 #010201, inset 0 0 0 1px var(--line); text-align: center; }
 .story-classification { margin: 0; color: var(--danger); font-family: "Press Start 2P", monospace; font-size: 9px; line-height: 1.75; text-shadow: 0 0 8px rgba(255, 0, 60, .7); }
 .story-dialog h2 { margin: 20px 0; color: var(--amber); font-family: "Press Start 2P", monospace; font-size: 16px; line-height: 1.6; text-shadow: 0 0 9px rgba(255, 176, 0, .55); }

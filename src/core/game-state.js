@@ -1,7 +1,7 @@
 import { createCongress, negotiateSupport, voteOnLaw } from './congress.js';
 import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countries.js';
 import { DEFAULT_BUDGET, advanceEconomy, clampTaxRate, setBudgetRate } from './economy.js';
-import { advanceGeopolitics, anexarPais as annexTreatyTarget, alterarNotaONU as changeOnuScore, aplicarReparacoes as applyReparationsTreaty, createGeopolitics, criarLiga as createLeagueState, desmilitarizarPais as demilitarizeTreatyTarget, declareWar, exigirAnexacao as demandAnnexation, getGeopoliticalModifiers, importarRecursos as importResources, imporSancao as imposeSanction, inviteToLeague as inviteLeagueMember, isLegitimateDefenseTarget, proposeAlliance as formAlliance, proposeTradeTreaty, sabotar as sabotageCountry, saquearTesouro as lootTreatyTarget } from './geopolitics.js';
+import { advanceGeopolitics, anexarPais as annexTreatyTarget, alterarNotaONU as changeOnuScore, aplicarReparacoes as applyReparationsTreaty, createGeopolitics, criarLiga as createLeagueState, desmilitarizarPais as demilitarizeTreatyTarget, declareWar, exigirAnexacao as demandAnnexation, getGeopoliticalModifiers, importarRecursos as importResources, imporSancao as imposeSanction, interceptArticle5 as detectArticle5, inviteToLeague as inviteLeagueMember, isLegitimateDefenseTarget, proposeAlliance as formAlliance, proposeTradeTreaty, respondArticle5 as respondArticle5State, sabotar as sabotageCountry, saquearTesouro as lootTreatyTarget } from './geopolitics.js';
 import { advanceMilitary, applyNuclearCompletion, calculateMilitaryMaintenance, canAutogolpe, comprarBlindados, comprarCacas, comprarEquipamento, comprarNavios, createMilitary, createRegime, evaluateRegime, fundNuclearProject, getPoderTotal, normalizeMilitary, recrutarSoldado as recruitSoldiers } from './military.js';
 import { aggregateActiveLawEffects, LAWS, LAW_LABOR_REFORM } from './laws.js';
 import { advanceTechnology, createTechnology, getTechnologyModifiers, purchaseTechnology } from './technology.js';
@@ -179,6 +179,7 @@ export function createGameState(countryId = 'bra') {
     history_log: [],
     news: [],
     pendingEvent: null,
+    pendingAllianceInvocation: null,
     pendingUnVote: null,
     activeGlobalResolutions: [],
     monthCounter: 0,
@@ -296,6 +297,11 @@ export function criarLiga(state, targetId) {
   return createLeague(state, 'Liga Global');
 }
 
+export function respondArticle5(state, decision) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(respondArticle5State(state, decision));
+}
+
 export function importarRecursos(state, contactId, resource, amount) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = importResources(state.geopolitics, state.economy, state.country, contactId, resource, amount);
@@ -312,6 +318,19 @@ export function alterarNotaONU(state, value) {
 }
 
 export function startWar(state, contactId) {
+  const targetBeforeWar = state.geopolitics.contacts.find((contact) => contact.id === contactId);
+  const isPlayerAllianceMember = Boolean(targetBeforeWar && ((state.player_alliance ?? []).includes(contactId) || targetBeforeWar.alliance));
+  if (isPlayerAllianceMember) {
+    return detectArticle5({
+      ...state,
+      geopolitics: {
+        ...state.geopolitics,
+        contacts: state.geopolitics.contacts.map((contact) => contact.id === contactId
+          ? { ...contact, alliance: true, atWar: true, atWarAgainst: state.country.id }
+          : contact),
+      },
+    });
+  }
   const next = applyGeopoliticalAction(state, (geopolitics) => declareWar(geopolitics, contactId));
   if (next.geopolitics === state.geopolitics) return next;
   const target = next.geopolitics.contacts.find((contact) => contact.id === contactId);
@@ -698,6 +717,7 @@ export function advanceMonth(state) {
   if (state.pendingGlobalBid) return { ...state, notice: 'Decida a candidatura aos Jogos Mundiais antes de avancar o mes.' };
   if (state.pendingInterrogation) return { ...state, notice: 'Resolva o interrogatorio antes de avancar o mes.' };
   if (state.pendingStory) return { ...state, notice: 'Leia o dossie confidencial antes de avancar o mes.' };
+  if (state.pendingAllianceInvocation) return { ...state, notice: 'Decida se a alianca sera defendida antes de avancar o mes.' };
   if (state.nuclearSanctionsPending) {
     state = {
       ...state,
@@ -782,6 +802,8 @@ export function advanceMonth(state) {
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
   });
+  const article5State = detectArticle5(completedState);
+  if (article5State.pendingAllianceInvocation) return article5State;
   const narrativeState = registrarEventoHistorico(completedState, 'diario', gerarEntradaDiario(completedState, state));
   const megaprojectState = processarMegaprojetos(narrativeState);
   const terminalState = resolverFinalDeJogo(megaprojectState);
@@ -898,6 +920,14 @@ export function hydrateGameState(serialized) {
         ? parsed.news.filter((item) => typeof item?.text === 'string' && item.calendar).slice(0, 5)
         : base.news,
       pendingEvent: EVENTS.find((event) => event.id === parsed.pendingEvent?.id) ?? null,
+      pendingAllianceInvocation: parsed.pendingAllianceInvocation?.allyId && parsed.pendingAllianceInvocation?.attackerId
+        ? {
+          allyId: parsed.pendingAllianceInvocation.allyId,
+          allyName: typeof parsed.pendingAllianceInvocation.allyName === 'string' ? parsed.pendingAllianceInvocation.allyName : parsed.pendingAllianceInvocation.allyId,
+          attackerId: parsed.pendingAllianceInvocation.attackerId,
+          attackerName: typeof parsed.pendingAllianceInvocation.attackerName === 'string' ? parsed.pendingAllianceInvocation.attackerName : parsed.pendingAllianceInvocation.attackerId,
+        }
+        : null,
       pendingUnVote: parsed.pendingUnVote && typeof parsed.pendingUnVote.resolutionId === 'string' ? parsed.pendingUnVote : null,
       activeGlobalResolutions: Array.isArray(parsed.activeGlobalResolutions) ? parsed.activeGlobalResolutions.filter((id) => typeof id === 'string') : base.activeGlobalResolutions,
       notice: typeof parsed.notice === 'string' ? parsed.notice : base.notice,

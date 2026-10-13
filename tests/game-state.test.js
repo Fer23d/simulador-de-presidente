@@ -31,6 +31,7 @@ import {
   registrarEventoHistorico,
   researchTechnology,
   criarLiga,
+  respondArticle5,
 } from '../src/core/game-state.js';
 
 test('creates a game state for Brazil', () => {
@@ -148,6 +149,52 @@ test('charges military maintenance once per month and penalizes morale when cash
 
   assert.ok(result.economy.cash < 0);
   assert.ok(result.military.support < prepared.military.support);
+});
+
+test('opens Article 5 and lets the president send troops to defend an ally', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    player_alliance: ['arg'],
+    economy: { ...state.economy, cash: 500_000_000_000 },
+    military: { ...state.military, exercito: { ...state.military.exercito, soldados: 100_000 } },
+    geopolitics: {
+      ...state.geopolitics,
+      contacts: state.geopolitics.contacts.map((contact) => contact.id === 'arg'
+        ? { ...contact, alliance: true, atWar: true, atWarAgainst: 'usa' }
+        : contact),
+    },
+  };
+
+  const pending = advanceMonth(prepared);
+  assert.equal(pending.pendingAllianceInvocation.allyId, 'arg');
+  assert.equal(pending.pendingAllianceInvocation.attackerId, 'usa');
+
+  const defended = respondArticle5(pending, 'send-troops');
+  assert.equal(defended.pendingAllianceInvocation, null);
+  assert.equal(defended.geopolitics.contacts.find((contact) => contact.id === 'usa').atWar, true);
+  assert.ok(defended.military.exercito.soldados < prepared.military.exercito.soldados);
+  assert.ok(defended.economy.cash < prepared.economy.cash);
+});
+
+test('Article 5 verbal condemnation expels the ally and reduces ONU reputation', () => {
+  const state = createGameState('bra');
+  const pending = {
+    ...state,
+    player_alliance: ['arg'],
+    pendingAllianceInvocation: { allyId: 'arg', attackerId: 'usa' },
+    geopolitics: {
+      ...state.geopolitics,
+      contacts: state.geopolitics.contacts.map((contact) => contact.id === 'arg'
+        ? { ...contact, alliance: true, atWar: true, atWarAgainst: 'usa' }
+        : contact),
+    },
+  };
+
+  const result = respondArticle5(pending, 'verbal-condemnation');
+  assert.deepEqual(result.player_alliance, []);
+  assert.equal(result.geopolitics.contacts.find((contact) => contact.id === 'arg').alliance, false);
+  assert.ok(result.geopolitics.onuScore < state.geopolitics.onuScore);
 });
 
 test('keeps the five most recent news headlines', async () => {

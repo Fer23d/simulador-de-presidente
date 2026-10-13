@@ -47,6 +47,21 @@ test('requires a trade treaty before an alliance can be proposed', () => {
   assert.equal(proposeAlliance(withTreaty.geopolitics, 'arg').ok, true);
 });
 
+test('requires relation 50 or higher for an alliance invitation', () => {
+  const state = createGeopolitics();
+  const tradeReady = {
+    ...state,
+    contacts: state.contacts.map((item) => item.id === 'arg' ? { ...item, tradeTreaty: true, relation: 49 } : item),
+  };
+  const accepted = {
+    ...tradeReady,
+    contacts: tradeReady.contacts.map((item) => item.id === 'arg' ? { ...item, relation: 50 } : item),
+  };
+
+  assert.equal(proposeAlliance(tradeReady, 'arg').ok, false);
+  assert.equal(proposeAlliance(accepted, 'arg').ok, true);
+});
+
 test('resolves the same war outcome for the same seed', () => {
   const atWar = declareWar(createGeopolitics(), 'arg').geopolitics;
   const first = advanceGeopolitics(atWar, { power: 50, support: 60 }, economy, 7);

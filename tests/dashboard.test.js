@@ -47,7 +47,20 @@ test('renders a searchable and scrollable full diplomacy list', async () => {
   assert.match(view, /diplomacy-search/);
   assert.match(view, /Propor Acordo Comercial/);
   assert.match(view, /Argentina/);
-  assert.doesNotMatch(view, /Estados Unidos/);
+  assert.match(view, /data-diplomacy-row/);
+});
+
+test('renders the blocking Article 5 alliance invocation modal', async () => {
+  const { renderAllianceInvocation } = await import('../src/ui/dashboard.js');
+  const { createGameState } = await import('../src/core/game-state.js');
+  const state = { ...createGameState('bra'), pendingAllianceInvocation: { allyId: 'arg', attackerId: 'usa' } };
+
+  const markup = renderAllianceInvocation(state);
+
+  assert.match(markup, /INVOCAÇÃO DA ALIANÇA/);
+  assert.match(markup, /send-troops/);
+  assert.match(markup, /verbal-condemnation/);
+  assert.match(markup, /fulfill-duty/);
 });
 
 test('renders the news feed and a blocking crisis dialog', async () => {
