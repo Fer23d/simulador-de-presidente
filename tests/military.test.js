@@ -15,6 +15,7 @@ import {
   comprarNavios,
   getPoderTotal,
   recrutarSoldado,
+  calculateMilitaryMaintenance,
 } from '../src/core/military.js';
 
 const country = { populacao_base: 210_000_000, pib_base: 2_000_000_000_000, steel: 1_000_000, uranium: 10_000 };
@@ -31,6 +32,13 @@ test('raises military power after a month of defense investment', () => {
   const updated = advanceMilitary(initial, economy, { defenseSpend: 0.08 }, {});
 
   assert.ok(updated.military.power > initial.power);
+});
+
+test('scales monthly military maintenance by technological level', () => {
+  const military = { exercito: { soldados: 100_000, blindados: 10 }, marinha: { navios: 2 }, aeronautica: { cacas: 4 } };
+
+  assert.equal(calculateMilitaryMaintenance(military, 1), 138_000_000);
+  assert.equal(calculateMilitaryMaintenance(military, 2), 276_000_000);
 });
 
 test('funds a civil nuclear project only when the treasury can cover it', () => {

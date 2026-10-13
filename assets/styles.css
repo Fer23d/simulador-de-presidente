@@ -261,6 +261,9 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .history-entry--tecnologia p { color: var(--cyan); }
 .history-entry--corrupcao p, .history-entry--black_ops p { color: var(--amber); text-shadow: 0 0 7px rgba(255, 176, 0, .6); }
 .history-entry--lei p { color: var(--phosphor); }
+.history-entry--diario { border-left: 3px solid var(--amber); padding-left: 12px; }
+.history-entry--diario p { color: var(--amber); }
+.history-entry--diario span { color: #d4d8b2; }
 
 .country-table-head, .country-row { display: grid; grid-template-columns: minmax(200px, 1fr) 180px 100px; align-items: center; gap: 12px; }
 .country-table-head { position: sticky; top: 0; z-index: 1; padding: 10px 0; border-bottom: 2px solid var(--line-hot); background: var(--panel); color: var(--amber); font-size: 12px; text-transform: uppercase; }

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createGameState } from '../src/core/game-state.js';
-import { checkStoryEvents, dismissStory } from '../src/core/story_engine.js';
+import { checkStoryEvents, dismissStory, gerarEntradaDiario } from '../src/core/story_engine.js';
 
 test('queues the nuclear story only once and applies its consequence when dismissed', () => {
   const state = { ...createGameState('bra'), unlocked_techs: ['nuke'] };
@@ -27,4 +27,11 @@ test('queues the Caixa 2 story after the first diversion without stacking it ove
 
   assert.equal(queued.currentStory, 'first_slush_fund');
   assert.equal(blocked.pendingStory, false);
+});
+
+test('turns a major GDP jump into a narrative golden age entry', () => {
+  const previous = { calendar: { month: 1, year: 2026 }, economy: { gdp: 100 } };
+  const state = { calendar: { month: 2, year: 2026 }, economy: { gdp: 125 }, regime: { gameOver: false } };
+
+  assert.match(gerarEntradaDiario(state, previous), /Era de Ouro/);
 });

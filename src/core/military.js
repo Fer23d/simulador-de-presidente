@@ -88,18 +88,24 @@ export function createMilitary(country) {
   });
 }
 
+export function calculateMilitaryMaintenance(military = {}, militaryTechLevel = 1) {
+  const normalized = normalizeMilitary(military);
+  const techMultiplier = Math.max(1, Number(militaryTechLevel) || 1);
+  const baseCost = (normalized.exercito.soldados * 180)
+    + (normalized.exercito.blindados * 6_000_000)
+    + (normalized.marinha.navios * 12_000_000)
+    + (normalized.aeronautica.cacas * 9_000_000);
+  return Math.round(baseCost * techMultiplier);
+}
+
 export function advanceMilitary(military, economy, budget, geopoliticalResult = {}, factions = {}) {
   const normalized = normalizeMilitary(military);
   const defenseSpend = clamp(Number(budget.defenseSpend) || 0, 0, 0.15);
   const warDelta = geopoliticalResult.militaryDelta ?? {};
-  const deficitPenalty = economy.cash < 0 ? 0.8 : 0;
+  const deficitPenalty = budget.applyDeficitPenalty === false ? 0 : economy.cash < 0 ? 8 : 0;
   const powerGain = defenseSpend * 18;
   const militaryFaction = Number(factions.militares) || 50;
   const supportShift = (militaryFaction - 50) * 0.015 + (defenseSpend * 8) + (warDelta.supportDelta ?? 0) - deficitPenalty;
-  const maintenance = (normalized.exercito.soldados * 180)
-    + (normalized.exercito.blindados * 6_000_000)
-    + (normalized.marinha.navios * 12_000_000)
-    + (normalized.aeronautica.cacas * 9_000_000);
   const nextReadiness = clamp(normalized.readiness + (defenseSpend * 0.12) - ((warDelta.powerLoss ?? 0) * 0.01), 0.5, 1.8);
   return {
     military: normalizeMilitary({
@@ -108,7 +114,7 @@ export function advanceMilitary(military, economy, budget, geopoliticalResult = 
       support: clamp((Number(normalized.support) || 0) + supportShift, 0, 100),
       combatAdjustment: normalized.combatAdjustment + powerGain - (warDelta.powerLoss ?? 0),
     }),
-    economy: { ...economy, cash: economy.cash - maintenance },
+    economy,
   };
 }
 

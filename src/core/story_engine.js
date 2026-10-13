@@ -74,3 +74,21 @@ export function dismissStory(state) {
     notice: `Dossie arquivado: ${story.title}.`,
   };
 }
+
+export function gerarEntradaDiario(state, previousState = null) {
+  const year = state.calendar?.year ?? 2026;
+  const month = state.calendar?.month ?? 1;
+  const period = `Ano ${year}, mes ${month}`;
+  if (state.regime?.gameOver) return `${period}: O governo chegou ao fim. A Historia fechara este capitulo sem piedade.`;
+
+  const currentWars = (state.geopolitics?.contacts ?? []).filter((contact) => contact.atWar).length;
+  const previousWars = (previousState?.geopolitics?.contacts ?? []).filter((contact) => contact.atWar).length;
+  if (currentWars > previousWars) return `${period}: Nossas tropas marcham. A Historia nao se lembrara de quem comecou, apenas de quem sobreviveu.`;
+
+  const previousGdp = Number(previousState?.economy?.gdp) || 0;
+  const currentGdp = Number(state.economy?.gdp) || 0;
+  if (previousGdp > 0 && currentGdp >= previousGdp * 1.1) return `${period}: A economia atinge a Era de Ouro. O povo celebra a prosperidade sob o meu comando.`;
+  if ((Number(state.economy?.cash) || 0) < 0) return `${period}: O Tesouro entrou no vermelho. Cada soldado entende que a crise tambem marcha fardada.`;
+  if (state.geopolitics?.internationalSanctions) return `${period}: O mundo fechou as portas. Sobrevivemos entre sancoes, racionamento e orgulho nacional.`;
+  return `${period}: O governo atravessou mais um mes. Nos arquivos do Estado, cada silencio tambem conta como uma decisao.`;
+}

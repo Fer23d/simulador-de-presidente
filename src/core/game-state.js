@@ -2,7 +2,7 @@ import { createCongress, negotiateSupport, voteOnLaw } from './congress.js';
 import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countries.js';
 import { DEFAULT_BUDGET, advanceEconomy, clampTaxRate, setBudgetRate } from './economy.js';
 import { advanceGeopolitics, anexarPais as annexTreatyTarget, alterarNotaONU as changeOnuScore, aplicarReparacoes as applyReparationsTreaty, createGeopolitics, criarLiga as createLeagueState, desmilitarizarPais as demilitarizeTreatyTarget, declareWar, exigirAnexacao as demandAnnexation, getGeopoliticalModifiers, importarRecursos as importResources, imporSancao as imposeSanction, inviteToLeague as inviteLeagueMember, isLegitimateDefenseTarget, proposeAlliance as formAlliance, proposeTradeTreaty, sabotar as sabotageCountry, saquearTesouro as lootTreatyTarget } from './geopolitics.js';
-import { advanceMilitary, applyNuclearCompletion, canAutogolpe, comprarBlindados, comprarCacas, comprarEquipamento, comprarNavios, createMilitary, createRegime, evaluateRegime, fundNuclearProject, getPoderTotal, normalizeMilitary, recrutarSoldado as recruitSoldiers } from './military.js';
+import { advanceMilitary, applyNuclearCompletion, calculateMilitaryMaintenance, canAutogolpe, comprarBlindados, comprarCacas, comprarEquipamento, comprarNavios, createMilitary, createRegime, evaluateRegime, fundNuclearProject, getPoderTotal, normalizeMilitary, recrutarSoldado as recruitSoldiers } from './military.js';
 import { aggregateActiveLawEffects, LAWS, LAW_LABOR_REFORM } from './laws.js';
 import { advanceTechnology, createTechnology, getTechnologyModifiers, purchaseTechnology } from './technology.js';
 import { calculateMilitaryResearchPoints, getMilitaryTechnology, pesquisarTecnologia } from './tech_tree.js';
@@ -24,7 +24,7 @@ import { aplicarModificadoresConstitucionais, promulgarConstituicao } from './co
 import { iniciarProjetoMaoMorta as startDeadHandProject, interceptarGameOverComMaoMorta, processarMegaprojetos } from './megaprojects.js';
 import { desviarFundos, interceptarFinalCaixa2, isEscapeEligible } from './corruption.js';
 import { escolherInterrogatorio as chooseInterrogation, reivindicarInterrogatorio as claimInterrogation, resolverInterrogatorio as resolveInterrogation, sortearCapturaAgente } from './interrogation.js';
-import { checkStoryEvents, dismissStory as dismissNarrativeStory, getStoryEvent } from './story_engine.js';
+import { checkStoryEvents, dismissStory as dismissNarrativeStory, gerarEntradaDiario, getStoryEvent } from './story_engine.js';
 
 const STATE_VERSION = 13;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
@@ -164,6 +164,8 @@ export function createGameState(countryId = 'bra') {
     geopolitics,
     world: geopolitics.contacts,
     military: createMilitary(country),
+    military_tech_level: 1,
+    player_alliance: [],
     technology: createTechnology(),
     military_research_points: 0,
     unlocked_techs: [],
@@ -278,7 +280,20 @@ export function proposeTreaty(state, contactId) {
 }
 
 export function proposeAlliance(state, contactId) {
-  return applyGeopoliticalAction(state, (geopolitics) => formAlliance(geopolitics, contactId));
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = formAlliance(state.geopolitics, contactId);
+  if (result.geopolitics === state.geopolitics) return { ...state, notice: result.reason };
+  return syncWorld({
+    ...state,
+    geopolitics: { ...result.geopolitics, tradeGrowthBonus: (Number(state.geopolitics.tradeGrowthBonus) || 0) + 0.001 },
+    player_alliance: [...new Set([...(state.player_alliance ?? []), contactId])],
+    notice: result.reason,
+  });
+}
+
+export function criarLiga(state, targetId) {
+  if (targetId) return proposeAlliance(state, targetId);
+  return createLeague(state, 'Liga Global');
 }
 
 export function importarRecursos(state, contactId, resource, amount) {
@@ -717,16 +732,18 @@ export function advanceMonth(state) {
   const economyAfterPolicy = advanceEconomy(state.economy, state.budget, monthlyEffects, modifiers);
   const traitInterest = economyAfterPolicy.cash > 0 ? economyAfterPolicy.cash * traitModifiers.cashInterest : 0;
   const economicMonth = { ...economyAfterPolicy, cash: economyAfterPolicy.cash + traitInterest };
+  const militaryMaintenance = calculateMilitaryMaintenance(state.military, state.military_tech_level);
+  const economyAfterMilitaryMaintenance = { ...economicMonth, cash: economicMonth.cash - militaryMaintenance };
   const nuclearResult = applyNuclearCompletion(changeOnuScore(state.geopolitics, effects.onuModifier ?? 0), state.military);
   const nuclear = state.onuReputationPermanentlyZero
     ? { ...nuclearResult, geopolitics: { ...nuclearResult.geopolitics, onuScore: 0, internationalSanctions: true, sanctionSeverity: 1 } }
     : nuclearResult;
-  const preparedMilitary = advanceMilitary(nuclear.military, economicMonth, state.budget, {}, state.factions);
+  const preparedMilitary = advanceMilitary(nuclear.military, economyAfterMilitaryMaintenance, state.budget, {}, state.factions);
   preparedMilitary.military.infantryMultiplier = technologyModifiers.infantryMultiplier;
   preparedMilitary.military.support = clamp(preparedMilitary.military.support + (effects.militarySupportModifier ?? 0), 0, 100);
   preparedMilitary.military.power = Math.min(100, preparedMilitary.military.power * (1 + technologyModifiers.militaryEffectiveness));
   const geopoliticalMonth = advanceGeopolitics(nuclear.geopolitics, preparedMilitary.military, economicMonth, state.randomSeed);
-  const militaryMonth = advanceMilitary(preparedMilitary.military, geopoliticalMonth.economy, { defenseSpend: 0 }, geopoliticalMonth, state.factions);
+  const militaryMonth = advanceMilitary(preparedMilitary.military, geopoliticalMonth.economy, { defenseSpend: 0, applyDeficitPenalty: false }, geopoliticalMonth, state.factions);
   const economyWithPuppetTribute = collectPuppetTribute(militaryMonth.economy, geopoliticalMonth.geopolitics);
   const factions = advanceFactions(state.factions, state.economy, economyWithPuppetTribute, state.budget, effects, { popularityModifier: modifiers.popularityModifier + (geopoliticalMonth.factionDelta ?? 0) });
   const infrastructureState = processarAutomacaoIndustrial({ ...state, country: state.country, factions });
@@ -752,6 +769,8 @@ export function advanceMonth(state) {
     factions: constitutionalState.factions,
     technology: constitutionalState.technology,
     military_research_points: Math.max(0, Number(state.military_research_points) || 0) + militaryResearchGenerated,
+    military_tech_level: Math.max(1, Number(state.military_tech_level) || 1),
+    player_alliance: Array.isArray(state.player_alliance) ? state.player_alliance : [],
     unlocked_techs: Array.isArray(state.unlocked_techs) ? state.unlocked_techs : [],
     regime: { ...stability.regime, coupRisk: clamp(stability.regime.coupRisk + (effects.coupRiskModifier ?? 0), 0, 0.8) },
     randomSeed: stability.seed,
@@ -763,7 +782,8 @@ export function advanceMonth(state) {
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
   });
-  const megaprojectState = processarMegaprojetos(completedState);
+  const narrativeState = registrarEventoHistorico(completedState, 'diario', gerarEntradaDiario(completedState, state));
+  const megaprojectState = processarMegaprojetos(narrativeState);
   const terminalState = resolverFinalDeJogo(megaprojectState);
   if (terminalState.dead_hand_triggered || terminalState.escape_ending_triggered || terminalState.pendingFinalDilemma) return terminalState;
   const resolvedState = aplicarEfeitosSoftPower(processarMigracoes(aplicarResolucoes(processarInfeccoesBiologicas(advanceCyberWarfare(megaprojectState)))));
@@ -848,6 +868,8 @@ export function hydrateGameState(serialized) {
         : base.military,
       technology: parsed.version >= 3 && Array.isArray(parsed.technology?.unlocked) ? { points: Math.max(0, Number(parsed.technology.points) || 0), unlocked: parsed.technology.unlocked.filter((id) => typeof id === 'string') } : base.technology,
       military_research_points: Math.max(0, Number(parsed.military_research_points) || 0),
+      military_tech_level: Math.max(1, Number(parsed.military_tech_level) || 1),
+      player_alliance: Array.isArray(parsed.player_alliance) ? parsed.player_alliance.filter((id) => typeof id === 'string') : base.player_alliance,
       unlocked_techs: Array.isArray(parsed.unlocked_techs)
         ? parsed.unlocked_techs.filter((id) => typeof id === 'string' && getMilitaryTechnology(id))
         : base.unlocked_techs,

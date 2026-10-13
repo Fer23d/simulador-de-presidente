@@ -30,6 +30,7 @@ import {
   desviarFundosParaCaixa2,
   registrarEventoHistorico,
   researchTechnology,
+  criarLiga,
 } from '../src/core/game-state.js';
 
 test('creates a game state for Brazil', () => {
@@ -45,6 +46,8 @@ test('creates a game state for Brazil', () => {
   assert.equal(state.pendingStory, false);
   assert.equal(state.currentStory, null);
   assert.deepEqual(state.history_log, []);
+  assert.deepEqual(state.player_alliance, []);
+  assert.equal(state.military_tech_level, 1);
 });
 
 test('adds timestamped narrative records without mutating the prior state', () => {
@@ -111,6 +114,40 @@ test('chronicles completed civilian research', () => {
 
   assert.equal(result.history_log.at(-1).type, 'tecnologia');
   assert.match(result.history_log.at(-1).text, /IA Logistica/);
+});
+
+test('forms a player alliance and grants a shared GDP growth bonus', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    geopolitics: {
+      ...state.geopolitics,
+      contacts: state.geopolitics.contacts.map((contact) => contact.id === 'arg'
+        ? { ...contact, tradeTreaty: true, relation: 50 }
+        : contact),
+    },
+  };
+
+  const result = criarLiga(prepared, 'arg');
+
+  assert.deepEqual(result.player_alliance, ['arg']);
+  assert.equal(result.geopolitics.contacts.find((contact) => contact.id === 'arg').alliance, true);
+  assert.equal(result.geopolitics.tradeGrowthBonus, 0.001);
+});
+
+test('charges military maintenance once per month and penalizes morale when cash is negative', () => {
+  const state = createGameState('bra');
+  const prepared = {
+    ...state,
+    economy: { ...state.economy, cash: 0 },
+    military_tech_level: 2,
+    military: { ...state.military, support: 60, exercito: { soldados: 100_000, blindados: 10 }, marinha: { navios: 0 }, aeronautica: { cacas: 0 } },
+  };
+
+  const result = advanceMonth(prepared);
+
+  assert.ok(result.economy.cash < 0);
+  assert.ok(result.military.support < prepared.military.support);
 });
 
 test('keeps the five most recent news headlines', async () => {

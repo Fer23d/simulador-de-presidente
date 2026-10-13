@@ -4,6 +4,7 @@ import { BUDGET_LIMITS, projectBudget } from '../core/economy.js';
 import { LAWS } from '../core/laws.js';
 import { TECHNOLOGIES } from '../core/technology.js';
 import { MILITARY_TECHNOLOGIES } from '../core/tech_tree.js';
+import { calculateMilitaryMaintenance } from '../core/military.js';
 import { MINISTERS } from '../core/ministers.js';
 import { getFactionSupport } from '../core/factions.js';
 import { canPromulgarConstituicao } from '../core/constitution.js';
@@ -32,6 +33,7 @@ import {
   hydrateGameState,
   negotiate,
   proposeAlliance,
+  criarLiga,
   proposeTreaty,
   researchTechnology,
   resolveEvent,
@@ -335,8 +337,9 @@ export function militaryView(state) {
   const marinha = military.marinha ?? { navios: 0 };
   const aeronautica = military.aeronautica ?? { cacas: 0 };
   const nuclear = military.nuclear ?? {};
+  const maintenance = calculateMilitaryMaintenance(military, state.military_tech_level);
   const canCoup = state.regime.type === 'democracy' && military.support >= 85 && state.budget.defenseSpend >= 0.06;
-  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Tríade militar</p><h2>Poder total ${Number(military.power || 0).toFixed(1)}</h2><p class="notice">${state.notice}</p><div class="branch-list"><article class="branch-row"><div><strong>Exercito</strong><span>${formatNumber.format(exercito.soldados)} soldados | ${formatNumber.format(exercito.blindados)} blindados</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="recruit">Recrutar soldados</button><button type="button" class="quiet-action" data-action="buy-tank">Comprar blindado</button></div></article><article class="branch-row"><div><strong>Marinha</strong><span>${formatNumber.format(marinha.navios)} navios operacionais</span></div><button type="button" class="quiet-action" data-action="buy-ship">Comprar navio</button></article><article class="branch-row"><div><strong>Aeronautica</strong><span>${formatNumber.format(aeronautica.cacas)} cacas operacionais</span></div><button type="button" class="quiet-action" data-action="buy-jet">Comprar caca</button></article></div><div class="ledger-row"><span>Apoio militar</span><strong>${Number(military.support || 0).toFixed(0)}%</strong></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section><section class="panel"><p class="eyebrow">Arsenal estrategico</p><h2>Programa nuclear</h2><div class="ledger-row"><span>Energia civil</span><strong>${Number(nuclear.civilProgress || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Dissuasao militar</span><strong>${Number(nuclear.militaryProgress || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Armas nucleares</span><strong>${Number(military.armasNucleares || 0)}</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="nuclear" data-kind="civil" data-amount="5000000000">Energia 5 bi</button><button type="button" class="quiet-action" data-action="nuclear" data-kind="military" data-amount="5000000000">Dissuasao 5 bi</button></div></section>${renderMilitaryResearchProjects(state)}</section>`;
+  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Tríade militar</p><h2>Poder total ${Number(military.power || 0).toFixed(1)}</h2><p class="notice">${state.notice}</p><div class="branch-list"><article class="branch-row"><div><strong>Exercito</strong><span>${formatNumber.format(exercito.soldados)} soldados | ${formatNumber.format(exercito.blindados)} blindados</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="recruit">Recrutar soldados</button><button type="button" class="quiet-action" data-action="buy-tank">Comprar blindado</button></div></article><article class="branch-row"><div><strong>Marinha</strong><span>${formatNumber.format(marinha.navios)} navios operacionais</span></div><button type="button" class="quiet-action" data-action="buy-ship">Comprar navio</button></article><article class="branch-row"><div><strong>Aeronautica</strong><span>${formatNumber.format(aeronautica.cacas)} cacas operacionais</span></div><button type="button" class="quiet-action" data-action="buy-jet">Comprar caca</button></article></div><div class="ledger-row"><span>Apoio militar</span><strong>${Number(military.support || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>CUSTO DE MANUTENÇÃO MENSAL</span><strong>${formatMoney(maintenance)}</strong></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section><section class="panel"><p class="eyebrow">Arsenal estrategico</p><h2>Programa nuclear</h2><div class="ledger-row"><span>Energia civil</span><strong>${Number(nuclear.civilProgress || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Dissuasao militar</span><strong>${Number(nuclear.militaryProgress || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Armas nucleares</span><strong>${Number(military.armasNucleares || 0)}</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="nuclear" data-kind="civil" data-amount="5000000000">Energia 5 bi</button><button type="button" class="quiet-action" data-action="nuclear" data-kind="military" data-amount="5000000000">Dissuasao 5 bi</button></div></section>${renderMilitaryResearchProjects(state)}</section>`;
 }
 
 function cabinetView(state) {
@@ -361,7 +364,7 @@ function countriesView(state) {
 
 export function historyView(state) {
   const entries = state.history_log ?? [];
-  return `<section id="tab-historico" class="panel historical-register"><div class="panel-heading"><div><p class="eyebrow">Arquivo presidencial</p><h2>&gt; REGISTRO HISTORICO</h2></div><span class="country-code">${entries.length} EVENTOS</span></div><div id="history-log" class="history-terminal" aria-live="polite">${entries.length ? entries.map((entry) => {
+  return `<section id="tab-historico" class="panel historical-register"><div class="panel-heading"><div><p class="eyebrow">Arquivo presidencial</p><h2>&gt; DIARIO DA NACAO</h2></div><span class="country-code">${entries.length} CRONICAS</span></div><div id="history-log" class="history-terminal" aria-live="polite">${entries.length ? entries.map((entry) => {
     const month = MONTHS[(entry.month ?? 1) - 1]?.toUpperCase() ?? 'MES DESCONHECIDO';
     const mandateYear = Math.max(1, (entry.year ?? 2026) - 2025);
     const type = escapeHtml(entry.type);
@@ -518,6 +521,7 @@ export function mountDashboard(root) {
   }
 
   window.logHistoryEvent = (type, text) => commit(registrarEventoHistorico(state, type, text));
+  window.criarLiga = (targetId) => commit(criarLiga(state, targetId));
 
   function fecharModalVotacao() {
     pendingCongressLawId = null;
@@ -681,7 +685,7 @@ export function mountDashboard(root) {
     if (action === 'leader-double') { commit(infiltrarSosiaLider(state, control.dataset.contact)); return; }
     if (action === 'treaty') { commit(proposeTreaty(state, control.dataset.contact)); return; }
     if (action === 'resource-import') { commit(importarRecursos(state, control.dataset.contact, control.dataset.resource, Number(control.dataset.amount))); return; }
-    if (action === 'alliance') { commit(proposeAlliance(state, control.dataset.contact)); return; }
+    if (action === 'alliance') { window.criarLiga(control.dataset.contact); return; }
     if (action === 'war') { commit(startWar(state, control.dataset.contact)); return; }
     if (action === 'peace') { commit(resolvePeaceTreaty(state, control.dataset.contact, control.dataset.choice)); return; }
     if (action === 'league-create') { commit(createLeague(state, 'Liga Global')); return; }

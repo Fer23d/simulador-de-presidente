@@ -84,6 +84,14 @@ test('renders the historical register as a CRT terminal log', async () => {
   assert.match(markup, /history-entry--guerra/);
 });
 
+test('renders alliance maintenance cost in the military tab', async () => {
+  const { militaryView } = await import('../src/ui/dashboard.js');
+  const { createGameState } = await import('../src/core/game-state.js');
+  const markup = militaryView({ ...createGameState('bra'), military_tech_level: 2 });
+
+  assert.match(markup, /CUSTO DE MANUTENÇÃO MENSAL/);
+});
+
 test('renders a blocking UN Assembly voting dialog', async () => {
   const { renderUnAssembly } = await import('../src/ui/dashboard.js');
 
