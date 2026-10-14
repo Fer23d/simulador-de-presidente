@@ -1,7 +1,7 @@
 import { createCongress, negotiateSupport, voteOnLaw } from './congress.js';
 import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countries.js';
 import { DEFAULT_BUDGET, advanceEconomy, clampTaxRate, setBudgetRate } from './economy.js';
-import { advanceGeopolitics, anexarPais as annexTreatyTarget, alterarNotaONU as changeOnuScore, aplicarReparacoes as applyReparationsTreaty, createGeopolitics, criarLiga as createLeagueState, desmilitarizarPais as demilitarizeTreatyTarget, declareWar, exigirAnexacao as demandAnnexation, getGeopoliticalModifiers, insultarNacao as insultNation, importarRecursos as importResources, imporSancao as imposeSanction, interceptArticle5 as detectArticle5, inviteToLeague as inviteLeagueMember, isLegitimateDefenseTarget, processarAgressaoIA, proposeAlliance as formAlliance, proposeTradeTreaty, respondArticle5 as respondArticle5State, sabotar as sabotageCountry, saquearTesouro as lootTreatyTarget } from './geopolitics.js';
+import { advanceGeopolitics, anexarPais as annexTreatyTarget, alterarNotaONU as changeOnuScore, aplicarReparacoes as applyReparationsTreaty, createGeopolitics, criarLiga as createLeagueState, desmilitarizarPais as demilitarizeTreatyTarget, declareWar, estabelecerFantoche as establishPuppet, exigirAnexacao as demandAnnexation, getGeopoliticalModifiers, insultarNacao as insultNation, importarRecursos as importResources, imporSancao as imposeSanction, interceptArticle5 as detectArticle5, inviteToLeague as inviteLeagueMember, isLegitimateDefenseTarget, processarAgressaoIA, proposeAlliance as formAlliance, proposeTradeTreaty, respondArticle5 as respondArticle5State, sabotar as sabotageCountry, saquearTesouro as lootTreatyTarget } from './geopolitics.js';
 import { advanceMilitary, applyNuclearCompletion, calculateMilitaryMaintenance, canAutogolpe, comprarBlindados, comprarCacas, comprarEquipamento, comprarNavios, createMilitary, createRegime, evaluateRegime, fundNuclearProject, getPoderTotal, normalizeMilitary, recrutarSoldado as recruitSoldiers } from './military.js';
 import { aggregateActiveLawEffects, LAWS, LAW_LABOR_REFORM } from './laws.js';
 import { advanceTechnology, createTechnology, getTechnologyModifiers, purchaseTechnology } from './technology.js';
@@ -603,6 +603,7 @@ export function resolvePeaceTreaty(state, contactId, choice) {
     : result;
   if (choice === 'annex') return consumeLegitimacy(anexarPais(state, contactId));
   if (choice === 'loot') return consumeLegitimacy(syncWorld(lootTreatyTarget(state)));
+  if (choice === 'puppet') return consumeLegitimacy(syncWorld(establishPuppet(state)));
   if (choice === 'demilitarize') return consumeLegitimacy(syncWorld(demilitarizeTreatyTarget(state)));
   if (choice === 'reparations') return consumeLegitimacy(syncWorld(applyReparationsTreaty(state)));
   return { ...state, notice: 'Termo de tratado invalido.' };

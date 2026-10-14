@@ -470,7 +470,7 @@ export function renderPeaceTreaty(state) {
     <p class="eyebrow">Tratado de Paz Obrigatorio</p>
     <h2 id="tratado-titulo">${target.name} foi derrotado</h2>
     <p class="notice">Decida o destino do territorio antes de encerrar outro mes.</p>
-    <div class="action-row"><button type="button" class="quiet-action danger-action" data-action="ui-annex">Anexar</button><button type="button" class="primary-action" data-action="ui-loot">Saquear Tesouro</button><button type="button" class="quiet-action" data-action="ui-demilitarize">Desmilitarizar</button><button type="button" class="quiet-action" data-action="ui-reparations">Reparacoes</button></div>
+    <div class="action-row"><button type="button" class="quiet-action danger-action" data-action="ui-annex">Anexar</button><button type="button" class="primary-action" data-action="ui-loot">Saquear Tesouro</button><button type="button" class="quiet-action" data-action="ui-puppet">Instalar Fantoche</button><button type="button" class="quiet-action" data-action="ui-demilitarize">Desmilitarizar</button><button type="button" class="quiet-action" data-action="ui-reparations">Reparacoes</button></div>
   </section>`;
 }
 
@@ -697,11 +697,13 @@ export function mountDashboard(root) {
 
   window.uiAnexar = () => resolvePendingTreaty('annex');
   window.uiSaquear = () => resolvePendingTreaty('loot');
+  window.uiFantoche = () => resolvePendingTreaty('puppet');
 
   treatyModal?.addEventListener('click', (event) => {
     const action = event.target.closest('[data-action]')?.dataset.action;
     if (action === 'ui-annex') window.uiAnexar();
     if (action === 'ui-loot') window.uiSaquear();
+    if (action === 'ui-puppet') window.uiFantoche();
     if (action === 'ui-demilitarize') resolvePendingTreaty('demilitarize');
     if (action === 'ui-reparations') resolvePendingTreaty('reparations');
   });

@@ -446,6 +446,24 @@ export function saquearTesouro(state) {
   return { ...state, economy: { ...state.economy, cash: state.economy.cash + loot }, geopolitics, notice: `${target.name} foi saqueado; recursos foram transferidos ao Tesouro.` };
 }
 
+export function estabelecerFantoche(state) {
+  const target = treatyTarget(state);
+  if (!target || Number(target.militaryPower) > 0) return { ...state, notice: 'Um governo fantoche exige um tratado de paz pendente.' };
+  const defensiveVictory = Boolean(state.geopolitics.peaceTreaty?.defensiveVictory || target.defensiveWar || target.warInitiator === target.id);
+  const geopolitics = alterarNotaONU({
+    ...state.geopolitics,
+    peaceTreaty: null,
+    contacts: state.geopolitics.contacts.map((contact) => contact.id === target.id
+      ? { ...contact, puppet: true, is_puppet_of: 'jogador', atWar: false, alliance: false, relation: 35, militaryPower: Math.max(1, Number(contact.militaryPower) || 1) }
+      : contact),
+  }, defensiveVictory ? 0 : -12);
+  return {
+    ...state,
+    geopolitics,
+    notice: `${target.name} aceitou um governo fantoche sob tutela presidencial.`,
+  };
+}
+
 export function desmilitarizarPais(state) {
   const target = treatyTarget(state);
   if (!target || Number(target.militaryPower) > 0) return { ...state, notice: 'Desmilitarizacao exige tratado pendente com alvo derrotado.' };
