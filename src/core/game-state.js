@@ -397,10 +397,22 @@ export function insultarNacao(state, contactId) {
     notice: result.retaliation
       ? `O insulto saiu caro: ${result.target.name} declarou guerra contra nos.`
       : `${result.target.name} foi insultado. A crise diplomatica continua em aberto.`,
-    pendingHostileAlert: result.retaliation
+    pendingHostileAlert: result.retaliation && !result.nuclearRetaliation
       ? { type: 'war', targetId: result.target.id, targetName: result.target.name, dismissed: false }
       : null,
   });
+  if (result.nuclearRetaliation) {
+    const nuclearState = {
+      ...next,
+      global_defcon: 1,
+      notice: `${result.target.name} respondeu ao insulto com retaliacao nuclear.`,
+    };
+    if (state.vault_built) return checkStoryChapters({ ...enterWasteland(nuclearState, 'retaliacao-nuclear-insulto'), global_defcon: 1, pendingHostileAlert: null });
+    return resolverFinalDeJogo({
+      ...nuclearState,
+      regime: { ...nuclearState.regime, gameOver: true, outcome: 'aniquilacao-nuclear-por-retaliacao', electionsSuspended: true },
+    });
+  }
   return result.retaliation
     ? addNews(next, `Alerta militar: ${result.target.name} declarou guerra apos um insulto presidencial.`)
     : next;
@@ -738,9 +750,12 @@ export function researchTechnology(state, technologyId) {
 export function pesquisarTecnologiaMilitar(state, technologyId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = pesquisarTecnologia(state, technologyId);
-  return result.unlocked_techs.length > (state.unlocked_techs?.length ?? 0)
-    ? checkStoryEvents(registrarEventoHistorico(addNews(result, result.notice), 'tecnologia', result.notice))
+  const researched = result.unlocked_techs.includes('nuke') && !result.country.has_nukes
+    ? { ...result, country: { ...result.country, has_nukes: true } }
     : result;
+  return researched.unlocked_techs.length > (state.unlocked_techs?.length ?? 0)
+    ? checkStoryEvents(registrarEventoHistorico(addNews(researched, researched.notice), 'tecnologia', researched.notice))
+    : researched;
 }
 
 export function dispensarHistoria(state) {
@@ -1012,6 +1027,7 @@ export function hydrateGameState(serialized) {
         industry_automated: Boolean(parsed.country?.industry_automated),
         bio_infected: Boolean(parsed.country?.bio_infected),
         bio_timer: Math.max(0, Math.floor(Number(parsed.country?.bio_timer) || 0)),
+        has_nukes: base.country.has_nukes,
       },
       calendar: {
         month: clamp(Math.floor(Number(calendar.month) || 1), 1, 12),
@@ -1055,6 +1071,7 @@ export function hydrateGameState(serialized) {
         contacts: base.geopolitics.contacts.map((baseContact) => ({
           ...baseContact,
           ...(parsed.geopolitics.contacts.find((savedContact) => savedContact?.id === baseContact.id) ?? {}),
+          has_nukes: baseContact.has_nukes,
         })),
       } : base.geopolitics,
       military: parsed.version >= 2 && parsed.military && Number.isFinite(parsed.military.power) && Number.isFinite(parsed.military.support)

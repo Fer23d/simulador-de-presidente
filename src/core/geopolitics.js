@@ -34,8 +34,9 @@ export function createGeopolitics(playerId = 'bra') {
       uranium: country.uranium,
       steel: country.steel,
       rare_earths: country.rare_earths,
+      has_nukes: country.has_nukes === true,
       cyber_defense: country.trait === 'tech_giant' ? 70 : country.trait === 'financial_hub' ? 55 : country.trait === 'military_tradition' ? 45 : 30,
-      nuclearWeapons: ['chn', 'fra', 'gbr', 'ind', 'isr', 'pak', 'prk', 'rus', 'usa'].includes(country.id) ? 1 : 0,
+      nuclearWeapons: country.has_nukes === true ? 1 : 0,
       trait: country.trait,
       military: {
         exercito: { soldados: Math.max(2_000, Math.round(country.populacao_base * 0.00022)), blindados: Math.max(1, Math.floor(Math.log10(country.pib_base) - 6)) },
@@ -165,6 +166,7 @@ export function insultarNacao(geopolitics, contactId, seed) {
   const random = nextRandom(seed);
   const relation = clamp((Number(target.relation) || 0) - 30, -100, 100);
   const retaliation = relation < 15 && random.value < 0.5;
+  const nuclearRetaliation = retaliation && target.has_nukes === true && relation <= 0;
   const updated = updateContact(geopolitics, contactId, (item) => ({
     ...item,
     relation,
@@ -177,6 +179,7 @@ export function insultarNacao(geopolitics, contactId, seed) {
   return {
     ok: true,
     retaliation,
+    nuclearRetaliation,
     target: { id: target.id, name: target.name },
     seed: random.seed,
     geopolitics: updated,
@@ -197,7 +200,7 @@ export function processarAgressaoIA(state, probability = 0.03) {
       random = nextRandom(random.seed);
       return contact;
     }
-    if (state.global_defcon === 1 && Number(contact.nuclearWeapons) > 0 && (Number(contact.relation) || 0) < 0) {
+    if (state.global_defcon === 1 && contact.has_nukes === true && (Number(contact.relation) || 0) < 0) {
       nuclearAttack = contact;
       return {
         ...contact,

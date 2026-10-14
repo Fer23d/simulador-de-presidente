@@ -281,6 +281,8 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .bloc-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .bloc-row div, .law-row > div { display: grid; min-width: 0; gap: 4px; }
 .bloc-row strong, .law-row strong { color: var(--phosphor); font-size: 15px; }
+.nuclear-threat-badge { display: inline-block; margin-left: 8px; border: 2px solid #ff003c; padding: 3px 6px; color: #ff4a68; background: rgba(70, 0, 12, .7); font-family: "Press Start 2P", monospace; font-size: 9px; line-height: 1.4; text-shadow: 0 0 8px rgba(255, 0, 60, .85); box-shadow: 0 0 10px rgba(255, 0, 60, .35); animation: nuclear-badge-pulse 1.1s steps(2, end) infinite; white-space: nowrap; }
+@keyframes nuclear-badge-pulse { 50% { color: #ffd166; border-color: #ffd166; box-shadow: 0 0 16px rgba(255, 209, 102, .62); } }
 .bloc-row span, .law-row span:not(.bill-state) { color: var(--muted); font-size: 13px; line-height: 1.35; }
 .bloc-row .action-row { flex-wrap: wrap; justify-content: flex-end; }
 .wasteland-contact { border-left: 4px solid var(--danger); padding-left: 10px; }

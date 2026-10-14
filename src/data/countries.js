@@ -1029,6 +1029,7 @@ const TRAIT_OVERRIDES = Object.freeze({
   che: 'financial_hub', sgp: 'financial_hub', ven: 'oil_rich',
 });
 const GENERIC_TRAITS = Object.freeze(['oil_rich', 'military_tradition', 'tech_giant', 'agri_power', 'financial_hub']);
+const REAL_NUCLEAR_POWERS = Object.freeze(new Set(['usa', 'rus', 'chn', 'fra', 'gbr', 'ind', 'pak', 'isr', 'prk']));
 
 function hash(value) {
   return [...value].reduce((total, character) => ((total * 31) + character.charCodeAt(0)) >>> 0, 2166136261);
@@ -1054,7 +1055,12 @@ function resourcesForCountry(country) {
   };
 }
 
-export const COUNTRIES = Object.freeze(COUNTRY_SEED.map((country) => Object.freeze({ ...country, trait: traitForCountry(country.id), ...resourcesForCountry(country) })));
+export const COUNTRIES = Object.freeze(COUNTRY_SEED.map((country) => Object.freeze({
+  ...country,
+  trait: traitForCountry(country.id),
+  has_nukes: REAL_NUCLEAR_POWERS.has(country.id),
+  ...resourcesForCountry(country),
+})));
 
 export function validateCountries(countries) {
   if (!Array.isArray(countries) || countries.length !== 200) {
@@ -1063,8 +1069,8 @@ export function validateCountries(countries) {
 
   const ids = new Set();
   for (const country of countries) {
-    if (!country?.id || !country.nome || !country.trait || !Number.isFinite(country.area_km2) || country.area_km2 <= 0 || !Number.isFinite(country.uranium) || !Number.isFinite(country.steel) || !Number.isFinite(country.rare_earths)) {
-      throw new Error('Cada pais precisa de id, nome, trait, recursos e area positiva.');
+    if (!country?.id || !country.nome || !country.trait || typeof country.has_nukes !== 'boolean' || !Number.isFinite(country.area_km2) || country.area_km2 <= 0 || !Number.isFinite(country.uranium) || !Number.isFinite(country.steel) || !Number.isFinite(country.rare_earths)) {
+      throw new Error('Cada pais precisa de id, nome, trait, status nuclear, recursos e area positiva.');
     }
     if (ids.has(country.id)) {
       throw new Error(`ID de pais duplicado: ${country.id}`);
