@@ -11,6 +11,7 @@ import { getFactionSupport } from '../core/factions.js';
 import { canPromulgarConstituicao } from '../core/constitution.js';
 import { RESOLUTIONS } from '../core/un_assembly.js';
 import { getStoryEvent } from '../core/story_engine.js';
+import { LORE_CHAPTERS, STORY_NOTICE } from '../core/story_lore.js';
 import { INTERNAL_PROJECTS } from '../core/infrastructure.js';
 import {
   advanceMonth,
@@ -434,6 +435,14 @@ export function historyView(state) {
   }).join('') : '<p class="notice">&gt; Nenhum evento marcante foi registrado.</p>'}</div></section>`;
 }
 
+export function storyModeView(state) {
+  const chapterIds = Array.isArray(state.unlocked_chapters) && state.unlocked_chapters.length
+    ? state.unlocked_chapters
+    : ['cap_1_origem'];
+  const chapters = chapterIds.map((id) => LORE_CHAPTERS[id]).filter(Boolean);
+  return `<section id="tab-modo-historia" class="panel story-manifesto"><div class="panel-heading"><div><p class="eyebrow">Arquivo pessoal // acesso do chefe de Estado</p><h2>&gt; MODO HISTÓRIA</h2></div><span class="country-code">${chapters.length} CAPÍTULO${chapters.length === 1 ? '' : 'S'}</span></div><p class="story-intro">Este é o meu manifesto. Cada capítulo foi desbloqueado por uma decisão que mudou o destino da nação.</p><div id="story-manifesto" class="story-book" aria-live="polite">${chapters.map((chapter, index) => `<article class="story-chapter ${index === chapters.length - 1 ? 'latest' : ''}"><p class="story-chapter-number">/// ARQUIVO ${String(index + 1).padStart(2, '0')} ///</p><h2>${escapeHtml(chapter.title)}</h2><p class="story-chapter-text">${escapeHtml(chapter.text)}</p><p class="story-signature">— O Presidente</p></article>`).join('')}</div></section>`;
+}
+
 export function renderNews(state) {
   const news = (state.news ?? []).slice(0, 5);
   return `<aside class="news-feed" aria-label="Giro de Noticias"><div class="panel-heading"><div><p class="eyebrow">Giro de Noticias</p><h2>Ultimas manchetes</h2></div></div><ol>${news.length ? news.map((item) => `<li><span>${MONTHS[(item.calendar?.month ?? 1) - 1]} ${item.calendar?.year ?? ''}</span>${item.text}</li>`).join('') : '<li><span>Agora</span>O gabinete aguarda a primeira decisao.</li>'}</ol></aside>`;
@@ -524,7 +533,7 @@ export function mountDashboard(root) {
       ['technology', 'Tecnologia'],
       ['projects', 'Projetos Internos'],
       ['congress', 'Congresso'],
-      ['history', '> REGISTRO HISTORICO'],
+      ['history', '> MODO HISTÓRIA'],
       ['countries', 'Paises'],
     ];
     const content = activeTab === 'budget' ? budgetView(state, projection)
@@ -534,7 +543,7 @@ export function mountDashboard(root) {
           : activeTab === 'technology' ? technologyView(state)
             : activeTab === 'projects' ? projectsView(state)
       : activeTab === 'congress' ? congressView(state)
-        : activeTab === 'history' ? historyView(state)
+        : activeTab === 'history' ? storyModeView(state)
         : activeTab === 'countries' ? countriesView(state)
           : overviewView(state, projection);
     root.innerHTML = `<div class="app-shell">
@@ -542,6 +551,7 @@ export function mountDashboard(root) {
       <section class="workspace"><header class="topbar"><div><p class="eyebrow">${state.title ?? 'Presidente'}</p><h1>${state.is_wasteland ? 'ANO ZERO POS-BOMBA' : `${MONTHS[state.calendar.month - 1]} de ${state.calendar.year}`}</h1></div><div class="topbar-actions"><label class="country-picker"><span>Pais</span><select data-action="select-country" aria-label="Selecionar pais">${COUNTRIES.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((country) => `<option value="${country.id}" ${country.id === state.country.id ? 'selected' : ''}>${country.nome}</option>`).join('')}</select></label><button type="button" class="quiet-action" data-action="reset">Reiniciar</button></div></header>
       <section class="metrics">${metric('PIB', formatMoney(state.economy.gdp))}${metric('Inflacao', formatPercent(state.economy.inflation), state.economy.inflation > 0.1 ? 'negative' : '')}${metric('Desemprego', formatPercent(state.economy.unemployment))}${metric('Apoio interno', `${getFactionSupport(state.factions).toFixed(0)}%`, getFactionSupport(state.factions) >= 55 ? 'positive' : '')}${metric('Caixa nacional', formatMoney(state.economy.cash))}${metric('DEFCON', `DEFCON: ${state.global_defcon}`, `defcon-${state.global_defcon}`)}${metric('Saldo projetado', formatMoney(projection.monthlyBalance), projection.monthlyBalance >= 0 ? 'positive' : 'negative')}</section>
       ${storageNotice ? `<p class="storage-notice">${storageNotice}</p>` : ''}
+      ${state.notice === STORY_NOTICE ? `<p class="storage-notice story-notification" role="status">${STORY_NOTICE}</p>` : ''}
       <section class="content-area">${content}</section>${renderNews(state)}
     </section></div>`;
     if (treatyModal) {
@@ -576,7 +586,7 @@ export function mountDashboard(root) {
     if (allianceModal) { const markup = renderAllianceInvocation(state); allianceModal.hidden = !markup; allianceModal.innerHTML = markup; }
     if (governmentModal) { const markup = renderGovernmentModal(state); governmentModal.hidden = !markup; governmentModal.innerHTML = markup; }
     if (activeTab === 'history') {
-      const historyLog = root.querySelector('#history-log');
+      const historyLog = root.querySelector('#story-manifesto, #history-log');
       if (historyLog) historyLog.scrollTop = historyLog.scrollHeight;
     }
     if (activeTab === 'diplomacy') filterDiplomacyRows(root, diplomacyQuery);

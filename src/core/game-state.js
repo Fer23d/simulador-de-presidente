@@ -31,10 +31,11 @@ import { iniciarProjetoMaoMorta as startDeadHandProject, interceptarGameOverComM
 import { desviarFundos, interceptarFinalCaixa2, isEscapeEligible } from './corruption.js';
 import { escolherInterrogatorio as chooseInterrogation, reivindicarInterrogatorio as claimInterrogation, resolverInterrogatorio as resolveInterrogation, sortearCapturaAgente } from './interrogation.js';
 import { checkStoryEvents, dismissStory as dismissNarrativeStory, gerarEntradaDiario, getStoryEvent } from './story_engine.js';
+import { checkStoryChapters, getLoreChapter } from './story_lore.js';
 import { advanceGovernment, applyGovernmentEconomy, openAutoCoup, resolveAutoCoup, resolveCorporateDefault } from './politics.js';
 import { advanceWastelandMonth, buildMegaVault, buildWastelandProject, enviarBatedores, transicionarParaWasteland as transitionToWasteland } from './wasteland.js';
 
-const STATE_VERSION = 14;
+const STATE_VERSION = 15;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 
 function clamp(value, minimum, maximum) {
@@ -90,7 +91,7 @@ export function addNews(state, text) {
 
 function interceptDeadHandGameOver(state) {
   const result = interceptarGameOverComMaoMorta(state);
-  if (result.dead_hand_triggered && state.vault_built) return transitionToWasteland(result, 'mao-morta');
+  if (result.dead_hand_triggered && state.vault_built) return enterWasteland(result, 'mao-morta');
   return result.dead_hand_triggered && !state.dead_hand_triggered
     ? addNews(syncWorld(result), 'Diretriz Omega executada: os silos da Mao Morta lancaram contra todos os alvos.')
     : result;
@@ -114,6 +115,10 @@ function resolverFinalDeJogo(state) {
       : result;
   }
   return interceptDeadHandGameOver(state);
+}
+
+function enterWasteland(state, reason) {
+  return checkStoryChapters(transitionToWasteland(state, reason));
 }
 
 function isValidCongress(congress) {
@@ -198,6 +203,7 @@ export function createGameState(countryId = 'bra') {
     laws: Object.fromEntries(LAWS.map((law) => [law.stateKey, { approved: false, voteCompleted: false }])),
     history: [],
     history_log: [],
+    unlocked_chapters: ['cap_1_origem'],
     news: [],
     pendingEvent: null,
     pendingAllianceInvocation: null,
@@ -257,7 +263,7 @@ export function desviarFundosParaCaixa2(state) {
   if (state.pendingFinalDilemma) return { ...state, notice: 'Resolva o dilema final antes de executar novas acoes.' };
   const result = desviarFundos(state);
   return result.slush_fund !== state.slush_fund
-    ? checkStoryEvents(registrarEventoHistorico(addNews(result, `Caixa 2 atualizado: R$ ${result.slush_fund.toLocaleString('pt-BR')}.`), 'corrupcao', 'Fundos foram desviados para uma conta offshore.'))
+    ? checkStoryChapters(checkStoryEvents(registrarEventoHistorico(addNews(result, `Caixa 2 atualizado: R$ ${result.slush_fund.toLocaleString('pt-BR')}.`), 'corrupcao', 'Fundos foram desviados para uma conta offshore.')))
     : result;
 }
 
@@ -363,7 +369,7 @@ export function startWar(state, contactId) {
       ? `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'} por decreto imperial.`
       : `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'} sob alegacao de legitima defesa.`)
     : `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'}.`;
-  return registrarEventoHistorico(addNews(syncWorld({ ...next, geopolitics, notice }), notice), 'guerra', `Declarada guerra contra ${target?.name ?? 'um alvo estrangeiro'}. O mundo sustem a respiracao.`);
+  return checkStoryChapters(registrarEventoHistorico(addNews(syncWorld({ ...next, geopolitics, notice }), notice), 'guerra', `Declarada guerra contra ${target?.name ?? 'um alvo estrangeiro'}. O mundo sustem a respiracao.`));
 }
 
 export function declararGuerra(state, contactId) {
@@ -426,7 +432,7 @@ export function executarAutoGolpe(state) {
 
 export function resolverAutoGolpe(state, government) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
-  return resolveAutoCoup(state, government);
+  return checkStoryChapters(resolveAutoCoup(state, government));
 }
 
 export function construirMegaVault(state) {
@@ -443,7 +449,7 @@ export function enviarBatedoresWasteland(state, factionId) {
 }
 
 export function transicionarParaWastelandMode(state, reason) {
-  return transitionToWasteland(state, reason);
+  return enterWasteland(state, reason);
 }
 
 export { transicionarParaWastelandMode as transicionarParaWasteland };
@@ -617,7 +623,7 @@ export function lancarAtaqueNuclear(state, contactId) {
     geopolitics: { ...state.geopolitics, contacts, onuScore: 0, internationalSanctions: true, sanctionSeverity: 1 },
     notice: `Ataque nuclear contra ${contact.name}: reputacao na ONU colapsou.`,
   });
-  return state.vault_built ? transitionToWasteland(result, 'ataque-nuclear') : result;
+  return state.vault_built ? enterWasteland(result, 'ataque-nuclear') : result;
 }
 
 export function canAutorizarAniquilacaoNuclear(state) {
@@ -663,7 +669,7 @@ export function autorizarAniquilacaoNuclear(state, contactId, authorizationCode)
     onuReputationPermanentlyZero: true,
     notice: `${target.name} foi reduzido a uma zona de aniquilacao nuclear.`,
   }), `${target.name} foi reduzido a uma zona de aniquilacao nuclear.`);
-  return state.vault_built ? transitionToWasteland(result, 'ataque-nuclear') : result;
+  return state.vault_built ? enterWasteland(result, 'ataque-nuclear') : result;
 }
 
 export function fundNuclear(state, kind, amount) {
@@ -908,27 +914,27 @@ export function advanceMonth(state) {
   const defconState = applyDefconEconomicShock(advanceDefcon(withNews));
   if (defconState.global_defcon === 1 && !defconState.defcon_one_triggered) {
     const defconCollapse = defconState.vault_built
-      ? transitionToWasteland({ ...defconState, defcon_one_triggered: true }, 'defcon-1')
+      ? enterWasteland({ ...defconState, defcon_one_triggered: true }, 'defcon-1')
       : {
         ...defconState,
         defcon_one_triggered: true,
         regime: { ...defconState.regime, gameOver: true, outcome: 'aniquilacao-nuclear', electionsSuspended: true },
         notice: 'DEFCON 1: a destruicao global encerrou a civilizacao.',
       };
-    return checkStoryEvents(defconCollapse);
+    return checkStoryChapters(checkStoryEvents(defconCollapse));
   }
   const globalBidState = verificarSedeGlobal(defconState);
   if (globalBidState.pendingGlobalBid) return addNews(globalBidState, globalBidState.notice);
   const assemblyState = verificarAssembleia(defconState);
   if (assemblyState.pendingUnVote) return addNews(assemblyState, assemblyState.notice);
   const eventRoll = rollMonthlyEvent(stability.seed);
-  if (!eventRoll.event) return checkStoryEvents(sortearCapturaAgente({ ...assemblyState, randomSeed: eventRoll.seed }));
-  return checkStoryEvents(addNews({
+  if (!eventRoll.event) return checkStoryChapters(checkStoryEvents(sortearCapturaAgente({ ...assemblyState, randomSeed: eventRoll.seed })));
+  return checkStoryChapters(checkStoryEvents(addNews({
     ...assemblyState,
     randomSeed: eventRoll.seed,
     pendingEvent: eventRoll.event,
     notice: `Crise nacional: ${eventRoll.event.title}.`,
-  }, `Alerta: ${eventRoll.event.title}.`));
+  }, `Alerta: ${eventRoll.event.title}.`)));
 }
 
 export function hydrateGameState(serialized) {
@@ -1030,6 +1036,9 @@ export function hydrateGameState(serialized) {
       })),
       history: isValidHistory(parsed.history) ? parsed.history.slice(0, 12) : [],
       history_log: isValidHistoryLog(parsed.history_log) ? parsed.history_log : [],
+      unlocked_chapters: Array.isArray(parsed.unlocked_chapters)
+        ? [...new Set(['cap_1_origem', ...parsed.unlocked_chapters.filter((id) => typeof id === 'string' && getLoreChapter(id))])]
+        : base.unlocked_chapters,
       ministers: {
         ...base.ministers,
         economy: parsed.ministers?.economy?.id === 'economy' ? { id: 'economy' } : null,
