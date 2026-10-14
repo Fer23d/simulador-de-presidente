@@ -31,6 +31,8 @@ import { iniciarProjetoMaoMorta as startDeadHandProject, interceptarGameOverComM
 import { desviarFundos, interceptarFinalCaixa2, isEscapeEligible } from './corruption.js';
 import { escolherInterrogatorio as chooseInterrogation, reivindicarInterrogatorio as claimInterrogation, resolverInterrogatorio as resolveInterrogation, sortearCapturaAgente } from './interrogation.js';
 import { checkStoryEvents, dismissStory as dismissNarrativeStory, gerarEntradaDiario, getStoryEvent } from './story_engine.js';
+import { advanceGovernment, applyGovernmentEconomy, openAutoCoup, resolveAutoCoup, resolveCorporateDefault } from './politics.js';
+import { advanceWastelandMonth, buildMegaVault, buildWastelandProject, enviarBatedores, transicionarParaWasteland as transitionToWasteland } from './wasteland.js';
 
 const STATE_VERSION = 14;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
@@ -88,6 +90,7 @@ export function addNews(state, text) {
 
 function interceptDeadHandGameOver(state) {
   const result = interceptarGameOverComMaoMorta(state);
+  if (result.dead_hand_triggered && state.vault_built) return transitionToWasteland(result, 'mao-morta');
   return result.dead_hand_triggered && !state.dead_hand_triggered
     ? addNews(syncWorld(result), 'Diretriz Omega executada: os silos da Mao Morta lancaram contra todos os alvos.')
     : result;
@@ -167,6 +170,13 @@ export function createGameState(countryId = 'bra') {
     calendar: { month: 1, year: 2026 },
     economy: createEconomy(country),
     budget: { ...DEFAULT_BUDGET },
+    government: 'republic',
+    title: 'Presidente',
+    pendingGovernmentChoice: false,
+    is_wasteland: false,
+    vault_built: false,
+    scrap: 0,
+    wastelandBuildings: { waterPurifiers: 0, geothermalGenerators: 0 },
     infrastructure: { roads: 0, railways: 0, airports: 0 },
     health: { hospitals: 0, clinics: 0 },
     industry: { factories: 0, power_plants: 0 },
@@ -203,6 +213,7 @@ export function createGameState(countryId = 'bra') {
     global_defcon: 5,
     defconPeacefulMonths: 0,
     defconAnnexationMonths: 0,
+    defcon_one_triggered: false,
     nuclearSanctionsPending: false,
     onuReputationPermanentlyZero: false,
     just_war_target: null,
@@ -345,10 +356,12 @@ export function startWar(state, contactId) {
   const next = applyGeopoliticalAction(state, (geopolitics) => declareWar(geopolitics, contactId));
   if (next.geopolitics === state.geopolitics) return next;
   const target = next.geopolitics.contacts.find((contact) => contact.id === contactId);
-  const legitimateDefense = isLegitimateDefenseTarget(state, contactId);
+  const legitimateDefense = isLegitimateDefenseTarget(state, contactId) || state.government === 'empire';
   const geopolitics = legitimateDefense ? next.geopolitics : changeOnuScore(next.geopolitics, -18);
   const notice = legitimateDefense
-    ? `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'} sob alegacao de legitima defesa.`
+    ? (state.government === 'empire'
+      ? `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'} por decreto imperial.`
+      : `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'} sob alegacao de legitima defesa.`)
     : `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'}.`;
   return registrarEventoHistorico(addNews(syncWorld({ ...next, geopolitics, notice }), notice), 'guerra', `Declarada guerra contra ${target?.name ?? 'um alvo estrangeiro'}. O mundo sustem a respiracao.`);
 }
@@ -405,6 +418,35 @@ export function construirProjetoInterno(state, projectId) {
   const result = buildInternalProject(state, projectId);
   return result === state ? result : addNews(result, result.notice);
 }
+
+export function executarAutoGolpe(state) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return openAutoCoup(state);
+}
+
+export function resolverAutoGolpe(state, government) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return resolveAutoCoup(state, government);
+}
+
+export function construirMegaVault(state) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return buildMegaVault(state);
+}
+
+export function construirProjetoWasteland(state, projectId) {
+  return buildWastelandProject(state, projectId);
+}
+
+export function enviarBatedoresWasteland(state, factionId) {
+  return enviarBatedores(state, factionId);
+}
+
+export function transicionarParaWastelandMode(state, reason) {
+  return transitionToWasteland(state, reason);
+}
+
+export { transicionarParaWastelandMode as transicionarParaWasteland };
 
 export function candidatarJogosMundiais(state) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
@@ -569,12 +611,13 @@ export function lancarAtaqueNuclear(state, contactId) {
   const contacts = state.geopolitics.contacts.map((item) => item.id === contactId
     ? { ...item, militaryPower: item.militaryPower * 0.2, population: Math.floor((Number(item.population) || 0) * 0.2), nuclearStruck: true, alliance: false }
     : { ...item, alliance: false });
-  return syncWorld({
+  const result = syncWorld({
     ...state,
     military: normalizeMilitary({ ...state.military, armasNucleares: arsenal - 1, nuclear: { ...state.military.nuclear, arsenal: Math.max(0, arsenal - 1) } }),
     geopolitics: { ...state.geopolitics, contacts, onuScore: 0, internationalSanctions: true, sanctionSeverity: 1 },
     notice: `Ataque nuclear contra ${contact.name}: reputacao na ONU colapsou.`,
   });
+  return state.vault_built ? transitionToWasteland(result, 'ataque-nuclear') : result;
 }
 
 export function canAutorizarAniquilacaoNuclear(state) {
@@ -610,7 +653,7 @@ export function autorizarAniquilacaoNuclear(state, contactId, authorizationCode)
       relation: -100,
     }
     : { ...contact, alliance: false });
-  return addNews(syncWorld({
+  const result = addNews(syncWorld({
     ...state,
     country: { ...state.country, uranium: Number(state.country.uranium) - 100 },
     geopolitics: { ...state.geopolitics, contacts, onuScore: 0, internationalSanctions: true, sanctionSeverity: 1 },
@@ -620,6 +663,7 @@ export function autorizarAniquilacaoNuclear(state, contactId, authorizationCode)
     onuReputationPermanentlyZero: true,
     notice: `${target.name} foi reduzido a uma zona de aniquilacao nuclear.`,
   }), `${target.name} foi reduzido a uma zona de aniquilacao nuclear.`);
+  return state.vault_built ? transitionToWasteland(result, 'ataque-nuclear') : result;
 }
 
 export function fundNuclear(state, kind, amount) {
@@ -728,6 +772,7 @@ export function voteLaborLaw(state) {
 
 export function advanceMonth(state) {
   if (state.regime?.gameOver) return resolverFinalDeJogo({ ...state, notice: 'A partida foi encerrada.' });
+  if (state.is_wasteland) return advanceWastelandMonth(state);
   if (state.geopolitics.peaceTreaty?.status === 'pending') return { ...state, notice: 'Resolva o Tratado de Paz antes de avancar o mes.' };
   if (state.pendingEvent) return { ...state, notice: 'Resolva a crise nacional antes de avancar o mes.' };
   if (state.pendingUnVote) return { ...state, notice: 'Registre seu voto na Assembleia da ONU antes de avancar o mes.' };
@@ -735,6 +780,7 @@ export function advanceMonth(state) {
   if (state.pendingInterrogation) return { ...state, notice: 'Resolva o interrogatorio antes de avancar o mes.' };
   if (state.pendingStory) return { ...state, notice: 'Leia o dossie confidencial antes de avancar o mes.' };
   if (state.pendingAllianceInvocation) return { ...state, notice: 'Decida se a alianca sera defendida antes de avancar o mes.' };
+  state = advanceGovernment(state);
   if (state.nuclearSanctionsPending) {
     state = {
       ...state,
@@ -749,7 +795,7 @@ export function advanceMonth(state) {
   const ministerModifiers = getMinisterModifiers(state.ministers);
   const corporateModifiers = getMegacorpModifiers(corporateState.megacorp_power);
   const softPowerModifiers = getSoftPowerModifiers(corporateState);
-  const monthlyEffects = { ...effects, taxRevenueModifier: (effects.taxRevenueModifier ?? 0) + ministerModifiers.taxRevenueModifier + corporateModifiers.taxRevenueModifier };
+  const monthlyEffects = applyGovernmentEconomy(state, { ...effects, taxRevenueModifier: (effects.taxRevenueModifier ?? 0) + ministerModifiers.taxRevenueModifier + corporateModifiers.taxRevenueModifier });
   const technology = state.regime?.constitution === 'theocratic'
     ? { ...state.technology, generated: 0 }
     : advanceTechnology(state.technology, state.economy, state.budget, state.country.trait);
@@ -846,6 +892,8 @@ export function advanceMonth(state) {
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
   });
+  const corporateDefault = resolveCorporateDefault(completedState);
+  if (corporateDefault.regime?.gameOver) return resolverFinalDeJogo(corporateDefault);
   const article5State = detectArticle5(completedState);
   if (article5State.pendingAllianceInvocation) return article5State;
   const narrativeState = registrarEventoHistorico(completedState, 'diario', gerarEntradaDiario(completedState, state));
@@ -858,6 +906,17 @@ export function advanceMonth(state) {
     ? addNews(addNews(syncWorld(resolvedState), notice), 'Alerta sanitario: o pais esta sob ataque biologico silencioso.')
     : addNews(syncWorld(resolvedState), notice);
   const defconState = applyDefconEconomicShock(advanceDefcon(withNews));
+  if (defconState.global_defcon === 1 && !defconState.defcon_one_triggered) {
+    const defconCollapse = defconState.vault_built
+      ? transitionToWasteland({ ...defconState, defcon_one_triggered: true }, 'defcon-1')
+      : {
+        ...defconState,
+        defcon_one_triggered: true,
+        regime: { ...defconState.regime, gameOver: true, outcome: 'aniquilacao-nuclear', electionsSuspended: true },
+        notice: 'DEFCON 1: a destruicao global encerrou a civilizacao.',
+      };
+    return checkStoryEvents(defconCollapse);
+  }
   const globalBidState = verificarSedeGlobal(defconState);
   if (globalBidState.pendingGlobalBid) return addNews(globalBidState, globalBidState.notice);
   const assemblyState = verificarAssembleia(defconState);
@@ -888,6 +947,7 @@ export function hydrateGameState(serialized) {
       ...base,
       country: {
         ...base.country,
+        nome: typeof parsed.country?.nome === 'string' ? parsed.country.nome : base.country.nome,
         area_km2: countryIsWasteland ? 0 : (Number.isFinite(Number(parsed.country?.area_km2)) ? Math.max(1, Number(parsed.country.area_km2)) : base.country.area_km2),
         populacao: countryIsWasteland ? 0 : (Number.isFinite(Number(parsed.country?.populacao ?? parsed.country?.populacao_base)) ? Math.max(1, Number(parsed.country.populacao ?? parsed.country.populacao_base)) : base.country.populacao),
         populacao_base: countryIsWasteland ? 0 : (Number.isFinite(Number(parsed.country?.populacao_base ?? parsed.country?.populacao)) ? Math.max(1, Number(parsed.country.populacao_base ?? parsed.country.populacao)) : base.country.populacao_base),
@@ -1012,6 +1072,17 @@ export function hydrateGameState(serialized) {
       global_defcon: clamp(Math.floor(Number(parsed.global_defcon) || base.global_defcon), 1, 5),
       defconPeacefulMonths: Math.max(0, Math.floor(Number(parsed.defconPeacefulMonths) || 0)),
       defconAnnexationMonths: Math.max(0, Math.floor(Number(parsed.defconAnnexationMonths) || 0)),
+      defcon_one_triggered: Boolean(parsed.defcon_one_triggered),
+      government: ['republic', 'empire', 'corporate'].includes(parsed.government) ? parsed.government : base.government,
+      title: typeof parsed.title === 'string' ? parsed.title : base.title,
+      pendingGovernmentChoice: Boolean(parsed.pendingGovernmentChoice),
+      is_wasteland: Boolean(parsed.is_wasteland),
+      vault_built: Boolean(parsed.vault_built || parsed.megaprojects?.megaVault?.completed),
+      scrap: Math.max(0, Number(parsed.scrap) || 0),
+      wastelandBuildings: {
+        waterPurifiers: Math.max(0, Math.floor(Number(parsed.wastelandBuildings?.waterPurifiers) || 0)),
+        geothermalGenerators: Math.max(0, Math.floor(Number(parsed.wastelandBuildings?.geothermalGenerators) || 0)),
+      },
       nuclearSanctionsPending: Boolean(parsed.nuclearSanctionsPending),
       onuReputationPermanentlyZero: Boolean(parsed.onuReputationPermanentlyZero),
       just_war_target: typeof parsed.just_war_target === 'string' ? parsed.just_war_target : null,
@@ -1023,6 +1094,7 @@ export function hydrateGameState(serialized) {
             completed: Boolean(parsed.megaprojects.deadHand.completed),
           }
           : null,
+        megaVault: parsed.megaprojects?.megaVault?.completed ? { completed: true } : null,
       },
       dead_hand_active: Boolean(parsed.dead_hand_active),
       dead_hand_triggered: Boolean(parsed.dead_hand_triggered),

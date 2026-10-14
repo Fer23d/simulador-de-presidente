@@ -21,6 +21,8 @@ import {
   comprarMaterialMilitar,
   comprarNavio,
   attemptAutogolpe,
+  executarAutoGolpe,
+  resolverAutoGolpe,
   changeTax,
   createGameState,
   decretarRevolucaoSocialista,
@@ -52,6 +54,9 @@ import {
   lancarCiberataque,
   automatizarIndustria,
   construirProjetoInterno,
+  construirMegaVault,
+  construirProjetoWasteland,
+  enviarBatedoresWasteland,
   executarFalsaBandeira,
   iniciarProjetoMaoMorta,
   lancarVirusSintetico,
@@ -155,7 +160,7 @@ function overviewView(state, projection) {
         <div><span>Lei Trabalhista</span><strong>${state.laws.laborReform.approved ? 'Aprovada' : state.laws.laborReform.voteCompleted ? 'Rejeitada' : 'Pendente'}</strong></div>
         <div><span>Forca corporativa</span><strong>${Number(state.megacorp_power || 0).toFixed(0)} / 100</strong></div>
       </div>
-      <button type="button" class="primary-action" data-action="advance" ${treatyPending ? 'disabled' : ''}>Avancar mes <span aria-hidden="true">→</span></button>
+      <button type="button" class="primary-action" data-action="advance" ${treatyPending ? 'disabled' : ''}>${state.is_wasteland ? '[ AVANÇAR MÊS (ANO ZERO PÓS-BOMBA) ]' : 'Avancar mes'} <span aria-hidden="true">→</span></button>
     </section>
     <section class="panel country-panel">
       <div class="panel-heading"><div><p class="eyebrow">Nacao</p><h2>${state.country.nome}</h2></div><span class="country-code">${state.country.id.toUpperCase()}</span></div>
@@ -249,6 +254,9 @@ function riskDiplomacyView(state) {
 }
 
 export function diplomacyView(state, searchQuery = '') {
+  if (state.is_wasteland) {
+    return `<section class="panel wasteland-diplomacy"><div class="panel-heading"><div><p class="eyebrow">Superficie devastada</p><h2>Faccoes do Ermo</h2></div><span class="country-code">SUCATA ${formatNumber.format(state.scrap ?? 0)}</span></div><p class="notice">A diplomacia antiga morreu. Envie batedores, negocie com os sobreviventes e defenda o Vault.</p><div class="diplomacy-list">${(state.geopolitics.contacts ?? []).map((contact) => `<article class="bloc-row"><div><strong>${escapeHtml(contact.name)}</strong><span>Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)}</span></div><button type="button" class="quiet-action" data-action="wasteland-scout" data-contact="${contact.id}" ${state.scrap >= 25 ? '' : 'disabled'}>[ ENVIAR BATEDORES ]</button></article>`).join('')}</div></section>`;
+  }
   const treaty = state.geopolitics.peaceTreaty;
   const target = treaty && state.geopolitics.contacts.find((contact) => contact.id === treaty.targetId);
   const contacts = (state.world ?? state.geopolitics.contacts)
@@ -291,6 +299,10 @@ export function renderAllianceInvocation(state) {
 }
 
 export function projectsView(state) {
+  if (state.is_wasteland) {
+    const buildings = state.wastelandBuildings ?? {};
+    return `<section class="panel projects-panel wasteland-projects"><div class="panel-heading"><div><p class="eyebrow">Ano Zero Pos-Bomba</p><h2>Economia de Sucata</h2></div><span class="country-code">SUCATA ${formatNumber.format(state.scrap ?? 0)}</span></div><p class="notice">A superficie morreu. O Vault agora mede o tempo em filtros, geradores e invasoes.</p><div class="internal-metrics"><span>POPULACAO ${formatNumber.format(state.country.populacao_base)}</span><span>PURIFICADORES ${buildings.waterPurifiers ?? 0}</span><span>GERADORES ${buildings.geothermalGenerators ?? 0}</span></div><article class="project-row"><div><strong>Purificador de Agua</strong><span>Custo: 50 sucatas | Mantem o Vault vivo.</span></div><button type="button" class="primary-action" data-action="wasteland-project" data-project="water-purifier" ${state.scrap >= 50 ? '' : 'disabled'}>[ CONSTRUIR ]</button></article><article class="project-row"><div><strong>Gerador Geotermico</strong><span>Custo: 100 sucatas | Alimenta as portas de metal.</span></div><button type="button" class="primary-action" data-action="wasteland-project" data-project="geothermal-generator" ${state.scrap >= 100 ? '' : 'disabled'}>[ CONSTRUIR ]</button></article></section>`;
+  }
   const automated = Boolean(state.country.industry_automated);
   const canAutomate = state.economy.cash >= 200_000_000_000 && state.technology.points >= 250;
   const deadHand = state.megaprojects?.deadHand;
@@ -298,6 +310,8 @@ export function projectsView(state) {
   const deadHandReady = deadHandUnlocked && state.economy.cash >= 1_000_000_000_000 && state.technology.points >= 1_000 && state.country.uranium >= 250;
   const deadHandLabel = state.dead_hand_active ? 'Rede ativa: retaliacao automatica armada.' : deadHand?.remainingMonths > 0 ? `Construcao em curso: ${deadHand.remainingMonths} meses.` : 'Custo: R$ 1 tri, 1.000 PP e 250 uranio. Prazo: 12 meses.';
   const deadHandProject = deadHandUnlocked ? `<article class="project-row ${state.dead_hand_active ? 'completed' : ''}"><div><strong>Construir Rede Mao Morta (IA)</strong><span>${deadHandLabel}</span></div><button type="button" class="quiet-action danger-action" data-action="dead-hand-project" ${state.dead_hand_active || deadHand?.remainingMonths > 0 || !deadHandReady ? 'disabled' : ''}>${state.dead_hand_active ? 'Rede ativa' : deadHand?.remainingMonths > 0 ? 'Em construcao' : 'Iniciar Rede'}</button></article>` : '';
+  const vaultReady = state.economy.cash >= 500_000_000_000 && state.country.steel >= 50_000;
+  const vaultProject = `<article class="project-row ${state.vault_built ? 'completed' : ''}"><div><strong>MEGA-VAULT DE CONTENCAO</strong><span>${state.vault_built ? 'Bunker operacional: a civilizacao ainda pode sobreviver.' : 'Custo: R$ 500 bi e 50.000 aco. Protege contra o colapso nuclear global.'}</span></div><button type="button" class="${state.vault_built ? 'quiet-action' : 'danger-action'}" data-action="mega-vault" ${state.vault_built || !vaultReady ? 'disabled' : ''}>${state.vault_built ? 'Vault operacional' : '[ CONSTRUIR VAULT ]'}</button></article>`;
   const internalMaintenance = calculateInternalMaintenance(state);
   const internalProjects = INTERNAL_PROJECTS.map((project) => {
     const count = Number(state[project.target]?.[project.field]) || 0;
@@ -307,7 +321,7 @@ export function projectsView(state) {
   const infrastructure = state.infrastructure ?? {};
   const health = state.health ?? {};
   const industry = state.industry ?? {};
-  return `<section class="panel projects-panel"><div class="panel-heading"><div><p class="eyebrow">Capacidade nacional</p><h2>Projetos Internos</h2></div><span class="country-code">ACO ${formatNumber.format(state.country.steel)}</span></div><div class="internal-metrics"><span>AMBIENTE ${Number(state.environment_health ?? 100).toFixed(0)}%</span><span>MANUTENCAO ${formatMoney(internalMaintenance)}/mes</span><span>ESTRADAS ${infrastructure.roads ?? 0} | FERROVIAS ${infrastructure.railways ?? 0} | AEROPORTOS ${infrastructure.airports ?? 0}</span><span>HOSPITAIS ${health.hospitals ?? 0} | CLINICAS ${health.clinics ?? 0}</span><span>FABRICAS ${industry.factories ?? 0} | USINAS ${industry.power_plants ?? 0}</span></div>${internalProjects}<article class="project-row ${automated ? 'completed' : ''}"><div><strong>Automatizar Parque Industrial</strong><span>${automated ? 'Industria 4.0 ativa: +3.000 aco por mes e pressao constante sobre trabalhadores.' : 'Custo: R$ 200 bi e 250 PP. Triplica a producao mensal de aco.'}</span></div><button type="button" class="${automated ? 'quiet-action' : 'primary-action'}" data-action="automate-industry" ${automated || !canAutomate ? 'disabled' : ''}>${automated ? 'Automatizado' : 'Automatizar'}</button></article>${deadHandProject}</section>`;
+  return `<section class="panel projects-panel"><div class="panel-heading"><div><p class="eyebrow">Capacidade nacional</p><h2>Projetos Internos</h2></div><span class="country-code">ACO ${formatNumber.format(state.country.steel)}</span></div><div class="internal-metrics"><span>AMBIENTE ${Number(state.environment_health ?? 100).toFixed(0)}%</span><span>MANUTENCAO ${formatMoney(internalMaintenance)}/mes</span><span>ESTRADAS ${infrastructure.roads ?? 0} | FERROVIAS ${infrastructure.railways ?? 0} | AEROPORTOS ${infrastructure.airports ?? 0}</span><span>HOSPITAIS ${health.hospitals ?? 0} | CLINICAS ${health.clinics ?? 0}</span><span>FABRICAS ${industry.factories ?? 0} | USINAS ${industry.power_plants ?? 0}</span></div>${internalProjects}<article class="project-row ${automated ? 'completed' : ''}"><div><strong>Automatizar Parque Industrial</strong><span>${automated ? 'Industria 4.0 ativa: +3.000 aco por mes e pressao constante sobre trabalhadores.' : 'Custo: R$ 200 bi e 250 PP. Triplica a producao mensal de aco.'}</span></div><button type="button" class="${automated ? 'quiet-action' : 'primary-action'}" data-action="automate-industry" ${automated || !canAutomate ? 'disabled' : ''}>${automated ? 'Automatizado' : 'Automatizar'}</button></article>${vaultProject}${deadHandProject}</section>`;
 }
 
 export function renderDeadHandTerminal(state) {
@@ -380,10 +394,21 @@ export function militaryView(state) {
 }
 
 function cabinetView(state) {
-  return `<section class="panel cabinet-panel"><div class="panel-heading"><div><p class="eyebrow">Equipe de governo</p><h2>Gabinete de Ministros</h2></div></div><div class="minister-list">${MINISTERS.map((minister) => {
+  const coupAvailable = state.government === 'republic' && state.economy.cash >= 500_000_000_000;
+  const governmentCard = state.government === 'republic'
+    ? `<article class="minister-row coup-row"><div><strong>Auto-Golpe de Estado</strong><span>Abandona a Republica por um Imperio Nacional ou Sindicato Corporativo.</span></div><button type="button" class="danger-action" data-action="auto-coup-open" ${coupAvailable ? '' : 'disabled'}>[ EXECUTAR AUTO-GOLPE (R$ 500 BI) ]</button></article>`
+    : `<article class="minister-row completed"><div><strong>${state.title}</strong><span>Regime ativo: ${state.government === 'empire' ? 'hostilidade imperial crescente' : 'tributacao corporativa duplicada'}.</span></div></article>`;
+  return `<section class="panel cabinet-panel"><div class="panel-heading"><div><p class="eyebrow">Equipe de governo</p><h2>Gabinete de Ministros</h2></div></div><div class="minister-list">${governmentCard}${MINISTERS.map((minister) => {
     const active = Boolean(state.ministers?.[minister.id]);
     return `<article class="minister-row"><div><strong>${minister.title}</strong><span>${minister.description}</span></div>${active ? `<button type="button" class="quiet-action" data-action="minister-dismiss" data-minister="${minister.id}">Demitir (+3 aprovacao)</button>` : `<button type="button" class="quiet-action" data-action="minister-hire" data-minister="${minister.id}">Contratar ${formatMoney(minister.cost)}</button>`}</article>`;
   }).join('')}</div></section>`;
+}
+
+function renderGovernmentModal(state) {
+  if (!state.pendingGovernmentChoice) return '';
+  return `<section class="modal-arcade-dialog" role="dialog" aria-modal="true" aria-labelledby="government-choice-title"><p class="modal-arcade-header">/// AUTO-GOLPE: NOVA ORDEM ///</p><h2 id="government-choice-title">ESCOLHA O DONO DO ESTADO</h2><pre class="ascii-constitution">A REPUBLICA FOI SILENCIADA.
+O CAIXA PAGOU PELA MUDANCA.
+ESCOLHA O REGIME QUE SOBREVIVERA.</pre><div class="constitution-options"><button type="button" class="constitution-choice" data-action="government-select" data-government="empire">[ IMPERIO NACIONAL ]<span>Exercito brutal. ONU ignorada. O mundo se torna hostil.</span></button><button type="button" class="constitution-choice" data-action="government-select" data-government="corporate">[ SINDICATO CORPORATIVO ]<span>Impostos em dobro. Se o caixa quebrar, vem a aquisicao hostil.</span></button></div></section>`;
 }
 
 function technologyView(state) {
@@ -481,12 +506,14 @@ export function mountDashboard(root) {
   const interrogationModal = document.getElementById('modal-interrogatorio');
   const storyModal = document.getElementById('modal-historia');
   const allianceModal = document.getElementById('modal-alianca');
+  const governmentModal = document.getElementById('modal-auto-golpe');
   const congressLawTitle = document.getElementById('congresso-lei-titulo');
   const congressLawDescription = document.getElementById('congresso-lei-descricao');
   let pendingCongressLawId = null;
   let pendingNukeTargetId = null;
 
   function render() {
+    if (typeof document !== 'undefined' && document.body) document.body.classList.toggle('wasteland-mode', Boolean(state.is_wasteland));
     const projection = projectBudget(state.economy, state.budget);
     const tabs = [
       ['overview', 'Visao geral'],
@@ -512,7 +539,7 @@ export function mountDashboard(root) {
           : overviewView(state, projection);
     root.innerHTML = `<div class="app-shell">
       <aside class="sidebar"><div class="brand"><span class="brand-mark">SP</span><div><strong>Simulador</strong><small>de Presidente</small></div></div><nav class="tab-list" aria-label="Navegacao principal">${tabs.map(([id, label]) => `<button type="button" class="tab-button ${activeTab === id ? 'active' : ''}" data-action="tab" data-tab="${id}">${label}</button>`).join('')}</nav><div class="sidebar-footer"><span>Mandato em curso</span><strong>${state.calendar.year}</strong></div></aside>
-      <section class="workspace"><header class="topbar"><div><p class="eyebrow">Mandato presidencial</p><h1>${MONTHS[state.calendar.month - 1]} de ${state.calendar.year}</h1></div><div class="topbar-actions"><label class="country-picker"><span>Pais</span><select data-action="select-country" aria-label="Selecionar pais">${COUNTRIES.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((country) => `<option value="${country.id}" ${country.id === state.country.id ? 'selected' : ''}>${country.nome}</option>`).join('')}</select></label><button type="button" class="quiet-action" data-action="reset">Reiniciar</button></div></header>
+      <section class="workspace"><header class="topbar"><div><p class="eyebrow">${state.title ?? 'Presidente'}</p><h1>${state.is_wasteland ? 'ANO ZERO POS-BOMBA' : `${MONTHS[state.calendar.month - 1]} de ${state.calendar.year}`}</h1></div><div class="topbar-actions"><label class="country-picker"><span>Pais</span><select data-action="select-country" aria-label="Selecionar pais">${COUNTRIES.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((country) => `<option value="${country.id}" ${country.id === state.country.id ? 'selected' : ''}>${country.nome}</option>`).join('')}</select></label><button type="button" class="quiet-action" data-action="reset">Reiniciar</button></div></header>
       <section class="metrics">${metric('PIB', formatMoney(state.economy.gdp))}${metric('Inflacao', formatPercent(state.economy.inflation), state.economy.inflation > 0.1 ? 'negative' : '')}${metric('Desemprego', formatPercent(state.economy.unemployment))}${metric('Apoio interno', `${getFactionSupport(state.factions).toFixed(0)}%`, getFactionSupport(state.factions) >= 55 ? 'positive' : '')}${metric('Caixa nacional', formatMoney(state.economy.cash))}${metric('DEFCON', `DEFCON: ${state.global_defcon}`, `defcon-${state.global_defcon}`)}${metric('Saldo projetado', formatMoney(projection.monthlyBalance), projection.monthlyBalance >= 0 ? 'positive' : 'negative')}</section>
       ${storageNotice ? `<p class="storage-notice">${storageNotice}</p>` : ''}
       <section class="content-area">${content}</section>${renderNews(state)}
@@ -547,6 +574,7 @@ export function mountDashboard(root) {
     if (interrogationModal) { const markup = renderInterrogation(state); interrogationModal.hidden = !markup; interrogationModal.style.display = markup ? '' : 'none'; interrogationModal.innerHTML = markup; }
     if (storyModal) { const markup = renderStoryCard(state); storyModal.hidden = !markup; storyModal.innerHTML = markup; }
     if (allianceModal) { const markup = renderAllianceInvocation(state); allianceModal.hidden = !markup; allianceModal.innerHTML = markup; }
+    if (governmentModal) { const markup = renderGovernmentModal(state); governmentModal.hidden = !markup; governmentModal.innerHTML = markup; }
     if (activeTab === 'history') {
       const historyLog = root.querySelector('#history-log');
       if (historyLog) historyLog.scrollTop = historyLog.scrollHeight;
@@ -623,6 +651,11 @@ export function mountDashboard(root) {
     }
 
     const nextState = autorizarAniquilacaoNuclear(state, pendingNukeTargetId, nukeCode.value.trim());
+    if (nextState.is_wasteland) {
+      fecharModalNuclear();
+      commit(nextState);
+      return;
+    }
     const target = nextState.geopolitics.contacts.find((contact) => contact.id === pendingNukeTargetId);
     if (!target?.wasteland) {
       nukeFeedback.textContent = nextState.notice;
@@ -719,6 +752,11 @@ export function mountDashboard(root) {
     if (decision) commit(respondArticle5(state, decision));
   });
 
+  governmentModal?.addEventListener('click', (event) => {
+    const government = event.target.closest('[data-action="government-select"]')?.dataset.government;
+    if (government) commit(resolverAutoGolpe(state, government));
+  });
+
   root.addEventListener('click', (event) => {
     const control = event.target.closest('[data-action]');
     if (!control || control.disabled) return;
@@ -744,6 +782,7 @@ export function mountDashboard(root) {
     if (action === 'union-absorb') { commit(absorverPaisParaUniao(state, control.dataset.contact)); return; }
     if (action === 'socialist-revolution') { commit(decretarRevolucaoSocialista(state)); return; }
     if (action === 'constitution-open') { abrirModalConstituicao(); return; }
+    if (action === 'auto-coup-open') { commit(executarAutoGolpe(state)); return; }
     if (action === 'sanction') { commit(imporSancao(state, control.dataset.contact)); return; }
     if (action === 'ultimatum') { commit(exigirAnexacao(state, control.dataset.contact)); return; }
     if (action === 'nuclear-strike') { commit(lancarAtaqueNuclear(state, control.dataset.contact)); return; }
@@ -760,6 +799,9 @@ export function mountDashboard(root) {
     if (action === 'military-research') { commit(pesquisarTecnologiaMilitar(state, control.dataset.technology)); return; }
     if (action === 'automate-industry') { commit(automatizarIndustria(state)); return; }
     if (action === 'internal-project') { commit(construirProjetoInterno(state, control.dataset.project)); return; }
+    if (action === 'mega-vault') { commit(construirMegaVault(state)); return; }
+    if (action === 'wasteland-project') { commit(construirProjetoWasteland(state, control.dataset.project)); return; }
+    if (action === 'wasteland-scout') { commit(enviarBatedoresWasteland(state, control.dataset.contact)); return; }
     if (action === 'dead-hand-project') { commit(iniciarProjetoMaoMorta(state)); return; }
     if (action === 'nationalize-megacorps') { commit(estatizarMegacorporacoes(state)); return; }
     if (action === 'negotiate') { commit(negotiate(state, control.dataset.bloc)); return; }

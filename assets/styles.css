@@ -19,6 +19,12 @@
 html { background: var(--void); }
 body { min-width: 320px; margin: 0; background: var(--void); color: var(--phosphor); font-size: 16px; text-shadow: 0 0 5px rgba(141, 255, 174, .33); }
 body::selection { background: var(--phosphor); color: var(--void); text-shadow: none; }
+.wasteland-mode { --void: #120b06; --screen: #21130a; --panel: #2a180b; --line: #8a4d1f; --line-hot: #ff9d3d; --phosphor: #ffb347; --cyan: #ffd27a; --amber: #ff7a18; --danger: #ff3d21; --muted: #c17b45; --quiet: #75401f; --shadow: #050201; background: var(--void); color: var(--phosphor); text-shadow: 0 0 5px rgba(255, 157, 61, .42); }
+.wasteland-mode .brand-mark { border-color: var(--phosphor); color: var(--phosphor); box-shadow: 4px 4px 0 var(--shadow), inset 0 0 12px rgba(255, 157, 61, .24); }
+.wasteland-mode .tab-button:hover, .wasteland-mode .tab-button.active { background: var(--phosphor); color: var(--void); }
+.wasteland-mode .app-shell, .wasteland-mode .sidebar { background: var(--void); }
+.wasteland-mode .sidebar { background: var(--screen); }
+.wasteland-mode .wasteland-projects { border-color: var(--amber); box-shadow: 0 0 18px rgba(255, 122, 24, .2); }
 button, input, select { font: inherit; }
 button { border-radius: 0; cursor: pointer; }
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
