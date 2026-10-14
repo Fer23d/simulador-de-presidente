@@ -15,7 +15,13 @@ import { financiarRebeldes as fundRebels } from './espionage.js';
 import { aplicarResolucoes, registrarVotoONU, verificarAssembleia } from './un_assembly.js';
 import { processarMigracoes } from './demographics.js';
 import { advanceCyberWarfare, lancarCiberataque as launchCyberAttack } from './cyber_warfare.js';
-import { automatizarIndustria as automateIndustry, processarAutomacaoIndustrial } from './infrastructure.js';
+import {
+  automatizarIndustria as automateIndustry,
+  buildInternalProject,
+  getInternalProjectModifiers,
+  processarAutomacaoIndustrial,
+  processarProjetosInternos,
+} from './infrastructure.js';
 import { aplicarEfeitosSoftPower, candidatarJogosMundiais as bidForGlobalGames, getSoftPowerModifiers, recusarCandidaturaGlobal, verificarSedeGlobal } from './soft_power.js';
 import { estatizarMegacorporacoes as nationalizeMegacorps, getMegacorpModifiers, isLobbyBlocked, processarMegacorporacoes } from './megacorps.js';
 import { advanceDefcon, applyDefconEconomicShock, markAnnexationTension } from './defcon.js';
@@ -26,7 +32,7 @@ import { desviarFundos, interceptarFinalCaixa2, isEscapeEligible } from './corru
 import { escolherInterrogatorio as chooseInterrogation, reivindicarInterrogatorio as claimInterrogation, resolverInterrogatorio as resolveInterrogation, sortearCapturaAgente } from './interrogation.js';
 import { checkStoryEvents, dismissStory as dismissNarrativeStory, gerarEntradaDiario, getStoryEvent } from './story_engine.js';
 
-const STATE_VERSION = 13;
+const STATE_VERSION = 14;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 
 function clamp(value, minimum, maximum) {
@@ -161,6 +167,11 @@ export function createGameState(countryId = 'bra') {
     calendar: { month: 1, year: 2026 },
     economy: createEconomy(country),
     budget: { ...DEFAULT_BUDGET },
+    infrastructure: { roads: 0, railways: 0, airports: 0 },
+    health: { hospitals: 0, clinics: 0 },
+    industry: { factories: 0, power_plants: 0 },
+    environment_health: 100,
+    internal_maintenance_cost: 0,
     geopolitics,
     world: geopolitics.contacts,
     military: createMilitary(country),
@@ -387,6 +398,12 @@ export function automatizarIndustria(state) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = automateIndustry(state);
   return result.country === state.country ? result : addNews(result, result.notice);
+}
+
+export function construirProjetoInterno(state, projectId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = buildInternalProject(state, projectId);
+  return result === state ? result : addNews(result, result.notice);
 }
 
 export function candidatarJogosMundiais(state) {
@@ -740,20 +757,26 @@ export function advanceMonth(state) {
   const technologyModifiers = getTechnologyModifiers(technology);
   const geopoliticalModifiers = getGeopoliticalModifiers(state.geopolitics, state.military);
   const traitModifiers = getTraitModifiers(state.country, state.geopolitics);
+  const internalProjectModifiers = getInternalProjectModifiers(state, technologyModifiers);
   const modifiers = {
     ...geopoliticalModifiers,
-    growthModifier: geopoliticalModifiers.growthModifier + technologyModifiers.growthModifier + factionModifiers.growthModifier,
+    growthModifier: geopoliticalModifiers.growthModifier + technologyModifiers.growthModifier + factionModifiers.growthModifier + internalProjectModifiers.growthModifier,
     infrastructureCostModifier: geopoliticalModifiers.infrastructureCostModifier + technologyModifiers.infrastructureCostModifier,
     popularityModifier: geopoliticalModifiers.factionModifier + technologyModifiers.popularityModifier,
     tradeRevenueRate: geopoliticalModifiers.tradeRevenueRate + traitModifiers.exportRevenueRate,
     inflationModifier: traitModifiers.foodInflationModifier + technologyModifiers.foodInflationModifier,
-    cashRevenueModifier: softPowerModifiers.cashRevenueModifier,
+    cashRevenueModifier: softPowerModifiers.cashRevenueModifier + internalProjectModifiers.cashRevenueModifier,
   };
   const economyAfterPolicy = advanceEconomy(state.economy, state.budget, monthlyEffects, modifiers);
   const traitInterest = economyAfterPolicy.cash > 0 ? economyAfterPolicy.cash * traitModifiers.cashInterest : 0;
   const economicMonth = { ...economyAfterPolicy, cash: economyAfterPolicy.cash + traitInterest };
-  const militaryMaintenance = calculateMilitaryMaintenance(state.military, state.military_tech_level);
-  const economyAfterMilitaryMaintenance = { ...economicMonth, cash: economicMonth.cash - militaryMaintenance };
+  const internalProjectState = processarProjetosInternos({ ...state, economy: economicMonth }, technologyModifiers);
+  const economyAfterInternalMaintenance = {
+    ...internalProjectState.economy,
+    cash: internalProjectState.economy.cash - internalProjectState.internal_maintenance_cost,
+  };
+  const militaryMaintenance = Math.round(calculateMilitaryMaintenance(state.military, state.military_tech_level) * technologyModifiers.militaryMaintenanceModifier);
+  const economyAfterMilitaryMaintenance = { ...economyAfterInternalMaintenance, cash: economyAfterInternalMaintenance.cash - militaryMaintenance };
   const nuclearResult = applyNuclearCompletion(changeOnuScore(state.geopolitics, effects.onuModifier ?? 0), state.military);
   const nuclear = state.onuReputationPermanentlyZero
     ? { ...nuclearResult, geopolitics: { ...nuclearResult.geopolitics, onuScore: 0, internationalSanctions: true, sanctionSeverity: 1 } }
@@ -762,11 +785,27 @@ export function advanceMonth(state) {
   preparedMilitary.military.infantryMultiplier = technologyModifiers.infantryMultiplier;
   preparedMilitary.military.support = clamp(preparedMilitary.military.support + (effects.militarySupportModifier ?? 0), 0, 100);
   preparedMilitary.military.power = Math.min(100, preparedMilitary.military.power * (1 + technologyModifiers.militaryEffectiveness));
-  const geopoliticalMonth = advanceGeopolitics(nuclear.geopolitics, preparedMilitary.military, economicMonth, state.randomSeed);
+  const geopoliticalMonth = advanceGeopolitics(nuclear.geopolitics, preparedMilitary.military, economyAfterMilitaryMaintenance, internalProjectState.randomSeed);
   const militaryMonth = advanceMilitary(preparedMilitary.military, geopoliticalMonth.economy, { defenseSpend: 0, applyDeficitPenalty: false }, geopoliticalMonth, state.factions);
   const economyWithPuppetTribute = collectPuppetTribute(militaryMonth.economy, geopoliticalMonth.geopolitics);
   const factions = advanceFactions(state.factions, state.economy, economyWithPuppetTribute, state.budget, effects, { popularityModifier: modifiers.popularityModifier + (geopoliticalMonth.factionDelta ?? 0) });
-  const infrastructureState = processarAutomacaoIndustrial({ ...state, country: state.country, factions });
+  const factionsAfterEcology = internalProjectState.ecologicalDisaster
+    ? {
+      ...factions,
+      trabalhadores: Math.max(0, (Number(factions.trabalhadores) || 0) - 8),
+      elite: Math.max(0, (Number(factions.elite) || 0) - 3),
+    }
+    : factions;
+  const infrastructureState = processarAutomacaoIndustrial({
+    ...state,
+    country: state.country,
+    factions: factionsAfterEcology,
+    infrastructure: internalProjectState.infrastructure,
+    health: internalProjectState.health,
+    industry: internalProjectState.industry,
+    environment_health: internalProjectState.environment_health,
+    internal_maintenance_cost: internalProjectState.internal_maintenance_cost,
+  });
   const constitutionalState = aplicarModificadoresConstitucionais(state, {
     economy: economyWithPuppetTribute,
     military: militaryMonth.military,
@@ -778,7 +817,7 @@ export function advanceMonth(state) {
     : evaluateRegime(state.regime, constitutionalState.economy, constitutionalState.military, geopoliticalMonth.geopolitics, geopoliticalMonth.seed, constitutionalState.factions);
   const month = state.calendar.month === 12 ? 1 : state.calendar.month + 1;
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
-  const notice = stability.event ?? `Mes encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superavit' : 'com deficit'}.`;
+  const notice = stability.event ?? internalProjectState.notice ?? `Mes encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superavit' : 'com deficit'}.`;
 
   const completedState = syncWorld({
     ...state,
@@ -788,6 +827,11 @@ export function advanceMonth(state) {
     country: infrastructureState.country,
     factions: constitutionalState.factions,
     technology: constitutionalState.technology,
+    infrastructure: internalProjectState.infrastructure,
+    health: internalProjectState.health,
+    industry: internalProjectState.industry,
+    environment_health: internalProjectState.environment_health,
+    internal_maintenance_cost: internalProjectState.internal_maintenance_cost,
     military_research_points: Math.max(0, Number(state.military_research_points) || 0) + militaryResearchGenerated,
     military_tech_level: Math.max(1, Number(state.military_tech_level) || 1),
     player_alliance: Array.isArray(state.player_alliance) ? state.player_alliance : [],
@@ -870,6 +914,21 @@ export function hydrateGameState(serialized) {
         scienceSpend: Number.isFinite(Number(parsed.budget?.scienceSpend)) ? Math.max(0, Number(parsed.budget.scienceSpend)) : base.budget.scienceSpend,
         defenseSpend: Number.isFinite(Number(parsed.budget?.defenseSpend)) ? Math.max(0, Number(parsed.budget.defenseSpend)) : base.budget.defenseSpend,
       },
+      infrastructure: {
+        roads: Math.max(0, Math.floor(Number(parsed.infrastructure?.roads) || 0)),
+        railways: Math.max(0, Math.floor(Number(parsed.infrastructure?.railways) || 0)),
+        airports: Math.max(0, Math.floor(Number(parsed.infrastructure?.airports) || 0)),
+      },
+      health: {
+        hospitals: Math.max(0, Math.floor(Number(parsed.health?.hospitals) || 0)),
+        clinics: Math.max(0, Math.floor(Number(parsed.health?.clinics) || 0)),
+      },
+      industry: {
+        factories: Math.max(0, Math.floor(Number(parsed.industry?.factories) || 0)),
+        power_plants: Math.max(0, Math.floor(Number(parsed.industry?.power_plants) || 0)),
+      },
+      environment_health: clamp(Number(parsed.environment_health ?? base.environment_health), 0, 100),
+      internal_maintenance_cost: Math.max(0, Number(parsed.internal_maintenance_cost) || 0),
       economy: {
         ...base.economy,
         gdp: countryIsWasteland ? 0 : Math.max(1, Number(economy.gdp) || base.economy.gdp),

@@ -141,6 +141,8 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .branch-row strong, .minister-row strong, .project-row strong { color: var(--amber); font-size: 15px; }
 .branch-row span, .minister-row span, .project-row span { color: var(--muted); font-size: 13px; }
 .projects-panel, .cabinet-panel, .technology-panel, .countries-panel { max-width: 1080px; }
+.internal-metrics { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 12px 0 4px; color: var(--phosphor); font-size: 12px; letter-spacing: .04em; }
+.internal-metrics span { border: 1px solid var(--line); padding: 6px 8px; background: rgba(0, 255, 127, .04); }
 .project-row.completed strong { color: var(--phosphor); }
 
 .peace-modal[hidden] { display: none; }

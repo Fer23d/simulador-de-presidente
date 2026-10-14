@@ -41,3 +41,21 @@ test('publishes deep research across energy, military, cybernetics, agronomy and
   assert.ok(TECHNOLOGIES.some((technology) => technology.id === 'state-hackers'));
   assert.equal(getTechnologyModifiers({ points: 0, unlocked: ['exoskeletons'] }).infantryMultiplier, 2);
 });
+
+test('publishes late-game technologies with functional project effects', () => {
+  const ids = new Set(TECHNOLOGIES.map((technology) => technology.id));
+  for (const id of ['carbon-filtration', 'maglev', 'genetic-medicine', 'quantum-espionage', 'war-logistics-ai']) {
+    assert.ok(ids.has(id), `missing technology ${id}`);
+  }
+
+  const modifiers = getTechnologyModifiers({
+    points: 0,
+    unlocked: ['carbon-filtration', 'maglev', 'genetic-medicine', 'quantum-espionage', 'war-logistics-ai'],
+  });
+
+  assert.equal(modifiers.environmentIndustryImpactModifier, 0.5);
+  assert.equal(modifiers.infrastructureGrowthMultiplier, 1.5);
+  assert.equal(modifiers.hospitalPopulationMultiplier, 2);
+  assert.equal(modifiers.quantumEspionage, true);
+  assert.equal(modifiers.militaryMaintenanceModifier, 0.5);
+});
