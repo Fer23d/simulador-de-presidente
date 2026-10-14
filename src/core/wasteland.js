@@ -46,6 +46,9 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
   return {
     ...state,
     is_wasteland: true,
+    wasteland_cinematic_pending: true,
+    wasteland_cinematic_ready: false,
+    unlocked_chapters: [...new Set([...(state.unlocked_chapters ?? []), 'cap_5_wasteland'])],
     scrap: Math.max(250, Number(state.scrap) || 0),
     vault_built: true,
     title: 'Sobrevivente Supremo',

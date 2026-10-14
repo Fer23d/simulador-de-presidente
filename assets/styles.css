@@ -12,6 +12,9 @@
   --muted: #8fae99;
   --quiet: #527360;
   --shadow: #020403;
+  --cor-primaria: var(--phosphor);
+  --cor-secundaria: var(--danger);
+  --cor-fundo: var(--void);
   font-family: "Share Tech Mono", monospace;
 }
 
@@ -25,6 +28,47 @@ body::selection { background: var(--phosphor); color: var(--void); text-shadow: 
 .wasteland-mode .app-shell, .wasteland-mode .sidebar { background: var(--void); }
 .wasteland-mode .sidebar { background: var(--screen); }
 .wasteland-mode .wasteland-projects { border-color: var(--amber); box-shadow: 0 0 18px rgba(255, 122, 24, .2); }
+body.theme-wasteland {
+  --cor-primaria: #ff9d00;
+  --cor-secundaria: #cc3300;
+  --cor-fundo: #1a0f00;
+  --void: #1a0f00;
+  --screen: #241405;
+  --panel: #2b1708;
+  --line: #8a4d1f;
+  --line-hot: #ff9d00;
+  --phosphor: #ffb347;
+  --cyan: #ffd27a;
+  --amber: #ff9d00;
+  --danger: #cc3300;
+  --muted: #c17b45;
+  --quiet: #75401f;
+  --shadow: #050201;
+  background: var(--cor-fundo);
+  color: var(--cor-primaria);
+  text-shadow: 0 0 7px rgba(255, 157, 0, .5);
+  animation: wasteland-terminal-flicker 3s steps(2, end) infinite;
+}
+body.theme-wasteland .app-shell,
+body.theme-wasteland .sidebar { background: var(--cor-fundo); }
+body.theme-wasteland .sidebar { background: var(--screen); }
+@keyframes wasteland-terminal-flicker { 0%, 18%, 22%, 63%, 100% { opacity: 1; } 20%, 21%, 64% { opacity: .88; } }
+
+#flash-nuclear { position: fixed; inset: 0; z-index: 9999; background: #fff; opacity: 1; pointer-events: all; transition: opacity 4s ease; }
+#flash-nuclear.flash-nuclear--fade { opacity: 0; }
+
+.modal-wasteland-cinematic[hidden] { display: none; }
+.modal-wasteland-cinematic { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; padding: 20px; background: rgba(26, 15, 0, .92); }
+.wasteland-cinematic-card { width: min(860px, 100%); border: 6px double #ff9d00; padding: clamp(24px, 5vw, 48px); background: #1a0f00; box-shadow: 0 0 36px rgba(255, 157, 0, .7), 12px 12px 0 #080400, inset 0 0 30px rgba(204, 51, 0, .24); text-align: center; animation: wasteland-card-arrival .6s steps(4, end) both; }
+.radiation-symbol { color: #ff9d00; font-size: clamp(70px, 13vw, 140px); line-height: 1; text-shadow: 0 0 18px rgba(255, 157, 0, .95); animation: radiation-pulse .75s steps(2, end) infinite; }
+.wasteland-cinematic-label { margin: 22px 0; color: #cc3300; font-family: "Press Start 2P", monospace; font-size: clamp(10px, 1.7vw, 15px); line-height: 1.7; text-shadow: 0 0 10px rgba(204, 51, 0, .8); }
+.wasteland-cinematic-text { margin: 0 auto 30px; color: #ffb347; font: 20px/1.55 "Share Tech Mono", monospace; text-align: left; white-space: pre-wrap; text-shadow: 0 0 9px rgba(255, 157, 0, .65); animation: fallout-typewriter 2.4s steps(72, end) both; }
+.wasteland-command-button { border: 3px solid #ff9d00; padding: 14px 18px; background: #ff9d00; color: #1a0f00; font-family: "Press Start 2P", monospace; font-size: 11px; line-height: 1.6; box-shadow: 6px 6px 0 #080400; }
+.wasteland-command-button:hover { background: #1a0f00; color: #ff9d00; }
+.wasteland-command-button:active { transform: translate(6px, 6px); box-shadow: none; }
+@keyframes wasteland-card-arrival { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes radiation-pulse { 50% { opacity: .42; transform: scale(.96); } }
+@keyframes fallout-typewriter { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 button, input, select { font: inherit; }
 button { border-radius: 0; cursor: pointer; }
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }

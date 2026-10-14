@@ -152,7 +152,7 @@ function taxControl(label, key, value) {
 
 function overviewView(state, projection) {
   const budgetTone = projection.monthlyBalance >= 0 ? 'positive' : 'negative';
-  const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid) || Boolean(state.pendingFinalDilemma) || Boolean(state.pendingInterrogation) || Boolean(state.pendingStory) || Boolean(state.pendingAllianceInvocation) || Boolean(state.pendingHostileAlert);
+  const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid) || Boolean(state.pendingFinalDilemma) || Boolean(state.pendingInterrogation) || Boolean(state.pendingStory) || Boolean(state.pendingAllianceInvocation) || Boolean(state.pendingHostileAlert) || Boolean(state.wasteland_cinematic_pending) || Boolean(state.wasteland_cinematic_ready);
   return `<section class="view-grid overview-grid">
     <section class="panel agenda-panel">
       <div class="panel-heading"><div><p class="eyebrow">Agenda presidencial</p><h2>Proximo movimento</h2></div><span class="status-dot"></span></div>
@@ -503,6 +503,37 @@ export function renderStoryCard(state) {
   </section>`;
 }
 
+export function renderWastelandCinematic(state) {
+  if (!state.is_wasteland || !state.wasteland_cinematic_ready) return '';
+  return `<section class="wasteland-cinematic-card" role="dialog" aria-modal="true" aria-labelledby="wasteland-cinematic-title">
+    <div class="radiation-symbol" aria-hidden="true">☢️</div>
+    <p id="wasteland-cinematic-title" class="wasteland-cinematic-label">/// TRANSIÇÃO DE SOBREVIVÊNCIA ///</p>
+    <pre class="wasteland-cinematic-text">[ ALERTA DE SISTEMA: SENSORES EXTERNOS DESTRUÍDOS ]
+&gt; Nível de radiação exterior letal.
+&gt; As superpotências não existem mais. A ONU não existe mais. O sol foi tapado pelas cinzas.
+&gt; Bem-vindo à Nova Era, Líder. Os portões do Bunker foram selados. Sobreviva.</pre>
+    <button type="button" class="wasteland-command-button" data-action="dismiss-wasteland-cinematic">[ ASSUMIR COMANDO DO VAULT ]</button>
+  </section>`;
+}
+
+export function triggerNuclearFallout({ onThemeChange, onComplete } = {}) {
+  if (typeof document === 'undefined' || !document.body) return false;
+  document.getElementById('flash-nuclear')?.remove();
+  const flash = document.createElement('div');
+  flash.id = 'flash-nuclear';
+  flash.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(flash);
+  void flash.offsetWidth;
+  document.body.classList.add('theme-wasteland', 'wasteland-mode');
+  onThemeChange?.();
+  requestAnimationFrame(() => flash.classList.add('flash-nuclear--fade'));
+  window.setTimeout(() => {
+    flash.remove();
+    onComplete?.();
+  }, 4000);
+  return true;
+}
+
 export function mountDashboard(root) {
   if (!root) {
     throw new Error('Elemento raiz do dashboard nao encontrado.');
@@ -529,13 +560,19 @@ export function mountDashboard(root) {
   const allianceModal = document.getElementById('modal-alianca');
   const hostileAlertModal = document.getElementById('modal-alerta-hostil');
   const governmentModal = document.getElementById('modal-auto-golpe');
+  const wastelandCinematicModal = document.getElementById('modal-wasteland-cinematic');
   const congressLawTitle = document.getElementById('congresso-lei-titulo');
   const congressLawDescription = document.getElementById('congresso-lei-descricao');
   let pendingCongressLawId = null;
   let pendingNukeTargetId = null;
+  let falloutCinematicStarted = false;
 
   function render() {
-    if (typeof document !== 'undefined' && document.body) document.body.classList.toggle('wasteland-mode', Boolean(state.is_wasteland));
+    if (typeof document !== 'undefined' && document.body) {
+      const flashPending = Boolean(state.is_wasteland && state.wasteland_cinematic_pending);
+      document.body.classList.toggle('wasteland-mode', Boolean(state.is_wasteland && !flashPending));
+      document.body.classList.toggle('theme-wasteland', Boolean(state.is_wasteland && !flashPending));
+    }
     const projection = projectBudget(state.economy, state.budget);
     const tabs = [
       ['overview', 'Visao geral'],
@@ -599,6 +636,11 @@ export function mountDashboard(root) {
     if (allianceModal) { const markup = renderAllianceInvocation(state); allianceModal.hidden = !markup; allianceModal.innerHTML = markup; }
     if (hostileAlertModal) { const markup = renderHostileAlert(state); hostileAlertModal.hidden = !markup; hostileAlertModal.innerHTML = markup; }
     if (governmentModal) { const markup = renderGovernmentModal(state); governmentModal.hidden = !markup; governmentModal.innerHTML = markup; }
+    if (wastelandCinematicModal) {
+      const markup = renderWastelandCinematic(state);
+      wastelandCinematicModal.hidden = !markup;
+      wastelandCinematicModal.innerHTML = markup;
+    }
     if (activeTab === 'history') {
       const historyLog = root.querySelector('#story-manifesto, #history-log');
       if (historyLog) historyLog.scrollTop = historyLog.scrollHeight;
@@ -606,10 +648,19 @@ export function mountDashboard(root) {
     if (activeTab === 'diplomacy') filterDiplomacyRows(root, diplomacyQuery);
   }
 
+  function startFalloutCinematicIfNeeded() {
+    if (!state.wasteland_cinematic_pending || falloutCinematicStarted) return;
+    falloutCinematicStarted = true;
+    triggerNuclearFallout({
+      onComplete: () => commit({ ...state, wasteland_cinematic_pending: false, wasteland_cinematic_ready: true, notice: 'Os portoes do Vault estao selados. Assuma o comando.' }),
+    });
+  }
+
   function commit(nextState) {
     state = nextState;
     storageNotice = saveState(state);
     render();
+    startFalloutCinematicIfNeeded();
   }
 
   window.logHistoryEvent = (type, text) => commit(registrarEventoHistorico(state, type, text));
@@ -787,6 +838,12 @@ export function mountDashboard(root) {
     if (government) commit(resolverAutoGolpe(state, government));
   });
 
+  wastelandCinematicModal?.addEventListener('click', (event) => {
+    if (!event.target.closest('[data-action="dismiss-wasteland-cinematic"]')) return;
+    falloutCinematicStarted = false;
+    commit({ ...state, wasteland_cinematic_pending: false, wasteland_cinematic_ready: false, notice: 'Comando do Vault assumido. A superficie aguarda.' });
+  });
+
   root.addEventListener('click', (event) => {
     const control = event.target.closest('[data-action]');
     if (!control || control.disabled) return;
@@ -862,4 +919,5 @@ export function mountDashboard(root) {
   });
 
   render();
+  startFalloutCinematicIfNeeded();
 }

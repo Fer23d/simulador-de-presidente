@@ -179,6 +179,8 @@ export function createGameState(countryId = 'bra') {
     title: 'Presidente',
     pendingGovernmentChoice: false,
     is_wasteland: false,
+    wasteland_cinematic_pending: false,
+    wasteland_cinematic_ready: false,
     vault_built: false,
     scrap: 0,
     wastelandBuildings: { waterPurifiers: 0, geothermalGenerators: 0 },
@@ -813,6 +815,7 @@ export function voteLaborLaw(state) {
 export function advanceMonth(state) {
   if (state.regime?.gameOver) return resolverFinalDeJogo({ ...state, notice: 'A partida foi encerrada.' });
   if (state.pendingHostileAlert) return { ...state, notice: 'Reconheca o alerta militar antes de avancar o mes.' };
+  if (state.wasteland_cinematic_ready) return { ...state, notice: 'Assuma o comando do Vault antes de avancar o mes.' };
   if (state.is_wasteland) return advanceWastelandMonth(state);
   if (state.geopolitics.peaceTreaty?.status === 'pending') return { ...state, notice: 'Resolva o Tratado de Paz antes de avancar o mes.' };
   if (state.pendingEvent) return { ...state, notice: 'Resolva a crise nacional antes de avancar o mes.' };
@@ -1138,6 +1141,8 @@ export function hydrateGameState(serialized) {
       title: typeof parsed.title === 'string' ? parsed.title : base.title,
       pendingGovernmentChoice: Boolean(parsed.pendingGovernmentChoice),
       is_wasteland: Boolean(parsed.is_wasteland),
+      wasteland_cinematic_pending: Boolean(parsed.wasteland_cinematic_pending),
+      wasteland_cinematic_ready: Boolean(parsed.wasteland_cinematic_ready),
       vault_built: Boolean(parsed.vault_built || parsed.megaprojects?.megaVault?.completed),
       scrap: Math.max(0, Number(parsed.scrap) || 0),
       wastelandBuildings: {
