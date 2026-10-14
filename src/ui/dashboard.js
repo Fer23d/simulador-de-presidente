@@ -30,6 +30,8 @@ import {
   financiarRebeldes,
   fundNuclear,
   importarRecursos,
+  insultarNacao,
+  dispensarAlertaHostil,
   hireMinister,
   resolvePeaceTreaty,
   createLeague,
@@ -150,7 +152,7 @@ function taxControl(label, key, value) {
 
 function overviewView(state, projection) {
   const budgetTone = projection.monthlyBalance >= 0 ? 'positive' : 'negative';
-  const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid) || Boolean(state.pendingFinalDilemma) || Boolean(state.pendingInterrogation) || Boolean(state.pendingStory) || Boolean(state.pendingAllianceInvocation);
+  const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid) || Boolean(state.pendingFinalDilemma) || Boolean(state.pendingInterrogation) || Boolean(state.pendingStory) || Boolean(state.pendingAllianceInvocation) || Boolean(state.pendingHostileAlert);
   return `<section class="view-grid overview-grid">
     <section class="panel agenda-panel">
       <div class="panel-heading"><div><p class="eyebrow">Agenda presidencial</p><h2>Proximo movimento</h2></div><span class="status-dot"></span></div>
@@ -270,7 +272,7 @@ export function diplomacyView(state, searchQuery = '') {
   const nuclearReady = unlockedTechs.has('nuke') && canAutorizarAniquilacaoNuclear(state);
   const peacePanel = `${target ? '<p class="notice">Um tratado de paz aguarda decisão no painel bloqueante.</p>' : ''}<p class="notice">Operação: Infiltrar Sósia do Líder em regimes não democráticos.</p>`;
   const leaguePanel = league ? `<div class="ledger-row"><span>${league.name}</span><strong>${league.memberIds.length} membros</strong></div>` : `<button type="button" class="quiet-action" data-action="league-create">Criar Nova Liga Global</button>`;
-  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relações Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}<label class="diplomacy-search"><span>Buscar país</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de países diplomáticos">${contacts.map((contact) => `<article class="bloc-row ${contact.wasteland ? 'wasteland-contact' : ''}" data-diplomacy-row data-country-name="${escapeHtml(contact.name)}"><div><strong>${contact.name}</strong><span>${contact.wasteland ? 'ZONA DE ANIQUILAÇÃO NUCLEAR' : `Relação ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | Defesa digital ${Number(contact.cyber_defense).toFixed(0)} | ${contact.trait}${contact.puppet ? ' | Fantoche' : ''}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.wasteland || contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button><button type="button" class="quiet-action" data-action="resource-import" data-contact="${contact.id}" data-resource="steel" data-amount="500" ${contact.wasteland || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Importar aço</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${contact.wasteland || contact.alliance || contact.atWar || contact.relation < 50 ? 'disabled' : ''}>Propor Aliança</button>${cyberReady ? `<button type="button" class="quiet-action danger-action" data-action="cyber-attack" data-contact="${contact.id}" ${contact.wasteland || (Number(contact.cyber_paralyzed_until) || 0) > (Number(state.monthCounter) || 0) ? 'disabled' : ''}>Lançar Ciberataque</button>` : ''}${bioReady ? `<button type="button" class="quiet-action danger-action" data-action="synthetic-virus" data-contact="${contact.id}" ${contact.wasteland || contact.bio_infected ? 'disabled' : ''}>Lançar Vírus Sintético</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="false-flag" data-contact="${contact.id}" ${contact.wasteland || contact.atWar || contact.anexado ? 'disabled' : ''}>Orquestrar Falsa Bandeira</button>${union ? `<button type="button" class="quiet-action" data-action="union-absorb" data-contact="${contact.id}" ${contact.wasteland || contact.relation > 80 || contact.puppet ? '' : 'disabled'}>Absorver pela União</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="fund-rebels" data-contact="${contact.id}" ${contact.wasteland ? 'disabled' : ''}>Financiar Rebeldes</button>${nuclearReady && contact.atWar && !contact.wasteland ? `<button type="button" class="quiet-action nuclear-action" data-action="nuclear-codes" data-contact="${contact.id}">CÓDIGOS NUCLEARES</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.wasteland || contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('')}<p class="notice" data-diplomacy-empty hidden>Nenhum país corresponde à busca.</p></div></section>`;
+  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relações Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}<label class="diplomacy-search"><span>Buscar país</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de países diplomáticos">${contacts.map((contact) => `<article class="bloc-row ${contact.wasteland ? 'wasteland-contact' : ''}" data-diplomacy-row data-country-name="${escapeHtml(contact.name)}"><div><strong>${contact.name}</strong><span>${contact.wasteland ? 'ZONA DE ANIQUILAÇÃO NUCLEAR' : `Relação ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | Defesa digital ${Number(contact.cyber_defense).toFixed(0)} | ${contact.trait}${contact.puppet ? ' | Fantoche' : ''}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.wasteland || contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button><button type="button" class="quiet-action" data-action="resource-import" data-contact="${contact.id}" data-resource="steel" data-amount="500" ${contact.wasteland || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Importar aço</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${contact.wasteland || contact.alliance || contact.atWar || contact.relation < 50 ? 'disabled' : ''}>Propor Aliança</button>${cyberReady ? `<button type="button" class="quiet-action danger-action" data-action="cyber-attack" data-contact="${contact.id}" ${contact.wasteland || (Number(contact.cyber_paralyzed_until) || 0) > (Number(state.monthCounter) || 0) ? 'disabled' : ''}>Lançar Ciberataque</button>` : ''}${bioReady ? `<button type="button" class="quiet-action danger-action" data-action="synthetic-virus" data-contact="${contact.id}" ${contact.wasteland || contact.bio_infected ? 'disabled' : ''}>Lançar Vírus Sintético</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="false-flag" data-contact="${contact.id}" ${contact.wasteland || contact.atWar || contact.anexado ? 'disabled' : ''}>Orquestrar Falsa Bandeira</button><button type="button" class="quiet-action danger-action" data-action="insult" data-contact="${contact.id}" ${contact.wasteland || contact.atWar || contact.anexado ? 'disabled' : ''}>[ INSULTAR LÍDER ESTRANGEIRO ]</button>${union ? `<button type="button" class="quiet-action" data-action="union-absorb" data-contact="${contact.id}" ${contact.wasteland || contact.relation > 80 || contact.puppet ? '' : 'disabled'}>Absorver pela União</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="fund-rebels" data-contact="${contact.id}" ${contact.wasteland ? 'disabled' : ''}>Financiar Rebeldes</button>${nuclearReady && contact.atWar && !contact.wasteland ? `<button type="button" class="quiet-action nuclear-action" data-action="nuclear-codes" data-contact="${contact.id}">CÓDIGOS NUCLEARES</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.wasteland || contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('')}<p class="notice" data-diplomacy-empty hidden>Nenhum país corresponde à busca.</p></div></section>`;
 }
 
 export function filterDiplomacyRows(root, query = '') {
@@ -297,6 +299,16 @@ export function renderAllianceInvocation(state) {
   const pending = state.pendingAllianceInvocation;
   if (!pending) return '';
   return `<section class="alliance-invocation" role="dialog" aria-modal="true" aria-labelledby="alliance-invocation-title"><p class="eyebrow">/// INVOCAÇÃO DA ALIANÇA ///</p><h2 id="alliance-invocation-title">Artigo 5 acionado</h2><pre>&gt; O NOSSO ALIADO ${escapeHtml(pending.allyName)} FOI ATACADO POR ${escapeHtml(pending.attackerName)}.\n&gt; A ALIANÇA EXIGE DEFESA.</pre><div class="modal-actions"><button type="button" class="primary-action" data-action="article5" data-decision="send-troops">[ ENVIAR TROPAS E CAIXA (+100 RELAÇÃO) ]</button><button type="button" class="quiet-action danger-action" data-action="article5" data-decision="verbal-condemnation">[ CONDENAÇÃO VERBAL APENAS ]</button><button type="button" class="quiet-action" data-action="article5" data-decision="fulfill-duty">[ CUMPRIR DEVER ]</button></div></section>`;
+}
+
+export function renderHostileAlert(state) {
+  const alert = state.pendingHostileAlert;
+  if (!alert) return '';
+  const nuclear = alert.type === 'nuclear';
+  const message = nuclear
+    ? `&gt; A DOUTRINA DE DESTRUIÇÃO FOI ATIVADA.\n&gt; ORIGEM: ${escapeHtml(alert.targetName)}. O VAULT SERÁ TESTADO.`
+    : `&gt; O PAÍS ${escapeHtml(alert.targetName)} NÃO TOLEROU O INSULTO E DECLAROU GUERRA CONTRA NÓS!\n&gt; O GABINETE DEVE RESPONDER.`;
+  return `<section class="hostile-alert ${nuclear ? 'hostile-alert--nuclear' : ''}" role="alertdialog" aria-modal="true" aria-labelledby="hostile-alert-title"><p class="eyebrow">/// ALERTA DE INTELIGÊNCIA ///</p><h2 id="hostile-alert-title">${nuclear ? 'ATAQUE NUCLEAR DETECTADO' : 'DECLARAÇÃO DE GUERRA DETECTADA'}</h2><pre>${message}</pre><button type="button" class="quiet-action danger-action" data-action="dismiss-hostile-alert">[ RECONHECER ALERTA ]</button></section>`;
 }
 
 export function projectsView(state) {
@@ -515,6 +527,7 @@ export function mountDashboard(root) {
   const interrogationModal = document.getElementById('modal-interrogatorio');
   const storyModal = document.getElementById('modal-historia');
   const allianceModal = document.getElementById('modal-alianca');
+  const hostileAlertModal = document.getElementById('modal-alerta-hostil');
   const governmentModal = document.getElementById('modal-auto-golpe');
   const congressLawTitle = document.getElementById('congresso-lei-titulo');
   const congressLawDescription = document.getElementById('congresso-lei-descricao');
@@ -584,6 +597,7 @@ export function mountDashboard(root) {
     if (interrogationModal) { const markup = renderInterrogation(state); interrogationModal.hidden = !markup; interrogationModal.style.display = markup ? '' : 'none'; interrogationModal.innerHTML = markup; }
     if (storyModal) { const markup = renderStoryCard(state); storyModal.hidden = !markup; storyModal.innerHTML = markup; }
     if (allianceModal) { const markup = renderAllianceInvocation(state); allianceModal.hidden = !markup; allianceModal.innerHTML = markup; }
+    if (hostileAlertModal) { const markup = renderHostileAlert(state); hostileAlertModal.hidden = !markup; hostileAlertModal.innerHTML = markup; }
     if (governmentModal) { const markup = renderGovernmentModal(state); governmentModal.hidden = !markup; governmentModal.innerHTML = markup; }
     if (activeTab === 'history') {
       const historyLog = root.querySelector('#story-manifesto, #history-log');
@@ -762,6 +776,10 @@ export function mountDashboard(root) {
     if (decision) commit(respondArticle5(state, decision));
   });
 
+  hostileAlertModal?.addEventListener('click', (event) => {
+    if (event.target.closest('[data-action="dismiss-hostile-alert"]')) commit(dispensarAlertaHostil(state));
+  });
+
   governmentModal?.addEventListener('click', (event) => {
     const government = event.target.closest('[data-action="government-select"]')?.dataset.government;
     if (government) commit(resolverAutoGolpe(state, government));
@@ -780,6 +798,7 @@ export function mountDashboard(root) {
     if (action === 'resource-import') { commit(importarRecursos(state, control.dataset.contact, control.dataset.resource, Number(control.dataset.amount))); return; }
     if (action === 'alliance') { window.criarLiga(control.dataset.contact); return; }
     if (action === 'war') { commit(startWar(state, control.dataset.contact)); return; }
+    if (action === 'insult') { commit(insultarNacao(state, control.dataset.contact)); return; }
     if (action === 'peace') { commit(resolvePeaceTreaty(state, control.dataset.contact, control.dataset.choice)); return; }
     if (action === 'league-create') { commit(createLeague(state, 'Liga Global')); return; }
     if (action === 'league-invite') { commit(inviteToLeague(state, control.dataset.contact)); return; }

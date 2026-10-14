@@ -35,6 +35,7 @@ export function createGeopolitics(playerId = 'bra') {
       steel: country.steel,
       rare_earths: country.rare_earths,
       cyber_defense: country.trait === 'tech_giant' ? 70 : country.trait === 'financial_hub' ? 55 : country.trait === 'military_tradition' ? 45 : 30,
+      nuclearWeapons: ['chn', 'fra', 'gbr', 'ind', 'isr', 'pak', 'prk', 'rus', 'usa'].includes(country.id) ? 1 : 0,
       trait: country.trait,
       military: {
         exercito: { soldados: Math.max(2_000, Math.round(country.populacao_base * 0.00022)), blindados: Math.max(1, Math.floor(Math.log10(country.pib_base) - 6)) },
@@ -45,6 +46,8 @@ export function createGeopolitics(playerId = 'bra') {
       alliance: false,
       atWar: false,
       atWarAgainst: null,
+      warInitiator: null,
+      defensiveWar: false,
       sancionado_por_jogador: false,
     };
   };
@@ -149,7 +152,94 @@ export function declareWar(geopolitics, contactId, attackerId = 'player') {
   return {
     ok: true,
     reason: `Guerra declarada contra ${contact.name}.`,
-    geopolitics: updateContact(geopolitics, contactId, (item) => ({ ...item, atWar: true, atWarAgainst: attackerId, alliance: false, relation: -100 })),
+    geopolitics: updateContact(geopolitics, contactId, (item) => ({ ...item, atWar: true, atWarAgainst: attackerId, warInitiator: attackerId, defensiveWar: false, alliance: false, relation: -100 })),
+  };
+}
+
+export function insultarNacao(geopolitics, contactId, seed) {
+  const target = geopolitics.contacts.find((contact) => contact.id === contactId);
+  if (!target || target.destruido || target.anexado || target.wasteland) {
+    return { ok: false, reason: 'Nacao invalida para provocacao diplomatica.', geopolitics, seed };
+  }
+  if (target.atWar) return { ok: false, reason: 'Nao se insulta uma nacao ja em guerra; o conflito ja fala por si.', geopolitics, seed };
+  const random = nextRandom(seed);
+  const relation = clamp((Number(target.relation) || 0) - 30, -100, 100);
+  const retaliation = relation < 15 && random.value < 0.5;
+  const updated = updateContact(geopolitics, contactId, (item) => ({
+    ...item,
+    relation,
+    atWar: retaliation,
+    atWarAgainst: retaliation ? 'player' : item.atWarAgainst,
+    warInitiator: retaliation ? item.id : item.warInitiator,
+    defensiveWar: retaliation,
+    alliance: retaliation ? false : item.alliance,
+  }));
+  return {
+    ok: true,
+    retaliation,
+    target: { id: target.id, name: target.name },
+    seed: random.seed,
+    geopolitics: updated,
+    reason: retaliation
+      ? `${target.name} declarou guerra apos o insulto.`
+      : `${target.name} recebeu o insulto e recuou por enquanto.`,
+  };
+}
+
+export function processarAgressaoIA(state, probability = 0.03) {
+  let random = nextRandom(state.randomSeed);
+  let nuclearAttack = null;
+  let firstAttack = null;
+  const contacts = state.geopolitics.contacts.map((contact) => {
+    if (contact.destruido || contact.anexado || contact.wasteland || contact.atWar) return contact;
+    const hatesPlayer = (Number(contact.relation) || 0) < 20;
+    if (!hatesPlayer) {
+      random = nextRandom(random.seed);
+      return contact;
+    }
+    if (state.global_defcon === 1 && Number(contact.nuclearWeapons) > 0 && (Number(contact.relation) || 0) < 0) {
+      nuclearAttack = contact;
+      return {
+        ...contact,
+        atWar: true,
+        atWarAgainst: state.country.id,
+        warInitiator: contact.id,
+        defensiveWar: true,
+        nuclearStrikeIncoming: true,
+        relation: -100,
+      };
+    }
+    const attacks = random.value < probability;
+    random = nextRandom(random.seed);
+    if (!attacks) return contact;
+    if (!firstAttack) firstAttack = contact;
+    return {
+      ...contact,
+      atWar: true,
+      atWarAgainst: state.country.id,
+      warInitiator: contact.id,
+      defensiveWar: true,
+      relation: -100,
+    };
+  });
+  const alertTarget = nuclearAttack ?? firstAttack;
+  return {
+    ...state,
+    geopolitics: { ...state.geopolitics, contacts },
+    world: contacts,
+    randomSeed: random.seed,
+    pendingHostileAlert: alertTarget
+      ? {
+        type: nuclearAttack ? 'nuclear' : 'war',
+        targetId: alertTarget.id,
+        targetName: alertTarget.name,
+        dismissed: false,
+      }
+      : state.pendingHostileAlert ?? null,
+    notice: alertTarget
+      ? (nuclearAttack ? `Ataque nuclear recebido de ${alertTarget.name}.` : `${alertTarget.name} declarou guerra contra nos.`)
+      : state.notice,
+    global_defcon: nuclearAttack ? 1 : state.global_defcon,
   };
 }
 
@@ -313,6 +403,7 @@ export function anexarPais(state) {
   const cash = Math.max(0, Number(target.cash) || 0);
   const playerMilitary = state.military ?? {};
   const targetMilitary = target.military ?? {};
+  const defensiveVictory = Boolean(state.geopolitics.peaceTreaty?.defensiveVictory || target.defensiveWar || target.warInitiator === target.id);
   const military = {
     ...playerMilitary,
     exercito: {
@@ -330,14 +421,14 @@ export function anexarPais(state) {
     contacts: state.geopolitics.contacts.map((contact) => contact.id === target.id
       ? { ...contact, anexado: true, destruido: true, atWar: false, alliance: false, tradeTreaty: false, militaryPower: 0, population: 0, populacao_base: 0, area_km2: 0, pib_base: 0, cash: 0, uranium: 0, steel: 0, rare_earths: 0 }
       : contact),
-  }, isLegitimateDefenseTarget(state, target.id) ? 0 : -45);
+  }, isLegitimateDefenseTarget(state, target.id) || defensiveVictory ? 0 : -45);
   return {
     ...state,
     country: { ...state.country, area_km2: area, populacao: population, populacao_base: population, pib_base: gdp, uranium: (Number(state.country.uranium) || 0) + (Number(target.uranium) || 0), steel: (Number(state.country.steel) || 0) + (Number(target.steel) || 0), rare_earths: (Number(state.country.rare_earths) || 0) + (Number(target.rare_earths) || 0) },
     economy: { ...state.economy, gdp: state.economy.gdp + (Number(target.pib_base) || 0), cash: state.economy.cash + cash },
     military,
     geopolitics,
-    notice: isLegitimateDefenseTarget(state, target.id)
+    notice: isLegitimateDefenseTarget(state, target.id) || defensiveVictory
       ? `${target.name} foi anexado sob alegacao de legitima defesa.`
       : `${target.name} foi anexado; a ONU condenou a medida.`,
   };
@@ -447,7 +538,11 @@ export function advanceGeopolitics(geopolitics, military, economy, seed) {
     const damage = Math.max(2, Math.round((playerScore / Math.max(1, updated.militaryPower)) * 4));
     const militaryPower = Math.max(0, updated.militaryPower - damage);
     if (militaryPower === 0 && !peaceTreaty) {
-      peaceTreaty = { targetId: updated.id, status: 'pending' };
+      peaceTreaty = {
+        targetId: updated.id,
+        status: 'pending',
+        ...(updated.defensiveWar || updated.warInitiator === updated.id ? { defensiveVictory: true } : {}),
+      };
       events.push(`${updated.name} foi derrotado; tratado de paz pendente.`);
     }
     return { ...updated, relation: -85, atWar: militaryPower > 0, militaryPower };

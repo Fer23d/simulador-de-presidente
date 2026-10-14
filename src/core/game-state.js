@@ -1,7 +1,7 @@
 import { createCongress, negotiateSupport, voteOnLaw } from './congress.js';
 import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countries.js';
 import { DEFAULT_BUDGET, advanceEconomy, clampTaxRate, setBudgetRate } from './economy.js';
-import { advanceGeopolitics, anexarPais as annexTreatyTarget, alterarNotaONU as changeOnuScore, aplicarReparacoes as applyReparationsTreaty, createGeopolitics, criarLiga as createLeagueState, desmilitarizarPais as demilitarizeTreatyTarget, declareWar, exigirAnexacao as demandAnnexation, getGeopoliticalModifiers, importarRecursos as importResources, imporSancao as imposeSanction, interceptArticle5 as detectArticle5, inviteToLeague as inviteLeagueMember, isLegitimateDefenseTarget, proposeAlliance as formAlliance, proposeTradeTreaty, respondArticle5 as respondArticle5State, sabotar as sabotageCountry, saquearTesouro as lootTreatyTarget } from './geopolitics.js';
+import { advanceGeopolitics, anexarPais as annexTreatyTarget, alterarNotaONU as changeOnuScore, aplicarReparacoes as applyReparationsTreaty, createGeopolitics, criarLiga as createLeagueState, desmilitarizarPais as demilitarizeTreatyTarget, declareWar, exigirAnexacao as demandAnnexation, getGeopoliticalModifiers, insultarNacao as insultNation, importarRecursos as importResources, imporSancao as imposeSanction, interceptArticle5 as detectArticle5, inviteToLeague as inviteLeagueMember, isLegitimateDefenseTarget, processarAgressaoIA, proposeAlliance as formAlliance, proposeTradeTreaty, respondArticle5 as respondArticle5State, sabotar as sabotageCountry, saquearTesouro as lootTreatyTarget } from './geopolitics.js';
 import { advanceMilitary, applyNuclearCompletion, calculateMilitaryMaintenance, canAutogolpe, comprarBlindados, comprarCacas, comprarEquipamento, comprarNavios, createMilitary, createRegime, evaluateRegime, fundNuclearProject, getPoderTotal, normalizeMilitary, recrutarSoldado as recruitSoldiers } from './military.js';
 import { aggregateActiveLawEffects, LAWS, LAW_LABOR_REFORM } from './laws.js';
 import { advanceTechnology, createTechnology, getTechnologyModifiers, purchaseTechnology } from './technology.js';
@@ -207,6 +207,7 @@ export function createGameState(countryId = 'bra') {
     news: [],
     pendingEvent: null,
     pendingAllianceInvocation: null,
+    pendingHostileAlert: null,
     pendingUnVote: null,
     activeGlobalResolutions: [],
     monthCounter: 0,
@@ -374,6 +375,38 @@ export function startWar(state, contactId) {
 
 export function declararGuerra(state, contactId) {
   return startWar(state, contactId);
+}
+
+export function insultarNacao(state, contactId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  if (state.pendingHostileAlert) return { ...state, notice: 'Resolva o alerta militar antes de provocar outra nacao.' };
+  const result = insultNation(state.geopolitics, contactId, state.randomSeed);
+  if (!result.ok) return { ...state, notice: result.reason };
+  const factions = {
+    ...state.factions,
+    elite: clamp((Number(state.factions?.elite) || 0) + 2, 0, 100),
+    militares: clamp((Number(state.factions?.militares) || 0) + (result.retaliation ? 4 : 2), 0, 100),
+  };
+  const next = syncWorld({
+    ...state,
+    geopolitics: result.geopolitics,
+    randomSeed: result.seed,
+    factions,
+    notice: result.retaliation
+      ? `O insulto saiu caro: ${result.target.name} declarou guerra contra nos.`
+      : `${result.target.name} foi insultado. A crise diplomatica continua em aberto.`,
+    pendingHostileAlert: result.retaliation
+      ? { type: 'war', targetId: result.target.id, targetName: result.target.name, dismissed: false }
+      : null,
+  });
+  return result.retaliation
+    ? addNews(next, `Alerta militar: ${result.target.name} declarou guerra apos um insulto presidencial.`)
+    : next;
+}
+
+export function dispensarAlertaHostil(state) {
+  if (!state.pendingHostileAlert) return state;
+  return { ...state, pendingHostileAlert: null, notice: 'Alerta militar reconhecido. O gabinete aguarda novas ordens.' };
 }
 
 export function sabotar(state, contactId) {
@@ -778,6 +811,7 @@ export function voteLaborLaw(state) {
 
 export function advanceMonth(state) {
   if (state.regime?.gameOver) return resolverFinalDeJogo({ ...state, notice: 'A partida foi encerrada.' });
+  if (state.pendingHostileAlert) return { ...state, notice: 'Reconheca o alerta militar antes de avancar o mes.' };
   if (state.is_wasteland) return advanceWastelandMonth(state);
   if (state.geopolitics.peaceTreaty?.status === 'pending') return { ...state, notice: 'Resolva o Tratado de Paz antes de avancar o mes.' };
   if (state.pendingEvent) return { ...state, notice: 'Resolva a crise nacional antes de avancar o mes.' };
@@ -912,6 +946,15 @@ export function advanceMonth(state) {
     ? addNews(addNews(syncWorld(resolvedState), notice), 'Alerta sanitario: o pais esta sob ataque biologico silencioso.')
     : addNews(syncWorld(resolvedState), notice);
   const defconState = applyDefconEconomicShock(advanceDefcon(withNews));
+  const hostileState = processarAgressaoIA(defconState);
+  if (hostileState.pendingHostileAlert?.type === 'nuclear') {
+    const nuclearCollapse = { ...hostileState, global_defcon: 1, notice: `Ataque nuclear recebido de ${hostileState.pendingHostileAlert.targetName}.` };
+    if (nuclearCollapse.vault_built) return checkStoryChapters(enterWasteland(nuclearCollapse, 'ataque-nuclear-inimigo'));
+    return checkStoryChapters(resolverFinalDeJogo({
+      ...nuclearCollapse,
+      regime: { ...nuclearCollapse.regime, gameOver: true, outcome: 'aniquilacao-nuclear-inimiga', electionsSuspended: true },
+    }));
+  }
   if (defconState.global_defcon === 1 && !defconState.defcon_one_triggered) {
     const defconCollapse = defconState.vault_built
       ? enterWasteland({ ...defconState, defcon_one_triggered: true }, 'defcon-1')
@@ -923,9 +966,9 @@ export function advanceMonth(state) {
       };
     return checkStoryChapters(checkStoryEvents(defconCollapse));
   }
-  const globalBidState = verificarSedeGlobal(defconState);
+  const globalBidState = verificarSedeGlobal(hostileState);
   if (globalBidState.pendingGlobalBid) return addNews(globalBidState, globalBidState.notice);
-  const assemblyState = verificarAssembleia(defconState);
+  const assemblyState = verificarAssembleia(hostileState);
   if (assemblyState.pendingUnVote) return addNews(assemblyState, assemblyState.notice);
   const eventRoll = rollMonthlyEvent(stability.seed);
   if (!eventRoll.event) return checkStoryChapters(checkStoryEvents(sortearCapturaAgente({ ...assemblyState, randomSeed: eventRoll.seed })));
@@ -1054,6 +1097,14 @@ export function hydrateGameState(serialized) {
           allyName: typeof parsed.pendingAllianceInvocation.allyName === 'string' ? parsed.pendingAllianceInvocation.allyName : parsed.pendingAllianceInvocation.allyId,
           attackerId: parsed.pendingAllianceInvocation.attackerId,
           attackerName: typeof parsed.pendingAllianceInvocation.attackerName === 'string' ? parsed.pendingAllianceInvocation.attackerName : parsed.pendingAllianceInvocation.attackerId,
+        }
+        : null,
+      pendingHostileAlert: parsed.pendingHostileAlert?.type && parsed.pendingHostileAlert?.targetId
+        ? {
+          type: parsed.pendingHostileAlert.type === 'nuclear' ? 'nuclear' : 'war',
+          targetId: parsed.pendingHostileAlert.targetId,
+          targetName: typeof parsed.pendingHostileAlert.targetName === 'string' ? parsed.pendingHostileAlert.targetName : parsed.pendingHostileAlert.targetId,
+          dismissed: false,
         }
         : null,
       pendingUnVote: parsed.pendingUnVote && typeof parsed.pendingUnVote.resolutionId === 'string' ? parsed.pendingUnVote : null,
