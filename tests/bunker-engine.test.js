@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import {
   AssetManager,
   BUNKER_MAP,
+  createProceduralPatterns,
   createBunkerState,
   getCameraOffset,
   getInteractionPrompt,
   moveBunkerPlayer,
+  renderBunkerScene,
 } from '../src/core/bunker_engine.js';
 
 test('cria um bunker 40x40 com o sobrevivente em uma célula caminhável', () => {
@@ -46,4 +48,79 @@ test('detecta interação adjacente com o gerador', () => {
   const bunker = createBunkerState({ player: { x: 9, y: 5 } });
 
   assert.equal(getInteractionPrompt(bunker), '> PRESSIONE [E] PARA INSPECIONAR GERADOR');
+});
+
+test('cria padrões procedurais para piso metálico e área de cautela', () => {
+  const calls = [];
+  const patterns = createProceduralPatterns(() => ({
+    width: 48,
+    height: 48,
+    getContext: () => ({
+      fillStyle: '',
+      strokeStyle: '',
+      lineWidth: 0,
+      fillRect: (...args) => calls.push(['fillRect', ...args]),
+      strokeRect: (...args) => calls.push(['strokeRect', ...args]),
+      beginPath: () => calls.push(['beginPath']),
+      moveTo: (...args) => calls.push(['moveTo', ...args]),
+      lineTo: (...args) => calls.push(['lineTo', ...args]),
+      stroke: () => calls.push(['stroke']),
+    }),
+  }));
+
+  assert.ok(patterns.floorMetal);
+  assert.ok(patterns.floorCaution);
+  assert.ok(calls.some(([name]) => name === 'stroke'));
+});
+
+test('renderiza a cena sem máscara global preta ou destination-out', () => {
+  const assignments = [];
+  const fills = [];
+  const gradients = [];
+  const ctx = {
+    globalCompositeOperation: 'source-over',
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    font: '',
+    textAlign: '',
+    textBaseline: '',
+    save() {},
+    restore() {},
+    translate() {},
+    rotate() {},
+    beginPath() {},
+    closePath() {},
+    moveTo() {},
+    lineTo() {},
+    arc() {},
+    ellipse() {},
+    fill() {},
+    stroke() {},
+    fillRect(...args) { fills.push(args); },
+    strokeRect() {},
+    fillText() {},
+    createLinearGradient() {
+      return { addColorStop() {} };
+    },
+    createRadialGradient() {
+      const gradient = { addColorStop() {} };
+      gradients.push(gradient);
+      return gradient;
+    },
+    set globalCompositeOperation(value) {
+      assignments.push(value);
+    },
+    get globalCompositeOperation() {
+      return assignments.at(-1) ?? 'source-over';
+    },
+  };
+  const patterns = { floorMetal: {}, floorCaution: {} };
+
+  const bunker = createBunkerState({ player: { x: 10, y: 5 } });
+  renderBunkerScene(ctx, bunker, { get: () => null }, { width: 320, height: 240 }, { x: 10, y: 5 }, patterns);
+
+  assert.equal(assignments.includes('destination-out'), false);
+  assert.ok(fills.length > 0);
+  assert.ok(gradients.length >= 3);
 });
