@@ -13,7 +13,7 @@ import { RESOLUTIONS } from '../core/un_assembly.js';
 import { getStoryEvent } from '../core/story_engine.js';
 import { LORE_CHAPTERS, STORY_NOTICE } from '../core/story_lore.js';
 import { INTERNAL_PROJECTS } from '../core/infrastructure.js';
-import { buildBunkerRoom, calculateBunkerCapacity, createIsometricBunkerEngine, getBuildSlots, getRoomAt, INITIAL_BUNKER_ROOMS, repairBunkerGenerator, ROOM_TYPES } from '../core/isometric_bunker.js';
+import { buildShelterRoom, calculateShelterCapacity, createShelterEngine, findBuildSlots, getRoom, INITIAL_SHELTER_GRID, repairShelterGenerator, SHELTER_TYPES, upgradeShelterRoom } from '../core/shelter_engine.js';
 import {
   advanceMonth,
   absorverPaisParaUniao,
@@ -345,16 +345,15 @@ export function projectsView(state) {
 }
 
 export function bunkerView(state) {
-  const rooms = state.bunker_rooms ?? INITIAL_BUNKER_ROOMS;
-  const modules = Object.entries(ROOM_TYPES).filter(([id]) => id !== 'vault');
-  const slots = getBuildSlots(rooms);
-  const sideNames = { north: 'norte', south: 'sul', east: 'leste', west: 'oeste' };
+  const grid = state.shelter_grid ?? INITIAL_SHELTER_GRID;
+  const modules = Object.entries(SHELTER_TYPES).filter(([id]) => id !== 'vault');
+  const rooms = grid.flat().filter(Boolean);
   return `<section class="bunker-chamber">
-    <div class="bunker-header"><div><p class="eyebrow">/// CÂMARA DE SEGURANÇA DO BUNKER ///</p><h2>Vault de Comando</h2></div><button type="button" class="quiet-action bunker-build-toggle" data-action="bunker-build-mode" aria-pressed="false">[ MODO CONSTRUÇÃO ]</button></div>
-    <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateBunkerCapacity(rooms))}</span><span>WASD / SETAS / E</span></div>
-    <div class="bunker-build-controls" hidden aria-label="Módulos de construção">${modules.map(([id, module]) => `<button type="button" class="bunker-module-button" data-action="bunker-module" data-module="${id}" aria-pressed="${id === 'dormitory'}" ${state.scrap < module.cost ? 'disabled' : ''}>${module.name}<small>${module.cost} sucatas</small></button>`).join('')}<span class="bunker-build-hint">Selecione um módulo e clique no + de uma parede externa.</span><div class="bunker-slot-controls"><label for="bunker-build-slot">Parede de expansão</label><select id="bunker-build-slot" class="bunker-build-slot">${slots.map((slot) => `<option value="${slot.anchorId}|${slot.direction}">${ROOM_TYPES[rooms.find((room) => room.id === slot.anchorId)?.type]?.name ?? 'Sala'} ${slot.anchorId} · ${sideNames[slot.direction]}</option>`).join('')}</select><button type="button" class="primary-action" data-action="bunker-place" ${slots.length ? '' : 'disabled'}>[ ANEXAR MÓDULO ]</button></div></div>
-    <canvas id="bunkerCanvas" class="bunker-canvas" width="960" height="600" aria-label="Planta isométrica do bunker; use WASD ou as setas para se mover"></canvas>
-    <div class="bunker-foot"><p class="bunker-status" data-bunker-room>&gt; Sala atual: Porta do Cofre. Pressione E para interagir.</p><div class="bunker-direction-controls" aria-label="Movimento do Presidente"><button type="button" data-action="bunker-move" data-direction="w" aria-label="Mover para nordeste">↗</button><button type="button" data-action="bunker-move" data-direction="a" aria-label="Mover para noroeste">↖</button><button type="button" data-action="bunker-move" data-direction="s" aria-label="Mover para sudoeste">↙</button><button type="button" data-action="bunker-move" data-direction="d" aria-label="Mover para sudeste">↘</button><button type="button" data-action="bunker-interact" aria-label="Interagir com a sala">E</button></div></div>
+    <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2></div><div class="bunker-header-actions"><button type="button" class="primary-action" data-action="advance">[ AVANÇAR MÊS ]</button><button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button></div></div>
+    <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ANDARES ${rooms.filter((room) => room.type === 'elevator').length}</span></div>
+    <div class="bunker-build-controls" hidden aria-label="Módulos de construção">${modules.map(([id, module]) => `<button type="button" class="bunker-module-button" data-action="shelter-module" data-module="${id}" aria-pressed="${id === 'dormitory'}" ${state.scrap < module.cost ? 'disabled' : ''}>${module.name}<small>${module.cost} sucatas</small></button>`).join('')}<div class="bunker-slot-controls"><label for="shelter-build-slot">Setor livre</label><select id="shelter-build-slot" class="bunker-build-slot"></select><button type="button" class="primary-action" data-action="shelter-place">[ CONSTRUIR ]</button></div></div>
+    <canvas id="shelterCanvas" class="bunker-canvas" width="960" height="600" aria-label="Corte lateral do Vault; arraste para percorrer, selecione um habitante e clique numa sala"></canvas>
+    <div class="bunker-foot"><p class="bunker-status" data-shelter-status role="status">AGUARDANDO ORDENS</p><div class="shelter-room-controls"><label for="shelter-room-select">Setor</label><select id="shelter-room-select" class="bunker-build-slot">${rooms.map((room) => `<option value="${room.floor}:${room.column}">${SHELTER_TYPES[room.type].name} · A${room.floor + 1} S${room.column}</option>`).join('')}</select><button type="button" class="quiet-action" data-action="shelter-open-room">[ GERIR SALA ]</button></div></div>
   </section>`;
 }
 
@@ -592,8 +591,36 @@ export function mountDashboard(root) {
   let bunkerBuildMode = false;
   let bunkerBuildType = 'dormitory';
 
+  function openShelterRoom(room) {
+    if (!room || !bunkerGeneratorModal) return;
+    const isGenerator = room.type === 'generator';
+    const description = {
+      vault: 'Porta blindada e centro de comando dos sobreviventes.',
+      elevator: 'Ligação vertical entre os andares habitados.',
+      dormitory: 'Leitos modulares. Capacidade de abrigo ampliada.',
+      generator: room.operational ? 'Unidade energética operacional.' : 'Unidade energética aguardando manutenção.',
+      greenhouse: 'Cultivo hidropônico para sustentar o Vault.',
+    }[room.type];
+    const canUpgrade = !['vault', 'elevator'].includes(room.type) && room.level < 3;
+    const upgradeCost = Math.ceil(SHELTER_TYPES[room.type].cost * .75 * room.level);
+    bunkerGeneratorModal.innerHTML = `<section class="bunker-dialog" role="dialog" aria-modal="true" aria-labelledby="bunker-room-title"><p class="eyebrow">/// GESTÃO DO VAULT ///</p><h2 id="bunker-room-title">${SHELTER_TYPES[room.type].name}</h2><pre>&gt; ANDAR ${room.floor + 1} / SETOR ${room.column} / NÍVEL ${room.level}
+&gt; ${description}
+&gt; SUCATA DISPONÍVEL: ${formatNumber.format(state.scrap ?? 0)}</pre><div class="action-row">${isGenerator && !room.operational ? `<button type="button" class="primary-action" data-action="repair-generator" data-floor="${room.floor}" data-column="${room.column}" ${state.scrap >= 25 ? '' : 'disabled'}>[ REPARAR: 25 SUCATAS ]</button>` : ''}${canUpgrade ? `<button type="button" class="primary-action" data-action="upgrade-shelter-room" data-floor="${room.floor}" data-column="${room.column}" ${state.scrap >= upgradeCost ? '' : 'disabled'}>[ MELHORAR: ${upgradeCost} SUCATAS ]</button>` : ''}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div></section>`;
+    bunkerGeneratorModal.hidden = false;
+    bunkerController?.pause();
+  }
+
+  function refreshShelterSlots() {
+    const select = root.querySelector('#shelter-build-slot');
+    if (!select) return;
+    const slots = findBuildSlots(state.shelter_grid, bunkerBuildType);
+    select.innerHTML = slots.map(({ floor, column }) => `<option value="${floor}:${column}">Andar ${floor + 1} · setor ${column === 0 ? 'elevador' : column}</option>`).join('');
+    const place = root.querySelector('[data-action="shelter-place"]');
+    if (place) place.disabled = !slots.length || state.scrap < SHELTER_TYPES[bunkerBuildType].cost;
+  }
+
   function render() {
-    const bunkerPlayer = bunkerController?.getState().player;
+    const bunkerSnapshot = bunkerController?.getSnapshot();
     bunkerController?.destroy();
     bunkerController = null;
     if (typeof document !== 'undefined' && document.body) {
@@ -625,52 +652,42 @@ export function mountDashboard(root) {
         : activeTab === 'history' ? storyModeView(state)
         : activeTab === 'countries' ? countriesView(state)
           : overviewView(state, projection);
+    const topbarActions = state.is_wasteland
+      ? `<span class="bunker-era">${state.country.nome}</span><button type="button" class="quiet-action" data-action="reset">Nova partida</button>`
+      : `<label class="country-picker"><span>Pais</span><select data-action="select-country" aria-label="Selecionar pais">${COUNTRIES.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((country) => `<option value="${country.id}" ${country.id === state.country.id ? 'selected' : ''}>${country.nome}</option>`).join('')}</select></label><button type="button" class="quiet-action" data-action="reset">Reiniciar</button>`;
     root.innerHTML = `<div class="app-shell">
       <aside class="sidebar"><div class="brand"><span class="brand-mark">SP</span><div><strong>Simulador</strong><small>de Presidente</small></div></div><nav class="tab-list" aria-label="Navegacao principal">${tabs.map(([id, label]) => `<button type="button" class="tab-button ${activeTab === id ? 'active' : ''}" data-action="tab" data-tab="${id}">${label}</button>`).join('')}</nav><div class="sidebar-footer"><span>Mandato em curso</span><strong>${state.calendar.year}</strong></div></aside>
-      <section class="workspace"><header class="topbar"><div><p class="eyebrow">${state.title ?? 'Presidente'}</p><h1>${state.is_wasteland ? 'ANO ZERO POS-BOMBA' : `${MONTHS[state.calendar.month - 1]} de ${state.calendar.year}`}</h1></div><div class="topbar-actions"><label class="country-picker"><span>Pais</span><select data-action="select-country" aria-label="Selecionar pais">${COUNTRIES.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((country) => `<option value="${country.id}" ${country.id === state.country.id ? 'selected' : ''}>${country.nome}</option>`).join('')}</select></label><button type="button" class="quiet-action" data-action="reset">Reiniciar</button></div></header>
+      <section class="workspace"><header class="topbar"><div><p class="eyebrow">${state.title ?? 'Presidente'}</p><h1>${state.is_wasteland ? 'ANO ZERO PÓS-BOMBA' : `${MONTHS[state.calendar.month - 1]} de ${state.calendar.year}`}</h1></div><div class="topbar-actions">${topbarActions}</div></header>
       <section class="metrics">${metric('PIB', formatMoney(state.economy.gdp))}${metric('Inflacao', formatPercent(state.economy.inflation), state.economy.inflation > 0.1 ? 'negative' : '')}${metric('Desemprego', formatPercent(state.economy.unemployment))}${metric('Apoio interno', `${getFactionSupport(state.factions).toFixed(0)}%`, getFactionSupport(state.factions) >= 55 ? 'positive' : '')}${metric('Caixa nacional', formatMoney(state.economy.cash))}${metric('DEFCON', `DEFCON: ${state.global_defcon}`, `defcon-${state.global_defcon}`)}${metric('Saldo projetado', formatMoney(projection.monthlyBalance), projection.monthlyBalance >= 0 ? 'positive' : 'negative')}</section>
       ${storageNotice ? `<p class="storage-notice">${storageNotice}</p>` : ''}
       ${state.notice === STORY_NOTICE ? `<p class="storage-notice story-notification" role="status">${STORY_NOTICE}</p>` : ''}
       <section class="content-area">${content}</section>${renderNews(state)}
     </section></div>`;
     if (state.is_wasteland) {
-      bunkerController = createIsometricBunkerEngine(root.querySelector('#bunkerCanvas'), {
-        rooms: state.bunker_rooms,
-        initialPlayer: bunkerPlayer ?? state.bunker_player,
-        onMove: (player) => {
-          state = { ...state, bunker_player: player };
+      bunkerController = createShelterEngine(root.querySelector('#shelterCanvas'), {
+        grid: state.shelter_grid,
+        previous: bunkerSnapshot ?? { inhabitants: state.shelter_inhabitants },
+        onBuild: (type, floor, column) => commit(buildShelterRoom(state, type, floor, column)),
+        onActorsChanged: (inhabitants) => {
+          state = { ...state, shelter_inhabitants: inhabitants };
           storageNotice = saveState(state);
         },
-        onBuild: (type, slot) => commit(buildBunkerRoom(state, type, slot.anchorId, slot.direction)),
-        onRoomChange: (room) => {
-          const label = root.querySelector('[data-bunker-room]');
-          if (label) label.textContent = `> Sala atual: ${ROOM_TYPES[room.type].name}. Pressione E para interagir.`;
+        onSelect: (actor) => {
+          const label = root.querySelector('[data-shelter-status]');
+          if (label) label.textContent = actor
+            ? `${actor.president ? 'PRESIDENTE' : 'HABITANTE'} SELECIONADO`
+            : 'AGUARDANDO ORDENS';
         },
-        onInteract: (room) => {
-          if (!room || !bunkerGeneratorModal) return;
-          const isGenerator = room.type === 'generator';
-          const description = {
-            vault: 'Porta blindada e centro de comando dos sobreviventes.',
-            dormitory: 'Leitos modulares. Capacidade de abrigo ampliada.',
-            generator: room.operational ? 'Unidade energética operacional.' : 'Unidade energética aguardando manutenção.',
-            greenhouse: 'Cultivo hidropônico para sustentar o Vault.',
-          }[room.type];
-          bunkerGeneratorModal.innerHTML = `<section class="bunker-dialog" role="dialog" aria-modal="true" aria-labelledby="bunker-room-title"><p class="eyebrow">/// GESTÃO DO BUNKER ///</p><h2 id="bunker-room-title">${ROOM_TYPES[room.type].name}</h2><pre>&gt; SETOR ${room.id.toUpperCase()}
-&gt; ${description}
-&gt; SUCATA DISPONÍVEL: ${formatNumber.format(state.scrap ?? 0)}</pre><div class="action-row">${isGenerator && !room.operational ? `<button type="button" class="primary-action" data-action="repair-generator" data-room-id="${room.id}" ${state.scrap >= 25 ? '' : 'disabled'}>[ REPARAR GERADOR: 25 SUCATAS ]</button>` : ''}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO BUNKER ]</button></div></section>`;
-          bunkerGeneratorModal.hidden = false;
-        },
+        onRoom: openShelterRoom,
       });
       bunkerController?.setBuildType(bunkerBuildType);
       bunkerController?.setBuildMode(bunkerBuildMode);
-      const buildToggle = root.querySelector('[data-action="bunker-build-mode"]');
+      const buildToggle = root.querySelector('[data-action="shelter-build-mode"]');
       if (buildToggle) buildToggle.setAttribute('aria-pressed', String(bunkerBuildMode));
       const buildControls = root.querySelector('.bunker-build-controls');
       if (buildControls) buildControls.hidden = !bunkerBuildMode;
-      root.querySelectorAll('[data-action="bunker-module"]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.module === bunkerBuildType)));
-      const currentRoom = getRoomAt(state.bunker_rooms ?? INITIAL_BUNKER_ROOMS, bunkerPlayer?.x ?? state.bunker_player?.x ?? 2, bunkerPlayer?.y ?? state.bunker_player?.y ?? 2);
-      const label = root.querySelector('[data-bunker-room]');
-      if (label && currentRoom) label.textContent = `> Sala atual: ${ROOM_TYPES[currentRoom.type].name}. Pressione E para interagir.`;
+      root.querySelectorAll('[data-action="shelter-module"]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.module === bunkerBuildType)));
+      refreshShelterSlots();
     }
     if (treatyModal) {
       const treatyMarkup = renderPeaceTreaty(state);
@@ -919,10 +936,14 @@ export function mountDashboard(root) {
       bunkerGeneratorModal.hidden = true;
       bunkerController?.resume();
     }
-    if (action === 'repair-generator') {
+    if (action === 'repair-generator' || action === 'upgrade-shelter-room') {
       bunkerGeneratorModal.hidden = true;
       bunkerController?.resume();
-      commit(repairBunkerGenerator(state, button.dataset.roomId));
+      const floor = Number(button.dataset.floor);
+      const column = Number(button.dataset.column);
+      commit(action === 'repair-generator'
+        ? repairShelterGenerator(state, floor, column)
+        : upgradeShelterRoom(state, floor, column));
     }
   });
 
@@ -930,26 +951,30 @@ export function mountDashboard(root) {
     const control = event.target.closest('[data-action]');
     if (!control || control.disabled) return;
     const { action } = control.dataset;
-    if (action === 'bunker-build-mode') {
+    if (action === 'shelter-build-mode') {
       bunkerBuildMode = !bunkerBuildMode;
       control.setAttribute('aria-pressed', String(bunkerBuildMode));
       root.querySelector('.bunker-build-controls').hidden = !bunkerBuildMode;
       bunkerController?.setBuildMode(bunkerBuildMode);
       return;
     }
-    if (action === 'bunker-module') {
+    if (action === 'shelter-module') {
       bunkerBuildType = control.dataset.module;
-      root.querySelectorAll('[data-action="bunker-module"]').forEach((button) => button.setAttribute('aria-pressed', String(button === control)));
+      root.querySelectorAll('[data-action="shelter-module"]').forEach((button) => button.setAttribute('aria-pressed', String(button === control)));
       bunkerController?.setBuildType(bunkerBuildType);
+      refreshShelterSlots();
       return;
     }
-    if (action === 'bunker-place') {
-      const [anchorId, direction] = root.querySelector('#bunker-build-slot')?.value.split('|') ?? [];
-      commit(buildBunkerRoom(state, bunkerBuildType, anchorId, direction));
+    if (action === 'shelter-place') {
+      const [floor, column] = root.querySelector('#shelter-build-slot')?.value.split(':').map(Number) ?? [];
+      commit(buildShelterRoom(state, bunkerBuildType, floor, column));
       return;
     }
-    if (action === 'bunker-move') { bunkerController?.move(control.dataset.direction); return; }
-    if (action === 'bunker-interact') { bunkerController?.interact(); return; }
+    if (action === 'shelter-open-room') {
+      const [floor, column] = root.querySelector('#shelter-room-select')?.value.split(':').map(Number) ?? [];
+      openShelterRoom(getRoom(state.shelter_grid, floor, column));
+      return;
+    }
     if (action === 'tab') { activeTab = control.dataset.tab; render(); return; }
     if (action === 'tax') { commit(changeTax(state, control.dataset.tax, Number(control.dataset.delta))); return; }
     if (action === 'slush-fund') { commit(desviarFundosParaCaixa2(state)); return; }

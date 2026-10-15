@@ -72,11 +72,18 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 .bunker-chamber { min-height: calc(100vh - 180px); border: 4px double var(--amber); padding: 18px; background: #090604; box-shadow: inset 0 0 26px rgba(255, 122, 24, .12); }
 .bunker-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; border-bottom: 2px solid var(--line); padding-bottom: 12px; }
 .bunker-header h2 { margin: 4px 0 0; color: var(--amber); }
+.bunker-header-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.bunker-header-actions button { white-space: nowrap; }
 .bunker-hud { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 12px 0; color: var(--phosphor); font-size: 13px; text-transform: uppercase; }
 .bunker-hud span { border: 1px solid var(--line); padding: 6px 8px; background: rgba(255, 122, 24, .06); }
-.bunker-canvas { display: block; width: min(100%, 960px); aspect-ratio: 8 / 5; margin: 12px auto 0; border: 4px double var(--amber); background: #161b1c; outline: none; box-shadow: 0 0 22px rgba(255, 122, 24, .24); }
+.bunker-canvas { display: block; width: 100%; aspect-ratio: 8 / 5; margin: 12px auto 0; border: 4px double var(--amber); background: #252523; outline: none; box-shadow: 0 0 22px rgba(255, 122, 24, .24); cursor: grab; touch-action: none; }
+.bunker-canvas:active { cursor: grabbing; }
 .bunker-canvas:focus { border-color: var(--phosphor); box-shadow: 0 0 22px rgba(255, 179, 71, .45); }
 .bunker-status { margin: 12px 0 0; color: var(--muted); }
+.shelter-room-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.shelter-room-controls label { color: var(--amber); }
+.shelter-room-controls button { white-space: nowrap; }
+.bunker-era { max-width: 42ch; color: var(--amber); font-size: 13px; text-align: right; overflow-wrap: anywhere; }
 .bunker-build-toggle[aria-pressed="true"] { border-color: #f7b653; background: #f7b653; color: #17130e; }
 .bunker-build-controls { display: flex; flex-wrap: wrap; align-items: stretch; gap: 9px; padding: 12px 0; border-top: 1px solid var(--line); }
 .bunker-build-controls[hidden] { display: none; }
@@ -94,7 +101,10 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 .bunker-direction-controls button { width: 38px; height: 38px; border: 2px solid var(--amber); background: #202727; color: var(--phosphor); font-size: 19px; line-height: 1; box-shadow: 3px 3px 0 #050706; }
 .bunker-direction-controls button:hover { background: var(--amber); color: #111; }
 .bunker-direction-controls button:active { transform: translate(3px, 3px); box-shadow: none; }
-@media (max-width: 640px) { .bunker-header, .bunker-foot { flex-wrap: wrap; } .bunker-canvas { aspect-ratio: 4 / 3; } .bunker-build-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .bunker-module-button { min-width: 0; } .bunker-build-hint, .bunker-slot-controls { grid-column: 1 / -1; } }
+@media (max-width: 640px) { .bunker-header, .bunker-foot { flex-wrap: wrap; } .bunker-header-actions, .shelter-room-controls { justify-content: flex-start; } .bunker-canvas { aspect-ratio: 4 / 3; } .bunker-build-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .bunker-module-button { min-width: 0; } .bunker-build-hint, .bunker-slot-controls { grid-column: 1 / -1; } }
+body.theme-wasteland .app-shell { grid-template-columns: minmax(0, 1fr); }
+body.theme-wasteland .sidebar, body.theme-wasteland .metrics { display: none; }
+body.theme-wasteland .content-area { max-width: none; }
 .modal-bunker[hidden] { display: none; }
 .modal-bunker { position: fixed; z-index: 55; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(8, 4, 1, .9); }
 .bunker-dialog { width: min(600px, 100%); border: 4px double var(--amber); padding: 24px; background: var(--panel); box-shadow: 0 0 28px rgba(255, 122, 24, .55), 9px 9px 0 var(--shadow); }

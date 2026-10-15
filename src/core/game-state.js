@@ -34,9 +34,9 @@ import { checkStoryEvents, dismissStory as dismissNarrativeStory, gerarEntradaDi
 import { checkStoryChapters, getLoreChapter } from './story_lore.js';
 import { advanceGovernment, applyGovernmentEconomy, openAutoCoup, resolveAutoCoup, resolveCorporateDefault } from './politics.js';
 import { advanceWastelandMonth, buildMegaVault, buildWastelandProject, enviarBatedores, transicionarParaWasteland as transitionToWasteland } from './wasteland.js';
-import { INITIAL_BUNKER_ROOMS, normalizeBunkerPlayer, normalizeBunkerRooms } from './isometric_bunker.js';
+import { INITIAL_SHELTER_GRID, migrateLegacyPlayer, migrateLegacyRooms, normalizeShelterGrid, normalizeShelterInhabitants } from './shelter_engine.js';
 
-const STATE_VERSION = 15;
+const STATE_VERSION = 16;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 
 function clamp(value, minimum, maximum) {
@@ -184,8 +184,8 @@ export function createGameState(countryId = 'bra') {
     wasteland_cinematic_ready: false,
     vault_built: false,
     scrap: 0,
-    bunker_rooms: [...INITIAL_BUNKER_ROOMS],
-    bunker_player: { x: 2, y: 2, facing: 'south' },
+    shelter_grid: normalizeShelterGrid(INITIAL_SHELTER_GRID),
+    shelter_inhabitants: [],
     wastelandBuildings: { waterPurifiers: 0, geothermalGenerators: 0 },
     infrastructure: { roads: 0, railways: 0, airports: 0 },
     health: { hospitals: 0, clinics: 0 },
@@ -1014,6 +1014,7 @@ export function hydrateGameState(serialized) {
     const calendar = parsed.calendar ?? {};
     const laws = parsed.laws?.laborReform ?? {};
     const countryIsWasteland = Boolean(parsed.country?.wasteland);
+    const shelterGrid = normalizeShelterGrid(parsed.shelter_grid ?? migrateLegacyRooms(parsed.bunker_rooms));
     const hydrated = {
       ...base,
       country: {
@@ -1165,8 +1166,8 @@ export function hydrateGameState(serialized) {
       wasteland_cinematic_ready: Boolean(parsed.wasteland_cinematic_ready),
       vault_built: Boolean(parsed.vault_built || parsed.megaprojects?.megaVault?.completed),
       scrap: Math.max(0, Number(parsed.scrap) || 0),
-      bunker_rooms: normalizeBunkerRooms(parsed.bunker_rooms),
-      bunker_player: normalizeBunkerPlayer(parsed.bunker_player, normalizeBunkerRooms(parsed.bunker_rooms)),
+      shelter_grid: shelterGrid,
+      shelter_inhabitants: normalizeShelterInhabitants(parsed.shelter_inhabitants ?? migrateLegacyPlayer(parsed.bunker_player, parsed.bunker_rooms, shelterGrid), shelterGrid),
       wastelandBuildings: {
         waterPurifiers: Math.max(0, Math.floor(Number(parsed.wastelandBuildings?.waterPurifiers) || 0)),
         geothermalGenerators: Math.max(0, Math.floor(Number(parsed.wastelandBuildings?.geothermalGenerators) || 0)),
