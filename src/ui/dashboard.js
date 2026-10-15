@@ -13,6 +13,7 @@ import { RESOLUTIONS } from '../core/un_assembly.js';
 import { getStoryEvent } from '../core/story_engine.js';
 import { LORE_CHAPTERS, STORY_NOTICE } from '../core/story_lore.js';
 import { INTERNAL_PROJECTS } from '../core/infrastructure.js';
+import { createBunkerEngine } from '../core/bunker_engine.js';
 import {
   advanceMonth,
   absorverPaisParaUniao,
@@ -343,6 +344,16 @@ export function projectsView(state) {
   return `<section class="panel projects-panel"><div class="panel-heading"><div><p class="eyebrow">Capacidade nacional</p><h2>Projetos Internos</h2></div><span class="country-code">ACO ${formatNumber.format(state.country.steel)}</span></div><div class="internal-metrics"><span>AMBIENTE ${Number(state.environment_health ?? 100).toFixed(0)}%</span><span>MANUTENCAO ${formatMoney(internalMaintenance)}/mes</span><span>ESTRADAS ${infrastructure.roads ?? 0} | FERROVIAS ${infrastructure.railways ?? 0} | AEROPORTOS ${infrastructure.airports ?? 0}</span><span>HOSPITAIS ${health.hospitals ?? 0} | CLINICAS ${health.clinics ?? 0}</span><span>FABRICAS ${industry.factories ?? 0} | USINAS ${industry.power_plants ?? 0}</span></div>${internalProjects}<article class="project-row ${automated ? 'completed' : ''}"><div><strong>Automatizar Parque Industrial</strong><span>${automated ? 'Industria 4.0 ativa: +3.000 aco por mes e pressao constante sobre trabalhadores.' : 'Custo: R$ 200 bi e 250 PP. Triplica a producao mensal de aco.'}</span></div><button type="button" class="${automated ? 'quiet-action' : 'primary-action'}" data-action="automate-industry" ${automated || !canAutomate ? 'disabled' : ''}>${automated ? 'Automatizado' : 'Automatizar'}</button></article>${vaultProject}${deadHandProject}</section>`;
 }
 
+export function bunkerView(state) {
+  const buildings = state.wastelandBuildings ?? {};
+  return `<section class="bunker-chamber">
+    <div class="bunker-header"><div><p class="eyebrow">/// CAMARA DE SEGURANCA DO BUNKER ///</p><h2>Vault de Comando</h2></div><span class="country-code">ANO ZERO</span></div>
+    <div class="bunker-hud"><span>SUCATA: ${formatNumber.format(state.scrap ?? 0)}</span><span>GERADORES: ${buildings.geothermalGenerators ?? 0}</span><span>PURIFICADORES: ${buildings.waterPurifiers ?? 0}</span><span>CONTROLES: WASD / SETAS / E</span></div>
+    <canvas id="bunkerCanvas" class="bunker-canvas" width="720" height="720" aria-label="Mapa subterrâneo do bunker"></canvas>
+    <p class="bunker-status">&gt; O mundo exterior está morto. Caminhe pelo bunker e inspecione as salas operacionais.</p>
+  </section>`;
+}
+
 export function renderDeadHandTerminal(state) {
   if (!state.dead_hand_triggered) return '';
   return `<section class="dead-hand-dialog" role="dialog" aria-modal="true" aria-labelledby="dead-hand-title"><pre id="dead-hand-title" class="ascii-dead-hand">[!] ERRO CRÍTICO NO GOVERNO CENTRAL [!]
@@ -567,13 +578,17 @@ export function mountDashboard(root) {
   const hostileAlertModal = document.getElementById('modal-alerta-hostil');
   const governmentModal = document.getElementById('modal-auto-golpe');
   const wastelandCinematicModal = document.getElementById('modal-wasteland-cinematic');
+  const bunkerGeneratorModal = document.getElementById('modal-bunker-gerador');
   const congressLawTitle = document.getElementById('congresso-lei-titulo');
   const congressLawDescription = document.getElementById('congresso-lei-descricao');
   let pendingCongressLawId = null;
   let pendingNukeTargetId = null;
   let falloutCinematicStarted = false;
+  let bunkerController = null;
 
   function render() {
+    bunkerController?.destroy();
+    bunkerController = null;
     if (typeof document !== 'undefined' && document.body) {
       const flashPending = Boolean(state.is_wasteland && state.wasteland_cinematic_pending);
       document.body.classList.toggle('wasteland-mode', Boolean(state.is_wasteland && !flashPending));
@@ -592,7 +607,8 @@ export function mountDashboard(root) {
       ['history', '> MODO HISTÓRIA'],
       ['countries', 'Paises'],
     ];
-    const content = activeTab === 'budget' ? budgetView(state, projection)
+    const content = state.is_wasteland ? bunkerView(state)
+      : activeTab === 'budget' ? budgetView(state, projection)
       : activeTab === 'diplomacy' ? diplomacyView(state, diplomacyQuery)
         : activeTab === 'military' ? militaryView(state)
           : activeTab === 'cabinet' ? cabinetView(state)
@@ -610,6 +626,18 @@ export function mountDashboard(root) {
       ${state.notice === STORY_NOTICE ? `<p class="storage-notice story-notification" role="status">${STORY_NOTICE}</p>` : ''}
       <section class="content-area">${content}</section>${renderNews(state)}
     </section></div>`;
+    if (state.is_wasteland) {
+      bunkerController = createBunkerEngine(root.querySelector('#bunkerCanvas'), {
+        onInteract: (interactive) => {
+          if (interactive.tile !== 2 || !bunkerGeneratorModal) return;
+          console.log('Abrindo Modal do Gerador');
+          bunkerGeneratorModal.innerHTML = `<section class="bunker-dialog" role="dialog" aria-modal="true" aria-labelledby="bunker-generator-title"><p class="eyebrow">/// GESTAO DE INFRAESTRUTURA ///</p><h2 id="bunker-generator-title">Gerador de Energia</h2><pre>&gt; UNIDADE G-02
+&gt; STATUS: MANUTENCAO NECESSARIA
+&gt; SUCATA DISPONIVEL: ${formatNumber.format(state.scrap ?? 0)}</pre><p class="notice">Reparar o gerador custa 25 unidades de sucata.</p><div class="action-row"><button type="button" class="primary-action" data-action="repair-generator" ${state.scrap >= 25 ? '' : 'disabled'}>[ REPARAR GERADOR ]</button><button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO BUNKER ]</button></div></section>`;
+          bunkerGeneratorModal.hidden = false;
+        },
+      });
+    }
     if (treatyModal) {
       const treatyMarkup = renderPeaceTreaty(state);
       treatyModal.hidden = !treatyMarkup;
@@ -848,6 +876,19 @@ export function mountDashboard(root) {
     if (!event.target.closest('[data-action="dismiss-wasteland-cinematic"]')) return;
     falloutCinematicStarted = false;
     commit({ ...state, wasteland_cinematic_pending: false, wasteland_cinematic_ready: false, notice: 'Comando do Vault assumido. A superficie aguarda.' });
+  });
+
+  bunkerGeneratorModal?.addEventListener('click', (event) => {
+    const action = event.target.closest('[data-action]')?.dataset.action;
+    if (action === 'close-bunker-modal') {
+      bunkerGeneratorModal.hidden = true;
+      bunkerController?.resume();
+    }
+    if (action === 'repair-generator' && state.scrap >= 25) {
+      bunkerGeneratorModal.hidden = true;
+      bunkerController?.resume();
+      commit({ ...state, scrap: state.scrap - 25, notice: 'Gerador G-02 reparado. A energia do Vault foi estabilizada.' });
+    }
   });
 
   root.addEventListener('click', (event) => {

@@ -69,6 +69,19 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 @keyframes wasteland-card-arrival { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
 @keyframes radiation-pulse { 50% { opacity: .42; transform: scale(.96); } }
 @keyframes fallout-typewriter { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+.bunker-chamber { min-height: calc(100vh - 180px); border: 4px double var(--amber); padding: 18px; background: #090604; box-shadow: inset 0 0 26px rgba(255, 122, 24, .12); }
+.bunker-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; border-bottom: 2px solid var(--line); padding-bottom: 12px; }
+.bunker-header h2 { margin: 4px 0 0; color: var(--amber); }
+.bunker-hud { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 12px 0; color: var(--phosphor); font-size: 13px; text-transform: uppercase; }
+.bunker-hud span { border: 1px solid var(--line); padding: 6px 8px; background: rgba(255, 122, 24, .06); }
+.bunker-canvas { display: block; width: min(100%, 720px); aspect-ratio: 1; margin: 0 auto; border: 4px double var(--amber); background: #000; image-rendering: pixelated; outline: none; box-shadow: 0 0 22px rgba(255, 122, 24, .24); }
+.bunker-canvas:focus { border-color: var(--phosphor); box-shadow: 0 0 22px rgba(255, 179, 71, .45); }
+.bunker-status { margin: 12px 0 0; color: var(--muted); }
+.modal-bunker[hidden] { display: none; }
+.modal-bunker { position: fixed; z-index: 55; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(8, 4, 1, .9); }
+.bunker-dialog { width: min(600px, 100%); border: 4px double var(--amber); padding: 24px; background: var(--panel); box-shadow: 0 0 28px rgba(255, 122, 24, .55), 9px 9px 0 var(--shadow); }
+.bunker-dialog h2 { color: var(--amber); }
+.bunker-dialog pre { overflow: auto; border: 1px dashed var(--line); padding: 14px; color: var(--phosphor); line-height: 1.5; }
 button, input, select { font: inherit; }
 button { border-radius: 0; cursor: pointer; }
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
