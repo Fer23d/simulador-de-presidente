@@ -115,7 +115,12 @@ export function buildShelterRoom(state, type, floor, column) {
   if ((Number(state.scrap) || 0) < specification.cost) return { ...state, notice: 'Sucata insuficiente.' };
   const grid = state.shelter_grid.map((row) => [...row]);
   grid[floor][column] = makeRoom(type, floor, column);
-  return { ...state, scrap: state.scrap - specification.cost, shelter_grid: grid,
+  const roles = { generator: 'engineer', greenhouse: 'scientist', medical: 'medic', arsenal: 'guard', radio: 'engineer', office: 'resident' };
+  const inhabitants = Array.isArray(state.inhabitants) && type !== 'elevator'
+    ? [...state.inhabitants, { id: `worker-${floor}-${column}`, floor, column, offsetX: column % 2 ? -78 : 78,
+      role: roles[type] ?? 'resident', pose: ['generator', 'greenhouse', 'medical', 'radio'].includes(type) ? 'working' : 'idle', facing: column % 2 ? 1 : -1 }]
+    : state.inhabitants;
+  return { ...state, scrap: state.scrap - specification.cost, shelter_grid: grid, ...(inhabitants ? { inhabitants } : {}),
     notice: `${specification.name} construído no andar ${floor + 1}, setor ${column}.` };
 }
 

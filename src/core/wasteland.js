@@ -1,5 +1,5 @@
 import { calculateShelterCapacity, INITIAL_SHELTER_GRID, normalizeShelterGrid } from './shelter_engine.js';
-import { createRpgPlayer } from './rpg_bunker.js';
+import { createInitialInhabitants, createRpgPlayer } from './rpg_bunker.js';
 
 const VAULT_CASH_COST = 500_000_000_000;
 const VAULT_STEEL_COST = 50_000;
@@ -55,6 +55,7 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
     scrap: Math.max(250, Number(state.scrap) || 0),
     shelter_grid: normalizeShelterGrid(INITIAL_SHELTER_GRID),
     shelter_inhabitants: [],
+    inhabitants: createInitialInhabitants(INITIAL_SHELTER_GRID),
     rpg_player: createRpgPlayer(INITIAL_SHELTER_GRID),
     shelter_supplies: { weapons: 0, medkits: 0 },
     shelter_guards: 0,

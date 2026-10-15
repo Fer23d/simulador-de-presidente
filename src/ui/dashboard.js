@@ -672,6 +672,8 @@ export function mountDashboard(root) {
       bunkerController = createRpgBunkerEngine(root.querySelector('#shelterCanvas'), {
         grid: state.shelter_grid,
         player: bunkerSnapshot?.player ?? state.rpg_player,
+        inhabitants: state.inhabitants,
+        cabinFloor: bunkerSnapshot?.cabinFloor,
         onBuild: (type, floor, column) => commit(buildShelterRoom(state, type, floor, column)),
         onPlayerChanged: (player) => {
           state = { ...state, rpg_player: player };

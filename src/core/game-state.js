@@ -34,7 +34,7 @@ import { checkStoryEvents, dismissStory as dismissNarrativeStory, gerarEntradaDi
 import { checkStoryChapters, getLoreChapter } from './story_lore.js';
 import { advanceGovernment, applyGovernmentEconomy, openAutoCoup, resolveAutoCoup, resolveCorporateDefault } from './politics.js';
 import { advanceWastelandMonth, buildMegaVault, buildWastelandProject, enviarBatedores, transicionarParaWasteland as transitionToWasteland } from './wasteland.js';
-import { createRpgPlayer, normalizeRpgPlayer } from './rpg_bunker.js';
+import { createRpgPlayer, normalizeInhabitants, normalizeRpgPlayer } from './rpg_bunker.js';
 import { INITIAL_SHELTER_GRID, migrateLegacyPlayer, migrateLegacyRooms, normalizeShelterGrid, normalizeShelterInhabitants } from './shelter_engine.js';
 
 const STATE_VERSION = 16;
@@ -187,6 +187,7 @@ export function createGameState(countryId = 'bra') {
     scrap: 0,
     shelter_grid: normalizeShelterGrid(INITIAL_SHELTER_GRID),
     shelter_inhabitants: [],
+    inhabitants: [],
     rpg_player: createRpgPlayer(INITIAL_SHELTER_GRID),
     shelter_supplies: { weapons: 0, medkits: 0 },
     shelter_guards: 0,
@@ -1173,6 +1174,9 @@ export function hydrateGameState(serialized) {
       scrap: Math.max(0, Number(parsed.scrap) || 0),
       shelter_grid: shelterGrid,
       shelter_inhabitants: normalizeShelterInhabitants(parsed.shelter_inhabitants ?? migrateLegacyPlayer(parsed.bunker_player, parsed.bunker_rooms, shelterGrid), shelterGrid),
+      inhabitants: parsed.is_wasteland ? normalizeInhabitants(parsed.inhabitants ??
+        (parsed.shelter_inhabitants?.some((actor) => actor?.id !== 'president')
+          ? parsed.shelter_inhabitants.filter((actor) => actor?.id !== 'president') : undefined), shelterGrid) : [],
       rpg_player: normalizeRpgPlayer(parsed.rpg_player ?? parsed.shelter_inhabitants?.find((actor) => actor.id === 'president'), shelterGrid),
       shelter_supplies: {
         weapons: Math.max(0, Math.floor(Number(parsed.shelter_supplies?.weapons) || 0)),
