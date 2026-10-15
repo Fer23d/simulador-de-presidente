@@ -13,7 +13,7 @@ import { RESOLUTIONS } from '../core/un_assembly.js';
 import { getStoryEvent } from '../core/story_engine.js';
 import { LORE_CHAPTERS, STORY_NOTICE } from '../core/story_lore.js';
 import { INTERNAL_PROJECTS } from '../core/infrastructure.js';
-import { createBunkerEngine } from '../core/bunker_engine.js';
+import { buildBunkerRoom, calculateBunkerCapacity, createIsometricBunkerEngine, getBuildSlots, getRoomAt, INITIAL_BUNKER_ROOMS, repairBunkerGenerator, ROOM_TYPES } from '../core/isometric_bunker.js';
 import {
   advanceMonth,
   absorverPaisParaUniao,
@@ -345,12 +345,16 @@ export function projectsView(state) {
 }
 
 export function bunkerView(state) {
-  const buildings = state.wastelandBuildings ?? {};
+  const rooms = state.bunker_rooms ?? INITIAL_BUNKER_ROOMS;
+  const modules = Object.entries(ROOM_TYPES).filter(([id]) => id !== 'vault');
+  const slots = getBuildSlots(rooms);
+  const sideNames = { north: 'norte', south: 'sul', east: 'leste', west: 'oeste' };
   return `<section class="bunker-chamber">
-    <div class="bunker-header"><div><p class="eyebrow">/// CAMARA DE SEGURANCA DO BUNKER ///</p><h2>Vault de Comando</h2></div><span class="country-code">ANO ZERO</span></div>
-    <div class="bunker-hud"><span>SUCATA: ${formatNumber.format(state.scrap ?? 0)}</span><span>GERADORES: ${buildings.geothermalGenerators ?? 0}</span><span>PURIFICADORES: ${buildings.waterPurifiers ?? 0}</span><span>CONTROLES: WASD / SETAS / E</span></div>
-    <canvas id="bunkerCanvas" class="bunker-canvas" width="720" height="720" aria-label="Mapa subterrâneo do bunker"></canvas>
-    <p class="bunker-status">&gt; O mundo exterior está morto. Caminhe pelo bunker e inspecione as salas operacionais.</p>
+    <div class="bunker-header"><div><p class="eyebrow">/// CÂMARA DE SEGURANÇA DO BUNKER ///</p><h2>Vault de Comando</h2></div><button type="button" class="quiet-action bunker-build-toggle" data-action="bunker-build-mode" aria-pressed="false">[ MODO CONSTRUÇÃO ]</button></div>
+    <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateBunkerCapacity(rooms))}</span><span>WASD / SETAS / E</span></div>
+    <div class="bunker-build-controls" hidden aria-label="Módulos de construção">${modules.map(([id, module]) => `<button type="button" class="bunker-module-button" data-action="bunker-module" data-module="${id}" aria-pressed="${id === 'dormitory'}" ${state.scrap < module.cost ? 'disabled' : ''}>${module.name}<small>${module.cost} sucatas</small></button>`).join('')}<span class="bunker-build-hint">Selecione um módulo e clique no + de uma parede externa.</span><div class="bunker-slot-controls"><label for="bunker-build-slot">Parede de expansão</label><select id="bunker-build-slot" class="bunker-build-slot">${slots.map((slot) => `<option value="${slot.anchorId}|${slot.direction}">${ROOM_TYPES[rooms.find((room) => room.id === slot.anchorId)?.type]?.name ?? 'Sala'} ${slot.anchorId} · ${sideNames[slot.direction]}</option>`).join('')}</select><button type="button" class="primary-action" data-action="bunker-place" ${slots.length ? '' : 'disabled'}>[ ANEXAR MÓDULO ]</button></div></div>
+    <canvas id="bunkerCanvas" class="bunker-canvas" width="960" height="600" aria-label="Planta isométrica do bunker; use WASD ou as setas para se mover"></canvas>
+    <div class="bunker-foot"><p class="bunker-status" data-bunker-room>&gt; Sala atual: Porta do Cofre. Pressione E para interagir.</p><div class="bunker-direction-controls" aria-label="Movimento do Presidente"><button type="button" data-action="bunker-move" data-direction="w" aria-label="Mover para nordeste">↗</button><button type="button" data-action="bunker-move" data-direction="a" aria-label="Mover para noroeste">↖</button><button type="button" data-action="bunker-move" data-direction="s" aria-label="Mover para sudoeste">↙</button><button type="button" data-action="bunker-move" data-direction="d" aria-label="Mover para sudeste">↘</button><button type="button" data-action="bunker-interact" aria-label="Interagir com a sala">E</button></div></div>
   </section>`;
 }
 
@@ -585,8 +589,11 @@ export function mountDashboard(root) {
   let pendingNukeTargetId = null;
   let falloutCinematicStarted = false;
   let bunkerController = null;
+  let bunkerBuildMode = false;
+  let bunkerBuildType = 'dormitory';
 
   function render() {
+    const bunkerPlayer = bunkerController?.getState().player;
     bunkerController?.destroy();
     bunkerController = null;
     if (typeof document !== 'undefined' && document.body) {
@@ -627,16 +634,43 @@ export function mountDashboard(root) {
       <section class="content-area">${content}</section>${renderNews(state)}
     </section></div>`;
     if (state.is_wasteland) {
-      bunkerController = createBunkerEngine(root.querySelector('#bunkerCanvas'), {
-        onInteract: (interactive) => {
-          if (interactive.tile !== 2 || !bunkerGeneratorModal) return;
-          console.log('Abrindo Modal do Gerador');
-          bunkerGeneratorModal.innerHTML = `<section class="bunker-dialog" role="dialog" aria-modal="true" aria-labelledby="bunker-generator-title"><p class="eyebrow">/// GESTAO DE INFRAESTRUTURA ///</p><h2 id="bunker-generator-title">Gerador de Energia</h2><pre>&gt; UNIDADE G-02
-&gt; STATUS: MANUTENCAO NECESSARIA
-&gt; SUCATA DISPONIVEL: ${formatNumber.format(state.scrap ?? 0)}</pre><p class="notice">Reparar o gerador custa 25 unidades de sucata.</p><div class="action-row"><button type="button" class="primary-action" data-action="repair-generator" ${state.scrap >= 25 ? '' : 'disabled'}>[ REPARAR GERADOR ]</button><button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO BUNKER ]</button></div></section>`;
+      bunkerController = createIsometricBunkerEngine(root.querySelector('#bunkerCanvas'), {
+        rooms: state.bunker_rooms,
+        initialPlayer: bunkerPlayer ?? state.bunker_player,
+        onMove: (player) => {
+          state = { ...state, bunker_player: player };
+          storageNotice = saveState(state);
+        },
+        onBuild: (type, slot) => commit(buildBunkerRoom(state, type, slot.anchorId, slot.direction)),
+        onRoomChange: (room) => {
+          const label = root.querySelector('[data-bunker-room]');
+          if (label) label.textContent = `> Sala atual: ${ROOM_TYPES[room.type].name}. Pressione E para interagir.`;
+        },
+        onInteract: (room) => {
+          if (!room || !bunkerGeneratorModal) return;
+          const isGenerator = room.type === 'generator';
+          const description = {
+            vault: 'Porta blindada e centro de comando dos sobreviventes.',
+            dormitory: 'Leitos modulares. Capacidade de abrigo ampliada.',
+            generator: room.operational ? 'Unidade energética operacional.' : 'Unidade energética aguardando manutenção.',
+            greenhouse: 'Cultivo hidropônico para sustentar o Vault.',
+          }[room.type];
+          bunkerGeneratorModal.innerHTML = `<section class="bunker-dialog" role="dialog" aria-modal="true" aria-labelledby="bunker-room-title"><p class="eyebrow">/// GESTÃO DO BUNKER ///</p><h2 id="bunker-room-title">${ROOM_TYPES[room.type].name}</h2><pre>&gt; SETOR ${room.id.toUpperCase()}
+&gt; ${description}
+&gt; SUCATA DISPONÍVEL: ${formatNumber.format(state.scrap ?? 0)}</pre><div class="action-row">${isGenerator && !room.operational ? `<button type="button" class="primary-action" data-action="repair-generator" data-room-id="${room.id}" ${state.scrap >= 25 ? '' : 'disabled'}>[ REPARAR GERADOR: 25 SUCATAS ]</button>` : ''}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO BUNKER ]</button></div></section>`;
           bunkerGeneratorModal.hidden = false;
         },
       });
+      bunkerController?.setBuildType(bunkerBuildType);
+      bunkerController?.setBuildMode(bunkerBuildMode);
+      const buildToggle = root.querySelector('[data-action="bunker-build-mode"]');
+      if (buildToggle) buildToggle.setAttribute('aria-pressed', String(bunkerBuildMode));
+      const buildControls = root.querySelector('.bunker-build-controls');
+      if (buildControls) buildControls.hidden = !bunkerBuildMode;
+      root.querySelectorAll('[data-action="bunker-module"]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.module === bunkerBuildType)));
+      const currentRoom = getRoomAt(state.bunker_rooms ?? INITIAL_BUNKER_ROOMS, bunkerPlayer?.x ?? state.bunker_player?.x ?? 2, bunkerPlayer?.y ?? state.bunker_player?.y ?? 2);
+      const label = root.querySelector('[data-bunker-room]');
+      if (label && currentRoom) label.textContent = `> Sala atual: ${ROOM_TYPES[currentRoom.type].name}. Pressione E para interagir.`;
     }
     if (treatyModal) {
       const treatyMarkup = renderPeaceTreaty(state);
@@ -879,15 +913,16 @@ export function mountDashboard(root) {
   });
 
   bunkerGeneratorModal?.addEventListener('click', (event) => {
-    const action = event.target.closest('[data-action]')?.dataset.action;
+    const button = event.target.closest('[data-action]');
+    const action = button?.dataset.action;
     if (action === 'close-bunker-modal') {
       bunkerGeneratorModal.hidden = true;
       bunkerController?.resume();
     }
-    if (action === 'repair-generator' && state.scrap >= 25) {
+    if (action === 'repair-generator') {
       bunkerGeneratorModal.hidden = true;
       bunkerController?.resume();
-      commit({ ...state, scrap: state.scrap - 25, notice: 'Gerador G-02 reparado. A energia do Vault foi estabilizada.' });
+      commit(repairBunkerGenerator(state, button.dataset.roomId));
     }
   });
 
@@ -895,6 +930,26 @@ export function mountDashboard(root) {
     const control = event.target.closest('[data-action]');
     if (!control || control.disabled) return;
     const { action } = control.dataset;
+    if (action === 'bunker-build-mode') {
+      bunkerBuildMode = !bunkerBuildMode;
+      control.setAttribute('aria-pressed', String(bunkerBuildMode));
+      root.querySelector('.bunker-build-controls').hidden = !bunkerBuildMode;
+      bunkerController?.setBuildMode(bunkerBuildMode);
+      return;
+    }
+    if (action === 'bunker-module') {
+      bunkerBuildType = control.dataset.module;
+      root.querySelectorAll('[data-action="bunker-module"]').forEach((button) => button.setAttribute('aria-pressed', String(button === control)));
+      bunkerController?.setBuildType(bunkerBuildType);
+      return;
+    }
+    if (action === 'bunker-place') {
+      const [anchorId, direction] = root.querySelector('#bunker-build-slot')?.value.split('|') ?? [];
+      commit(buildBunkerRoom(state, bunkerBuildType, anchorId, direction));
+      return;
+    }
+    if (action === 'bunker-move') { bunkerController?.move(control.dataset.direction); return; }
+    if (action === 'bunker-interact') { bunkerController?.interact(); return; }
     if (action === 'tab') { activeTab = control.dataset.tab; render(); return; }
     if (action === 'tax') { commit(changeTax(state, control.dataset.tax, Number(control.dataset.delta))); return; }
     if (action === 'slush-fund') { commit(desviarFundosParaCaixa2(state)); return; }

@@ -1,3 +1,5 @@
+import { calculateBunkerCapacity, INITIAL_BUNKER_ROOMS, normalizeBunkerRooms } from './isometric_bunker.js';
+
 const VAULT_CASH_COST = 500_000_000_000;
 const VAULT_STEEL_COST = 50_000;
 
@@ -50,6 +52,8 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
     wasteland_cinematic_ready: false,
     unlocked_chapters: [...new Set([...(state.unlocked_chapters ?? []), 'cap_5_wasteland'])],
     scrap: Math.max(250, Number(state.scrap) || 0),
+    bunker_rooms: [...INITIAL_BUNKER_ROOMS],
+    bunker_player: { x: 2, y: 2, facing: 'south' },
     vault_built: true,
     title: 'Sobrevivente Supremo',
     country: {
@@ -80,12 +84,17 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
 }
 
 export function advanceWastelandMonth(state) {
+  const rooms = normalizeBunkerRooms(state.bunker_rooms);
+  const generators = rooms.filter((room) => room.type === 'generator' && room.operational).length;
+  const greenhouses = rooms.filter((room) => room.type === 'greenhouse').length;
+  const population = Math.min(calculateBunkerCapacity(rooms), state.country.populacao_base + greenhouses * 5);
   return {
     ...state,
     calendar: { month: state.calendar.month === 12 ? 1 : state.calendar.month + 1, year: state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year },
     monthCounter: (Number(state.monthCounter) || 0) + 1,
-    scrap: (Number(state.scrap) || 0) + 25,
-    notice: 'O Vault sobrevive mais um mes. Sucata recuperada na superficie.',
+    scrap: (Number(state.scrap) || 0) + 25 + generators * 15,
+    country: { ...state.country, populacao: population, populacao_base: population },
+    notice: 'O Vault sobrevive mais um mês. Os módulos operacionais sustentam a população.',
   };
 }
 
