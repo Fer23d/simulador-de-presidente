@@ -13,7 +13,6 @@ import { RESOLUTIONS } from '../core/un_assembly.js';
 import { getStoryEvent } from '../core/story_engine.js';
 import { LORE_CHAPTERS, STORY_NOTICE } from '../core/story_lore.js';
 import { INTERNAL_PROJECTS } from '../core/infrastructure.js';
-import { renderMap, selectMapCountry } from '../core/map_engine.js';
 import {
   advanceMonth,
   absorverPaisParaUniao,
@@ -255,52 +254,6 @@ function legacyDiplomacyView(state) {
   const annexed = new Set(state.geopolitics.annexedCountryIds ?? []);
   const mapCountry = (id, label, path) => `<path d="${path}" class="map-country ${selected.id === id ? 'selected' : ''} ${annexed.has(id) ? 'annexed' : ''}" ${annexed.has(id) ? '' : `data-action="map-country" data-country="${id}" role="button" tabindex="0" aria-label="Selecionar ${label}"`}></path>`;
   return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Painel mundial</p><h2>Diplomacia e Mapa</h2></div><span class="country-code ${onuTone}">ONU ${state.geopolitics.onuScore}/100</span></div><div class="onu-meter"><div><span>Reputacao global</span><strong class="${onuTone}">${state.geopolitics.internationalSanctions ? 'Sancoes internacionais ativas' : 'Sem sancoes internacionais'}</strong></div><div class="meter-track"><span style="width:${state.geopolitics.onuScore}%"></span></div></div><div class="map-layout"><svg class="world-map" viewBox="0 0 800 360" aria-label="Mapa mundial simplificado de teste"><path class="map-ocean" d="M0 0H800V360H0Z"></path>${mapCountry('usa', 'Estados Unidos', 'M105 92h126l35 32-23 48-98 6-46-38z')}${mapCountry('bra', 'Brasil', 'M270 191l71-12 47 48-19 84-65 7-44-61z')}${mapCountry('rus', 'Rússia', 'M420 64h235l65 35-38 47-174-2-88-39z')}${mapCountry('chn', 'China', 'M570 164l93-6 56 43-37 62-92 3-42-55z')}<text x="142" y="132">EUA</text><text x="312" y="245">BR</text><text x="545" y="105">RÚSSIA</text><text x="615" y="214">CHINA</text></svg><aside class="map-selection"><p class="eyebrow">Nacao selecionada</p><h3>${selected.nome} ${nuclearBadge(selected)}</h3><div class="ledger-row"><span>Area</span><strong>${formatNumber.format(selected.area_km2)} km²</strong></div><div class="ledger-row"><span>Populacao</span><strong>${formatNumber.format(selected.populacao_base)}</strong></div><div class="ledger-row"><span>Governo</span><strong>${selected.tipo_governo}</strong></div></aside></div><div class="bloc-list">${state.geopolitics.contacts.map((contact) => `<article class="bloc-row ${contact.anexado ? 'annexed-contact' : ''}"><div><strong>${contact.name} ${nuclearBadge(contact)}</strong><span>${contact.anexado ? 'Territorio anexado' : `Relacao ${formatRelation(contact.relation)} | Poder ${contact.militaryPower.toFixed(0)} | ${contact.atWar ? 'Em guerra' : contact.alliance ? 'Aliado' : contact.tradeTreaty ? 'Acordo comercial' : 'Sem tratado'}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.anexado || contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comercio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${contact.anexado || contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Alianca</button><button type="button" class="quiet-action" data-action="sabotage" data-contact="${contact.id}" ${contact.anexado || contact.atWar ? 'disabled' : ''}>Sabotar</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.anexado || contact.atWar ? 'disabled' : ''}>Guerra</button></div></article>`).join('')}</div></section>`;
-}
-
-export function warRoomView(state) {
-  const selectedId = state.ui?.selectedMapCountryId ?? state.country.id;
-  const selected = selectedId === state.country.id
-    ? state.country
-    : state.geopolitics.contacts.find((contact) => contact.id === selectedId) ?? createCountryProfile(getCountryById(selectedId) ?? state.country);
-  const selectedRelation = selected.id === state.country.id ? null : selected.relation;
-  const selectedStatus = selected.id === state.country.id
-    ? 'Nacao natal'
-    : selected.anexado || selected.destruido
-      ? 'Territorio neutralizado'
-      : selected.atWar
-        ? 'Teatro de guerra ativo'
-        : selectedRelation > 50
-          ? 'Relacao favoravel'
-          : selectedRelation < 20
-            ? 'Tensao diplomatica'
-            : 'Relacao estavel';
-  const mapCountry = (id, label, path) => `<path id="${id}" data-map-country="" d="${path}" class="map-country" data-action="map-country" data-country="${id}" role="button" tabindex="0" aria-label="Selecionar ${label}"></path>`;
-
-  return `<section class="panel war-room-panel">
-    <div class="panel-heading"><div><p class="eyebrow">/// SALA DE GUERRA ///</p><h2>Mapa Global</h2></div><span class="country-code">${state.is_wasteland ? 'MUNDO EM CINZAS' : 'MAPA OPERACIONAL'}</span></div>
-    <p class="notice">Os IDs dos polígonos SVG devem corresponder exatamente aos IDs de <code>state.world</code>. Neste banco, eles são minúsculos: <code>usa</code>, <code>rus</code>, <code>bra</code> e <code>chn</code>.</p>
-    <div class="map-layout">
-      <svg class="world-map war-map" data-war-map viewBox="0 0 800 360" role="img" aria-label="Mapa mundial operacional">
-        <path class="map-ocean" d="M0 0H800V360H0Z"></path>
-        ${mapCountry('usa', 'Estados Unidos', 'M105 92h126l35 32-23 48-98 6-46-38z')}
-        ${mapCountry('bra', 'Brasil', 'M270 191l71-12 47 48-19 84-65 7-44-61z')}
-        ${mapCountry('rus', 'Rússia', 'M420 64h235l65 35-38 47-174-2-88-39z')}
-        ${mapCountry('chn', 'China', 'M570 164l93-6 56 43-37 62-92 3-42-55z')}
-        <circle class="radiation-marker" data-radiation-marker cx="702" cy="280" r="9" hidden></circle>
-        <circle class="vault-marker" data-vault-marker cx="312" cy="245" r="7" hidden></circle>
-        <text x="142" y="132">EUA</text><text x="312" y="245">BR</text><text x="545" y="105">RÚSSIA</text><text x="615" y="214">CHINA</text>
-      </svg>
-      <aside class="map-selection">
-        <p class="eyebrow">Nação selecionada</p>
-        <h3>${escapeHtml(selected.name ?? selected.nome ?? selected.id)} ${nuclearBadge(selected)}</h3>
-        <div class="ledger-row"><span>Status</span><strong>${selectedStatus}</strong></div>
-        <div class="ledger-row"><span>Área</span><strong>${formatNumber.format(selected.area_km2 ?? 0)} km²</strong></div>
-        <div class="ledger-row"><span>População</span><strong>${formatNumber.format(selected.population ?? selected.populacao_base ?? 0)}</strong></div>
-        ${selectedRelation === null ? '<p class="notice">Clique numa nação para abrir a sua ficha diplomática.</p>' : `<div class="ledger-row"><span>Relação</span><strong>${formatRelation(selectedRelation)}</strong></div><button type="button" class="primary-action" data-action="open-diplomacy" data-country="${selected.id}">Abrir diplomacia</button>`}
-      </aside>
-    </div>
-    <p class="map-legend"><span class="legend-player">Nação natal</span><span class="legend-ally">Aliança</span><span class="legend-war">Guerra</span><span class="legend-tense">Tensão</span><span class="legend-nuclear">Ameaça nuclear</span></p>
-  </section>`;
 }
 
 function riskDiplomacyView(state) {
@@ -631,7 +584,6 @@ export function mountDashboard(root) {
       ['overview', 'Visao geral'],
       ['budget', 'Orcamento'],
       ['diplomacy', 'Diplomacia'],
-      ['war-room', '> SALA DE GUERRA (MAPA GLOBAL)'],
       ['military', 'Forcas Armadas'],
       ['cabinet', 'Gabinete'],
       ['technology', 'Tecnologia'],
@@ -642,7 +594,6 @@ export function mountDashboard(root) {
     ];
     const content = activeTab === 'budget' ? budgetView(state, projection)
       : activeTab === 'diplomacy' ? diplomacyView(state, diplomacyQuery)
-        : activeTab === 'war-room' ? warRoomView(state)
         : activeTab === 'military' ? militaryView(state)
           : activeTab === 'cabinet' ? cabinetView(state)
           : activeTab === 'technology' ? technologyView(state)
@@ -659,8 +610,6 @@ export function mountDashboard(root) {
       ${state.notice === STORY_NOTICE ? `<p class="storage-notice story-notification" role="status">${STORY_NOTICE}</p>` : ''}
       <section class="content-area">${content}</section>${renderNews(state)}
     </section></div>`;
-    const map = root.querySelector('[data-war-map]');
-    if (map) renderMap(state, map);
     if (treatyModal) {
       const treatyMarkup = renderPeaceTreaty(state);
       treatyModal.hidden = !treatyMarkup;
@@ -906,8 +855,6 @@ export function mountDashboard(root) {
     if (!control || control.disabled) return;
     const { action } = control.dataset;
     if (action === 'tab') { activeTab = control.dataset.tab; render(); return; }
-    if (action === 'map-country') { if (state.is_wasteland) return; activeTab = 'diplomacy'; state = selectMapCountry(state, control.dataset.country); render(); return; }
-    if (action === 'open-diplomacy') { activeTab = 'diplomacy'; state = selectMapCountry(state, control.dataset.country); render(); return; }
     if (action === 'tax') { commit(changeTax(state, control.dataset.tax, Number(control.dataset.delta))); return; }
     if (action === 'slush-fund') { commit(desviarFundosParaCaixa2(state)); return; }
     if (action === 'leader-double') { commit(infiltrarSosiaLider(state, control.dataset.contact)); return; }
