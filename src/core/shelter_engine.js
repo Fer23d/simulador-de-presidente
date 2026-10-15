@@ -12,6 +12,10 @@ export const SHELTER_TYPES = Object.freeze({
   dormitory: Object.freeze({ name: 'Dormitório', cost: 80, capacity: 500, accent: '#9b7a68' }),
   generator: Object.freeze({ name: 'Sala do Gerador', cost: 120, capacity: 0, accent: '#e7a947' }),
   greenhouse: Object.freeze({ name: 'Estufa Hidropônica', cost: 100, capacity: 100, accent: '#87b888' }),
+  arsenal: Object.freeze({ name: 'Arsenal Militar', cost: 150, capacity: 0, accent: '#ad7168' }),
+  medical: Object.freeze({ name: 'Centro Médico', cost: 130, capacity: 80, accent: '#88b5ae' }),
+  radio: Object.freeze({ name: 'Sala de Rádio', cost: 105, capacity: 0, accent: '#b9a277' }),
+  office: Object.freeze({ name: 'Gabinete do Ditador', cost: 220, capacity: 0, accent: '#b396b1' }),
 });
 
 function emptyGrid() {
@@ -138,6 +142,38 @@ export function upgradeShelterRoom(state, floor, column) {
 
 export function calculateShelterCapacity(grid) {
   return grid.flat().reduce((total, room) => total + (room ? SHELTER_TYPES[room.type].capacity * room.level : 0), 0);
+}
+
+function hasModule(state, type) {
+  return Boolean(state.shelter_grid?.flat().some((room) => room?.type === type));
+}
+
+export function equipShelterGuard(state) {
+  if (!state.is_wasteland || !hasModule(state, 'arsenal') || (state.shelter_supplies?.weapons ?? 0) < 1) {
+    return { ...state, notice: 'Arsenal ou armamento indisponível.' };
+  }
+  return { ...state, shelter_guards: (state.shelter_guards ?? 0) + 1,
+    shelter_supplies: { ...state.shelter_supplies, weapons: state.shelter_supplies.weapons - 1 },
+    notice: 'Um habitante recebeu armamento e integra a guarda do Vault.' };
+}
+
+export function useShelterMedkit(state) {
+  if (!state.is_wasteland || !hasModule(state, 'medical') || (state.shelter_supplies?.medkits ?? 0) < 1) {
+    return { ...state, notice: 'Centro médico ou curativos indisponíveis.' };
+  }
+  return { ...state, shelter_radiation: Math.max(0, (state.shelter_radiation ?? 0) - 15),
+    shelter_supplies: { ...state.shelter_supplies, medkits: state.shelter_supplies.medkits - 1 },
+    notice: 'Tratamento concluído. A exposição à radiação diminuiu.' };
+}
+
+export function broadcastShelterSignal(state) {
+  if (!state.is_wasteland || !hasModule(state, 'radio') || (state.scrap ?? 0) < 10) {
+    return { ...state, notice: 'Sala de rádio ou sucata indisponível.' };
+  }
+  const population = Math.min(calculateShelterCapacity(state.shelter_grid), (state.country?.populacao_base ?? 0) + 10);
+  return { ...state, scrap: state.scrap - 10,
+    country: { ...state.country, populacao: population, populacao_base: population },
+    notice: 'A transmissão alcançou sobreviventes da superfície.' };
 }
 
 export function findRoute(grid, from, to) {

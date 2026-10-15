@@ -1,4 +1,5 @@
 import { calculateShelterCapacity, INITIAL_SHELTER_GRID, normalizeShelterGrid } from './shelter_engine.js';
+import { createRpgPlayer } from './rpg_bunker.js';
 
 const VAULT_CASH_COST = 500_000_000_000;
 const VAULT_STEEL_COST = 50_000;
@@ -54,6 +55,10 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
     scrap: Math.max(250, Number(state.scrap) || 0),
     shelter_grid: normalizeShelterGrid(INITIAL_SHELTER_GRID),
     shelter_inhabitants: [],
+    rpg_player: createRpgPlayer(INITIAL_SHELTER_GRID),
+    shelter_supplies: { weapons: 0, medkits: 0 },
+    shelter_guards: 0,
+    shelter_radiation: 25,
     vault_built: true,
     title: 'Sobrevivente Supremo',
     country: {
@@ -90,12 +95,22 @@ export function advanceWastelandMonth(state) {
     .reduce((total, room) => total + room.level, 0);
   const greenhouses = rooms.filter((room) => room.type === 'greenhouse')
     .reduce((total, room) => total + room.level, 0);
-  const population = Math.min(calculateShelterCapacity(grid), state.country.populacao_base + greenhouses * 5);
+  const countLevels = (type) => rooms.filter((room) => room.type === type).reduce((total, room) => total + room.level, 0);
+  const arsenals = countLevels('arsenal');
+  const medical = countLevels('medical');
+  const radio = countLevels('radio');
+  const offices = countLevels('office');
+  const population = Math.min(calculateShelterCapacity(grid), state.country.populacao_base + greenhouses * 5 + medical * 2 + radio * 3);
   return {
     ...state,
     calendar: { month: state.calendar.month === 12 ? 1 : state.calendar.month + 1, year: state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year },
     monthCounter: (Number(state.monthCounter) || 0) + 1,
-    scrap: (Number(state.scrap) || 0) + 25 + generators * 15,
+    scrap: (Number(state.scrap) || 0) + 25 + generators * 15 + offices * 5,
+    shelter_supplies: {
+      weapons: (Number(state.shelter_supplies?.weapons) || 0) + arsenals,
+      medkits: (Number(state.shelter_supplies?.medkits) || 0) + medical * 2,
+    },
+    shelter_radiation: Math.max(0, Math.min(100, (Number(state.shelter_radiation) || 0) + 2 - medical)),
     country: { ...state.country, populacao: population, populacao_base: population },
     notice: 'O Vault sobrevive mais um mês. Os módulos operacionais sustentam a população.',
   };

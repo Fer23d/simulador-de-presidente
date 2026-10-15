@@ -152,12 +152,13 @@ test('destinos e posicoes dos habitantes sobrevivem ao save e entradas invalidas
   assert.deepEqual(normalizeShelterInhabitants([{ ...saved, route: [{ floor: 5, column: 6 }] }], state.shelter_grid)[0].route, []);
 });
 
-test('a interface troca WASD por arrastar, selecionar e expandir', () => {
+test('a interface oferece controle direto, gestão de salas e expansão', () => {
   const state = transicionarParaWasteland(createGameState('bra'));
   const markup = bunkerView(state);
   assert.match(markup, /data-action="shelter-build-mode"/);
   assert.match(markup, /id="shelterCanvas"/);
-  assert.match(markup, /AGUARDANDO ORDENS/);
+  assert.match(markup, /PRESIDENTE EM PATRULHA/);
+  assert.match(markup, /A e D movem o Presidente/);
   assert.doesNotMatch(markup, /Arraste para explorar/);
   assert.doesNotMatch(markup, /WASD/);
   assert.match(markup, /data-action="advance"/);

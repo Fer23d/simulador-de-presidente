@@ -76,8 +76,7 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 .bunker-header-actions button { white-space: nowrap; }
 .bunker-hud { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 12px 0; color: var(--phosphor); font-size: 13px; text-transform: uppercase; }
 .bunker-hud span { border: 1px solid var(--line); padding: 6px 8px; background: rgba(255, 122, 24, .06); }
-.bunker-canvas { display: block; width: 100%; aspect-ratio: 8 / 5; margin: 12px auto 0; border: 4px double var(--amber); background: #252523; outline: none; box-shadow: 0 0 22px rgba(255, 122, 24, .24); cursor: grab; touch-action: none; }
-.bunker-canvas:active { cursor: grabbing; }
+.bunker-canvas { display: block; width: 100%; aspect-ratio: 8 / 5; margin: 12px auto 0; border: 4px double var(--amber); background: #252523; outline: none; box-shadow: 0 0 22px rgba(255, 122, 24, .24); cursor: crosshair; touch-action: none; }
 .bunker-canvas:focus { border-color: var(--phosphor); box-shadow: 0 0 22px rgba(255, 179, 71, .45); }
 .bunker-status { margin: 12px 0 0; color: var(--muted); }
 .shelter-room-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 10px; }
