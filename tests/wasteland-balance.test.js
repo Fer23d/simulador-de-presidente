@@ -4,7 +4,7 @@ import { createGameState, hydrateGameState } from '../src/core/game-state.js';
 import { advanceWastelandMonth, transicionarParaWasteland } from '../src/core/wasteland.js';
 import { canResolveWastelandEvent, getWastelandEvent, resolveWastelandEvent } from '../src/core/game_mechanics.js';
 import { buildShelterRoom, repairShelterGenerator } from '../src/core/shelter_engine.js';
-import { bunkerEventView, bunkerView } from '../src/ui/dashboard.js';
+import { bunkerView, renderStoryCard } from '../src/ui/dashboard.js';
 
 function makeWastelandState() {
   const state = transicionarParaWasteland(createGameState('bra'));
@@ -91,7 +91,7 @@ test('every third Wasteland month blocks further advancement until the dilemma i
   assert.equal(blocked.monthCounter, state.monthCounter);
   assert.deepEqual(blocked.shelter_supplies, state.shelter_supplies);
   assert.match(bunkerView(state), /data-action="advance" disabled/);
-  assert.match(bunkerEventView(state), /A Ração de Emergência/);
+  assert.match(renderStoryCard(state), /A Ração de Emergência/);
 });
 
 test('greenhouse quarantine suppresses three complete production calculations and resumes on the fourth', () => {

@@ -379,12 +379,6 @@ export function expeditionReportView(state) {
   return `<section class="bunker-dialog expedition-report" role="dialog" aria-modal="true" aria-labelledby="expedition-report-title"><p class="eyebrow">/// RELATÓRIO DE MISSÃO ///</p><h2 id="expedition-report-title">${report.success ? 'Explorador retornou' : 'Sinal perdido'}</h2><pre>${message}</pre><button type="button" class="primary-action" data-action="dismiss-expedition-report">[ ARQUIVAR RELATÓRIO ]</button></section>`;
 }
 
-export function bunkerEventView(state) {
-  const event = getWastelandEvent(state.pendingBunkerEvent?.id);
-  if (!event) return '';
-  return `<section class="bunker-dialog bunker-event-dialog" role="dialog" aria-modal="true" aria-labelledby="bunker-event-title"><p class="eyebrow">/// DILEMA DO VAULT · MÊS ${Number(state.wastelandMonthCounter) || 0} ///</p><h2 id="bunker-event-title">${escapeHtml(event.title)}</h2><p class="bunker-event-description">${escapeHtml(event.description)}</p><div class="bunker-event-options">${event.options.map((option) => `<button type="button" class="${option.cost ? 'quiet-action' : 'primary-action'}" data-action="resolve-bunker-event" data-option="${escapeHtml(option.id)}" ${canResolveWastelandEvent(state, event.id, option.id) ? '' : 'disabled'}>${escapeHtml(option.label)}</button>`).join('')}</div></section>`;
-}
-
 export function renderDeadHandTerminal(state) {
   if (!state.dead_hand_triggered) return '';
   return `<section class="dead-hand-dialog" role="dialog" aria-modal="true" aria-labelledby="dead-hand-title"><pre id="dead-hand-title" class="ascii-dead-hand">[!] ERRO CRÍTICO NO GOVERNO CENTRAL [!]
@@ -542,13 +536,28 @@ export function renderSoftPower(state) {
 
 export function renderStoryCard(state) {
   const story = state.pendingStory ? getStoryEvent(state.currentStory) : null;
-  if (!story) return '';
+  if (story) {
+    return `<section class="story-dialog" role="dialog" aria-modal="true" aria-labelledby="story-title">
+      <p class="story-classification">/// DOSSIÊ CONFIDENCIAL // NÍVEL ÔMEGA ///</p>
+      <h2 id="story-title">${escapeHtml(story.title)}</h2>
+      <p class="story-typewriter">${escapeHtml(story.text)}</p>
+      <button type="button" class="arcade-vote-yes story-dismiss" data-action="dismiss-story">${escapeHtml(story.button_label)}</button>
+    </section>`;
+  }
+  const event = state.pendingBunkerEvent ? getWastelandEvent(state.pendingBunkerEvent.id) : null;
+  if (!event) return '';
   return `<section class="story-dialog" role="dialog" aria-modal="true" aria-labelledby="story-title">
-    <p class="story-classification">/// DOSSIÊ CONFIDENCIAL // NÍVEL ÔMEGA ///</p>
-    <h2 id="story-title">${escapeHtml(story.title)}</h2>
-    <p class="story-typewriter">${escapeHtml(story.text)}</p>
-    <button type="button" class="arcade-vote-yes story-dismiss" data-action="dismiss-story">${escapeHtml(story.button_label)}</button>
+      <p class="story-classification">/// DILEMA DO VAULT · MÊS ${Number(state.wastelandMonthCounter) || 0} ///</p>
+      <h2 id="story-title">${escapeHtml(event.title)}</h2>
+      <p class="story-typewriter">${escapeHtml(event.description)}</p>
+      <div class="action-row">${event.options.map((option, index) => `<button type="button" class="${index === 0 ? 'arcade-vote-yes' : 'arcade-vote-abandon'}" data-action="resolve-story-card" data-option="${escapeHtml(option.id)}" ${canResolveWastelandEvent(state, event.id, option.id) ? '' : 'disabled'}>${escapeHtml(option.label)}</button>`).join('')}</div>
   </section>`;
+}
+
+export function resolveStoryCardAction(state, action, optionId = null) {
+  if (action === 'dismiss-story' && state.pendingStory) return dispensarHistoria(state);
+  if (action === 'resolve-story-card' && state.pendingBunkerEvent && optionId) return resolveWastelandEvent(state, optionId);
+  return state;
 }
 
 export function renderWastelandCinematic(state) {
@@ -611,7 +620,6 @@ export function mountDashboard(root) {
   const wastelandCinematicModal = document.getElementById('modal-wasteland-cinematic');
   const bunkerGeneratorModal = document.getElementById('modal-bunker-gerador');
   const expeditionReportModal = document.getElementById('modal-expedition-report');
-  const bunkerEventModal = document.getElementById('modal-bunker-event');
   const congressLawTitle = document.getElementById('congresso-lei-titulo');
   const congressLawDescription = document.getElementById('congresso-lei-descricao');
   let pendingCongressLawId = null;
@@ -741,11 +749,6 @@ export function mountDashboard(root) {
       const reportMarkup = state.pendingBunkerEvent ? '' : expeditionReportView(state);
       expeditionReportModal.innerHTML = reportMarkup;
       expeditionReportModal.hidden = !reportMarkup;
-    }
-    if (bunkerEventModal) {
-      const eventMarkup = bunkerEventView(state);
-      bunkerEventModal.innerHTML = eventMarkup;
-      bunkerEventModal.hidden = !eventMarkup;
     }
     if (treatyModal) {
       const treatyMarkup = renderPeaceTreaty(state);
@@ -964,7 +967,13 @@ export function mountDashboard(root) {
   });
 
   storyModal?.addEventListener('click', (event) => {
-    if (event.target.closest('[data-action="dismiss-story"]')) commit(dispensarHistoria(state));
+    const control = event.target.closest('[data-action]');
+    const action = control?.dataset.action;
+    if (!action) return;
+    const nextState = resolveStoryCardAction(state, action, control.dataset.option ?? null);
+    if (nextState === state) return;
+    commit(nextState);
+    if (action === 'resolve-story-card') root.querySelector('#shelterCanvas')?.focus();
   });
 
   allianceModal?.addEventListener('click', (event) => {
@@ -1018,13 +1027,6 @@ export function mountDashboard(root) {
   expeditionReportModal?.addEventListener('click', (event) => {
     if (!event.target.closest('[data-action="dismiss-expedition-report"]')) return;
     commit(dismissExpeditionReport(state));
-    root.querySelector('#shelterCanvas')?.focus();
-  });
-
-  bunkerEventModal?.addEventListener('click', (event) => {
-    const optionId = event.target.closest('[data-action="resolve-bunker-event"]')?.dataset.option;
-    if (!optionId) return;
-    commit(resolveWastelandEvent(state, optionId));
     root.querySelector('#shelterCanvas')?.focus();
   });
 
