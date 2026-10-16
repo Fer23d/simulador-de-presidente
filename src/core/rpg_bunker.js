@@ -15,6 +15,7 @@ const LABELS = Object.freeze({
   greenhouse: 'INSPECIONAR A ESTUFA', dormitory: 'GERIR DORMITÓRIO',
   arsenal: 'ABRIR O ARSENAL', medical: 'ACEDER AO CENTRO MÉDICO',
   radio: 'OPERAR A SALA DE RÁDIO', office: 'ENTRAR NO GABINETE',
+  detention: 'INSPECIONAR A CELA DE DETENÇÃO',
 });
 
 export function createRpgPlayer(grid = INITIAL_SHELTER_GRID) {
@@ -50,6 +51,20 @@ export function findNearbyTrigger(player, grid) {
   const center = cellCenter(room.floor, room.column);
   return Math.abs(player.x - center.x) <= TRIGGER_RADIUS
     ? { room, label: `[ E ] ${LABELS[room.type] ?? 'GERIR SALA'}` } : null;
+}
+
+export function findNearbyRebel(player, grid, inhabitants = []) {
+  if (player.liftTarget !== null) return null;
+  const column = playerColumn(player);
+  const candidates = inhabitants.filter((npc) => npc.currentState === 'rebel' && !npc.is_prisoner
+    && !npc.is_on_expedition && npc.floor === player.floor && npc.column === column);
+  const nearby = candidates.map((npc) => ({ npc,
+    distance: Math.abs(player.x - (WORLD_LEFT + npc.column * SLOT_WIDTH + SLOT_WIDTH / 2 + npc.offsetX)) }))
+    .filter(({ distance }) => distance <= 48)
+    .sort((a, b) => a.distance - b.distance)[0];
+  if (!nearby) return null;
+  const hasCell = grid.flat().some((room) => room?.type === 'detention');
+  return { npc: nearby.npc, label: hasCell ? '[ E ] PRENDER DISSIDENTE' : '[ E ] CONSTRUA UMA CELA PARA PRENDER O DISSIDENTE' };
 }
 
 export function updatePlayer(player, input, grid, deltaSeconds) {
@@ -100,9 +115,13 @@ export function createInitialInhabitants(grid = INITIAL_SHELTER_GRID) {
   if (!getRoom(grid, 0, 1)) return [];
   return [
     { id: 'vault-resident-1', floor: 0, column: 1, offsetX: -78, role: 'resident', pose: 'seated', facing: 1,
-      currentState: 'idle', targetOffsetX: null, waitSeconds: 1 },
+      currentState: 'idle', targetOffsetX: null, waitSeconds: 1, loyalty: 100,
+      workFloor: null, workColumn: null, rebellionCheckDone: false,
+      is_on_expedition: false, expedition_timer: 0, is_prisoner: false },
     { id: 'vault-engineer-1', floor: 0, column: 1, offsetX: 78, role: 'engineer', pose: 'working', facing: -1,
-      currentState: 'idle', targetOffsetX: null, waitSeconds: 1 },
+      currentState: 'idle', targetOffsetX: null, waitSeconds: 1, loyalty: 100,
+      workFloor: null, workColumn: null, rebellionCheckDone: false,
+      is_on_expedition: false, expedition_timer: 0, is_prisoner: false },
   ];
 }
 
@@ -118,14 +137,25 @@ export function normalizeInhabitants(value, grid) {
     ids.add(npc.id);
     const targetOffsetX = Number.isFinite(npc.targetOffsetX)
       ? Math.max(-108, Math.min(108, npc.targetOffsetX)) : null;
+    const room = getRoom(grid, npc.floor, npc.column);
+    const legacyWorkRoom = room?.type === 'greenhouse' && npc.role === 'scientist'
+      || room?.type === 'generator' && npc.role === 'engineer';
     result.push({ id: npc.id, floor: npc.floor, column: npc.column,
       offsetX: Math.max(-108, Math.min(108, Number(npc.offsetX) || 0)),
       role: ['resident', 'engineer', 'scientist', 'medic', 'guard'].includes(npc.role) ? npc.role : 'resident',
       pose: ['idle', 'seated', 'working'].includes(npc.pose) ? npc.pose : 'idle',
       facing: npc.facing === -1 ? -1 : 1,
-      currentState: targetOffsetX !== null && ['walking_left', 'walking_right'].includes(npc.currentState)
-        ? npc.currentState : 'idle', targetOffsetX,
-      waitSeconds: Number.isFinite(npc.waitSeconds) ? Math.max(0, Math.min(6, npc.waitSeconds)) : 1 });
+      currentState: npc.currentState === 'rebel' ? 'rebel'
+        : targetOffsetX !== null && ['walking_left', 'walking_right'].includes(npc.currentState) ? npc.currentState : 'idle',
+      targetOffsetX: npc.currentState === 'rebel' ? null : targetOffsetX,
+      waitSeconds: Number.isFinite(npc.waitSeconds) ? Math.max(0, Math.min(6, npc.waitSeconds)) : 1,
+      loyalty: Math.max(0, Math.min(100, Number(npc.loyalty ?? 100))),
+      workFloor: Number.isInteger(npc.workFloor) ? npc.workFloor : legacyWorkRoom ? npc.floor : null,
+      workColumn: Number.isInteger(npc.workColumn) ? npc.workColumn : legacyWorkRoom ? npc.column : null,
+      rebellionCheckDone: npc.rebellionCheckDone === true,
+      is_on_expedition: npc.is_on_expedition === true,
+      expedition_timer: Math.max(0, Math.floor(Number(npc.expedition_timer) || 0)),
+      is_prisoner: npc.is_prisoner === true });
   }
   return result;
 }
@@ -154,7 +184,7 @@ export const renderRpgBunker = renderSpriteScene;
 
 export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, player: savedPlayer,
   inhabitants = [], cabinFloor: savedCabinFloor, onBuild, onRoom, onPlayerChanged, onInhabitantsChanged, onHint,
-  onAssetsReady, assetUrls = {} } = {}) {
+  onDetain, onAssetsReady, assetUrls = {} } = {}) {
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
   const assets = new AssetManager({ ...DEFAULT_ASSETS, ...assetUrls });
@@ -197,7 +227,8 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     camera.offset_x += (targetX - camera.offset_x) * Math.min(1, dt * 8);
     camera.offset_y += (targetY - camera.offset_y) * Math.min(1, dt * 8);
     renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants: actors, cabinFloor, time });
-    const hint = paused || buildMode ? '' : getElevatorPrompt(player, grid) || findNearbyTrigger(player, grid)?.label || '';
+    const rebel = findNearbyRebel(player, grid, actors.map((actor) => actor.snapshot()));
+    const hint = paused || buildMode ? '' : rebel?.label || getElevatorPrompt(player, grid) || findNearbyTrigger(player, grid)?.label || '';
     if (hint !== lastHint) { lastHint = hint; onHint?.(hint); }
     frameId = requestAnimationFrame(frame);
   }
@@ -211,6 +242,16 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     if (!['a', 'd', 'w', 's', 'e', 'arrowleft', 'arrowright', 'arrowup', 'arrowdown'].includes(key)) return;
     event.preventDefault();
     if (key === 'e' && !event.repeat) {
+      const rebel = findNearbyRebel(player, grid, actors.map((actor) => actor.snapshot()));
+      if (rebel) {
+        const hasCell = grid.flat().some((room) => room?.type === 'detention');
+        if (hasCell && onDetain) {
+          paused = true;
+          keys.clear();
+          onDetain(rebel.npc.id);
+        }
+        return;
+      }
       const trigger = findNearbyTrigger(player, grid);
       if (trigger) { paused = true; keys.clear(); onRoom?.(trigger.room); }
     } else keys.add(key);

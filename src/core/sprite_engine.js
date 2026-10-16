@@ -4,7 +4,7 @@ const SURFACE_Y = WORLD_TOP - 30;
 const ATLAS_CELLS = Object.freeze({
   vault: [0, 0], elevator: [1, 0], dormitory: [2, 0],
   generator: [0, 1], greenhouse: [1, 1], arsenal: [2, 1],
-  medical: [0, 2], radio: [1, 2], office: [2, 2],
+  medical: [0, 2], radio: [1, 2], office: [2, 2], detention: [2, 2],
 });
 const NPC_ROWS = Object.freeze({ resident: 0, engineer: 0, scientist: 1, medic: 2, guard: 3 });
 const frameBoundsCache = new WeakMap();
@@ -221,12 +221,30 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
     cabinY + ELEVATOR_ART_FLOOR_INSET - ELEVATOR_CABIN_HEIGHT, 116, ELEVATOR_CABIN_HEIGHT);
   const npcSheet = assets.getImage('npc_walk_sheet');
   for (const npc of inhabitants) {
+    if (npc.is_on_expedition) continue;
     const room = grid[npc.floor]?.[npc.column];
     if (!room) continue;
     const x = WORLD_LEFT + npc.column * SLOT_WIDTH + SLOT_WIDTH / 2 + npc.offsetX;
     const placement = getActorPlacement(room);
     const animationPhase = [...npc.id].reduce((sum, letter) => sum + letter.charCodeAt(0), 0) % 4 * 67;
     drawActorSprite(ctx, { ...npc, x, y: placement.floorY }, npcSheet, time + animationPhase, placement);
+    if (npc.currentState === 'rebel' && !npc.is_prisoner) {
+      ctx.save();
+      ctx.globalAlpha = .62 + (Math.sin(time / 180) + 1) * .19;
+      ctx.fillStyle = '#ff263d';
+      ctx.font = 'bold 25px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('!', x, placement.floorY - placement.height - 7);
+      ctx.restore();
+    } else if (Number(npc.loyalty ?? 100) < 40 && !npc.is_prisoner && !npc.is_on_expedition) {
+      ctx.save();
+      ctx.globalAlpha = .55 + (Math.sin(time / 430) + 1) * .12;
+      ctx.fillStyle = '#e6c75a';
+      ctx.font = 'bold 17px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('⚠', x, placement.floorY - placement.height - 7);
+      ctx.restore();
+    }
   }
   const playerColumn = Math.max(0, Math.min(grid[player.floor]?.length - 1 ?? 0,
     Math.floor((player.x - WORLD_LEFT) / SLOT_WIDTH)));
@@ -238,6 +256,25 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
     : placement.floorY + Math.min(0, player.y - physicalFloorY);
   drawActorSprite(ctx, { ...player, y: playerY, role: 'president' },
     assets.getImage('character_sheet'), time, placement);
+  for (const room of grid.flat()) if (room?.type === 'detention') renderDetentionBars(ctx, room);
   for (const room of grid.flat()) if (room?.type === 'greenhouse') renderGreenhouseGlow(ctx, room);
+  ctx.restore();
+}
+
+function renderDetentionBars(ctx, room) {
+  const x = WORLD_LEFT + room.column * SLOT_WIDTH;
+  const y = WORLD_TOP + room.floor * FLOOR_SPACING;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(30, 35, 35, .96)';
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  for (let barX = x + 20; barX < x + SLOT_WIDTH - 12; barX += 34) {
+    ctx.moveTo(barX, y + 27);
+    ctx.lineTo(barX, y + ROOM_HEIGHT - 14);
+  }
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(185, 195, 186, .48)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
   ctx.restore();
 }

@@ -16,6 +16,7 @@ export const SHELTER_TYPES = Object.freeze({
   medical: Object.freeze({ name: 'Centro Médico', cost: 130, capacity: 80, accent: '#88b5ae' }),
   radio: Object.freeze({ name: 'Sala de Rádio', cost: 105, capacity: 0, accent: '#b9a277' }),
   office: Object.freeze({ name: 'Gabinete do Ditador', cost: 220, capacity: 0, accent: '#b396b1' }),
+  detention: Object.freeze({ name: 'Cela de Detenção', cost: 180, capacity: 0, accent: '#a9574c' }),
 });
 
 function emptyGrid() {
@@ -28,6 +29,7 @@ function makeRoom(type, floor, column, data = {}) {
     type, floor, column,
     level: Math.max(1, Math.min(3, Math.floor(Number(data.level) || 1))),
     operational: type === 'generator' ? data.operational === true : true,
+    ...(typeof data.staffedBy === 'string' ? { staffedBy: data.staffedBy } : {}),
   };
 }
 
@@ -114,13 +116,21 @@ export function buildShelterRoom(state, type, floor, column) {
   }
   if ((Number(state.scrap) || 0) < specification.cost) return { ...state, notice: 'Sucata insuficiente.' };
   const grid = state.shelter_grid.map((row) => [...row]);
-  grid[floor][column] = makeRoom(type, floor, column);
   const roles = { generator: 'engineer', greenhouse: 'scientist', medical: 'medic', arsenal: 'guard', radio: 'engineer', office: 'resident' };
-  const inhabitants = Array.isArray(state.inhabitants) && type !== 'elevator'
+  const hasWorker = Array.isArray(state.inhabitants) && type !== 'elevator' && type !== 'detention';
+  const workerId = `worker-${floor}-${column}`;
+  const productiveRoom = ['generator', 'greenhouse'].includes(type);
+  grid[floor][column] = makeRoom(type, floor, column, productiveRoom ? { staffedBy: workerId } : {});
+  const inhabitants = Array.isArray(state.inhabitants) && type !== 'elevator' && type !== 'detention'
     ? [...state.inhabitants, { id: `worker-${floor}-${column}`, floor, column, offsetX: column % 2 ? -78 : 78,
       role: roles[type] ?? 'resident', pose: ['generator', 'greenhouse', 'medical', 'radio'].includes(type) ? 'working' : 'idle', facing: column % 2 ? 1 : -1,
-      currentState: 'idle', targetOffsetX: null, waitSeconds: 1 }]
+      currentState: 'idle', targetOffsetX: null, waitSeconds: 1, loyalty: 100, is_on_expedition: false, expedition_timer: 0, is_prisoner: false }]
     : state.inhabitants;
+  if (hasWorker && productiveRoom) {
+    inhabitants[inhabitants.length - 1].workFloor = floor;
+    inhabitants[inhabitants.length - 1].workColumn = column;
+    inhabitants[inhabitants.length - 1].rebellionCheckDone = false;
+  }
   return { ...state, scrap: state.scrap - specification.cost, shelter_grid: grid, ...(inhabitants ? { inhabitants } : {}),
     notice: `${specification.name} construído no andar ${floor + 1}, setor ${column}.` };
 }

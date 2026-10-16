@@ -1,5 +1,6 @@
 import { calculateShelterCapacity, INITIAL_SHELTER_GRID, normalizeShelterGrid } from './shelter_engine.js';
 import { createInitialInhabitants, createRpgPlayer } from './rpg_bunker.js';
+import { advanceMonthlyGameMechanics, getRoomProductivityMultiplier } from './game_mechanics.js';
 
 const VAULT_CASH_COST = 500_000_000_000;
 const VAULT_STEEL_COST = 50_000;
@@ -56,8 +57,11 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
     shelter_grid: normalizeShelterGrid(INITIAL_SHELTER_GRID),
     shelter_inhabitants: [],
     inhabitants: createInitialInhabitants(INITIAL_SHELTER_GRID),
+    pendingExpeditionReports: [],
+    pendingBunkerEvent: null,
+    wastelandMonthCounter: 0,
     rpg_player: createRpgPlayer(INITIAL_SHELTER_GRID),
-    shelter_supplies: { weapons: 0, medkits: 0 },
+    shelter_supplies: { weapons: 0, medkits: 0, food: 20, energy: 20 },
     shelter_guards: 0,
     shelter_radiation: 25,
     vault_built: true,
@@ -90,30 +94,50 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
 }
 
 export function advanceWastelandMonth(state) {
+  if (state.pendingBunkerEvent || state.pendingExpeditionReports?.length) {
+    return { ...state, notice: state.pendingBunkerEvent
+      ? 'Resolva o dilema do Vault antes de avancar o mes.'
+      : 'Leia o relatorio da expedicao antes de avancar o mes.' };
+  }
   const grid = normalizeShelterGrid(state.shelter_grid);
   const rooms = grid.flat().filter(Boolean);
   const generators = rooms.filter((room) => room.type === 'generator' && room.operational)
-    .reduce((total, room) => total + room.level, 0);
+    .reduce((total, room) => total + room.level * getRoomProductivityMultiplier(state, room), 0);
   const greenhouses = rooms.filter((room) => room.type === 'greenhouse')
-    .reduce((total, room) => total + room.level, 0);
+    .reduce((total, room) => total + room.level * getRoomProductivityMultiplier(state, room), 0);
   const countLevels = (type) => rooms.filter((room) => room.type === type).reduce((total, room) => total + room.level, 0);
   const arsenals = countLevels('arsenal');
   const medical = countLevels('medical');
   const radio = countLevels('radio');
   const offices = countLevels('office');
   const population = Math.min(calculateShelterCapacity(grid), state.country.populacao_base + greenhouses * 5 + medical * 2 + radio * 3);
-  return {
+  const populationConsumption = Math.ceil(Math.max(0, Number(population) || 0) / 500);
+  const supplies = {
+    weapons: (Number(state.shelter_supplies?.weapons) || 0) + arsenals,
+    medkits: (Number(state.shelter_supplies?.medkits) || 0) + medical * 2,
+    food: Math.max(0, (Number(state.shelter_supplies?.food) || 0) + greenhouses * 12 - populationConsumption),
+    energy: Math.max(0, (Number(state.shelter_supplies?.energy) || 0) + generators * 12 - populationConsumption),
+  };
+  const wastelandMonthCounter = (Number(state.wastelandMonthCounter) || 0) + 1;
+  const advanced = {
     ...state,
     calendar: { month: state.calendar.month === 12 ? 1 : state.calendar.month + 1, year: state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year },
     monthCounter: (Number(state.monthCounter) || 0) + 1,
+    wastelandMonthCounter,
     scrap: (Number(state.scrap) || 0) + 25 + generators * 15 + offices * 5,
-    shelter_supplies: {
-      weapons: (Number(state.shelter_supplies?.weapons) || 0) + arsenals,
-      medkits: (Number(state.shelter_supplies?.medkits) || 0) + medical * 2,
-    },
+    shelter_supplies: supplies,
     shelter_radiation: Math.max(0, Math.min(100, (Number(state.shelter_radiation) || 0) + 2 - medical)),
     country: { ...state.country, populacao: population, populacao_base: population },
     notice: 'O Vault sobrevive mais um mês. Os módulos operacionais sustentam a população.',
+  };
+  const processed = advanceMonthlyGameMechanics(advanced);
+  if (wastelandMonthCounter % 3 !== 0 || processed.pendingBunkerEvent) return processed;
+  const eventIndex = (Math.floor(wastelandMonthCounter / 3) - 1) % 3;
+  const eventIds = ['ration-emergency', 'generator-bearings', 'air-filter-crisis'];
+  return {
+    ...processed,
+    pendingBunkerEvent: { id: eventIds[eventIndex] },
+    notice: `${processed.notice?.includes('SINAL DO EXPLORADOR') ? `${processed.notice} ` : ''}Uma decisao urgente aguarda o comando do Vault.`,
   };
 }
 

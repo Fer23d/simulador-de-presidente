@@ -2,7 +2,7 @@ import { SLOT_WIDTH } from './shelter_engine.js';
 
 const EDGE_MARGIN = 24;
 const MAX_OFFSET = SLOT_WIDTH / 2 - EDGE_MARGIN;
-const STATES = new Set(['idle', 'walking_left', 'walking_right']);
+const STATES = new Set(['idle', 'walking_left', 'walking_right', 'rebel']);
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 
 export class Inhabitant {
@@ -17,7 +17,14 @@ export class Inhabitant {
     this.targetOffsetX = Number.isFinite(data.targetOffsetX)
       ? clamp(data.targetOffsetX, -MAX_OFFSET, MAX_OFFSET) : null;
     this.currentState = STATES.has(data.currentState) ? data.currentState : 'idle';
-    if (this.targetOffsetX === null) this.currentState = 'idle';
+    this.loyalty = clamp(Number(data.loyalty ?? 100), 0, 100);
+    this.workFloor = Number.isInteger(data.workFloor) ? data.workFloor : null;
+    this.workColumn = Number.isInteger(data.workColumn) ? data.workColumn : null;
+    this.rebellionCheckDone = data.rebellionCheckDone === true;
+    this.is_on_expedition = data.is_on_expedition === true;
+    this.expedition_timer = Math.max(0, Math.floor(Number(data.expedition_timer) || 0));
+    this.is_prisoner = data.is_prisoner === true;
+    if (this.targetOffsetX === null && this.currentState !== 'rebel') this.currentState = 'idle';
     this.waitSeconds = Number.isFinite(data.waitSeconds) ? clamp(data.waitSeconds, 0, 6) : 1;
     this.speed = 26 + [...this.id].reduce((sum, letter) => sum + letter.charCodeAt(0), 0) % 12;
     this.random = random;
@@ -25,7 +32,7 @@ export class Inhabitant {
 
   update(deltaTime) {
     const dt = clamp(Number(deltaTime) || 0, 0, .1);
-    if (!dt) return;
+    if (!dt || this.is_on_expedition || this.is_prisoner || this.currentState === 'rebel') return;
     if (this.currentState === 'idle') {
       this.waitSeconds -= dt;
       if (this.waitSeconds > 0) return;
@@ -56,6 +63,10 @@ export class Inhabitant {
   snapshot() {
     return { id: this.id, floor: this.floor, column: this.column, offsetX: this.offsetX,
       role: this.role, pose: this.pose, facing: this.facing,
-      currentState: this.currentState, targetOffsetX: this.targetOffsetX, waitSeconds: this.waitSeconds };
+      currentState: this.currentState, targetOffsetX: this.targetOffsetX, waitSeconds: this.waitSeconds,
+      loyalty: this.loyalty, workFloor: this.workFloor, workColumn: this.workColumn,
+      rebellionCheckDone: this.rebellionCheckDone,
+      is_on_expedition: this.is_on_expedition, expedition_timer: this.expedition_timer,
+      is_prisoner: this.is_prisoner };
   }
 }

@@ -34,10 +34,11 @@ import { checkStoryEvents, dismissStory as dismissNarrativeStory, gerarEntradaDi
 import { checkStoryChapters, getLoreChapter } from './story_lore.js';
 import { advanceGovernment, applyGovernmentEconomy, openAutoCoup, resolveAutoCoup, resolveCorporateDefault } from './politics.js';
 import { advanceWastelandMonth, buildMegaVault, buildWastelandProject, enviarBatedores, transicionarParaWasteland as transitionToWasteland } from './wasteland.js';
+import { getWastelandEvent } from './game_mechanics.js';
 import { createRpgPlayer, normalizeInhabitants, normalizeRpgPlayer } from './rpg_bunker.js';
 import { INITIAL_SHELTER_GRID, migrateLegacyPlayer, migrateLegacyRooms, normalizeShelterGrid, normalizeShelterInhabitants } from './shelter_engine.js';
 
-const STATE_VERSION = 16;
+const STATE_VERSION = 18;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 
 function clamp(value, minimum, maximum) {
@@ -189,7 +190,10 @@ export function createGameState(countryId = 'bra') {
     shelter_inhabitants: [],
     inhabitants: [],
     rpg_player: createRpgPlayer(INITIAL_SHELTER_GRID),
-    shelter_supplies: { weapons: 0, medkits: 0 },
+    shelter_supplies: { weapons: 0, medkits: 0, food: 0, energy: 0 },
+    pendingExpeditionReports: [],
+    wastelandMonthCounter: 0,
+    pendingBunkerEvent: null,
     shelter_guards: 0,
     shelter_radiation: 0,
     wastelandBuildings: { waterPurifiers: 0, geothermalGenerators: 0 },
@@ -1181,7 +1185,17 @@ export function hydrateGameState(serialized) {
       shelter_supplies: {
         weapons: Math.max(0, Math.floor(Number(parsed.shelter_supplies?.weapons) || 0)),
         medkits: Math.max(0, Math.floor(Number(parsed.shelter_supplies?.medkits) || 0)),
+        food: Math.max(0, Math.floor(Number(parsed.shelter_supplies?.food ?? (parsed.is_wasteland ? 20 : 0)) || 0)),
+        energy: Math.max(0, Math.floor(Number(parsed.shelter_supplies?.energy ?? (parsed.is_wasteland ? 20 : 0)) || 0)),
       },
+      pendingExpeditionReports: Array.isArray(parsed.pendingExpeditionReports)
+        ? parsed.pendingExpeditionReports.filter((report) => typeof report?.id === 'string'
+          && typeof report.inhabitantId === 'string' && typeof report.success === 'boolean').slice(0, 16)
+        : [],
+      wastelandMonthCounter: Math.max(0, Math.floor(Number(parsed.wastelandMonthCounter) || 0)),
+      pendingBunkerEvent: getWastelandEvent(parsed.pendingBunkerEvent?.id)
+        ? { id: parsed.pendingBunkerEvent.id }
+        : null,
       shelter_guards: Math.max(0, Math.floor(Number(parsed.shelter_guards) || 0)),
       shelter_radiation: Math.max(0, Math.min(100, Number(parsed.shelter_radiation) || 0)),
       wastelandBuildings: {

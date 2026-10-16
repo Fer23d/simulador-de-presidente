@@ -149,3 +149,26 @@ test('missing art produces a magenta error tile instead of procedural scenery', 
   assert.ok(colors.length >= 4);
   assert.deepEqual(new Set(colors), new Set(['#ff00ff']));
 });
+
+test('expedition NPCs are hidden, rebels show an alert, and detention cells draw bars in front', () => {
+  const grid = buildShelterRoom({ is_wasteland: true, scrap: 500, shelter_grid: INITIAL_SHELTER_GRID }, 'detention', 0, 2).shelter_grid;
+  const assetsByKey = Object.fromEntries(['bg_sky', 'bg_mountains', 'fg_wasteland', 'dirt_texture', 'room_atlas',
+    'elevator_cabin', 'character_sheet', 'npc_walk_sheet'].map((key) => [key, { key, width: 1200, height: 800 }]));
+  const npcDraws = [];
+  const alerts = [];
+  let barsDrawn = 0;
+  const ctx = { canvas: { width: 960, height: 600 }, save() {}, restore() {}, translate() {}, scale() {},
+    createPattern() { return 'soil'; }, beginPath() {}, ellipse() {}, fill() {}, moveTo() {}, lineTo() {},
+    stroke() { barsDrawn++; }, drawImage(image) { if (image.key === 'npc_walk_sheet') npcDraws.push(image.key); },
+    fillText(text) { alerts.push(text); }, fillRect() {} };
+  renderSpriteScene(ctx, { grid, player: { ...cellCenter(0, 1), floor: 0, vx: 0, facing: 1, liftTarget: null },
+    inhabitants: [
+      { id: 'away', floor: 0, column: 1, offsetX: -40, role: 'resident', is_on_expedition: true },
+      { id: 'sad', floor: 0, column: 1, offsetX: 0, role: 'resident', loyalty: 30 },
+      { id: 'rebel', floor: 0, column: 1, offsetX: 40, role: 'resident', currentState: 'rebel' },
+    ], camera: { offset_x: 0, offset_y: 0 }, assets: { getImage: (key) => assetsByKey[key] }, time: 300 });
+
+  assert.equal(npcDraws.length, 2);
+  assert.deepEqual(alerts, ['⚠', '!']);
+  assert.equal(barsDrawn, 2);
+});

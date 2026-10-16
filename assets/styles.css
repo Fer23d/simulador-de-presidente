@@ -82,6 +82,8 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 .bunker-tooltip[hidden] { display: none; }
 .bunker-canvas:focus { border-color: var(--phosphor); box-shadow: 0 0 22px rgba(255, 179, 71, .45); }
 .bunker-status { margin: 12px 0 0; color: var(--muted); }
+.bunker-notice { margin: 4px 0 0; color: var(--amber); font-size: 13px; }
+.bunker-notice.danger { color: #ff263d; text-shadow: 0 0 8px rgba(255, 38, 61, .5); }
 .shelter-room-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .shelter-room-controls label { color: var(--amber); }
 .shelter-room-controls button { white-space: nowrap; }
@@ -112,6 +114,22 @@ body.theme-wasteland .content-area { max-width: none; }
 .bunker-dialog { width: min(600px, 100%); border: 4px double var(--amber); padding: 24px; background: var(--panel); box-shadow: 0 0 28px rgba(255, 122, 24, .55), 9px 9px 0 var(--shadow); }
 .bunker-dialog h2 { color: var(--amber); }
 .bunker-dialog pre { overflow: auto; border: 1px dashed var(--line); padding: 14px; color: var(--phosphor); line-height: 1.5; }
+.expedition-logistics { margin: 14px 0; border: 1px dashed var(--line); padding: 12px; }
+.expedition-logistics h3 { margin: 0 0 6px; color: var(--amber); }
+.expedition-logistics p { color: var(--muted); }
+.expedition-logistics ul { display: grid; gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
+.expedition-logistics li { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+.expedition-logistics li > span { color: var(--phosphor); overflow-wrap: anywhere; }
+.expedition-logistics button { white-space: nowrap; }
+.expedition-report { border-color: #e0a94d; }
+.expedition-report h2 { color: var(--amber); }
+.bunker-event-dialog { width: min(680px, 100%); border-color: #e6c75a; box-shadow: 0 0 32px rgba(230, 199, 90, .32), 9px 9px 0 var(--shadow); }
+.bunker-event-dialog h2 { color: #f0cb65; }
+.bunker-event-description { margin: 16px 0 22px; color: var(--phosphor); line-height: 1.6; }
+.bunker-event-options { display: grid; gap: 10px; }
+.bunker-event-options button { width: 100%; min-height: 48px; text-align: left; white-space: normal; }
+.bunker-event-options button:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 640px) { .expedition-logistics li { align-items: stretch; flex-direction: column; } .expedition-logistics button { white-space: normal; } }
 button, input, select { font: inherit; }
 button { border-radius: 0; cursor: pointer; }
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
