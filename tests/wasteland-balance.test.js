@@ -184,6 +184,24 @@ test('radio scouts fail rolls at or above the 65 percent success threshold', () 
   assert.equal(result.shelter_supplies.food, 50);
 });
 
+test('radio scouts succeed on a roll between the cure and scout thresholds', () => {
+  const state = {
+    ...addProductionRooms(makeWastelandState()),
+    randomSeed: 940,
+    shelter_supplies: { food: 100, energy: 100 },
+    pendingBunkerEvent: { id: 'radio-signal-unknown' },
+  };
+
+  assert.ok(0.6 < (Math.imul(state.randomSeed, 1664525) + 1013904223 >>> 0) / 4294967296);
+  const result = resolveWastelandEvent(state, 'send-scouts');
+  assert.equal(result.scrap, state.scrap + 100);
+  assert.equal(result.shelter_supplies.food, 50);
+});
+
+test('radio event uses the approved narrative title', () => {
+  assert.equal(getWastelandEvent('radio-signal-unknown').title, 'Sinal de Rádio Desconhecido');
+});
+
 test('ignoring the radio signal has no costs or loot', () => {
   const state = { ...makeWastelandState(), pendingBunkerEvent: { id: 'radio-signal-unknown' } };
   const result = resolveWastelandEvent(state, 'ignore-signal');

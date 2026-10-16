@@ -38,7 +38,7 @@ export const WASTELAND_EVENTS = Object.freeze([
   }),
   Object.freeze({
     id: 'radio-signal-unknown',
-    title: 'Um Sinal Desconhecido',
+    title: 'Sinal de Rádio Desconhecido',
     description: 'Uma transmissão fraca surgiu no rádio. Enviar batedores pode revelar um esconderijo, mas a viagem consumirá mantimentos.',
     options: Object.freeze([
       Object.freeze({ id: 'send-scouts', label: '[ ENVIAR BATEDORES: 50 COMIDAS ]', cost: Object.freeze({ food: 50 }) }),
