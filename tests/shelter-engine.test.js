@@ -9,6 +9,7 @@ import {
   buildShelterRoom,
   cellCenter,
   createShelterEngine,
+  drawRoomLevelIndicators,
   findBuildSlots,
   findRoute,
   getCellAtPoint,
@@ -125,9 +126,11 @@ test('gerador precisa de reparo; upgrades geram beneficios persistentes', () => 
   const repaired = repairShelterGenerator(built, 0, 2);
   assert.equal(repaired.scrap, built.scrap - 25);
   assert.equal(advanceWastelandMonth(repaired).scrap, repaired.scrap + 40);
-  const upgraded = upgradeShelterRoom(repaired, 0, 2);
+  const readyToUpgrade = { ...repaired, scrap: 300 };
+  const upgraded = upgradeShelterRoom(readyToUpgrade, 0, 2);
   assert.equal(getRoom(upgraded.shelter_grid, 0, 2).level, 2);
-  assert.equal(advanceWastelandMonth(upgraded).scrap, upgraded.scrap + 55);
+  assert.equal(upgraded.scrap, 0);
+  assert.equal(advanceWastelandMonth(upgraded).scrap, 55);
 });
 
 test('saves antigos migram para a grelha lateral sem perder salas', () => {
@@ -154,6 +157,26 @@ test('grid normalization preserves a clamped quarantine timer only on greenhouse
 
   grid[0][2] = { type: 'greenhouse', level: 1, disabledMonthsRemaining: -3 };
   assert.equal(normalizeShelterGrid(grid)[0][2].disabledMonthsRemaining, 0);
+});
+
+test('room levels hydrate up to five and clamp invalid higher values', () => {
+  const grid = INITIAL_SHELTER_GRID.map((row) => [...row]);
+  grid[0][2] = { type: 'greenhouse', level: 5 };
+  grid[0][3] = { type: 'generator', level: 9 };
+  const normalized = normalizeShelterGrid(grid);
+  assert.equal(normalized[0][2].level, 5);
+  assert.equal(normalized[0][3].level, 5);
+});
+
+test('canvas level indicator draws five active and inactive pips', () => {
+  const fills = [];
+  const ctx = {
+    fillRect(x, y, width, height) { fills.push({ x, y, width, height, color: this.fillStyle }); },
+  };
+  drawRoomLevelIndicators(ctx, { x: 10, y: 20, width: 240 }, 3);
+  assert.equal(fills.length, 5);
+  assert.equal(fills.filter((pip) => pip.color === '#69d879').length, 3);
+  assert.equal(fills.filter((pip) => pip.color === '#343c3a').length, 2);
 });
 
 test('destinos e posicoes dos habitantes sobrevivem ao save e entradas invalidas sao descartadas', () => {

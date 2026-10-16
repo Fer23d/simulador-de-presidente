@@ -114,6 +114,10 @@ body.theme-wasteland .content-area { max-width: none; }
 .bunker-dialog { width: min(600px, 100%); border: 4px double var(--amber); padding: 24px; background: var(--panel); box-shadow: 0 0 28px rgba(255, 122, 24, .55), 9px 9px 0 var(--shadow); }
 .bunker-dialog h2 { color: var(--amber); }
 .bunker-dialog pre { overflow: auto; border: 1px dashed var(--line); padding: 14px; color: var(--phosphor); line-height: 1.5; }
+.room-economy-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0; margin: 14px 0; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.room-economy-stats div { min-width: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 10px; }
+.room-economy-stats dt { color: var(--amber); font-size: 12px; text-transform: uppercase; }
+.room-economy-stats dd { margin: 5px 0 0; color: var(--phosphor); overflow-wrap: anywhere; }
 .expedition-logistics { margin: 14px 0; border: 1px dashed var(--line); padding: 12px; }
 .expedition-logistics h3 { margin: 0 0 6px; color: var(--amber); }
 .expedition-logistics p { color: var(--muted); }

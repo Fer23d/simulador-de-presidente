@@ -1,3 +1,5 @@
+import { getRoomUpgradeCost, ROOM_MAX_LEVEL } from './bunker_economy.js';
+
 export const SLOT_WIDTH = 264;
 export const ROOM_HEIGHT = 146;
 export const FLOOR_SPACING = 181;
@@ -27,7 +29,7 @@ function makeRoom(type, floor, column, data = {}) {
   return {
     id: typeof data.id === 'string' && /^[a-z0-9-]{1,32}$/.test(data.id) ? data.id : `${type}-${floor}-${column}`,
     type, floor, column,
-    level: Math.max(1, Math.min(3, Math.floor(Number(data.level) || 1))),
+    level: Math.max(1, Math.min(ROOM_MAX_LEVEL, Math.floor(Number(data.level) || 1))),
     operational: type === 'generator' ? data.operational === true : true,
     ...(typeof data.staffedBy === 'string' ? { staffedBy: data.staffedBy } : {}),
     ...(type === 'greenhouse' && Number.isFinite(Number(data.disabledMonthsRemaining))
@@ -149,10 +151,10 @@ export function repairShelterGenerator(state, floor, column) {
 
 export function upgradeShelterRoom(state, floor, column) {
   const room = getRoom(state.shelter_grid, floor, column);
-  if (!state.is_wasteland || !room || ['vault', 'elevator'].includes(room.type) || room.level >= 3) {
+  const cost = getRoomUpgradeCost(room);
+  if (!state.is_wasteland || !room || cost === null) {
     return { ...state, notice: 'Esta sala não pode receber mais melhorias.' };
   }
-  const cost = Math.ceil(SHELTER_TYPES[room.type].cost * .75 * room.level);
   if ((Number(state.scrap) || 0) < cost) return { ...state, notice: 'Sucata insuficiente para melhorar a sala.' };
   const grid = state.shelter_grid.map((row) => [...row]);
   grid[floor][column] = { ...room, level: room.level + 1 };
@@ -478,9 +480,22 @@ function drawRoom(ctx, room, grid, camera, time) {
   ctx.fillStyle = SHELTER_TYPES[room.type].accent;
   ctx.font = '14px "Share Tech Mono", monospace';
   ctx.fillText(`${SHELTER_TYPES[room.type].name.toUpperCase()}  /  N${room.level}`, rect.x + 16, rect.y + 24);
+  drawRoomLevelIndicators(ctx, rect, room.level);
   drawFurniture(ctx, room, rect, time);
   ctx.fillStyle = 'rgba(255, 184, 98, .05)';
   ctx.fillRect(rect.x + 8, rect.y + 27, rect.width - 16, 48);
+}
+
+export function drawRoomLevelIndicators(ctx, rect, level) {
+  const activeLevel = Math.max(1, Math.min(ROOM_MAX_LEVEL, Math.floor(Number(level) || 1)));
+  const size = 8;
+  const gap = 4;
+  const startX = rect.x + rect.width - (ROOM_MAX_LEVEL * size + (ROOM_MAX_LEVEL - 1) * gap) - 13;
+  const y = rect.y + 10;
+  for (let index = 0; index < ROOM_MAX_LEVEL; index++) {
+    ctx.fillStyle = index < activeLevel ? '#69d879' : '#343c3a';
+    ctx.fillRect(startX + index * (size + gap), y, size, size);
+  }
 }
 
 function drawInhabitant(ctx, inhabitant, camera, time, selected) {

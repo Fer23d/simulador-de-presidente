@@ -33,8 +33,8 @@ test('low morale halves assigned greenhouse and generator output while inhabitan
   };
 
   const next = advanceWastelandMonth(state);
-  assert.equal(next.shelter_supplies.food, 103);
-  assert.equal(next.shelter_supplies.energy, 103);
+  assert.equal(next.shelter_supplies.food, 147);
+  assert.equal(next.shelter_supplies.energy, 147);
   assert.equal(next.inhabitants.find((npc) => npc.id === 'worker-0-2').currentState, 'idle');
   assert.equal(next.inhabitants.find((npc) => npc.id === 'worker-0-2').loyalty, 30);
 });
@@ -112,7 +112,7 @@ test('greenhouse quarantine suppresses three complete production calculations an
   assert.equal(state.shelter_grid.flat().find((room) => room?.type === 'greenhouse').disabledMonthsRemaining, 0);
 
   state = advanceWastelandMonth(state);
-  assert.equal(state.shelter_supplies.food, 103);
+  assert.equal(state.shelter_supplies.food, 191);
 });
 
 test('dilemma choices apply their effects, clear the pause, and survive save hydration while pending', () => {

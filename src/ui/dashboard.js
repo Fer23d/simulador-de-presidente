@@ -7,6 +7,7 @@ import { MILITARY_TECHNOLOGIES } from '../core/tech_tree.js';
 import { calculateMilitaryMaintenance } from '../core/military.js';
 import { calculateInternalMaintenance } from '../core/infrastructure.js';
 import { MINISTERS } from '../core/ministers.js';
+import { getRoomEconomyProfile, getRoomStorageCapacity, getRoomUpgradeCost } from '../core/bunker_economy.js';
 import { getFactionSupport } from '../core/factions.js';
 import { canPromulgarConstituicao } from '../core/constitution.js';
 import { RESOLUTIONS } from '../core/un_assembly.js';
@@ -352,11 +353,30 @@ export function bunkerView(state) {
   const rooms = grid.flat().filter(Boolean);
   return `<section class="bunker-chamber">
     <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2></div><div class="bunker-header-actions"><button type="button" class="primary-action" data-action="advance" ${state.pendingExpeditionReports?.length || state.pendingBunkerEvent ? 'disabled' : ''}>[ AVANÇAR MÊS ]</button><button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button></div></div>
-    <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)}</span><span>COMIDA ${formatNumber.format(state.shelter_supplies?.food ?? 0)}</span><span>ENERGIA ${formatNumber.format(state.shelter_supplies?.energy ?? 0)}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
+    <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'scrap'))}</span><span>COMIDA ${formatNumber.format(state.shelter_supplies?.food ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'food'))}</span><span>ENERGIA ${formatNumber.format(state.shelter_supplies?.energy ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'energy'))}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'weapons'))}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'medkits'))}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
     <div class="bunker-build-controls" hidden aria-label="Módulos de construção">${modules.map(([id, module]) => `<button type="button" class="bunker-module-button" data-action="shelter-module" data-module="${id}" aria-pressed="${id === 'dormitory'}" ${state.scrap < module.cost ? 'disabled' : ''}>${module.name}<small>${module.cost} sucatas</small></button>`).join('')}<div class="bunker-slot-controls"><label for="shelter-build-slot">Setor livre</label><select id="shelter-build-slot" class="bunker-build-slot"></select><button type="button" class="primary-action" data-action="shelter-place">[ CONSTRUIR ]</button></div></div>
     <div class="bunker-stage"><canvas id="shelterCanvas" class="bunker-canvas" width="960" height="600" tabindex="0" aria-label="Bunker lateral. A e D movem o Presidente, W e S operam o elevador, E interage. Na construção, clique num setor livre."></canvas><div class="bunker-tooltip" data-bunker-tooltip role="status" hidden></div></div>
     <div class="bunker-foot"><div><p class="bunker-status" data-shelter-status role="status">PRESIDENTE EM PATRULHA</p><p class="bunker-notice ${state.notice?.includes('SINAL DO EXPLORADOR') ? 'danger' : ''}" role="status">${escapeHtml(state.notice ?? '')}</p></div><div class="shelter-room-controls"><label for="shelter-room-select">Setor</label><select id="shelter-room-select" class="bunker-build-slot">${rooms.map((room) => `<option value="${room.floor}:${room.column}">${SHELTER_TYPES[room.type].name} · A${room.floor + 1} S${room.column}</option>`).join('')}</select><button type="button" class="quiet-action" data-action="shelter-open-room">[ GERIR SALA ]</button></div></div>
   </section>`;
+}
+
+export function renderRoomManagement(state, room) {
+  if (!room || !SHELTER_TYPES[room.type]) return '';
+  const profile = getRoomEconomyProfile(state, room);
+  const productionText = profile.production
+    ? `${formatNumber.format(profile.production.amount)} ${profile.production.label}/mês`
+    : 'Sem produção mensal direta';
+  const nextText = profile.nextLevel?.production
+    ? `Nível ${profile.nextLevel.level}: ${formatNumber.format(profile.nextLevel.production.amount)} ${profile.nextLevel.production.label}/mês`
+    : 'Nível máximo atingido';
+  const cost = getRoomUpgradeCost(room);
+  const upgradeControl = cost === null
+    ? ['vault', 'elevator'].includes(room.type)
+      ? ''
+      : '<button type="button" class="primary-action" disabled>[ NÍVEL MÁXIMO ATINGIDO ]</button>'
+    : `<button type="button" class="primary-action" data-action="upgrade-shelter-room" data-floor="${room.floor}" data-column="${room.column}" ${state.scrap < cost ? 'disabled' : ''}>[ MELHORAR SALA - CUSTO: ${formatNumber.format(cost)} SUCATAS ]</button>`;
+  return `<h2 id="bunker-room-title">${SHELTER_TYPES[room.type].name} (NÍVEL ${profile.level})</h2>
+    <dl class="room-economy-stats"><div><dt>Produção atual</dt><dd>${productionText}</dd></div><div><dt>Trabalhadores ativos</dt><dd>${profile.workers.active} / ${profile.workers.assigned}</dd></div><div><dt>Consumo populacional do Vault</dt><dd>${formatNumber.format(profile.consumption.food)} comida + ${formatNumber.format(profile.consumption.energy)} energia/mês</dd></div><div><dt>Projeção de melhoria</dt><dd>${nextText}</dd></div><div><dt>Sucata disponível</dt><dd>${formatNumber.format(state.scrap ?? 0)}</dd></div></dl>${upgradeControl}`;
 }
 
 export function expeditionLogisticsView(state) {
@@ -644,11 +664,8 @@ export function mountDashboard(root) {
       office: 'Coordena operações e gera 5 sucatas por nível a cada mês.',
       detention: 'Cela reforçada para conter habitantes em rebelião. Dissidentes presos deixam de sabotar o Vault.',
     }[room.type];
-    const canUpgrade = !['vault', 'elevator'].includes(room.type) && room.level < 3;
-    const upgradeCost = Math.ceil(SHELTER_TYPES[room.type].cost * .75 * room.level);
-    bunkerGeneratorModal.innerHTML = `<section class="bunker-dialog" role="dialog" aria-modal="true" aria-labelledby="bunker-room-title"><p class="eyebrow">/// GESTÃO DO VAULT ///</p><h2 id="bunker-room-title">${SHELTER_TYPES[room.type].name}</h2><pre>&gt; ANDAR ${room.floor + 1} / SETOR ${room.column} / NÍVEL ${room.level}
-&gt; ${description}
-&gt; SUCATA DISPONÍVEL: ${formatNumber.format(state.scrap ?? 0)}</pre>${room.type === 'vault' ? expeditionLogisticsView(state) : ''}<div class="action-row">${isGenerator && !room.operational ? `<button type="button" class="primary-action" data-action="repair-generator" data-floor="${room.floor}" data-column="${room.column}" ${state.scrap >= 25 ? '' : 'disabled'}>[ REPARAR: 25 SUCATAS ]</button>` : ''}${room.type === 'arsenal' ? `<button type="button" class="primary-action" data-action="equip-guard" ${state.shelter_supplies?.weapons > 0 ? '' : 'disabled'}>[ EQUIPAR GUARDA: 1 ARMA ]</button>` : ''}${room.type === 'medical' ? `<button type="button" class="primary-action" data-action="treat-radiation" ${state.shelter_supplies?.medkits > 0 ? '' : 'disabled'}>[ TRATAR RADIAÇÃO: 1 CURATIVO ]</button>` : ''}${room.type === 'radio' ? `<button type="button" class="primary-action" data-action="broadcast-radio" ${state.scrap >= 10 ? '' : 'disabled'}>[ TRANSMITIR SINAL: 10 SUCATAS ]</button>` : ''}${room.type === 'office' ? (state.geopolitics?.contacts ?? []).map((contact) => `<button type="button" class="quiet-action" data-action="vault-scout" data-contact="${escapeHtml(contact.id)}" ${state.scrap >= 25 ? '' : 'disabled'}>[ BATEDORES: ${escapeHtml(contact.name)} ]</button>`).join('') : ''}${canUpgrade ? `<button type="button" class="primary-action" data-action="upgrade-shelter-room" data-floor="${room.floor}" data-column="${room.column}" ${state.scrap >= upgradeCost ? '' : 'disabled'}>[ MELHORAR: ${upgradeCost} SUCATAS ]</button>` : ''}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div></section>`;
+    bunkerGeneratorModal.innerHTML = `<section class="bunker-dialog" role="dialog" aria-modal="true" aria-labelledby="bunker-room-title"><p class="eyebrow">/// GESTÃO DO VAULT ///</p>${renderRoomManagement(state, room)}<pre>&gt; ANDAR ${room.floor + 1} / SETOR ${room.column}
+&gt; ${description}</pre>${room.type === 'vault' ? expeditionLogisticsView(state) : ''}<div class="action-row">${isGenerator && !room.operational ? `<button type="button" class="primary-action" data-action="repair-generator" data-floor="${room.floor}" data-column="${room.column}" ${state.scrap >= 25 ? '' : 'disabled'}>[ REPARAR: 25 SUCATAS ]</button>` : ''}${room.type === 'arsenal' ? `<button type="button" class="primary-action" data-action="equip-guard" ${state.shelter_supplies?.weapons > 0 ? '' : 'disabled'}>[ EQUIPAR GUARDA: 1 ARMA ]</button>` : ''}${room.type === 'medical' ? `<button type="button" class="primary-action" data-action="treat-radiation" ${state.shelter_supplies?.medkits > 0 ? '' : 'disabled'}>[ TRATAR RADIAÇÃO: 1 CURATIVO ]</button>` : ''}${room.type === 'radio' ? `<button type="button" class="primary-action" data-action="broadcast-radio" ${state.scrap >= 10 ? '' : 'disabled'}>[ TRANSMITIR SINAL: 10 SUCATAS ]</button>` : ''}${room.type === 'office' ? (state.geopolitics?.contacts ?? []).map((contact) => `<button type="button" class="quiet-action" data-action="vault-scout" data-contact="${escapeHtml(contact.id)}" ${state.scrap >= 25 ? '' : 'disabled'}>[ BATEDORES: ${escapeHtml(contact.name)} ]</button>`).join('') : ''}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div></section>`;
     bunkerGeneratorModal.hidden = false;
     bunkerController?.pause();
   }
@@ -999,6 +1016,13 @@ export function mountDashboard(root) {
   bunkerGeneratorModal?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-action]');
     const action = button?.dataset.action;
+    if (action === 'upgrade-shelter-room') {
+      const floor = Number(button.dataset.floor);
+      const column = Number(button.dataset.column);
+      commit(upgradeShelterRoom(state, floor, column));
+      openShelterRoom(getRoom(state.shelter_grid, floor, column));
+      return;
+    }
     if (action === 'close-bunker-modal') {
       bunkerGeneratorModal.hidden = true;
       bunkerController?.resume();
@@ -1009,14 +1033,13 @@ export function mountDashboard(root) {
       commit(startExpedition(state, button.dataset.inhabitant));
       root.querySelector('#shelterCanvas')?.focus();
     }
-    if (action === 'repair-generator' || action === 'upgrade-shelter-room' || action === 'equip-guard' || action === 'treat-radiation' || action === 'broadcast-radio' || action === 'vault-scout') {
+    if (action === 'repair-generator' || action === 'equip-guard' || action === 'treat-radiation' || action === 'broadcast-radio' || action === 'vault-scout') {
       bunkerGeneratorModal.hidden = true;
       bunkerController?.resume();
       const floor = Number(button.dataset.floor);
       const column = Number(button.dataset.column);
       const next = action === 'repair-generator' ? repairShelterGenerator(state, floor, column)
-        : action === 'upgrade-shelter-room' ? upgradeShelterRoom(state, floor, column)
-          : action === 'equip-guard' ? equipShelterGuard(state)
+        : action === 'equip-guard' ? equipShelterGuard(state)
             : action === 'treat-radiation' ? useShelterMedkit(state)
               : action === 'broadcast-radio' ? broadcastShelterSignal(state)
                 : enviarBatedoresWasteland(state, button.dataset.contact);

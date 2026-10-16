@@ -1,9 +1,9 @@
 import { nextRandom } from './geopolitics.js';
+import { getRoomWorkforce } from './bunker_economy.js';
 
 const EXPEDITION_MONTHS = 3;
 const EXPEDITION_SUCCESS_CHANCE = 0.7;
 const REBEL_SCRAP_COST = 5;
-const LOW_MORALE_THRESHOLD = 40;
 const REBELLION_CHANCE = 0.2;
 const SCOUT_EXPEDITION_SUCCESS_CHANCE = 0.65;
 const GREENHOUSE_CURE_SUCCESS_CHANCE = 0.6;
@@ -72,17 +72,7 @@ export function canResolveWastelandEvent(state, eventId, optionId) {
 
 export function getRoomProductivityMultiplier(state, room) {
   if (!room || !['greenhouse', 'generator'].includes(room.type) || (room.type === 'generator' && !room.operational)) return 0;
-  const workers = (state.inhabitants ?? []).filter((inhabitant) =>
-    inhabitant.workFloor === room.floor && inhabitant.workColumn === room.column);
-  if (room.staffedBy) {
-    const assigned = workers.find((inhabitant) => inhabitant.id === room.staffedBy);
-    if (!assigned) return 0;
-    return assigned.is_on_expedition || assigned.is_prisoner || assigned.currentState === 'rebel'
-      ? 0 : Number(assigned.loyalty ?? 100) < LOW_MORALE_THRESHOLD ? 0.5 : 1;
-  }
-  if (!workers.length) return 1;
-  return workers.reduce((total, worker) => total + (worker.is_on_expedition || worker.is_prisoner || worker.currentState === 'rebel'
-    ? 0 : Number(worker.loyalty ?? 100) < LOW_MORALE_THRESHOLD ? 0.5 : 1), 0) / workers.length;
+  return getRoomWorkforce(state, room).effective;
 }
 
 export function startExpedition(state, inhabitantId) {
