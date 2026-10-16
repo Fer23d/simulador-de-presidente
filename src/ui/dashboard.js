@@ -7,7 +7,7 @@ import { MILITARY_TECHNOLOGIES } from '../core/tech_tree.js';
 import { calculateMilitaryMaintenance } from '../core/military.js';
 import { calculateInternalMaintenance } from '../core/infrastructure.js';
 import { MINISTERS } from '../core/ministers.js';
-import { getRoomEconomyProfile, getRoomStorageCapacity, getRoomUpgradeCost } from '../core/bunker_economy.js';
+import { getRoomEconomyProfile, getRoomStorageCapacity, getRoomUpgradeCosts } from '../core/bunker_economy.js';
 import { getFactionSupport } from '../core/factions.js';
 import { canPromulgarConstituicao } from '../core/constitution.js';
 import { RESOLUTIONS } from '../core/un_assembly.js';
@@ -353,10 +353,10 @@ export function bunkerView(state) {
   const rooms = grid.flat().filter(Boolean);
   return `<section class="bunker-chamber">
     <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2></div><div class="bunker-header-actions"><button type="button" class="primary-action" data-action="advance" ${state.pendingExpeditionReports?.length || state.pendingBunkerEvent ? 'disabled' : ''}>[ AVANÇAR MÊS ]</button><button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button></div></div>
-    <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'scrap'))}</span><span>COMIDA ${formatNumber.format(state.shelter_supplies?.food ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'food'))}</span><span>ENERGIA ${formatNumber.format(state.shelter_supplies?.energy ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'energy'))}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'weapons'))}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'medkits'))}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
+    <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'scrap'))}</span><span>CIÊNCIA ${formatNumber.format(state.science ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'science'))}</span><span>COMIDA ${formatNumber.format(state.shelter_supplies?.food ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'food'))}</span><span>ENERGIA ${formatNumber.format(state.shelter_supplies?.energy ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'energy'))}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'weapons'))}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'medkits'))}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
     <div class="bunker-build-controls" hidden aria-label="Módulos de construção">${modules.map(([id, module]) => `<button type="button" class="bunker-module-button" data-action="shelter-module" data-module="${id}" aria-pressed="${id === 'dormitory'}" ${state.scrap < module.cost ? 'disabled' : ''}>${module.name}<small>${module.cost} sucatas</small></button>`).join('')}<div class="bunker-slot-controls"><label for="shelter-build-slot">Setor livre</label><select id="shelter-build-slot" class="bunker-build-slot"></select><button type="button" class="primary-action" data-action="shelter-place">[ CONSTRUIR ]</button></div></div>
     <div class="bunker-stage"><canvas id="shelterCanvas" class="bunker-canvas" width="960" height="600" tabindex="0" aria-label="Bunker lateral. A e D movem o Presidente, W e S operam o elevador, E interage. Na construção, clique num setor livre."></canvas><div class="bunker-tooltip" data-bunker-tooltip role="status" hidden></div></div>
-    <div class="bunker-foot"><div><p class="bunker-status" data-shelter-status role="status">PRESIDENTE EM PATRULHA</p><p class="bunker-notice ${state.notice?.includes('SINAL DO EXPLORADOR') ? 'danger' : ''}" role="status">${escapeHtml(state.notice ?? '')}</p></div><div class="shelter-room-controls"><label for="shelter-room-select">Setor</label><select id="shelter-room-select" class="bunker-build-slot">${rooms.map((room) => `<option value="${room.floor}:${room.column}">${SHELTER_TYPES[room.type].name} · A${room.floor + 1} S${room.column}</option>`).join('')}</select><button type="button" class="quiet-action" data-action="shelter-open-room">[ GERIR SALA ]</button></div></div>
+    <div class="bunker-foot"><div><p class="bunker-status" data-shelter-status role="status">PRESIDENTE EM PATRULHA</p><p class="bunker-notice ${state.notice?.includes('SINAL DO EXPLORADOR') || state.notice?.includes('ALERTA CRÍTICO') ? 'danger' : ''}" role="status">${escapeHtml(state.notice ?? '')}</p></div><div class="shelter-room-controls"><label for="shelter-room-select">Setor</label><select id="shelter-room-select" class="bunker-build-slot">${rooms.map((room) => `<option value="${room.floor}:${room.column}">${SHELTER_TYPES[room.type].name} · A${room.floor + 1} S${room.column}</option>`).join('')}</select><button type="button" class="quiet-action" data-action="shelter-open-room">[ GERIR SALA ]</button></div></div>
   </section>`;
 }
 
@@ -369,14 +369,16 @@ export function renderRoomManagement(state, room) {
   const nextText = profile.nextLevel?.production
     ? `Nível ${profile.nextLevel.level}: ${formatNumber.format(profile.nextLevel.production.amount)} ${profile.nextLevel.production.label}/mês`
     : 'Nível máximo atingido';
-  const cost = getRoomUpgradeCost(room);
-  const upgradeControl = cost === null
+  const costs = getRoomUpgradeCosts(room);
+  const scrapAvailable = Number(state.scrap) || 0;
+  const scienceAvailable = Number(state.science) || 0;
+  const upgradeControl = costs === null
     ? ['vault', 'elevator'].includes(room.type)
       ? ''
       : '<button type="button" class="primary-action" disabled>[ NÍVEL MÁXIMO ATINGIDO ]</button>'
-    : `<button type="button" class="primary-action" data-action="upgrade-shelter-room" data-floor="${room.floor}" data-column="${room.column}" ${state.scrap < cost ? 'disabled' : ''}>[ MELHORAR SALA - CUSTO: ${formatNumber.format(cost)} SUCATAS ]</button>`;
+    : `<div class="upgrade-costs"><span class="resource-cost ${scrapAvailable >= costs.scrap ? 'resource-cost--enough' : 'resource-cost--short'}">SUCATA: ${formatNumber.format(costs.scrap)} (SALDO ${formatNumber.format(scrapAvailable)})</span><span class="resource-cost ${scienceAvailable >= costs.science ? 'resource-cost--enough' : 'resource-cost--short'}">CIÊNCIA: ${formatNumber.format(costs.science)} (SALDO ${formatNumber.format(scienceAvailable)})</span></div><button type="button" class="primary-action" data-action="upgrade-shelter-room" data-floor="${room.floor}" data-column="${room.column}" ${scrapAvailable < costs.scrap || scienceAvailable < costs.science ? 'disabled' : ''}>[ MELHORAR SALA ]</button>`;
   return `<h2 id="bunker-room-title">${SHELTER_TYPES[room.type].name} (NÍVEL ${profile.level})</h2>
-    <dl class="room-economy-stats"><div><dt>Produção atual</dt><dd>${productionText}</dd></div><div><dt>Trabalhadores ativos</dt><dd>${profile.workers.active} / ${profile.workers.assigned}</dd></div><div><dt>Consumo populacional do Vault</dt><dd>${formatNumber.format(profile.consumption.food)} comida + ${formatNumber.format(profile.consumption.energy)} energia/mês</dd></div><div><dt>Projeção de melhoria</dt><dd>${nextText}</dd></div><div><dt>Sucata disponível</dt><dd>${formatNumber.format(state.scrap ?? 0)}</dd></div></dl>${upgradeControl}`;
+    <dl class="room-economy-stats"><div><dt>Produção atual</dt><dd>${productionText}</dd></div><div><dt>Trabalhadores ativos</dt><dd>${profile.workers.active} / ${profile.workers.assigned}</dd></div><div><dt>Consumo populacional do Vault</dt><dd>${formatNumber.format(profile.consumption.food)} comida + ${formatNumber.format(profile.consumption.energy)} energia/mês</dd></div><div><dt>Projeção de melhoria</dt><dd>${nextText}</dd></div><div><dt>Sucata disponível</dt><dd>${formatNumber.format(scrapAvailable)}</dd></div><div><dt>Ciência disponível</dt><dd>${formatNumber.format(scienceAvailable)}</dd></div></dl>${upgradeControl}`;
 }
 
 export function expeditionLogisticsView(state) {
@@ -386,7 +388,7 @@ export function expeditionLogisticsView(state) {
     const unavailable = npc.currentState === 'rebel' || npc.is_prisoner || npc.is_on_expedition;
     const status = npc.is_on_expedition ? `EM EXPEDIÇÃO · ${npc.expedition_timer} MESES`
       : npc.is_prisoner ? 'DETIDO' : npc.currentState === 'rebel' ? 'REBELDE' : 'SAUDÁVEL';
-    return `<li><span>${escapeHtml(npc.id)} — ${status}</span><button type="button" class="primary-action" data-action="start-expedition" data-inhabitant="${escapeHtml(npc.id)}" ${unavailable ? 'disabled' : ''}>[ ENVIAR PARA A SUPERFÍCIE ]</button></li>`;
+    return `<li><span>${npc.isVIP ? '⭐ ' : ''}${escapeHtml(npc.name || npc.id)} — ${status}</span><button type="button" class="primary-action" data-action="start-expedition" data-inhabitant="${escapeHtml(npc.id)}" ${unavailable ? 'disabled' : ''}>[ ENVIAR PARA A SUPERFÍCIE ]</button></li>`;
   }).join('')}</ul></section>`;
 }
 
@@ -394,7 +396,7 @@ export function expeditionReportView(state) {
   const report = state.pendingExpeditionReports?.[0];
   if (!report) return '';
   const message = report.success
-    ? `> ${escapeHtml(report.inhabitantId)} regressou da superfície.\n> RECUPERADO: 500 SUCATAS / 1 PONTO DE TECNOLOGIA.`
+    ? `> ${escapeHtml(report.inhabitantId)} regressou da superfície.\n> RECUPERADO: 500 SUCATAS / 1 PONTO DE TECNOLOGIA.${report.vipFound ? `\n> ESPECIALISTA RESGATADO: ⭐ ${escapeHtml(report.vipName)} (MODIFICADOR x2).` : ''}`
     : `> O SINAL DE ${escapeHtml(report.inhabitantId)} FOI PERDIDO NO WASTELAND.`;
   return `<section class="bunker-dialog expedition-report" role="dialog" aria-modal="true" aria-labelledby="expedition-report-title"><p class="eyebrow">/// RELATÓRIO DE MISSÃO ///</p><h2 id="expedition-report-title">${report.success ? 'Explorador retornou' : 'Sinal perdido'}</h2><pre>${message}</pre><button type="button" class="primary-action" data-action="dismiss-expedition-report">[ ARQUIVAR RELATÓRIO ]</button></section>`;
 }
@@ -658,6 +660,7 @@ export function mountDashboard(root) {
       dormitory: 'Leitos modulares. Capacidade de abrigo ampliada.',
       generator: room.operational ? 'Unidade energética operacional.' : 'Unidade energética aguardando manutenção.',
       greenhouse: 'Cultivo hidropônico para sustentar o Vault.',
+      laboratory: 'Centro de pesquisa científica. Produz Ciência conforme o nível e os especialistas alocados.',
       arsenal: 'Produz 1 arma por nível a cada mês. Equipamento para a defesa do Vault.',
       medical: 'Produz 2 curativos por nível e melhora o crescimento da população.',
       radio: 'Transmite sinais para atrair 3 sobreviventes por nível a cada mês.',

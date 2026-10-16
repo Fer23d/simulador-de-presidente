@@ -11,6 +11,9 @@ export class Inhabitant {
     this.floor = data.floor;
     this.column = data.column;
     this.role = data.role ?? 'resident';
+    this.name = typeof data.name === 'string' && data.name.trim() ? data.name.slice(0, 60) : 'Habitante Genérico';
+    this.isVIP = data.isVIP === true;
+    this.modifier = Math.max(1, Math.min(5, Number(data.modifier) || (this.isVIP ? 2 : 1)));
     this.pose = data.pose ?? 'idle';
     this.facing = data.facing === -1 ? -1 : 1;
     this.offsetX = clamp(Number(data.offsetX) || 0, -MAX_OFFSET, MAX_OFFSET);
@@ -63,6 +66,7 @@ export class Inhabitant {
   snapshot() {
     return { id: this.id, floor: this.floor, column: this.column, offsetX: this.offsetX,
       role: this.role, pose: this.pose, facing: this.facing,
+      name: this.name, isVIP: this.isVIP, modifier: this.modifier,
       currentState: this.currentState, targetOffsetX: this.targetOffsetX, waitSeconds: this.waitSeconds,
       loyalty: this.loyalty, workFloor: this.workFloor, workColumn: this.workColumn,
       rebellionCheckDone: this.rebellionCheckDone,

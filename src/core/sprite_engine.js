@@ -4,7 +4,7 @@ const SURFACE_Y = WORLD_TOP - 30;
 const ATLAS_CELLS = Object.freeze({
   vault: [0, 0], elevator: [1, 0], dormitory: [2, 0],
   generator: [0, 1], greenhouse: [1, 1], arsenal: [2, 1],
-  medical: [0, 2], radio: [1, 2], office: [2, 2], detention: [2, 2],
+  medical: [0, 2], radio: [1, 2], office: [2, 2], detention: [2, 2], laboratory: [0, 2],
 });
 const NPC_ROWS = Object.freeze({ resident: 0, engineer: 0, scientist: 1, medic: 2, guard: 3 });
 const frameBoundsCache = new WeakMap();
@@ -23,6 +23,7 @@ export const DEFAULT_ASSETS = Object.freeze({
   fg_wasteland: './assets/img/fg_wasteland.png',
   dirt_texture: './assets/img/dirt_texture.png',
   room_atlas: './assets/img/room_atlas.png',
+  room_laboratory: './assets/img/room_laboratory.png',
   elevator_cabin: './assets/img/elevator_cabin.png',
   character_sheet: './assets/img/character_sheet.png',
   npc_walk_sheet: './assets/img/npc_walk_sheet.png',
@@ -228,6 +229,16 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
     const placement = getActorPlacement(room);
     const animationPhase = [...npc.id].reduce((sum, letter) => sum + letter.charCodeAt(0), 0) % 4 * 67;
     drawActorSprite(ctx, { ...npc, x, y: placement.floorY }, npcSheet, time + animationPhase, placement);
+    if (npc.isVIP) {
+      ctx.save();
+      ctx.fillStyle = '#f4d36e';
+      ctx.font = 'bold 12px "Share Tech Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#f4d36e';
+      ctx.shadowBlur = 5;
+      ctx.fillText(`⭐ ${npc.name || 'Especialista'}`, x, placement.floorY - placement.height - 11);
+      ctx.restore();
+    }
     if (npc.currentState === 'rebel' && !npc.is_prisoner) {
       ctx.save();
       ctx.globalAlpha = .62 + (Math.sin(time / 180) + 1) * .19;

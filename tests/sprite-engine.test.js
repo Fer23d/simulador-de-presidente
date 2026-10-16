@@ -92,6 +92,23 @@ test('the scene anchors both residents and the president to their own floor', ()
   assert.equal(feet[1][1], getActorPlacement({ floor: 0, column: 0, type: 'elevator' }).floorY);
 });
 
+test('VIP render shows a gold star and specialist name over the distinct scientist sprite row', () => {
+  const labels = [];
+  const sprites = [];
+  const image = { width: 1200, height: 800, key: 'sheet' };
+  const ctx = { canvas: { width: 960, height: 600 }, save() {}, restore() {}, translate() {}, scale() {},
+    beginPath() {}, ellipse() {}, fill() {}, drawImage(...args) { sprites.push(args); },
+    createPattern() { return 'soil'; }, fillRect() {}, fillText(text) { labels.push(text); } };
+  const vip = { id: 'vip-scientist', name: 'Dr. Isaac', isVIP: true, modifier: 2,
+    floor: 0, column: 1, offsetX: 0, role: 'scientist', currentState: 'idle' };
+  renderSpriteScene(ctx, { grid: INITIAL_SHELTER_GRID,
+    player: { ...cellCenter(0, 1), floor: 0, vx: 0, facing: 1, liftTarget: null },
+    inhabitants: [vip], camera: { offset_x: 0, offset_y: 0 },
+    assets: { getImage: () => image }, cabinFloor: 0, time: 0 });
+  assert.ok(labels.includes('⭐ Dr. Isaac'));
+  assert.ok(sprites.some((args) => args[0] === image && args[2] > 0));
+});
+
 test('an inhabitant chooses a target inside one room, walks, then idles', () => {
   const rolls = [0.1, 0.9];
   const npc = new Inhabitant({ id: 'worker', floor: 0, column: 1, offsetX: 0, role: 'engineer',

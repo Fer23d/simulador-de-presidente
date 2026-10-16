@@ -1,5 +1,5 @@
 import { calculateShelterCapacity, INITIAL_SHELTER_GRID, normalizeShelterGrid } from './shelter_engine.js';
-import { getRoomEconomyProfile, getRoomStorageCapacity } from './bunker_economy.js';
+import { getBunkerEnergyConsumption, getBunkerFoodConsumption, getRoomEconomyProfile, getRoomStorageCapacity } from './bunker_economy.js';
 import { createInitialInhabitants, createRpgPlayer } from './rpg_bunker.js';
 import { advanceMonthlyGameMechanics, getRoomProductivityMultiplier, getWastelandEvent, WASTELAND_EVENTS } from './game_mechanics.js';
 
@@ -55,6 +55,7 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
     wasteland_cinematic_ready: false,
     unlocked_chapters: [...new Set([...(state.unlocked_chapters ?? []), 'cap_5_wasteland'])],
     scrap: Math.max(250, Number(state.scrap) || 0),
+    science: Math.max(0, Math.floor(Number(state.science) || 0)),
     shelter_grid: normalizeShelterGrid(INITIAL_SHELTER_GRID),
     shelter_inhabitants: [],
     inhabitants: createInitialInhabitants(INITIAL_SHELTER_GRID),
@@ -105,10 +106,13 @@ export function advanceWastelandMonth(state) {
   const grid = normalizeShelterGrid(state.shelter_grid);
   const rooms = grid.flat().filter(Boolean);
   const activeGreenhouses = rooms.filter((room) => room.type === 'greenhouse' && !(room.disabledMonthsRemaining > 0));
+  const laboratories = rooms.filter((room) => room.type === 'laboratory');
   const generators = rooms.filter((room) => room.type === 'generator' && room.operational);
   const energyProduction = generators.reduce((total, room) =>
     total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0);
   const foodProduction = activeGreenhouses.reduce((total, room) =>
+    total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0);
+  const scienceProduction = laboratories.reduce((total, room) =>
     total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0);
   const generatorWorkUnits = generators.reduce((total, room) =>
     total + room.level * getRoomProductivityMultiplier(state, room), 0);
@@ -120,12 +124,13 @@ export function advanceWastelandMonth(state) {
   const radio = countLevels('radio');
   const offices = countLevels('office');
   const population = Math.min(calculateShelterCapacity(grid), state.country.populacao_base + greenhouseWorkUnits * 5 + medical * 2 + radio * 3);
-  const populationConsumption = Math.ceil(Math.max(0, Number(population) || 0) / 500);
+  const foodConsumption = getBunkerFoodConsumption(state, population);
+  const energyConsumption = getBunkerEnergyConsumption(state, population);
   const supplies = {
     weapons: Math.min(getRoomStorageCapacity(grid, 'weapons'), (Number(state.shelter_supplies?.weapons) || 0) + arsenals),
     medkits: Math.min(getRoomStorageCapacity(grid, 'medkits'), (Number(state.shelter_supplies?.medkits) || 0) + medical * 2),
-    food: Math.min(getRoomStorageCapacity(grid, 'food'), Math.max(0, (Number(state.shelter_supplies?.food) || 0) + foodProduction - populationConsumption)),
-    energy: Math.min(getRoomStorageCapacity(grid, 'energy'), Math.max(0, (Number(state.shelter_supplies?.energy) || 0) + energyProduction - populationConsumption)),
+    food: Math.min(getRoomStorageCapacity(grid, 'food'), Math.max(0, (Number(state.shelter_supplies?.food) || 0) + foodProduction - foodConsumption)),
+    energy: Math.min(getRoomStorageCapacity(grid, 'energy'), Math.max(0, (Number(state.shelter_supplies?.energy) || 0) + energyProduction - energyConsumption)),
   };
   const wastelandMonthCounter = Math.max(0, Math.floor(Number(state.wasteland_turn ?? state.wastelandMonthCounter) || 0)) + 1;
   const nextGrid = grid.map((row) => row.map((room) => room?.type === 'greenhouse' && room.disabledMonthsRemaining > 0
@@ -139,6 +144,7 @@ export function advanceWastelandMonth(state) {
     wastelandMonthCounter,
     wastelandEventCursor: Math.max(0, Math.floor(Number(state.wastelandEventCursor) || 0)) % WASTELAND_EVENTS.length,
     shelter_grid: nextGrid,
+    science: Math.min(getRoomStorageCapacity(grid, 'science'), (Number(state.science) || 0) + scienceProduction),
     scrap: Math.min(getRoomStorageCapacity(grid, 'scrap'), (Number(state.scrap) || 0) + 25 + generatorWorkUnits * 15 + offices * 5),
     shelter_supplies: supplies,
     shelter_radiation: Math.max(0, Math.min(100, (Number(state.shelter_radiation) || 0) + 2 - medical)),
@@ -163,7 +169,7 @@ export function advanceWastelandMonth(state) {
     ...processed,
     pendingBunkerEvent: { id: WASTELAND_EVENTS[selectedIndex].id },
     wastelandEventCursor: (selectedIndex + 1) % WASTELAND_EVENTS.length,
-    notice: `${processed.notice?.includes('SINAL DO EXPLORADOR') ? `${processed.notice} ` : ''}Uma decisao urgente aguarda o comando do Vault.`,
+    notice: `${processed.notice?.includes('SINAL DO EXPLORADOR') || processed.notice?.includes('ALERTA CRÍTICO') ? `${processed.notice} ` : ''}Uma decisao urgente aguarda o comando do Vault.`,
   };
 }
 

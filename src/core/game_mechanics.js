@@ -5,8 +5,16 @@ const EXPEDITION_MONTHS = 3;
 const EXPEDITION_SUCCESS_CHANCE = 0.7;
 const REBEL_SCRAP_COST = 5;
 const REBELLION_CHANCE = 0.2;
+const VIP_DISCOVERY_CHANCE = 0.1;
+const VIP_ASSASSINATION_CHANCE = 0.3;
 const SCOUT_EXPEDITION_SUCCESS_CHANCE = 0.65;
 const GREENHOUSE_CURE_SUCCESS_CHANCE = 0.6;
+const VIP_PROFILES = Object.freeze([
+  Object.freeze({ name: 'Dr. Isaac', role: 'scientist' }),
+  Object.freeze({ name: 'Dra. Amara', role: 'scientist' }),
+  Object.freeze({ name: 'Coronel Silva', role: 'guard' }),
+  Object.freeze({ name: 'Coronela Costa', role: 'guard' }),
+]);
 
 export const WASTELAND_EVENTS = Object.freeze([
   Object.freeze({
@@ -71,7 +79,7 @@ export function canResolveWastelandEvent(state, eventId, optionId) {
 }
 
 export function getRoomProductivityMultiplier(state, room) {
-  if (!room || !['greenhouse', 'generator'].includes(room.type) || (room.type === 'generator' && !room.operational)) return 0;
+  if (!room || !['greenhouse', 'generator', 'laboratory'].includes(room.type) || (room.type === 'generator' && !room.operational)) return 0;
   return getRoomWorkforce(state, room).effective;
 }
 
@@ -111,11 +119,47 @@ export function advanceMonthlyGameMechanics(state) {
     const roll = nextRandom(randomSeed);
     randomSeed = roll.seed;
     const success = roll.value < EXPEDITION_SUCCESS_CHANCE;
+    const reportIndex = reports.length;
     reports.push({ id: `${state.monthCounter}-${inhabitant.id}`, inhabitantId: inhabitant.id, success });
     if (success) {
       inhabitants.push({ ...inhabitant, is_on_expedition: false, expedition_timer: 0 });
       scrap += 500;
       technology = { ...technology, points: (Number(technology.points) || 0) + 1 };
+      const rarityRoll = nextRandom(randomSeed);
+      randomSeed = rarityRoll.seed;
+      if (rarityRoll.value < VIP_DISCOVERY_CHANCE && inhabitants.length < 48) {
+        const profileIndex = Math.floor(rarityRoll.value * 10_000) % VIP_PROFILES.length;
+        const profile = VIP_PROFILES[profileIndex];
+        const rooms = state.shelter_grid?.flat() ?? [];
+        const laboratory = rooms.find((room) => room?.type === 'laboratory');
+        const formerWorkplace = rooms.find((room) => room?.floor === inhabitant.workFloor
+          && room?.column === inhabitant.workColumn && ['generator', 'greenhouse', 'laboratory'].includes(room.type));
+        const destination = laboratory ?? formerWorkplace;
+        const floor = destination?.floor ?? inhabitant.floor;
+        const column = destination?.column ?? inhabitant.column;
+        const assignedWorkplace = destination && ['generator', 'greenhouse', 'laboratory'].includes(destination.type);
+        const vip = {
+          id: `${inhabitant.id}-vip-${Math.max(0, Number(state.monthCounter) || 0)}`,
+          name: profile.name,
+          role: profile.role,
+          isVIP: true,
+          modifier: 2,
+          floor,
+          column,
+          offsetX: profileIndex % 2 ? 38 : -38,
+          currentState: 'idle',
+          targetOffsetX: null,
+          waitSeconds: 1,
+          loyalty: 100,
+          rebellionCheckDone: false,
+          is_on_expedition: false,
+          expedition_timer: 0,
+          is_prisoner: false,
+          ...(assignedWorkplace ? { workFloor: floor, workColumn: column, pose: 'working' } : {}),
+        };
+        inhabitants.push(vip);
+        reports[reportIndex] = { ...reports[reportIndex], vipFound: true, vipName: vip.name };
+      }
     } else {
       lostExplorer = true;
     }
@@ -140,19 +184,39 @@ export function advanceMonthlyGameMechanics(state) {
   });
   const rebels = updatedInhabitants.filter((inhabitant) => inhabitant.currentState === 'rebel' && !inhabitant.is_prisoner && !inhabitant.is_on_expedition).length;
   scrap = Math.max(0, scrap - rebels * REBEL_SCRAP_COST);
+  const assassinated = new Set();
+  let assassinationNotice = null;
+  for (const rebel of updatedInhabitants.filter((inhabitant) => inhabitant.isVIP
+    && inhabitant.currentState === 'rebel' && !inhabitant.is_prisoner && !inhabitant.is_on_expedition)) {
+    const attackRoll = nextRandom(randomSeed);
+    randomSeed = attackRoll.seed;
+    if (attackRoll.value >= VIP_ASSASSINATION_CHANCE) continue;
+    const candidates = updatedInhabitants.filter((inhabitant) => !inhabitant.isVIP
+      && inhabitant.currentState !== 'rebel' && !inhabitant.is_prisoner && !inhabitant.is_on_expedition
+      && Number.isInteger(inhabitant.workFloor) && Number.isInteger(inhabitant.workColumn)
+      && Math.abs(inhabitant.floor - rebel.floor) + Math.abs(inhabitant.column - rebel.column) <= 1
+      && !assassinated.has(inhabitant.id));
+    if (!candidates.length) continue;
+    const targetRoll = nextRandom(randomSeed);
+    randomSeed = targetRoll.seed;
+    const victim = candidates[Math.floor(targetRoll.value * candidates.length)];
+    assassinated.add(victim.id);
+    assassinationNotice = `> ALERTA CRÍTICO: ${rebel.name || rebel.id} assassinou ${victim.name || victim.id}.`;
+  }
+  const survivingInhabitants = updatedInhabitants.filter((inhabitant) => !assassinated.has(inhabitant.id));
 
   return {
     ...state,
     randomSeed,
     scrap,
     technology,
-    inhabitants: updatedInhabitants,
+    inhabitants: survivingInhabitants,
     pendingExpeditionReports: reports,
-    notice: lostExplorer
+    notice: assassinationNotice ?? (lostExplorer
       ? '> O SINAL DO EXPLORADOR FOI PERDIDO NO WASTELAND.'
       : rebels > 0 ? `Dissidentes causaram danos discretos ao Vault. Sucata perdida: ${rebels * REBEL_SCRAP_COST}.`
         : resourcesDepleted ? 'Alimentos ou energia esgotados. A lealdade dos habitantes caiu.'
-          : reports.length > (state.pendingExpeditionReports?.length ?? 0) ? 'Relatorio de expedicao pronto para consulta.' : state.notice,
+          : reports.length > (state.pendingExpeditionReports?.length ?? 0) ? 'Relatorio de expedicao pronto para consulta.' : state.notice),
   };
 }
 

@@ -186,6 +186,7 @@ export function createGameState(countryId = 'bra') {
     wasteland_cinematic_ready: false,
     vault_built: false,
     scrap: 0,
+    science: 0,
     shelter_grid: normalizeShelterGrid(INITIAL_SHELTER_GRID),
     shelter_inhabitants: [],
     inhabitants: [],
@@ -1178,6 +1179,7 @@ export function hydrateGameState(serialized) {
       wasteland_cinematic_ready: Boolean(parsed.wasteland_cinematic_ready),
       vault_built: Boolean(parsed.vault_built || parsed.megaprojects?.megaVault?.completed),
       scrap: Math.max(0, Number(parsed.scrap) || 0),
+      science: Math.max(0, Math.floor(Number(parsed.science) || 0)),
       shelter_grid: shelterGrid,
       shelter_inhabitants: normalizeShelterInhabitants(parsed.shelter_inhabitants ?? migrateLegacyPlayer(parsed.bunker_player, parsed.bunker_rooms, shelterGrid), shelterGrid),
       inhabitants: parsed.is_wasteland ? normalizeInhabitants(parsed.inhabitants ??

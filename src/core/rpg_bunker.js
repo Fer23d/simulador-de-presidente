@@ -116,10 +116,12 @@ export function createInitialInhabitants(grid = INITIAL_SHELTER_GRID) {
   return [
     { id: 'vault-resident-1', floor: 0, column: 1, offsetX: -78, role: 'resident', pose: 'seated', facing: 1,
       currentState: 'idle', targetOffsetX: null, waitSeconds: 1, loyalty: 100,
+      name: 'Habitante Genérico', isVIP: false, modifier: 1,
       workFloor: null, workColumn: null, rebellionCheckDone: false,
       is_on_expedition: false, expedition_timer: 0, is_prisoner: false },
     { id: 'vault-engineer-1', floor: 0, column: 1, offsetX: 78, role: 'engineer', pose: 'working', facing: -1,
       currentState: 'idle', targetOffsetX: null, waitSeconds: 1, loyalty: 100,
+      name: 'Habitante Genérico', isVIP: false, modifier: 1,
       workFloor: null, workColumn: null, rebellionCheckDone: false,
       is_on_expedition: false, expedition_timer: 0, is_prisoner: false },
   ];
@@ -138,10 +140,13 @@ export function normalizeInhabitants(value, grid) {
     const targetOffsetX = Number.isFinite(npc.targetOffsetX)
       ? Math.max(-108, Math.min(108, npc.targetOffsetX)) : null;
     const room = getRoom(grid, npc.floor, npc.column);
-    const legacyWorkRoom = room?.type === 'greenhouse' && npc.role === 'scientist'
+    const legacyWorkRoom = (room?.type === 'greenhouse' || room?.type === 'laboratory') && npc.role === 'scientist'
       || room?.type === 'generator' && npc.role === 'engineer';
     result.push({ id: npc.id, floor: npc.floor, column: npc.column,
       offsetX: Math.max(-108, Math.min(108, Number(npc.offsetX) || 0)),
+      name: typeof npc.name === 'string' && npc.name.trim() ? npc.name.slice(0, 60) : 'Habitante Genérico',
+      isVIP: npc.isVIP === true,
+      modifier: Math.max(1, Math.min(5, Number(npc.modifier) || (npc.isVIP === true ? 2 : 1))),
       role: ['resident', 'engineer', 'scientist', 'medic', 'guard'].includes(npc.role) ? npc.role : 'resident',
       pose: ['idle', 'seated', 'working'].includes(npc.pose) ? npc.pose : 'idle',
       facing: npc.facing === -1 ? -1 : 1,

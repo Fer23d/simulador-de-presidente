@@ -118,6 +118,10 @@ body.theme-wasteland .content-area { max-width: none; }
 .room-economy-stats div { min-width: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 10px; }
 .room-economy-stats dt { color: var(--amber); font-size: 12px; text-transform: uppercase; }
 .room-economy-stats dd { margin: 5px 0 0; color: var(--phosphor); overflow-wrap: anywhere; }
+.upgrade-costs { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 12px 0; font-family: "Share Tech Mono", monospace; }
+.resource-cost { font-weight: 700; }
+.resource-cost--enough { color: #39ff14; }
+.resource-cost--short { color: #ff465d; }
 .expedition-logistics { margin: 14px 0; border: 1px dashed var(--line); padding: 12px; }
 .expedition-logistics h3 { margin: 0 0 6px; color: var(--amber); }
 .expedition-logistics p { color: var(--muted); }
