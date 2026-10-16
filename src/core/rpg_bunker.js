@@ -4,6 +4,7 @@ import {
   FLOOR_SPACING, WORLD_LEFT, WORLD_TOP,
 } from './shelter_engine.js';
 import { AssetManager, DEFAULT_ASSETS, renderSpriteScene } from './sprite_engine.js';
+import { Inhabitant } from './inhabitant.js';
 
 const WALK_SPEED = 170;
 const LIFT_SPEED = 280;
@@ -98,8 +99,10 @@ export function updatePlayer(player, input, grid, deltaSeconds) {
 export function createInitialInhabitants(grid = INITIAL_SHELTER_GRID) {
   if (!getRoom(grid, 0, 1)) return [];
   return [
-    { id: 'vault-resident-1', floor: 0, column: 1, offsetX: -78, role: 'resident', pose: 'seated', facing: 1 },
-    { id: 'vault-engineer-1', floor: 0, column: 1, offsetX: 78, role: 'engineer', pose: 'working', facing: -1 },
+    { id: 'vault-resident-1', floor: 0, column: 1, offsetX: -78, role: 'resident', pose: 'seated', facing: 1,
+      currentState: 'idle', targetOffsetX: null, waitSeconds: 1 },
+    { id: 'vault-engineer-1', floor: 0, column: 1, offsetX: 78, role: 'engineer', pose: 'working', facing: -1,
+      currentState: 'idle', targetOffsetX: null, waitSeconds: 1 },
   ];
 }
 
@@ -113,11 +116,16 @@ export function normalizeInhabitants(value, grid) {
       !Number.isInteger(npc.column) || !getRoom(grid, npc.floor, npc.column) ||
       getRoom(grid, npc.floor, npc.column).type === 'elevator') continue;
     ids.add(npc.id);
+    const targetOffsetX = Number.isFinite(npc.targetOffsetX)
+      ? Math.max(-108, Math.min(108, npc.targetOffsetX)) : null;
     result.push({ id: npc.id, floor: npc.floor, column: npc.column,
-      offsetX: Math.max(-98, Math.min(98, Number(npc.offsetX) || 0)),
+      offsetX: Math.max(-108, Math.min(108, Number(npc.offsetX) || 0)),
       role: ['resident', 'engineer', 'scientist', 'medic', 'guard'].includes(npc.role) ? npc.role : 'resident',
       pose: ['idle', 'seated', 'working'].includes(npc.pose) ? npc.pose : 'idle',
-      facing: npc.facing === -1 ? -1 : 1 });
+      facing: npc.facing === -1 ? -1 : 1,
+      currentState: targetOffsetX !== null && ['walking_left', 'walking_right'].includes(npc.currentState)
+        ? npc.currentState : 'idle', targetOffsetX,
+      waitSeconds: Number.isFinite(npc.waitSeconds) ? Math.max(0, Math.min(6, npc.waitSeconds)) : 1 });
   }
   return result;
 }
@@ -145,7 +153,7 @@ export function getElevatorCabinGroundY(player, cabinFloor = player.floor) {
 export const renderRpgBunker = renderSpriteScene;
 
 export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, player: savedPlayer,
-  inhabitants = [], cabinFloor: savedCabinFloor, onBuild, onRoom, onPlayerChanged, onHint,
+  inhabitants = [], cabinFloor: savedCabinFloor, onBuild, onRoom, onPlayerChanged, onInhabitantsChanged, onHint,
   onAssetsReady, assetUrls = {} } = {}) {
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
@@ -161,8 +169,10 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   let frameId = null;
   let lastTime = 0;
   let lastSave = 0;
+  let lastNpcSave = 0;
   let lastHint = '';
   const keys = new Set();
+  const actors = inhabitants.map((data) => new Inhabitant(data));
 
   function savePlayer() { onPlayerChanged?.({ ...player, vx: 0, vy: 0, liftTarget: null }); }
   function frame(time) {
@@ -176,12 +186,17 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
       if (player.liftTarget !== null || getRoom(grid, player.floor, playerColumn(player))?.type === 'elevator') cabinFloor = player.floor;
       if (player.floor !== previousFloor) { cabinFloor = player.floor; savePlayer(); }
       if (Math.abs(player.vx) > 0 && time - lastSave > 700) { savePlayer(); lastSave = time; }
+      for (const actor of actors) actor.update(dt);
+      if (time - lastNpcSave > 2500) {
+        onInhabitantsChanged?.(actors.map((actor) => actor.snapshot()));
+        lastNpcSave = time;
+      }
     }
     const targetX = canvas.width / 2 - player.x;
     const targetY = canvas.height / 2 - player.y;
     camera.offset_x += (targetX - camera.offset_x) * Math.min(1, dt * 8);
     camera.offset_y += (targetY - camera.offset_y) * Math.min(1, dt * 8);
-    renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants, cabinFloor, time });
+    renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants: actors, cabinFloor, time });
     const hint = paused || buildMode ? '' : getElevatorPrompt(player, grid) || findNearbyTrigger(player, grid)?.label || '';
     if (hint !== lastHint) { lastHint = hint; onHint?.(hint); }
     frameId = requestAnimationFrame(frame);
@@ -218,7 +233,8 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   });
   return {
     ready,
-    getSnapshot: () => ({ player: { ...player }, camera: { ...camera }, cabinFloor }),
+    getSnapshot: () => ({ player: { ...player }, camera: { ...camera }, cabinFloor,
+      inhabitants: actors.map((actor) => actor.snapshot()) }),
     setBuildMode(value) { buildMode = Boolean(value); keys.clear(); },
     setBuildType(value) { if (SHELTER_TYPES[value]) buildType = value; },
     pause() { paused = true; keys.clear(); },

@@ -100,3 +100,14 @@ test('NPCs survive save hydration and invalid residents are filtered', () => {
   const expanded = buildShelterRoom(wasteland, 'generator', 0, 2);
   assert.deepEqual(hydrateGameState(JSON.stringify(expanded)).inhabitants, expanded.inhabitants);
 });
+
+test('NPC walk state survives hydration without leaving the assigned room', () => {
+  const wasteland = transicionarParaWasteland(createGameState('bra'));
+  const inhabitants = wasteland.inhabitants.map((npc, index) => index === 0
+    ? { ...npc, currentState: 'walking_right', targetOffsetX: 96, waitSeconds: 0 }
+    : npc);
+  const restored = hydrateGameState(JSON.stringify({ ...wasteland, inhabitants }));
+  assert.equal(restored.inhabitants[0].currentState, 'walking_right');
+  assert.equal(restored.inhabitants[0].targetOffsetX, 96);
+  assert.equal(restored.inhabitants[0].floor, 0);
+});

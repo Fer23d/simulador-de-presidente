@@ -118,7 +118,8 @@ export function buildShelterRoom(state, type, floor, column) {
   const roles = { generator: 'engineer', greenhouse: 'scientist', medical: 'medic', arsenal: 'guard', radio: 'engineer', office: 'resident' };
   const inhabitants = Array.isArray(state.inhabitants) && type !== 'elevator'
     ? [...state.inhabitants, { id: `worker-${floor}-${column}`, floor, column, offsetX: column % 2 ? -78 : 78,
-      role: roles[type] ?? 'resident', pose: ['generator', 'greenhouse', 'medical', 'radio'].includes(type) ? 'working' : 'idle', facing: column % 2 ? 1 : -1 }]
+      role: roles[type] ?? 'resident', pose: ['generator', 'greenhouse', 'medical', 'radio'].includes(type) ? 'working' : 'idle', facing: column % 2 ? 1 : -1,
+      currentState: 'idle', targetOffsetX: null, waitSeconds: 1 }]
     : state.inhabitants;
   return { ...state, scrap: state.scrap - specification.cost, shelter_grid: grid, ...(inhabitants ? { inhabitants } : {}),
     notice: `${specification.name} construído no andar ${floor + 1}, setor ${column}.` };

@@ -679,6 +679,10 @@ export function mountDashboard(root) {
           state = { ...state, rpg_player: player };
           storageNotice = saveState(state);
         },
+        onInhabitantsChanged: (inhabitants) => {
+          state = { ...state, inhabitants };
+          storageNotice = saveState(state);
+        },
         onRoom: openShelterRoom,
         onHint: (hint) => {
           const tooltip = root.querySelector('[data-bunker-tooltip]');
