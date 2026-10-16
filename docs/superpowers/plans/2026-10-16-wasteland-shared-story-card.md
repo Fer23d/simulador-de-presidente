@@ -188,9 +188,9 @@ Expected: all tests pass, including unrelated tests already present in the works
 Run: `git status --short` and `git diff origin/main...HEAD --check`.
 Expected: only implementation files and tests from this work are in the feature commits; the pre-existing modifications in `src/core/geopolitics.js`, `tests/dashboard.test.js`, and `tests/geopolitics.test.js` are not accidentally staged.
 
-- [ ] **Step 3: Publish and verify deployment**
+- [x] **Step 3: Publish and verify remote commit**
 
-Push the approved implementation branch/commits using the repository's established GitHub Pages path. Confirm the remote commit and deployment result before reporting the site as updated.
+Push the approved implementation branch/commits to `main` using the repository's established GitHub Pages path. Confirm the remote commit before reporting the code as published. This repository has no checked-in GitHub Actions workflow, so a Pages deployment result must not be claimed unless separately observed.
 
 ## Final Review
 
