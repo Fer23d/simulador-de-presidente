@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildShelterRoom, broadcastShelterSignal, cellCenter, equipShelterGuard, INITIAL_SHELTER_GRID, useShelterMedkit } from '../src/core/shelter_engine.js';
-import { createInitialInhabitants, createRpgPlayer, findNearbyTrigger, generateDirtPattern, getElevatorCabinGroundY, getElevatorShaftBounds, getRoomLightPalette, normalizeInhabitants, renderInhabitants, renderRpgBunker, updatePlayer } from '../src/core/rpg_bunker.js';
+import * as bunker from '../src/core/rpg_bunker.js';
+const { createInitialInhabitants, createRpgPlayer, findNearbyTrigger, getElevatorCabinGroundY,
+  getElevatorShaftBounds, getRoomLightPalette, normalizeInhabitants, renderInhabitants,
+  renderRpgBunker, updatePlayer } = bunker;
 import { createGameState, hydrateGameState } from '../src/core/game-state.js';
 import { advanceWastelandMonth, transicionarParaWasteland } from '../src/core/wasteland.js';
 
@@ -91,13 +94,131 @@ test('room interactions consume supplies and change the vault state immutably', 
   assert.equal(broadcast.country.populacao_base, 3010);
 });
 
-test('the soil texture is a repeating Canvas pattern', () => {
-  const texture = { width: 256, height: 256 };
-  const pattern = { soil: true };
-  const calls = [];
-  const ctx = { createPattern(image, repetition) { calls.push([image, repetition]); return pattern; } };
-  assert.equal(generateDirtPattern(ctx, texture), pattern);
-  assert.deepEqual(calls, [[texture, 'repeat']]);
+test('world-coordinate terrain generates distinct neighboring chunks without a repeating tile', () => {
+  assert.equal(typeof bunker.generateTerrainChunk, 'function');
+  assert.equal(typeof bunker.terrainColorAt, 'function');
+  const factory = () => {
+    const canvas = { width: 0, height: 0, pixels: null };
+    canvas.getContext = () => new Proxy({
+      createImageData(width, height) { return { data: new Uint8ClampedArray(width * height * 4) }; },
+      putImageData(image) { canvas.pixels = image.data; },
+      createRadialGradient() { return { addColorStop() {} }; },
+    }, { get(target, key) { return key in target ? target[key] : () => {}; } });
+    return canvas;
+  };
+  const first = bunker.generateTerrainChunk(0, 0, factory, 32);
+  const neighbor = bunker.generateTerrainChunk(1, 0, factory, 32);
+  const again = bunker.generateTerrainChunk(0, 0, factory, 32);
+  assert.equal(first.pixels.length, 32 * 32 * 4);
+  assert.deepEqual(first.pixels, again.pixels);
+  assert.notDeepEqual(first.pixels, neighbor.pixels);
+  assert.deepEqual(bunker.terrainColorAt(80, 700), bunker.terrainColorAt(80, 700));
+  assert.notDeepEqual(bunker.terrainColorAt(80, 700), bunker.terrainColorAt(2080, 700));
+});
+
+test('terrain cache generates at most one new chunk per frame and reuses completed chunks', () => {
+  assert.equal(typeof bunker.TerrainChunkCache, 'function');
+  const generated = [];
+  const cache = new bunker.TerrainChunkCache((x, y) => {
+    generated.push([x, y]);
+    return { x, y };
+  });
+  cache.beginFrame();
+  const first = cache.get(0, 0);
+  assert.equal(cache.get(1, 0), null);
+  assert.equal(cache.get(0, 0), first);
+  assert.deepEqual(generated, [[0, 0]]);
+  cache.beginFrame();
+  assert.deepEqual(cache.get(1, 0), { x: 1, y: 0 });
+  assert.deepEqual(generated, [[0, 0], [1, 0]]);
+});
+
+test('surface parallax moves distant ruins slower than the bunker', () => {
+  assert.equal(typeof bunker.getParallaxLayers, 'function');
+  const layers = bunker.getParallaxLayers({ offset_x: -200, offset_y: -100 });
+  assert.equal(layers.farX, -36);
+  assert.ok(Math.abs(layers.nearX + 112) < 0.001);
+  assert.ok(Math.abs(layers.farY) < 100);
+});
+
+test('ruin silhouettes vary by world position but stay stable across frames', () => {
+  assert.equal(typeof bunker.getRuinProfile, 'function');
+  const first = Array.from({ length: 8 }, (_, index) => bunker.getRuinProfile(index, 0));
+  assert.ok(new Set(first.map((profile) => profile.width)).size >= 5);
+  assert.ok(new Set(first.map((profile) => profile.height)).size >= 5);
+  assert.deepEqual(first[3], bunker.getRuinProfile(3, 0));
+});
+
+test('surface is visible above floor zero and disappears after descending underground', () => {
+  const fills = [];
+  const gradient = { addColorStop() {} };
+  const ctx = new Proxy({
+    createLinearGradient() { return gradient; }, createRadialGradient() { return gradient; },
+    fillRect(...args) { fills.push(args); },
+  }, { get(target, key) { return key in target ? target[key] : () => {}; } });
+  bunker.renderWastelandSurface(ctx, { offset_x: 0, offset_y: -100 }, { width: 960, height: 600 });
+  assert.ok(fills.some(([x, y, width, height]) => x === 0 && y === 0 && width === 960 && height > 0));
+  fills.length = 0;
+  bunker.renderWastelandSurface(ctx, { offset_x: 0, offset_y: -400 }, { width: 960, height: 600 });
+  assert.equal(fills.length, 0);
+});
+
+test('greenhouse draws three separate hydroponic water channels', () => {
+  assert.equal(typeof bunker.drawHydroponics, 'function');
+  const channels = [];
+  const gradient = { addColorStop() {} };
+  const ctx = new Proxy({
+    createLinearGradient() { return gradient; }, createRadialGradient() { return gradient; },
+    fillRect(x, y, width, height) { if (width > 150 && height === 10) channels.push(y); },
+  }, { get(target, key) { return key in target ? target[key] : () => {}; } });
+  bunker.drawHydroponics(ctx, 0, 0, 200);
+  assert.equal(new Set(channels).size, 3);
+});
+
+test('elevator scissor gates leave the cabin visible through crossed bars', () => {
+  assert.equal(typeof bunker.drawElevatorCabin, 'function');
+  const strokes = [];
+  const ctx = new Proxy({
+    createLinearGradient() { return { addColorStop() {} }; },
+    moveTo(x, y) { strokes.push(['from', x, y]); },
+    lineTo(x, y) { strokes.push(['to', x, y]); },
+  }, { get(target, key) { return key in target ? target[key] : () => {}; } });
+  bunker.drawElevatorCabin(ctx, 322, 300, true, false);
+  assert.ok(strokes.length >= 16);
+  assert.ok(strokes.some(([kind, x, y], index) => kind === 'to' && strokes[index - 1]?.[1] !== x && strokes[index - 1]?.[2] !== y));
+});
+
+test('characters use nine-argument spritesheet crops or articulated canvas limbs', () => {
+  assert.equal(typeof bunker.drawCharacter, 'function');
+  const frames = [];
+  const rotations = [];
+  const ctx = new Proxy({
+    drawImage(...args) { frames.push(args); },
+    rotate(angle) { rotations.push(angle); },
+    createLinearGradient() { return { addColorStop() {} }; },
+  }, { get(target, key) { return key in target ? target[key] : () => {}; } });
+  const actor = { x: 100, y: 200, facing: 1, role: 'engineer', pose: 'working', vx: 70 };
+  bunker.drawCharacter(ctx, actor, 300, { width: 512, height: 768 });
+  assert.equal(frames[0].length, 9);
+  assert.ok(frames[0][1] >= 0 && frames[0][3] > 0);
+  bunker.drawCharacter(ctx, actor, 300);
+  const firstPose = [...rotations];
+  assert.ok(firstPose.length >= 4);
+  rotations.length = 0;
+  bunker.drawCharacter(ctx, actor, 700);
+  assert.notDeepEqual(rotations, firstPose);
+});
+
+test('water drips advance with animation time', () => {
+  assert.equal(typeof bunker.drawWaterDrips, 'function');
+  const droplets = [];
+  const ctx = new Proxy({ arc(x, y) { droplets.push([x, y]); } },
+    { get(target, key) { return key in target ? target[key] : () => {}; } });
+  bunker.drawWaterDrips(ctx, 100, 50, 0);
+  const first = droplets.map((point) => [...point]);
+  droplets.length = 0;
+  bunker.drawWaterDrips(ctx, 100, 50, 300);
+  assert.notDeepEqual(droplets, first);
 });
 
 test('a single shaft spans connected elevator floors and the gaps between them', () => {
@@ -133,17 +254,17 @@ test('the Wasteland starts with NPCs and filters stale or invalid residents', ()
 
 test('NPC rendering animates independently of player movement', () => {
   const npc = createInitialInhabitants(INITIAL_SHELTER_GRID)[0];
-  const translations = [];
-  const ctx = {
-    save() {}, restore() {}, scale() {}, fillRect() {}, beginPath() {}, ellipse() {}, fill() {},
-    stroke() {}, moveTo() {}, lineTo() {}, arc() {}, closePath() {},
+  const rotations = [];
+  const ctx = new Proxy({
     createLinearGradient() { return { addColorStop() {} }; },
-    translate(x, y) { translations.push([x, y]); },
-  };
+    rotate(angle) { rotations.push(angle); },
+  }, { get(target, key) { return key in target ? target[key] : () => {}; } });
   renderInhabitants(ctx, [npc], INITIAL_SHELTER_GRID, 0);
+  const initialPose = [...rotations];
+  rotations.length = 0;
   renderInhabitants(ctx, [npc], INITIAL_SHELTER_GRID, 700);
-  assert.equal(translations.length, 2);
-  assert.notEqual(translations[0][1], translations[1][1]);
+  assert.ok(initialPose.length >= 4);
+  assert.notDeepEqual(rotations, initialPose);
 });
 
 test('Wasteland seeds NPCs, builds recruit residents, and hydration restores them', () => {
@@ -156,23 +277,21 @@ test('Wasteland seeds NPCs, builds recruit residents, and hydration restores the
   assert.ok(hydrateGameState(JSON.stringify(legacy)).inhabitants.length >= 2);
 });
 
-test('the RPG render pipeline includes NPCs and a textured soil pattern', () => {
-  const calls = { translate: 0, patterned: false };
+test('the RPG render pipeline draws terrain chunks and NPCs without a repeated soil pattern', () => {
+  const calls = { translate: 0, chunks: 0 };
   const texture = { width: 256, height: 256 };
   const gradient = { addColorStop() {} };
-  const pattern = { dirt: true };
   const ctx = new Proxy({ canvas: { width: 960, height: 600 },
-    createPattern(_texture, repeat) { assert.equal(repeat, 'repeat'); return pattern; },
     createLinearGradient() { return gradient; }, createRadialGradient() { return gradient; },
     measureText() { return { width: 100 }; },
     translate() { calls.translate++; },
-    set fillStyle(value) { if (value === pattern) calls.patterned = true; },
+    drawImage(image) { if (image === texture) calls.chunks++; },
   }, { get(target, key) { return key in target ? target[key] : () => {}; } });
-  const assets = { get: () => texture };
+  const assets = { get: () => ({}), getTerrainChunk: () => texture };
   renderRpgBunker(ctx, { grid: INITIAL_SHELTER_GRID, player: createRpgPlayer(),
     camera: { offset_x: 0, offset_y: 0 }, assets,
     inhabitants: createInitialInhabitants(), time: 700 });
-  assert.equal(calls.patterned, true);
+  assert.ok(calls.chunks > 0);
   assert.ok(calls.translate >= 3);
 });
 
