@@ -5,6 +5,7 @@ const EXPEDITION_SUCCESS_CHANCE = 0.7;
 const REBEL_SCRAP_COST = 5;
 const LOW_MORALE_THRESHOLD = 40;
 const REBELLION_CHANCE = 0.2;
+const WASTELAND_EVENT_SUCCESS_CHANCE = 0.7;
 
 export const WASTELAND_EVENTS = Object.freeze([
   Object.freeze({
@@ -34,6 +35,25 @@ export const WASTELAND_EVENTS = Object.freeze([
       Object.freeze({ id: 'keep-ventilation-running', label: '[ MANTER A VENTILAÇÃO ]', effects: Object.freeze({ food: -30, loyalty: -10 }) }),
     ]),
   }),
+  Object.freeze({
+    id: 'radio-signal-unknown',
+    title: 'Um Sinal Desconhecido',
+    description: 'Uma transmissão fraca surgiu no rádio. Enviar batedores pode revelar um esconderijo, mas a viagem consumirá mantimentos.',
+    options: Object.freeze([
+      Object.freeze({ id: 'send-scouts', label: '[ ENVIAR BATEDORES: 50 COMIDAS ]', cost: Object.freeze({ food: 50 }) }),
+      Object.freeze({ id: 'ignore-signal', label: '[ IGNORAR O SINAL ]', effects: Object.freeze({}) }),
+    ]),
+  }),
+  Object.freeze({
+    id: 'greenhouse-fungus',
+    title: 'Fungo na Estufa',
+    description: 'Uma infestação ameaça a colheita hidropônica. A equipe pode isolar a estufa ou gastar energia tentando salvar as plantas.',
+    prerequisites: Object.freeze({ roomType: 'greenhouse' }),
+    options: Object.freeze([
+      Object.freeze({ id: 'quarantine-greenhouse', label: '[ COLOCAR A ESTUFA EM QUARENTENA ]', effects: Object.freeze({}) }),
+      Object.freeze({ id: 'attempt-cure', label: '[ TENTAR A CURA: 80 ENERGIAS ]', cost: Object.freeze({ energy: 80 }) }),
+    ]),
+  }),
 ]);
 
 export function getWastelandEvent(eventId) {
@@ -41,10 +61,12 @@ export function getWastelandEvent(eventId) {
 }
 
 export function canResolveWastelandEvent(state, eventId, optionId) {
-  const option = getWastelandEvent(eventId)?.options.find((choice) => choice.id === optionId);
+  const event = getWastelandEvent(eventId);
+  const option = event?.options.find((choice) => choice.id === optionId);
   if (!state.is_wasteland || !option) return false;
+  if (event.prerequisites?.roomType && !state.shelter_grid?.flat().some((room) => room?.type === event.prerequisites.roomType)) return false;
   return Object.entries(option.cost ?? {}).every(([resource, amount]) =>
-    (Number(state[resource] ?? state.shelter_supplies?.[resource]) || 0) >= amount);
+    (Number(resource === 'scrap' ? state.scrap : state.shelter_supplies?.[resource]) || 0) >= amount);
 }
 
 export function getRoomProductivityMultiplier(state, room) {
@@ -162,16 +184,38 @@ export function resolveWastelandEvent(state, optionId) {
     if (resource === 'loyalty') continue;
     supplies[resource] = Math.max(0, (Number(supplies[resource]) || 0) + amount);
   }
+  let randomSeed = state.randomSeed;
+  let outcome = null;
+  if (optionId === 'send-scouts' || optionId === 'attempt-cure') {
+    const roll = nextRandom(Number(state.randomSeed) || 1);
+    randomSeed = roll.seed;
+    outcome = roll.value < WASTELAND_EVENT_SUCCESS_CHANCE;
+    if (optionId === 'send-scouts' && outcome) scrap += 100;
+  }
+  let shelterGrid = state.shelter_grid;
+  if (optionId === 'quarantine-greenhouse' || (optionId === 'attempt-cure' && !outcome)) {
+    let quarantined = false;
+    shelterGrid = (state.shelter_grid ?? []).map((row) => row.map((room) => {
+      if (!quarantined && room?.type === 'greenhouse') {
+        quarantined = true;
+        return { ...room, disabledMonthsRemaining: 3 };
+      }
+      return room;
+    }));
+  }
   const loyaltyChange = Number(option.effects?.loyalty) || 0;
-  const inhabitants = loyaltyChange ? (state.inhabitants ?? []).map((inhabitant) => ({
+  const eventLoyaltyChange = optionId === 'attempt-cure' && !outcome ? -10 : loyaltyChange;
+  const inhabitants = eventLoyaltyChange ? (state.inhabitants ?? []).map((inhabitant) => ({
     ...inhabitant,
-    loyalty: Math.max(0, Math.min(100, (Number(inhabitant.loyalty) || 0) + loyaltyChange)),
-    ...(Number(inhabitant.loyalty) + loyaltyChange > 0 ? { rebellionCheckDone: false } : {}),
+    loyalty: Math.max(0, Math.min(100, (Number(inhabitant.loyalty) || 0) + eventLoyaltyChange)),
+    ...(Number(inhabitant.loyalty) + eventLoyaltyChange > 0 ? { rebellionCheckDone: false } : {}),
   })) : state.inhabitants;
   return {
     ...state,
     scrap,
     shelter_supplies: supplies,
+    ...(randomSeed !== state.randomSeed ? { randomSeed } : {}),
+    ...(shelterGrid ? { shelter_grid: shelterGrid } : {}),
     ...(inhabitants ? { inhabitants } : {}),
     pendingBunkerEvent: null,
     notice: `Dilema resolvido: ${event.title}.`,

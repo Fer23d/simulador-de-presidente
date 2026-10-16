@@ -125,3 +125,37 @@ test('bunker UI exposes food, energy, expedition logistics, and a blocking missi
   assert.match(report, /SINAL DE vault-resident-1 FOI PERDIDO/);
   assert.match(report, /data-action="dismiss-expedition-report"/);
 });
+
+test('a failed fungal cure quarantines the greenhouse and lowers loyalty without going below zero', () => {
+  let state = wastelandState();
+  state = buildShelterRoom(state, 'greenhouse', 0, 2);
+  state = {
+    ...state,
+    randomSeed: 1198,
+    shelter_supplies: { ...state.shelter_supplies, energy: 100 },
+    pendingBunkerEvent: { id: 'greenhouse-fungus' },
+    inhabitants: state.inhabitants.map((npc, index) => ({ ...npc, loyalty: index === 0 ? 5 : 40 })),
+  };
+
+  const result = resolveWastelandEvent(state, 'attempt-cure');
+  const greenhouse = result.shelter_grid.flat().find((room) => room?.type === 'greenhouse');
+  assert.equal(result.shelter_supplies.energy, 20);
+  assert.equal(greenhouse.disabledMonthsRemaining, 3);
+  assert.equal(result.inhabitants[0].loyalty, 0);
+  assert.ok(result.inhabitants.every((npc, index) => npc.loyalty === (index === 0 ? 0 : 30)));
+  assert.notEqual(result.randomSeed, state.randomSeed);
+  assert.equal(result.pendingBunkerEvent, null);
+});
+
+test('unknown Wasteland events and options leave resources and pending decisions unchanged', () => {
+  const original = { ...wastelandState(), pendingBunkerEvent: { id: 'ration-emergency' } };
+  const resources = { scrap: original.scrap, supplies: original.shelter_supplies, seed: original.randomSeed };
+
+  const unknownEvent = resolveWastelandEvent({ ...original, pendingBunkerEvent: { id: 'unknown-event' } }, 'unknown-option');
+  assert.deepEqual({ scrap: unknownEvent.scrap, supplies: unknownEvent.shelter_supplies, seed: unknownEvent.randomSeed }, resources);
+  assert.deepEqual(unknownEvent.pendingBunkerEvent, { id: 'unknown-event' });
+
+  const unknownOption = resolveWastelandEvent(original, 'unknown-option');
+  assert.deepEqual({ scrap: unknownOption.scrap, supplies: unknownOption.shelter_supplies, seed: unknownOption.randomSeed }, resources);
+  assert.deepEqual(unknownOption.pendingBunkerEvent, original.pendingBunkerEvent);
+});
