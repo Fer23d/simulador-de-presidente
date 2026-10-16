@@ -171,6 +171,19 @@ test('radio scouts spend food and yield a deterministic scrap cache only on succ
   assert.equal(failed.scrap, pending.scrap);
 });
 
+test('radio scouts fail rolls at or above the 65 percent success threshold', () => {
+  const state = {
+    ...addProductionRooms(makeWastelandState()),
+    randomSeed: 1069,
+    shelter_supplies: { food: 100, energy: 100 },
+    pendingBunkerEvent: { id: 'radio-signal-unknown' },
+  };
+
+  const result = resolveWastelandEvent(state, 'send-scouts');
+  assert.equal(result.scrap, state.scrap);
+  assert.equal(result.shelter_supplies.food, 50);
+});
+
 test('ignoring the radio signal has no costs or loot', () => {
   const state = { ...makeWastelandState(), pendingBunkerEvent: { id: 'radio-signal-unknown' } };
   const result = resolveWastelandEvent(state, 'ignore-signal');
@@ -196,6 +209,19 @@ test('a successful fungal cure spends 80 energy and keeps the greenhouse active'
   assert.equal(getWastelandEvent('greenhouse-fungus').options[1].cost.energy, 80);
   assert.equal(result.shelter_supplies.energy, state.shelter_supplies.energy - 80);
   assert.equal(room.disabledMonthsRemaining ?? 0, 0);
+});
+
+test('fungal cure fails rolls at or above the 60 percent success threshold', () => {
+  const state = {
+    ...addProductionRooms(makeWastelandState()),
+    randomSeed: 940,
+    pendingBunkerEvent: { id: 'greenhouse-fungus' },
+  };
+
+  const result = resolveWastelandEvent(state, 'attempt-cure');
+  const greenhouse = result.shelter_grid.flat().find((room) => room?.type === 'greenhouse');
+  assert.equal(result.shelter_supplies.energy, state.shelter_supplies.energy - 80);
+  assert.equal(greenhouse.disabledMonthsRemaining, 3);
 });
 
 test('an unaffordable fungal cure preserves supplies, seed, and pending event', () => {

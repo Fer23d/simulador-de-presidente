@@ -5,7 +5,8 @@ const EXPEDITION_SUCCESS_CHANCE = 0.7;
 const REBEL_SCRAP_COST = 5;
 const LOW_MORALE_THRESHOLD = 40;
 const REBELLION_CHANCE = 0.2;
-const WASTELAND_EVENT_SUCCESS_CHANCE = 0.7;
+const SCOUT_EXPEDITION_SUCCESS_CHANCE = 0.65;
+const GREENHOUSE_CURE_SUCCESS_CHANCE = 0.6;
 
 export const WASTELAND_EVENTS = Object.freeze([
   Object.freeze({
@@ -189,7 +190,10 @@ export function resolveWastelandEvent(state, optionId) {
   if (optionId === 'send-scouts' || optionId === 'attempt-cure') {
     const roll = nextRandom(Number(state.randomSeed) || 1);
     randomSeed = roll.seed;
-    outcome = roll.value < WASTELAND_EVENT_SUCCESS_CHANCE;
+    const successChance = optionId === 'send-scouts'
+      ? SCOUT_EXPEDITION_SUCCESS_CHANCE
+      : GREENHOUSE_CURE_SUCCESS_CHANCE;
+    outcome = roll.value < successChance;
     if (optionId === 'send-scouts' && outcome) scrap += 100;
   }
   let shelterGrid = state.shelter_grid;
