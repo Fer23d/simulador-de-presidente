@@ -353,7 +353,7 @@ export function bunkerView(state) {
     <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2></div><div class="bunker-header-actions"><button type="button" class="primary-action" data-action="advance">[ AVANÇAR MÊS ]</button><button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button></div></div>
     <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
     <div class="bunker-build-controls" hidden aria-label="Módulos de construção">${modules.map(([id, module]) => `<button type="button" class="bunker-module-button" data-action="shelter-module" data-module="${id}" aria-pressed="${id === 'dormitory'}" ${state.scrap < module.cost ? 'disabled' : ''}>${module.name}<small>${module.cost} sucatas</small></button>`).join('')}<div class="bunker-slot-controls"><label for="shelter-build-slot">Setor livre</label><select id="shelter-build-slot" class="bunker-build-slot"></select><button type="button" class="primary-action" data-action="shelter-place">[ CONSTRUIR ]</button></div></div>
-    <canvas id="shelterCanvas" class="bunker-canvas" width="960" height="600" tabindex="0" aria-label="Bunker lateral. A e D movem o Presidente, W e S operam o elevador, E interage. Na construção, clique num setor livre."></canvas>
+    <div class="bunker-stage"><canvas id="shelterCanvas" class="bunker-canvas" width="960" height="600" tabindex="0" aria-label="Bunker lateral. A e D movem o Presidente, W e S operam o elevador, E interage. Na construção, clique num setor livre."></canvas><div class="bunker-tooltip" data-bunker-tooltip role="status" hidden></div></div>
     <div class="bunker-foot"><p class="bunker-status" data-shelter-status role="status">PRESIDENTE EM PATRULHA</p><div class="shelter-room-controls"><label for="shelter-room-select">Setor</label><select id="shelter-room-select" class="bunker-build-slot">${rooms.map((room) => `<option value="${room.floor}:${room.column}">${SHELTER_TYPES[room.type].name} · A${room.floor + 1} S${room.column}</option>`).join('')}</select><button type="button" class="quiet-action" data-action="shelter-open-room">[ GERIR SALA ]</button></div></div>
   </section>`;
 }
@@ -680,6 +680,17 @@ export function mountDashboard(root) {
           storageNotice = saveState(state);
         },
         onRoom: openShelterRoom,
+        onHint: (hint) => {
+          const tooltip = root.querySelector('[data-bunker-tooltip]');
+          if (!tooltip) return;
+          tooltip.textContent = hint;
+          tooltip.hidden = !hint;
+        },
+        onAssetsReady: (failed) => {
+          if (!failed.length) return;
+          const status = root.querySelector('[data-shelter-status]');
+          if (status) status.textContent = `TEXTURAS INDISPONÍVEIS: ${failed.join(', ')}`;
+        },
       });
       bunkerController?.setBuildType(bunkerBuildType);
       bunkerController?.setBuildMode(bunkerBuildMode);

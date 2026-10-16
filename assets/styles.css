@@ -77,6 +77,9 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 .bunker-hud { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 12px 0; color: var(--phosphor); font-size: 13px; text-transform: uppercase; }
 .bunker-hud span { border: 1px solid var(--line); padding: 6px 8px; background: rgba(255, 122, 24, .06); }
 .bunker-canvas { display: block; width: 100%; aspect-ratio: 8 / 5; margin: 12px auto 0; border: 4px double var(--amber); background: #252523; outline: none; box-shadow: 0 0 22px rgba(255, 122, 24, .24); cursor: crosshair; touch-action: none; }
+.bunker-stage { position: relative; }
+.bunker-tooltip { position: absolute; z-index: 2; top: 22px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); padding: 9px 14px; border: 2px solid var(--amber); background: rgba(12, 12, 10, .94); color: var(--phosphor); font-family: 'Share Tech Mono', monospace; font-size: 15px; text-align: center; white-space: nowrap; box-shadow: 4px 4px 0 #080400; pointer-events: none; }
+.bunker-tooltip[hidden] { display: none; }
 .bunker-canvas:focus { border-color: var(--phosphor); box-shadow: 0 0 22px rgba(255, 179, 71, .45); }
 .bunker-status { margin: 12px 0 0; color: var(--muted); }
 .shelter-room-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 10px; }
@@ -100,7 +103,7 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 .bunker-direction-controls button { width: 38px; height: 38px; border: 2px solid var(--amber); background: #202727; color: var(--phosphor); font-size: 19px; line-height: 1; box-shadow: 3px 3px 0 #050706; }
 .bunker-direction-controls button:hover { background: var(--amber); color: #111; }
 .bunker-direction-controls button:active { transform: translate(3px, 3px); box-shadow: none; }
-@media (max-width: 640px) { .bunker-header, .bunker-foot { flex-wrap: wrap; } .bunker-header-actions, .shelter-room-controls { justify-content: flex-start; } .bunker-canvas { aspect-ratio: 4 / 3; } .bunker-build-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .bunker-module-button { min-width: 0; } .bunker-build-hint, .bunker-slot-controls { grid-column: 1 / -1; } }
+@media (max-width: 640px) { .bunker-header, .bunker-foot { flex-wrap: wrap; } .bunker-header-actions, .shelter-room-controls { justify-content: flex-start; } .bunker-tooltip { white-space: normal; font-size: 13px; } .bunker-build-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .bunker-module-button { min-width: 0; } .bunker-build-hint, .bunker-slot-controls { grid-column: 1 / -1; } }
 body.theme-wasteland .app-shell { grid-template-columns: minmax(0, 1fr); }
 body.theme-wasteland .sidebar, body.theme-wasteland .metrics { display: none; }
 body.theme-wasteland .content-area { max-width: none; }
