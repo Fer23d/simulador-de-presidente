@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createGameState } from '../src/core/game-state.js';
 import { advanceWastelandMonth, transicionarParaWasteland } from '../src/core/wasteland.js';
 import { buildShelterRoom } from '../src/core/shelter_engine.js';
-import { detainRebel, dismissExpeditionReport, resolveWastelandEvent, startExpedition } from '../src/core/game_mechanics.js';
+import { detainRebel, dismissExpeditionReport, getWastelandEvent, resolveWastelandEvent, startExpedition } from '../src/core/game_mechanics.js';
 import { hydrateGameState } from '../src/core/game-state.js';
 import { bunkerView, expeditionLogisticsView, expeditionReportView } from '../src/ui/dashboard.js';
 
@@ -55,6 +55,53 @@ test('a failed expedition removes the explorer and records the lost signal notic
   assert.match(state.notice, /SINAL DO EXPLORADOR FOI PERDIDO/);
   assert.equal(state.pendingExpeditionReports[0].success, false);
   assert.equal(state.pendingBunkerEvent?.id, 'ration-emergency');
+});
+
+test('event cadence skips greenhouse dilemmas until eligible and continues in catalog round-robin order', () => {
+  let state = wastelandState();
+  const nextDilemma = () => {
+    for (let month = 0; month < 3; month++) state = advanceWastelandMonth(state);
+    const eventId = state.pendingBunkerEvent?.id;
+    assert.ok(eventId);
+    const optionId = getWastelandEvent(eventId).options[1].id;
+    state = resolveWastelandEvent(state, optionId);
+    return eventId;
+  };
+
+  assert.deepEqual(Array.from({ length: 5 }, nextDilemma), [
+    'ration-emergency', 'generator-bearings', 'air-filter-crisis', 'radio-signal-unknown', 'ration-emergency',
+  ]);
+  assert.equal(state.wastelandEventCursor, 1);
+
+  assert.deepEqual(Array.from({ length: 3 }, nextDilemma), [
+    'generator-bearings', 'air-filter-crisis', 'radio-signal-unknown',
+  ]);
+  state = buildShelterRoom({ ...state, scrap: 1000 }, 'greenhouse', 0, 2);
+  assert.equal(nextDilemma(), 'greenhouse-fungus');
+});
+
+test('a failed expedition report and scheduled dilemma remain pending independently', () => {
+  const base = wastelandState();
+  let state = {
+    ...base,
+    wasteland_turn: 2,
+    wastelandMonthCounter: 2,
+    randomSeed: 1198,
+    inhabitants: base.inhabitants.map((npc, index) => index === 0
+      ? { ...npc, is_on_expedition: true, expedition_timer: 1 }
+      : npc),
+  };
+
+  state = advanceWastelandMonth(state);
+  assert.equal(state.pendingBunkerEvent?.id, 'ration-emergency');
+  assert.equal(state.pendingExpeditionReports.length, 1);
+  assert.equal(advanceWastelandMonth(state).monthCounter, state.monthCounter);
+  const reportDismissed = dismissExpeditionReport(state);
+  assert.equal(reportDismissed.pendingBunkerEvent?.id, 'ration-emergency');
+  assert.equal(advanceWastelandMonth(reportDismissed).monthCounter, state.monthCounter);
+  const dilemmaResolved = resolveWastelandEvent(reportDismissed, 'refuse-ration-cuts');
+  assert.equal(dilemmaResolved.pendingExpeditionReports.length, 0);
+  assert.equal(advanceWastelandMonth(dilemmaResolved).monthCounter, state.monthCounter + 1);
 });
 
 test('zero food or energy reduces loyalty gradually without an automatic rebellion', () => {

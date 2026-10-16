@@ -34,7 +34,7 @@ import { checkStoryEvents, dismissStory as dismissNarrativeStory, gerarEntradaDi
 import { checkStoryChapters, getLoreChapter } from './story_lore.js';
 import { advanceGovernment, applyGovernmentEconomy, openAutoCoup, resolveAutoCoup, resolveCorporateDefault } from './politics.js';
 import { advanceWastelandMonth, buildMegaVault, buildWastelandProject, enviarBatedores, transicionarParaWasteland as transitionToWasteland } from './wasteland.js';
-import { getWastelandEvent } from './game_mechanics.js';
+import { getWastelandEvent, WASTELAND_EVENTS } from './game_mechanics.js';
 import { createRpgPlayer, normalizeInhabitants, normalizeRpgPlayer } from './rpg_bunker.js';
 import { INITIAL_SHELTER_GRID, migrateLegacyPlayer, migrateLegacyRooms, normalizeShelterGrid, normalizeShelterInhabitants } from './shelter_engine.js';
 
@@ -192,7 +192,9 @@ export function createGameState(countryId = 'bra') {
     rpg_player: createRpgPlayer(INITIAL_SHELTER_GRID),
     shelter_supplies: { weapons: 0, medkits: 0, food: 0, energy: 0 },
     pendingExpeditionReports: [],
+    wasteland_turn: 0,
     wastelandMonthCounter: 0,
+    wastelandEventCursor: 0,
     pendingBunkerEvent: null,
     shelter_guards: 0,
     shelter_radiation: 0,
@@ -1192,7 +1194,9 @@ export function hydrateGameState(serialized) {
         ? parsed.pendingExpeditionReports.filter((report) => typeof report?.id === 'string'
           && typeof report.inhabitantId === 'string' && typeof report.success === 'boolean').slice(0, 16)
         : [],
-      wastelandMonthCounter: Math.max(0, Math.floor(Number(parsed.wastelandMonthCounter) || 0)),
+      wasteland_turn: Math.max(0, Math.floor(Number(parsed.wasteland_turn ?? parsed.wastelandMonthCounter) || 0)),
+      wastelandMonthCounter: Math.max(0, Math.floor(Number(parsed.wasteland_turn ?? parsed.wastelandMonthCounter) || 0)),
+      wastelandEventCursor: ((Math.floor(Number(parsed.wastelandEventCursor) || 0) % WASTELAND_EVENTS.length) + WASTELAND_EVENTS.length) % WASTELAND_EVENTS.length,
       pendingBunkerEvent: getWastelandEvent(parsed.pendingBunkerEvent?.id)
         ? { id: parsed.pendingBunkerEvent.id }
         : null,

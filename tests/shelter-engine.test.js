@@ -144,6 +144,18 @@ test('saves antigos migram para a grelha lateral sem perder salas', () => {
   assert.equal(restored.version, 18);
 });
 
+test('grid normalization preserves a clamped quarantine timer only on greenhouses', () => {
+  const grid = INITIAL_SHELTER_GRID.map((row) => [...row]);
+  grid[0][2] = { type: 'greenhouse', level: 1, disabledMonthsRemaining: 2.8 };
+  grid[0][3] = { type: 'generator', level: 1, disabledMonthsRemaining: 4 };
+  const normalized = normalizeShelterGrid(grid);
+  assert.equal(normalized[0][2].disabledMonthsRemaining, 2);
+  assert.equal(Object.hasOwn(normalized[0][3], 'disabledMonthsRemaining'), false);
+
+  grid[0][2] = { type: 'greenhouse', level: 1, disabledMonthsRemaining: -3 };
+  assert.equal(normalizeShelterGrid(grid)[0][2].disabledMonthsRemaining, 0);
+});
+
 test('destinos e posicoes dos habitantes sobrevivem ao save e entradas invalidas sao descartadas', () => {
   const state = buildShelterRoom(transicionarParaWasteland(createGameState('bra')), 'dormitory', 0, 2);
   const saved = { id: 'president', floor: 0, column: 1, x: 410, y: 303, facing: 1, route: [{ floor: 0, column: 2 }] };

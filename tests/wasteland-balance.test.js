@@ -85,16 +85,41 @@ test('every third Wasteland month blocks further advancement until the dilemma i
   state = advanceWastelandMonth(state);
 
   assert.equal(state.wastelandMonthCounter, 3);
+  assert.equal(state.wasteland_turn, 3);
   assert.equal(state.pendingBunkerEvent?.id, 'ration-emergency');
-  assert.equal(advanceWastelandMonth(state).monthCounter, state.monthCounter);
+  const blocked = advanceWastelandMonth(state);
+  assert.equal(blocked.monthCounter, state.monthCounter);
+  assert.deepEqual(blocked.shelter_supplies, state.shelter_supplies);
   assert.match(bunkerView(state), /data-action="advance" disabled/);
   assert.match(bunkerEventView(state), /A Ração de Emergência/);
+});
+
+test('greenhouse quarantine suppresses three complete production calculations and resumes on the fourth', () => {
+  let state = addProductionRooms(makeWastelandState());
+  const grid = state.shelter_grid.map((row) => row.map((room) => room?.type === 'greenhouse'
+    ? { ...room, disabledMonthsRemaining: 3 }
+    : room));
+  state = { ...state, shelter_grid: grid, shelter_supplies: { ...state.shelter_supplies, food: 100 } };
+
+  state = advanceWastelandMonth(state);
+  assert.equal(state.shelter_supplies.food, 98);
+  assert.equal(state.shelter_grid.flat().find((room) => room?.type === 'greenhouse').disabledMonthsRemaining, 2);
+  state = advanceWastelandMonth(state);
+  assert.equal(state.shelter_supplies.food, 96);
+  state = advanceWastelandMonth(state);
+  state = resolveWastelandEvent(state, 'refuse-ration-cuts');
+  assert.equal(state.shelter_supplies.food, 94);
+  assert.equal(state.shelter_grid.flat().find((room) => room?.type === 'greenhouse').disabledMonthsRemaining, 0);
+
+  state = advanceWastelandMonth(state);
+  assert.equal(state.shelter_supplies.food, 103);
 });
 
 test('dilemma choices apply their effects, clear the pause, and survive save hydration while pending', () => {
   const base = makeWastelandState();
   const waiting = {
     ...base,
+    wasteland_turn: undefined,
     wastelandMonthCounter: 6,
     pendingBunkerEvent: { id: 'ration-emergency' },
     shelter_supplies: { ...base.shelter_supplies, food: 10 },
@@ -112,6 +137,22 @@ test('dilemma choices apply their effects, clear the pause, and survive save hyd
   const restored = hydrateGameState(JSON.stringify({ ...waiting, version: 18 }));
   assert.deepEqual(restored.pendingBunkerEvent, { id: 'ration-emergency' });
   assert.equal(restored.wastelandMonthCounter, 6);
+});
+
+test('legacy Wasteland cadence hydrates both counters and the current counter wins when both are saved', () => {
+  const base = makeWastelandState();
+  assert.equal(createGameState('bra').wastelandEventCursor, 0);
+  assert.equal(base.wastelandEventCursor, 0);
+  const legacy = hydrateGameState(JSON.stringify({ ...base, version: 18, wasteland_turn: undefined, wastelandMonthCounter: 6 }));
+  assert.equal(legacy.wasteland_turn, 6);
+  assert.equal(legacy.wastelandMonthCounter, 6);
+
+  const current = hydrateGameState(JSON.stringify({
+    ...base, version: 18, wasteland_turn: 4, wastelandMonthCounter: 9,
+  }));
+  assert.equal(current.wasteland_turn, 4);
+  assert.equal(current.wastelandMonthCounter, 4);
+  assert.equal(Number.isInteger(current.wastelandEventCursor), true);
 });
 
 test('radio scouts spend food and yield a deterministic scrap cache only on success', () => {

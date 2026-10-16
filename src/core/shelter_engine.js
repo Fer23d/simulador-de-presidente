@@ -30,6 +30,9 @@ function makeRoom(type, floor, column, data = {}) {
     level: Math.max(1, Math.min(3, Math.floor(Number(data.level) || 1))),
     operational: type === 'generator' ? data.operational === true : true,
     ...(typeof data.staffedBy === 'string' ? { staffedBy: data.staffedBy } : {}),
+    ...(type === 'greenhouse' && Number.isFinite(Number(data.disabledMonthsRemaining))
+      ? { disabledMonthsRemaining: Math.max(0, Math.floor(Number(data.disabledMonthsRemaining))) }
+      : {}),
   };
 }
 
