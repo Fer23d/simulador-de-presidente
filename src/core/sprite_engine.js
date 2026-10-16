@@ -8,6 +8,14 @@ const ATLAS_CELLS = Object.freeze({
 });
 const NPC_ROWS = Object.freeze({ resident: 0, engineer: 0, scientist: 1, medic: 2, guard: 3 });
 const frameBoundsCache = new WeakMap();
+const ROOM_CEILING_THICKNESS = 12;
+const ELEVATOR_CABIN_HEIGHT = 129;
+const ELEVATOR_INNER_HEIGHT = ELEVATOR_CABIN_HEIGHT * .47;
+const ELEVATOR_ART_FLOOR_INSET = 19;
+const ELEVATOR_SPRITE_FOOT_OFFSET = 3;
+
+export const ROOM_FLOOR_THICKNESS = 13;
+export const SPRITE_BOTTOM_PADDING = 2;
 
 export const DEFAULT_ASSETS = Object.freeze({
   bg_sky: './assets/img/bg_sky.png',
@@ -137,14 +145,35 @@ function visibleFrameBounds(image, frame, row, rows) {
   }
 }
 
-export function drawActorSprite(ctx, actor, image, time = 0) {
+export function getActorPlacement(room, { liftY } = {}) {
+  const physicalFloorY = cellCenter(room.floor, room.column).y;
+  if (room.type === 'elevator') {
+    const innerHeight = ELEVATOR_INNER_HEIGHT;
+    return { innerHeight, height: innerHeight * .6,
+      floorY: (liftY ?? physicalFloorY) + ELEVATOR_SPRITE_FOOT_OFFSET };
+  }
+  const innerHeight = ROOM_HEIGHT - ROOM_CEILING_THICKNESS - ROOM_FLOOR_THICKNESS;
+  const roomY = WORLD_TOP + room.floor * FLOOR_SPACING;
+  return { innerHeight, height: innerHeight * .55,
+    floorY: roomY + ROOM_HEIGHT - ROOM_FLOOR_THICKNESS + SPRITE_BOTTOM_PADDING };
+}
+
+export function drawActorSprite(ctx, actor, image, time = 0, placement = { height: ROOM_HEIGHT * .55 }) {
   const president = actor.role === 'president';
   const walking = president ? Math.abs(actor.vx ?? 0) > 1 : actor.currentState?.startsWith('walking_');
   const frame = walking ? 1 + Math.floor(time / 140) % 3 : 0;
   const row = president ? 0 : NPC_ROWS[actor.role] ?? 0;
   const crop = image ? visibleFrameBounds(image, frame, row, president ? 2 : 4) : null;
-  const height = ROOM_HEIGHT * .6;
-  const width = crop ? Math.min(ROOM_HEIGHT * .48, height * crop[2] / crop[3]) : ROOM_HEIGHT * .27;
+  const height = placement.height;
+  const width = crop ? height * crop[2] / crop[3] : height * .45;
+  ctx.save();
+  ctx.globalAlpha = .4;
+  ctx.filter = 'blur(2px)';
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(actor.x, actor.y, Math.max(7, width * .32), 2.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
   ctx.save();
   ctx.translate(actor.x, actor.y);
   if (actor.facing === -1) ctx.scale(-1, 1);
@@ -187,18 +216,28 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
       }
     }
   }
-  const cabinY = player.liftTarget !== null ? player.y : WORLD_TOP + cabinFloor * FLOOR_SPACING + ROOM_HEIGHT - 19;
-  drawOrMissing(ctx, assets.getImage('elevator_cabin'), WORLD_LEFT + 74, cabinY - 129, 116, 129);
+  const cabinY = player.liftTarget !== null ? player.y : cellCenter(cabinFloor, 0).y;
+  drawOrMissing(ctx, assets.getImage('elevator_cabin'), WORLD_LEFT + 74,
+    cabinY + ELEVATOR_ART_FLOOR_INSET - ELEVATOR_CABIN_HEIGHT, 116, ELEVATOR_CABIN_HEIGHT);
   const npcSheet = assets.getImage('npc_walk_sheet');
   for (const npc of inhabitants) {
+    const room = grid[npc.floor]?.[npc.column];
+    if (!room) continue;
     const x = WORLD_LEFT + npc.column * SLOT_WIDTH + SLOT_WIDTH / 2 + npc.offsetX;
-    const y = cellCenter(npc.floor, npc.column).y;
+    const placement = getActorPlacement(room);
     const animationPhase = [...npc.id].reduce((sum, letter) => sum + letter.charCodeAt(0), 0) % 4 * 67;
-    drawActorSprite(ctx, { ...npc, x, y }, npcSheet, time + animationPhase);
+    drawActorSprite(ctx, { ...npc, x, y: placement.floorY }, npcSheet, time + animationPhase, placement);
   }
-  const floorY = cellCenter(player.floor, 0).y;
-  const playerY = player.liftTarget !== null || player.y < floorY - 1 ? player.y : floorY;
-  drawActorSprite(ctx, { ...player, y: playerY, role: 'president' }, assets.getImage('character_sheet'), time);
+  const playerColumn = Math.max(0, Math.min(grid[player.floor]?.length - 1 ?? 0,
+    Math.floor((player.x - WORLD_LEFT) / SLOT_WIDTH)));
+  const playerRoom = grid[player.floor]?.[playerColumn] ?? { floor: player.floor, column: playerColumn, type: 'vault' };
+  const placement = getActorPlacement(playerRoom,
+    player.liftTarget !== null ? { liftY: player.y } : {});
+  const physicalFloorY = cellCenter(player.floor, playerColumn).y;
+  const playerY = playerRoom.type === 'elevator' ? placement.floorY
+    : placement.floorY + Math.min(0, player.y - physicalFloorY);
+  drawActorSprite(ctx, { ...player, y: playerY, role: 'president' },
+    assets.getImage('character_sheet'), time, placement);
   for (const room of grid.flat()) if (room?.type === 'greenhouse') renderGreenhouseGlow(ctx, room);
   ctx.restore();
 }
