@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { advanceEnvironmentCycle, createEnvironmentState, getEnergyConsumptionForPhase, getNpcMovementDelta, getNighttimeRiskChance } from '../src/core/environment.js';
+import { advanceEnvironmentCycle, countActiveGenerators, createEnvironmentState, getEnergyConsumptionForPhase, getNpcMovementDelta, getNighttimeRiskChance } from '../src/core/environment.js';
 import { getBunkerEnergyConsumption } from '../src/core/bunker_economy.js';
 import { createGameState, hydrateGameState } from '../src/core/game-state.js';
 import { bunkerEnvironmentHudView } from '../src/ui/dashboard.js';
@@ -36,24 +36,38 @@ test('night saves thirty percent of energy and slows NPC movement by twenty perc
   assert.equal(getEnergyConsumptionForPhase(100, true), 70);
   assert.equal(getEnergyConsumptionForPhase(100, false), 100);
   assert.equal(getNpcMovementDelta(10, true), 8);
+  assert.equal(getNpcMovementDelta(10, true, 2), 8);
+  assert.equal(getNpcMovementDelta(10, true, 3), 10);
   assert.equal(getNpcMovementDelta(10, false), 10);
+  assert.equal(countActiveGenerators([
+    [{ type: 'generator', level: 1 }, { type: 'medical', level: 3 }],
+    [{ type: 'generator', level: 2 }, { type: 'generator', level: 0 }],
+    [{ type: 'generator', level: 1 }],
+  ]), 3);
+  assert.equal(countActiveGenerators([{ type: 'generator', level: 1 }, { type: 'vault', level: 1 }]), 1);
 });
 
 test('night doubles negative event odds and applies reduced consumption to the monthly bunker economy', () => {
   assert.equal(getNighttimeRiskChance(0.2, true), 0.4);
+  assert.equal(getNighttimeRiskChance(0.2, true, 2), 0.4);
+  assert.equal(getNighttimeRiskChance(0.2, true, 3), 0.2);
   assert.equal(getNighttimeRiskChance(0.2, false), 0.2);
   assert.equal(getBunkerEnergyConsumption({ isNight: true, country: { populacao_base: 50_000 } }), 70);
   assert.equal(getBunkerEnergyConsumption({ isNight: false, country: { populacao_base: 50_000 } }), 100);
 });
 
-test('environment phase survives save hydration and the HUD renders as a separate overlay component', () => {
+test('environment phase survives save hydration and the HUD renders the phase and security overlay', () => {
   const state = createGameState('bra');
   const restored = hydrateGameState(JSON.stringify({ ...state, version: 18, environment: { elapsedMs: 330_000 }, isNight: false }));
-  const hud = bunkerEnvironmentHudView(restored.environment, restored.isNight);
+  const hud = bunkerEnvironmentHudView(restored.environment, restored.isNight,
+    [{ role: 'soldier' }, { role: 'engineer', isMilitary: true }], 1);
 
   assert.equal(restored.isNight, true);
   assert.equal(restored.version, 19);
   assert.match(hud, /data-environment-hud/);
   assert.match(hud, /NOITE/);
   assert.match(hud, /04:30/);
+  assert.match(hud, /SEGURANÇA/);
+  assert.match(hud, /30%/);
+  assert.match(hud, /3 SOLDADOS/);
 });

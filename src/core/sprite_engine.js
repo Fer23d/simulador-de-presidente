@@ -4,7 +4,11 @@ const SURFACE_Y = WORLD_TOP - 30;
 const ATLAS_CELLS = Object.freeze({
   vault: [0, 0], elevator: [1, 0], dormitory: [2, 0],
   generator: [0, 1], greenhouse: [1, 1], arsenal: [2, 1],
-  medical: [0, 2], radio: [1, 2], office: [2, 2], detention: [2, 2], laboratory: [0, 2],
+  medical: [0, 2], radio: [1, 2], office: [2, 2], detention: [2, 2],
+});
+const ROOM_AMBIENT_LIGHTS = Object.freeze({
+  medical: Object.freeze(['rgba(200, 240, 255, .3)', 'rgba(200, 240, 255, .12)']),
+  laboratory: Object.freeze(['rgba(100, 255, 100, .2)', 'rgba(100, 255, 100, .08)']),
 });
 const NPC_ROWS = Object.freeze({ resident: 0, engineer: 0, scientist: 1, medic: 2, guard: 3 });
 const frameBoundsCache = new WeakMap();
@@ -102,14 +106,40 @@ export function renderRoom(ctx, room, assets) {
     drawOrMissing(ctx, assets.getImage('uv_light_prop'), x + 55, y + 7, 154, 48);
     return;
   }
+  if (room.type === 'laboratory') {
+    const laboratory = assets.getImage('room_laboratory');
+    const emptyBase = assets.getImage('room_base_empty');
+    drawOrMissing(ctx, laboratory ?? emptyBase, x, y, SLOT_WIDTH, ROOM_HEIGHT);
+    renderRoomAmbientLight(ctx, room, x, y);
+    return;
+  }
   const individual = assets.getImage(`room_${room.type}`);
-  if (individual) { drawOrMissing(ctx, individual, x, y, SLOT_WIDTH, ROOM_HEIGHT); return; }
-  const atlas = assets.getImage('room_atlas');
-  const [column, row] = ATLAS_CELLS[room.type] ?? ATLAS_CELLS.vault;
-  const cellWidth = atlas?.width / 3;
-  const cellHeight = atlas?.height / 3;
-  drawOrMissing(ctx, atlas, x, y, SLOT_WIDTH, ROOM_HEIGHT,
-    atlas ? [column * cellWidth, row * cellHeight, cellWidth, cellHeight] : null);
+  if (individual) {
+    drawOrMissing(ctx, individual, x, y, SLOT_WIDTH, ROOM_HEIGHT);
+  } else {
+    const atlas = assets.getImage('room_atlas');
+    const [column, row] = ATLAS_CELLS[room.type] ?? ATLAS_CELLS.vault;
+    const cellWidth = atlas?.width / 3;
+    const cellHeight = atlas?.height / 3;
+    drawOrMissing(ctx, atlas, x, y, SLOT_WIDTH, ROOM_HEIGHT,
+      atlas ? [column * cellWidth, row * cellHeight, cellWidth, cellHeight] : null);
+  }
+  renderRoomAmbientLight(ctx, room, x, y);
+}
+
+function renderRoomAmbientLight(ctx, room, x, y) {
+  const colors = ROOM_AMBIENT_LIGHTS[room.type];
+  if (!colors || typeof ctx.createRadialGradient !== 'function') return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  const light = ctx.createRadialGradient(x + SLOT_WIDTH / 2, y + ROOM_HEIGHT * .38, 6,
+    x + SLOT_WIDTH / 2, y + ROOM_HEIGHT * .48, SLOT_WIDTH * .56);
+  light.addColorStop(0, colors[0]);
+  light.addColorStop(.62, colors[1]);
+  light.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = light;
+  ctx.fillRect(x, y, SLOT_WIDTH, ROOM_HEIGHT);
+  ctx.restore();
 }
 
 function visibleFrameBounds(image, frame, row, rows) {
@@ -197,17 +227,22 @@ function renderGreenhouseGlow(ctx, room) {
   ctx.restore();
 }
 
-export function applyNightOverlay(ctx, width, height, isNight) {
+export function applyNightOverlay(ctx, width, height, isNight, { activeGenerators = 0, surfaceHeight = height } = {}) {
   if (!isNight) return;
+  const overlayHeight = Number(activeGenerators) >= 3
+    ? Math.max(0, Math.min(height, Number(surfaceHeight) || 0))
+    : height;
+  if (overlayHeight <= 0) return;
   ctx.save();
   ctx.globalAlpha = 0.4;
   ctx.globalCompositeOperation = 'multiply';
   ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillRect(0, 0, width, overlayHeight);
   ctx.restore();
 }
 
-export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants = [], cabinFloor = player.floor, time = 0, isNight = false }) {
+export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants = [], cabinFloor = player.floor,
+  time = 0, isNight = false, activeGenerators = 0 }) {
   renderSurface(ctx, camera, assets);
   renderDirt(ctx, camera, assets);
   ctx.save();
@@ -280,7 +315,10 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
   for (const room of grid.flat()) if (room?.type === 'detention') renderDetentionBars(ctx, room);
   for (const room of grid.flat()) if (room?.type === 'greenhouse') renderGreenhouseGlow(ctx, room);
   ctx.restore();
-  if (isNight && ctx.canvas) applyNightOverlay(ctx, ctx.canvas.width, ctx.canvas.height, true);
+  if (isNight && ctx.canvas) {
+    const surfaceHeight = Math.max(0, Math.min(ctx.canvas.height, SURFACE_Y + camera.offset_y));
+    applyNightOverlay(ctx, ctx.canvas.width, ctx.canvas.height, true, { activeGenerators, surfaceHeight });
+  }
 }
 
 function renderDetentionBars(ctx, room) {

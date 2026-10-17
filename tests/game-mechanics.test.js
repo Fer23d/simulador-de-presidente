@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createGameState } from '../src/core/game-state.js';
 import { advanceWastelandMonth, transicionarParaWasteland } from '../src/core/wasteland.js';
 import { buildShelterRoom } from '../src/core/shelter_engine.js';
-import { detainRebel, dismissExpeditionReport, getWastelandEvent, resolveWastelandEvent, startExpedition } from '../src/core/game_mechanics.js';
+import { advanceMonthlyGameMechanics, calculateSuppression, calculateSuppressedChance, detainRebel, dismissExpeditionReport, getWastelandEvent, resolveWastelandEvent, startExpedition } from '../src/core/game_mechanics.js';
 import { hydrateGameState } from '../src/core/game-state.js';
 import { bunkerView, expeditionLogisticsView, expeditionReportView } from '../src/ui/dashboard.js';
 
@@ -116,6 +116,63 @@ test('zero food or energy reduces loyalty gradually without an automatic rebelli
   assert.equal(result.inhabitants[0].loyalty, 20);
   assert.notEqual(result.inhabitants[0].currentState, 'rebel');
   assert.equal(result.scrap, state.scrap + 25);
+});
+
+test('three operational generators prevent nighttime rebellion and sabotage odds from doubling', () => {
+  const base = {
+    randomSeed: 1,
+    isNight: true,
+    scrap: 100,
+    shelter_supplies: { food: 100, energy: 100 },
+    inhabitants: [{ id: 'resident-1', loyalty: 0, currentState: 'idle', rebellionCheckDone: false }],
+  };
+  const withTwo = advanceMonthlyGameMechanics({ ...base, shelter_grid: [[
+    { type: 'generator', level: 1 }, { type: 'generator', level: 1 },
+  ]] });
+  const withThree = advanceMonthlyGameMechanics({ ...base, shelter_grid: [[
+    { type: 'generator', level: 1 }, { type: 'generator', level: 1 }, { type: 'generator', level: 1 },
+  ]] });
+
+  assert.equal(withTwo.inhabitants[0].currentState, 'rebel');
+  assert.equal(withThree.inhabitants[0].currentState, 'idle');
+});
+
+test('soldiers and arsenal guards suppress bunker conflict and soften morale loss', () => {
+  const prepared = wastelandState();
+  const residents = prepared.inhabitants.map((npc, index) => ({
+    ...npc,
+    loyalty: index === 0 ? 50 : 100,
+  }));
+  const state = {
+    ...prepared,
+    shelter_guards: 1,
+    shelter_supplies: { ...prepared.shelter_supplies, food: 0 },
+    inhabitants: [
+      ...residents,
+      { id: 'military-vip', role: 'guard', isVIP: true, loyalty: 100, currentState: 'idle' },
+    ],
+  };
+
+  const suppression = calculateSuppression(state);
+  const result = advanceMonthlyGameMechanics(state);
+
+  assert.deepEqual(suppression, { totalSoldiers: 2, suppressionFactor: 0.2, percent: 20 });
+  assert.equal(result.inhabitants.find((npc) => npc.id === residents[0].id).loyalty, 42);
+  assert.equal(calculateSuppressedChance(0.3, 0.3), 0);
+  assert.ok(Math.abs(calculateSuppressedChance(0.3, 0.1) - 0.2) < 1e-9);
+});
+
+test('soldier suppression reduces rebellion odds after the nighttime modifier', () => {
+  const base = {
+    randomSeed: 1,
+    isNight: true,
+    scrap: 100,
+    shelter_supplies: { food: 100, energy: 100 },
+    inhabitants: [{ id: 'resident-1', loyalty: 0, currentState: 'idle', rebellionCheckDone: false }],
+  };
+  const result = advanceMonthlyGameMechanics({ ...base, shelter_guards: 2 });
+
+  assert.equal(result.inhabitants[0].currentState, 'idle');
 });
 
 test('a rebel can be detained only after building a detention cell and then stops sabotaging', () => {

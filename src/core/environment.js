@@ -1,6 +1,18 @@
 export const DAY_PHASE_MS = 300_000;
 export const FULL_CYCLE_MS = 600_000;
+export const GENERATOR_LIGHT_THRESHOLD = 3;
 const modulo = (value, divisor) => ((value % divisor) + divisor) % divisor;
+
+export function countActiveGenerators(rooms) {
+  if (!Array.isArray(rooms)) return 0;
+  return rooms.flat(Infinity).filter((room) => room?.type === 'generator'
+    && Number(room.level ?? 1) >= 1 && room.operational !== false && room.destroyed !== true).length;
+}
+
+export function hasReliableNightPower(activeGenerators) {
+  return Number.isFinite(Number(activeGenerators))
+    && Number(activeGenerators) >= GENERATOR_LIGHT_THRESHOLD;
+}
 
 export function createEnvironmentState(value = {}) {
   const rawElapsed = Number(value.elapsedMs);
@@ -28,14 +40,14 @@ export function getEnergyConsumptionForPhase(amount, isNight) {
   return isNight ? Math.ceil(consumption * 0.7) : consumption;
 }
 
-export function getNpcMovementDelta(deltaSeconds, isNight) {
+export function getNpcMovementDelta(deltaSeconds, isNight, activeGenerators = 0) {
   const rawDelta = Number(deltaSeconds);
   const delta = Number.isFinite(rawDelta) ? Math.max(0, rawDelta) : 0;
-  return isNight ? delta * 0.8 : delta;
+  return isNight && !hasReliableNightPower(activeGenerators) ? delta * 0.8 : delta;
 }
 
-export function getNighttimeRiskChance(baseChance, isNight) {
+export function getNighttimeRiskChance(baseChance, isNight, activeGenerators = 0) {
   const rawChance = Number(baseChance);
   const chance = Number.isFinite(rawChance) ? Math.max(0, Math.min(1, rawChance)) : 0;
-  return isNight ? Math.min(1, chance * 2) : chance;
+  return isNight && !hasReliableNightPower(activeGenerators) ? Math.min(1, chance * 2) : chance;
 }

@@ -1,6 +1,6 @@
 import { nextRandom } from './geopolitics.js';
 import { getRoomWorkforce } from './bunker_economy.js';
-import { getNighttimeRiskChance } from './environment.js';
+import { countActiveGenerators, getNighttimeRiskChance } from './environment.js';
 import { createExpeditionNodes } from './expeditions.js';
 
 const EXPEDITION_MONTHS = 3;
@@ -11,6 +11,7 @@ const VIP_DISCOVERY_CHANCE = 0.1;
 const VIP_ASSASSINATION_CHANCE = 0.3;
 const SCOUT_EXPEDITION_SUCCESS_CHANCE = 0.65;
 const GREENHOUSE_CURE_SUCCESS_CHANCE = 0.6;
+const SUPPRESSION_PER_SOLDIER = 0.1;
 const VIP_PROFILES = Object.freeze([
   Object.freeze({ name: 'Dr. Isaac', role: 'scientist' }),
   Object.freeze({ name: 'Dra. Amara', role: 'scientist' }),
@@ -67,6 +68,24 @@ export const WASTELAND_EVENTS = Object.freeze([
   }),
 ]);
 
+export function calculateSuppression(state = {}) {
+  const inhabitants = Array.isArray(state.inhabitants) ? state.inhabitants : [];
+  const inhabitantSoldiers = inhabitants.filter((inhabitant) => !inhabitant.is_on_expedition && !inhabitant.is_prisoner
+    && (inhabitant.role === 'soldier'
+    || inhabitant.isMilitary === true
+    || (inhabitant.isVIP === true && ['guard', 'military', 'soldier'].includes(inhabitant.role)))).length;
+  const arsenalGuards = Math.max(0, Math.floor(Number(state.shelter_guards) || 0));
+  const totalSoldiers = inhabitantSoldiers + arsenalGuards;
+  const suppressionFactor = Math.min(1, totalSoldiers * SUPPRESSION_PER_SOLDIER);
+  return { totalSoldiers, suppressionFactor, percent: Math.round(suppressionFactor * 100) };
+}
+
+export function calculateSuppressedChance(baseChance, suppressionFactor) {
+  const chance = Math.max(0, Math.min(1, Number(baseChance) || 0));
+  const suppression = Math.max(0, Math.min(1, Number(suppressionFactor) || 0));
+  return Math.max(0, chance - suppression);
+}
+
 export function getWastelandEvent(eventId) {
   return WASTELAND_EVENTS.find((event) => event.id === eventId) ?? null;
 }
@@ -103,6 +122,8 @@ export function startExpedition(state, inhabitantId, destination = null) {
 
 export function advanceMonthlyGameMechanics(state) {
   let randomSeed = Number(state.randomSeed) || 1;
+  const activeGenerators = countActiveGenerators(state.shelter_grid ?? state.bunker_rooms);
+  const { suppressionFactor } = calculateSuppression(state);
   const reports = [...(state.pendingExpeditionReports ?? [])];
   const inhabitants = [];
   let scrap = Math.max(0, Number(state.scrap) || 0);
@@ -174,7 +195,8 @@ export function advanceMonthlyGameMechanics(state) {
     || (Number(state.shelter_supplies?.energy) || 0) <= 0;
   const updatedInhabitants = inhabitants.map((inhabitant) => {
     if (inhabitant.is_prisoner || inhabitant.is_on_expedition || inhabitant.currentState === 'rebel') return inhabitant;
-    const loyalty = Math.max(0, Math.min(100, Number(inhabitant.loyalty ?? 100) - (resourcesDepleted ? 10 : 0)));
+    const loyaltyLoss = resourcesDepleted ? 10 * (1 - suppressionFactor) : 0;
+    const loyalty = Math.max(0, Math.min(100, Number(inhabitant.loyalty ?? 100) - loyaltyLoss));
     let currentState = inhabitant.currentState;
     let rebellionCheckDone = inhabitant.rebellionCheckDone === true;
     if (loyalty > 0) rebellionCheckDone = false;
@@ -182,7 +204,9 @@ export function advanceMonthlyGameMechanics(state) {
       const roll = nextRandom(randomSeed);
       randomSeed = roll.seed;
       rebellionCheckDone = true;
-      if (roll.value < getNighttimeRiskChance(REBELLION_CHANCE, state.isNight === true)) currentState = 'rebel';
+      const rebellionChance = calculateSuppressedChance(
+        getNighttimeRiskChance(REBELLION_CHANCE, state.isNight === true, activeGenerators), suppressionFactor);
+      if (roll.value < rebellionChance) currentState = 'rebel';
     }
     return { ...inhabitant, loyalty, currentState,
       ...(currentState === 'rebel' ? { targetOffsetX: null } : {}), rebellionCheckDone };
@@ -195,7 +219,9 @@ export function advanceMonthlyGameMechanics(state) {
     && inhabitant.currentState === 'rebel' && !inhabitant.is_prisoner && !inhabitant.is_on_expedition)) {
     const attackRoll = nextRandom(randomSeed);
     randomSeed = attackRoll.seed;
-    if (attackRoll.value >= getNighttimeRiskChance(VIP_ASSASSINATION_CHANCE, state.isNight === true)) continue;
+    const assassinationChance = calculateSuppressedChance(
+      getNighttimeRiskChance(VIP_ASSASSINATION_CHANCE, state.isNight === true, activeGenerators), suppressionFactor);
+    if (attackRoll.value >= assassinationChance) continue;
     const candidates = updatedInhabitants.filter((inhabitant) => !inhabitant.isVIP
       && inhabitant.currentState !== 'rebel' && !inhabitant.is_prisoner && !inhabitant.is_on_expedition
       && Number.isInteger(inhabitant.workFloor) && Number.isInteger(inhabitant.workColumn)

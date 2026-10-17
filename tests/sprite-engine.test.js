@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  AssetManager, DEFAULT_ASSETS, applyNightOverlay, drawActorSprite, getActorPlacement, renderSpriteScene,
+  AssetManager, DEFAULT_ASSETS, applyNightOverlay, drawActorSprite, getActorPlacement, renderRoom, renderSpriteScene,
   ROOM_FLOOR_THICKNESS, SPRITE_BOTTOM_PADDING,
 } from '../src/core/sprite_engine.js';
 import { buildShelterRoom, cellCenter, FLOOR_SPACING, INITIAL_SHELTER_GRID,
@@ -24,8 +24,79 @@ test('night overlay tints only the canvas scene and restores the previous compos
   applyNightOverlay(ctx, 960, 600, true);
 
   assert.deepEqual(calls, [['#000', 0, 0, 960, 600]]);
+  applyNightOverlay(ctx, 960, 600, true, { activeGenerators: 3, surfaceHeight: 180 });
+  assert.deepEqual(calls[1], ['#000', 0, 0, 960, 180]);
+  applyNightOverlay(ctx, 960, 600, true, { activeGenerators: 2, surfaceHeight: 180 });
+  assert.deepEqual(calls[2], ['#000', 0, 0, 960, 600]);
   assert.equal(ctx.globalAlpha, 1);
   assert.equal(ctx.globalCompositeOperation, 'source-over');
+});
+
+test('medical and laboratory rooms use separate sprites with distinct localized lighting', () => {
+  const draws = [];
+  const lights = [];
+  const ctx = {
+    globalCompositeOperation: 'source-over',
+    save() {}, restore() {},
+    drawImage(...args) { draws.push(args); },
+    createRadialGradient(...args) {
+      const stops = [];
+      const gradient = { addColorStop(...stop) { stops.push(stop); } };
+      lights.push({ args, stops });
+      return gradient;
+    },
+    fillRect(...args) { lights.at(-1).rect = args; },
+  };
+  const atlas = { width: 1200, height: 900 };
+  const labSprite = { id: 'dedicated-lab', width: 480, height: 240 };
+  const assets = { getImage: (key) => key === 'room_atlas' ? atlas : key === 'room_laboratory' ? labSprite : null };
+  const medical = { type: 'medical', floor: 0, column: 0 };
+  const laboratory = { type: 'laboratory', floor: 1, column: 2 };
+
+  renderRoom(ctx, medical, assets);
+  renderRoom(ctx, laboratory, assets);
+
+  assert.notDeepEqual(draws[0].slice(1, 5), draws[1].slice(1, 5));
+  assert.deepEqual(lights[0].rect, [draws[0][5], draws[0][6], draws[0][7], draws[0][8]]);
+  assert.match(lights[0].stops[0][1], /200, 240, 255/);
+  assert.equal(draws[1][0], labSprite);
+  assert.match(lights[1].stops[0][1], /100, 255, 100/);
+});
+
+test('laboratory never falls back to the radio room sprite when its dedicated art is unavailable', () => {
+  const drawn = [];
+  const emptyBase = { id: 'empty-room-base', width: 480, height: 240 };
+  const atlas = { id: 'room-atlas', width: 1200, height: 900 };
+  const ctx = { save() {}, restore() {}, drawImage(...args) { drawn.push(args); } };
+  const assets = { getImage: (key) => key === 'room_base_empty' ? emptyBase : key === 'room_atlas' ? atlas : null };
+
+  renderRoom(ctx, { type: 'laboratory', floor: 0, column: 0 }, assets);
+
+  assert.equal(drawn.length, 1);
+  assert.equal(drawn[0][0], emptyBase);
+});
+
+test('night surface-only darkness follows the camera while blackout still covers the whole view', () => {
+  const blackRects = [];
+  const ctx = {
+    canvas: { width: 960, height: 600 },
+    globalAlpha: 1,
+    globalCompositeOperation: 'source-over',
+    save() {}, restore() {}, translate() {}, scale() {},
+    createPattern() { return 'soil'; },
+    fillRect(x, y, width, height) { if (this.fillStyle === '#000') blackRects.push([x, y, width, height]); },
+    drawImage() {}, beginPath() {}, ellipse() {}, fill() {},
+  };
+  const assets = { getImage: () => ({ width: 1688, height: 932 }) };
+  const player = { ...cellCenter(0, 1), floor: 0, vx: 0, facing: 1, liftTarget: null };
+  const camera = { offset_x: 0, offset_y: 180 };
+  const scene = { grid: [], player, camera, assets, inhabitants: [], cabinFloor: 0, time: 0, isNight: true };
+
+  renderSpriteScene(ctx, { ...scene, activeGenerators: 3 });
+  renderSpriteScene(ctx, { ...scene, activeGenerators: 2 });
+
+  assert.deepEqual(blackRects[0], [0, 0, 960, Math.min(600, Math.max(0, WORLD_TOP - 30 + camera.offset_y))]);
+  assert.deepEqual(blackRects[1], [0, 0, 960, 600]);
 });
 
 test('asset manager preloads every image and records failed URLs', async () => {
