@@ -1,3 +1,5 @@
+import { getEnergyConsumptionForPhase } from './environment.js';
+
 export const ROOM_MAX_LEVEL = 5;
 
 const OUTPUT_BY_LEVEL = Object.freeze([100, 250, 400, 550, 700]);
@@ -42,7 +44,8 @@ export function getBunkerFoodConsumption(state, population = state.country?.popu
 }
 
 export function getBunkerEnergyConsumption(state, population = state.country?.populacao_base) {
-  return Math.ceil(Math.max(0, Number(population) || 0) / 500);
+  const baseConsumption = Math.ceil(Math.max(0, Number(population) || 0) / 500);
+  return getEnergyConsumptionForPhase(baseConsumption, state.isNight === true);
 }
 
 export function getRoomWorkforce(state, room) {

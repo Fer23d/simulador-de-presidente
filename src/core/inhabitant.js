@@ -26,6 +26,7 @@ export class Inhabitant {
     this.rebellionCheckDone = data.rebellionCheckDone === true;
     this.is_on_expedition = data.is_on_expedition === true;
     this.expedition_timer = Math.max(0, Math.floor(Number(data.expedition_timer) || 0));
+    this.expedition_destination = typeof data.expedition_destination === 'string' ? data.expedition_destination.slice(0, 120) : undefined;
     this.is_prisoner = data.is_prisoner === true;
     if (this.targetOffsetX === null && this.currentState !== 'rebel') this.currentState = 'idle';
     this.waitSeconds = Number.isFinite(data.waitSeconds) ? clamp(data.waitSeconds, 0, 6) : 1;
@@ -33,7 +34,7 @@ export class Inhabitant {
     this.random = random;
   }
 
-  update(deltaTime) {
+  update(deltaTime, speedMultiplier = 1) {
     const dt = clamp(Number(deltaTime) || 0, 0, .1);
     if (!dt || this.is_on_expedition || this.is_prisoner || this.currentState === 'rebel') return;
     if (this.currentState === 'idle') {
@@ -54,7 +55,7 @@ export class Inhabitant {
       return;
     }
     const remaining = this.targetOffsetX - this.offsetX;
-    this.offsetX += Math.sign(remaining) * Math.min(Math.abs(remaining), this.speed * dt);
+    this.offsetX += Math.sign(remaining) * Math.min(Math.abs(remaining), this.speed * dt * Math.max(0, Number(speedMultiplier) || 0));
     if (this.offsetX === this.targetOffsetX) {
       if (this.pose === 'working' && Math.abs(this.offsetX) === 84) this.facing = this.offsetX < 0 ? 1 : -1;
       this.currentState = 'idle';
@@ -71,6 +72,7 @@ export class Inhabitant {
       loyalty: this.loyalty, workFloor: this.workFloor, workColumn: this.workColumn,
       rebellionCheckDone: this.rebellionCheckDone,
       is_on_expedition: this.is_on_expedition, expedition_timer: this.expedition_timer,
+      ...(this.expedition_destination ? { expedition_destination: this.expedition_destination } : {}),
       is_prisoner: this.is_prisoner };
   }
 }

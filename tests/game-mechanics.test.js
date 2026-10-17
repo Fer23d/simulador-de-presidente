@@ -156,7 +156,7 @@ test('wasteland supplies, rebel status, active expeditions, and reports survive 
   assert.equal(restored.inhabitants[1].currentState, 'rebel');
   assert.equal(restored.shelter_grid[0][2].type, 'detention');
   assert.equal(restored.pendingExpeditionReports[0].id, 'report-1');
-  assert.equal(restored.version, 18);
+  assert.equal(restored.version, 19);
 });
 
 test('bunker UI exposes food, energy, expedition logistics, and a blocking mission report', () => {

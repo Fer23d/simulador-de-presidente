@@ -78,6 +78,16 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 .bunker-hud span { border: 1px solid var(--line); padding: 6px 8px; background: rgba(255, 122, 24, .06); }
 .bunker-canvas { display: block; width: 100%; aspect-ratio: 8 / 5; margin: 12px auto 0; border: 4px double var(--amber); background: #252523; outline: none; box-shadow: 0 0 22px rgba(255, 122, 24, .24); cursor: crosshair; touch-action: none; }
 .bunker-stage { position: relative; }
+.bunker-environment-hud { position: absolute; z-index: 1; top: 24px; right: 24px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 8px; min-width: 156px; padding: 7px 9px; border: 1px solid var(--amber); background: rgba(8, 7, 5, .88); color: var(--phosphor); font: 13px/1.2 "Share Tech Mono", monospace; pointer-events: none; text-shadow: 0 0 6px currentColor; }
+.environment-phase-icon { grid-row: span 2; color: var(--amber); font-size: 18px; }
+.environment-phase-label { font-weight: 700; }
+.environment-phase-clock { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.environment-progress { grid-column: 2 / 4; display: block; height: 5px; overflow: hidden; background: #31271d; }
+.environment-progress > span { display: block; height: 100%; background: var(--amber); box-shadow: 0 0 7px var(--amber); }
+.bunker-environment-hud.is-night { border-color: #8fa8dc; color: #c5d7ff; }
+.bunker-environment-hud.is-night .environment-phase-icon { color: #a9c2ff; }
+.bunker-environment-hud.is-night .environment-progress > span { background: #a9c2ff; }
+.bunker-environment-hud.is-night .environment-progress > span { box-shadow: 0 0 7px #a9c2ff; }
 .bunker-tooltip { position: absolute; z-index: 2; top: 22px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); padding: 9px 14px; border: 2px solid var(--amber); background: rgba(12, 12, 10, .94); color: var(--phosphor); font-family: 'Share Tech Mono', monospace; font-size: 15px; text-align: center; white-space: nowrap; box-shadow: 4px 4px 0 #080400; pointer-events: none; }
 .bunker-tooltip[hidden] { display: none; }
 .bunker-canvas:focus { border-color: var(--phosphor); box-shadow: 0 0 22px rgba(255, 179, 71, .45); }
@@ -125,6 +135,12 @@ body.theme-wasteland .content-area { max-width: none; }
 .expedition-logistics { margin: 14px 0; border: 1px dashed var(--line); padding: 12px; }
 .expedition-logistics h3 { margin: 0 0 6px; color: var(--amber); }
 .expedition-logistics p { color: var(--muted); }
+.expedition-location { margin: 12px 0 4px; color: var(--amber) !important; }
+.expedition-privacy { margin: 4px 0 10px; color: var(--muted); font-size: 12px; }
+.expedition-attribution { display: block; margin-bottom: 10px; color: var(--muted); font-size: 12px; }
+.expedition-attribution a { color: var(--cyan); }
+.expedition-route-label { display: block; margin: 8px 0 5px; color: var(--amber); font-size: 13px; text-transform: uppercase; }
+.expedition-logistics select { width: 100%; }
 .expedition-logistics ul { display: grid; gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
 .expedition-logistics li { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
 .expedition-logistics li > span { color: var(--phosphor); overflow-wrap: anywhere; }

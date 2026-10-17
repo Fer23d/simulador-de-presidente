@@ -197,7 +197,17 @@ function renderGreenhouseGlow(ctx, room) {
   ctx.restore();
 }
 
-export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants = [], cabinFloor = player.floor, time = 0 }) {
+export function applyNightOverlay(ctx, width, height, isNight) {
+  if (!isNight) return;
+  ctx.save();
+  ctx.globalAlpha = 0.4;
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
+}
+
+export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants = [], cabinFloor = player.floor, time = 0, isNight = false }) {
   renderSurface(ctx, camera, assets);
   renderDirt(ctx, camera, assets);
   ctx.save();
@@ -270,6 +280,7 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
   for (const room of grid.flat()) if (room?.type === 'detention') renderDetentionBars(ctx, room);
   for (const room of grid.flat()) if (room?.type === 'greenhouse') renderGreenhouseGlow(ctx, room);
   ctx.restore();
+  if (isNight && ctx.canvas) applyNightOverlay(ctx, ctx.canvas.width, ctx.canvas.height, true);
 }
 
 function renderDetentionBars(ctx, room) {

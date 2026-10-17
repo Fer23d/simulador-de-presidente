@@ -5,6 +5,7 @@ import {
 } from './shelter_engine.js';
 import { AssetManager, DEFAULT_ASSETS, renderSpriteScene } from './sprite_engine.js';
 import { Inhabitant } from './inhabitant.js';
+import { advanceEnvironmentCycle, createEnvironmentState, getNpcMovementDelta } from './environment.js';
 
 const WALK_SPEED = 170;
 const LIFT_SPEED = 280;
@@ -160,6 +161,8 @@ export function normalizeInhabitants(value, grid) {
       rebellionCheckDone: npc.rebellionCheckDone === true,
       is_on_expedition: npc.is_on_expedition === true,
       expedition_timer: Math.max(0, Math.floor(Number(npc.expedition_timer) || 0)),
+      ...(typeof npc.expedition_destination === 'string' && npc.expedition_destination.trim()
+        ? { expedition_destination: npc.expedition_destination.slice(0, 120) } : {}),
       is_prisoner: npc.is_prisoner === true });
   }
   return result;
@@ -189,7 +192,7 @@ export const renderRpgBunker = renderSpriteScene;
 
 export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, player: savedPlayer,
   inhabitants = [], cabinFloor: savedCabinFloor, onBuild, onRoom, onPlayerChanged, onInhabitantsChanged, onHint,
-  onDetain, onAssetsReady, assetUrls = {} } = {}) {
+  onDetain, onAssetsReady, onEnvironmentChanged, environment = {}, isNight = environment?.isNight ?? false, assetUrls = {} } = {}) {
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
   const assets = new AssetManager({ ...DEFAULT_ASSETS, ...assetUrls });
@@ -205,7 +208,10 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   let lastTime = 0;
   let lastSave = 0;
   let lastNpcSave = 0;
+  let lastEnvironmentNotice = 0;
+  let lastEnvironmentSave = 0;
   let lastHint = '';
+  let dayNight = createEnvironmentState({ ...environment, isNight });
   const keys = new Set();
   const actors = inhabitants.map((data) => new Inhabitant(data));
 
@@ -214,6 +220,16 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     if (destroyed) return;
     const dt = lastTime ? (time - lastTime) / 1000 : 0;
     lastTime = time;
+    const previousNight = dayNight.isNight;
+    dayNight = advanceEnvironmentCycle(dayNight, dt * 1000);
+    const phaseChanged = previousNight !== dayNight.isNight;
+    if (phaseChanged || time - lastEnvironmentNotice >= 1_000) {
+      const persist = phaseChanged || time - lastEnvironmentSave >= 10_000;
+      onEnvironmentChanged?.({ elapsedMs: dayNight.elapsedMs, isNight: dayNight.isNight,
+        remainingMs: dayNight.remainingMs, progress: dayNight.progress }, { phaseChanged, persist });
+      lastEnvironmentNotice = time;
+      if (persist) lastEnvironmentSave = time;
+    }
     if (!paused && !buildMode) {
       const previousFloor = player.floor;
       player = updatePlayer(player, { left: keys.has('a') || keys.has('arrowleft'), right: keys.has('d') || keys.has('arrowright'),
@@ -221,7 +237,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
       if (player.liftTarget !== null || getRoom(grid, player.floor, playerColumn(player))?.type === 'elevator') cabinFloor = player.floor;
       if (player.floor !== previousFloor) { cabinFloor = player.floor; savePlayer(); }
       if (Math.abs(player.vx) > 0 && time - lastSave > 700) { savePlayer(); lastSave = time; }
-      for (const actor of actors) actor.update(dt);
+      for (const actor of actors) actor.update(dt, getNpcMovementDelta(1, dayNight.isNight));
       if (time - lastNpcSave > 2500) {
         onInhabitantsChanged?.(actors.map((actor) => actor.snapshot()));
         lastNpcSave = time;
@@ -231,7 +247,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     const targetY = canvas.height / 2 - player.y;
     camera.offset_x += (targetX - camera.offset_x) * Math.min(1, dt * 8);
     camera.offset_y += (targetY - camera.offset_y) * Math.min(1, dt * 8);
-    renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants: actors, cabinFloor, time });
+    renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants: actors, cabinFloor, time, isNight: dayNight.isNight });
     const rebel = findNearbyRebel(player, grid, actors.map((actor) => actor.snapshot()));
     const hint = paused || buildMode ? '' : rebel?.label || getElevatorPrompt(player, grid) || findNearbyTrigger(player, grid)?.label || '';
     if (hint !== lastHint) { lastHint = hint; onHint?.(hint); }
@@ -280,6 +296,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   return {
     ready,
     getSnapshot: () => ({ player: { ...player }, camera: { ...camera }, cabinFloor,
+      environment: { elapsedMs: dayNight.elapsedMs, isNight: dayNight.isNight },
       inhabitants: actors.map((actor) => actor.snapshot()) }),
     setBuildMode(value) { buildMode = Boolean(value); keys.clear(); },
     setBuildType(value) { if (SHELTER_TYPES[value]) buildType = value; },

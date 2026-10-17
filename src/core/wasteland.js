@@ -2,6 +2,7 @@ import { calculateShelterCapacity, INITIAL_SHELTER_GRID, normalizeShelterGrid } 
 import { getBunkerEnergyConsumption, getBunkerFoodConsumption, getRoomEconomyProfile, getRoomStorageCapacity } from './bunker_economy.js';
 import { createInitialInhabitants, createRpgPlayer } from './rpg_bunker.js';
 import { advanceMonthlyGameMechanics, getRoomProductivityMultiplier, getWastelandEvent, WASTELAND_EVENTS } from './game_mechanics.js';
+import { createEnvironmentState } from './environment.js';
 
 const VAULT_CASH_COST = 500_000_000_000;
 const VAULT_STEEL_COST = 50_000;
@@ -60,6 +61,9 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
     shelter_inhabitants: [],
     inhabitants: createInitialInhabitants(INITIAL_SHELTER_GRID),
     pendingExpeditionReports: [],
+    expeditionLocation: null,
+    environment: createEnvironmentState(),
+    isNight: false,
     pendingBunkerEvent: null,
     wasteland_turn: 0,
     wastelandMonthCounter: 0,

@@ -37,8 +37,10 @@ import { advanceWastelandMonth, buildMegaVault, buildWastelandProject, enviarBat
 import { getWastelandEvent, WASTELAND_EVENTS } from './game_mechanics.js';
 import { createRpgPlayer, normalizeInhabitants, normalizeRpgPlayer } from './rpg_bunker.js';
 import { INITIAL_SHELTER_GRID, migrateLegacyPlayer, migrateLegacyRooms, normalizeShelterGrid, normalizeShelterInhabitants } from './shelter_engine.js';
+import { createEnvironmentState } from './environment.js';
+import { createExpeditionLocation } from './expeditions.js';
 
-const STATE_VERSION = 18;
+const STATE_VERSION = 19;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 
 function clamp(value, minimum, maximum) {
@@ -193,6 +195,9 @@ export function createGameState(countryId = 'bra') {
     rpg_player: createRpgPlayer(INITIAL_SHELTER_GRID),
     shelter_supplies: { weapons: 0, medkits: 0, food: 0, energy: 0 },
     pendingExpeditionReports: [],
+    expeditionLocation: null,
+    environment: createEnvironmentState(),
+    isNight: false,
     wasteland_turn: 0,
     wastelandMonthCounter: 0,
     wastelandEventCursor: 0,
@@ -1027,6 +1032,7 @@ export function hydrateGameState(serialized) {
     const calendar = parsed.calendar ?? {};
     const laws = parsed.laws?.laborReform ?? {};
     const countryIsWasteland = Boolean(parsed.country?.wasteland);
+    const environment = createEnvironmentState(parsed.environment ?? {});
     const shelterGrid = normalizeShelterGrid(parsed.shelter_grid ?? migrateLegacyRooms(parsed.bunker_rooms));
     const hydrated = {
       ...base,
@@ -1046,6 +1052,11 @@ export function hydrateGameState(serialized) {
         bio_timer: Math.max(0, Math.floor(Number(parsed.country?.bio_timer) || 0)),
         has_nukes: base.country.has_nukes,
       },
+      environment,
+      isNight: environment.isNight,
+      expeditionLocation: typeof parsed.expeditionLocation?.city === 'string'
+        ? createExpeditionLocation(parsed.expeditionLocation.city, parsed.expeditionLocation.source)
+        : null,
       calendar: {
         month: clamp(Math.floor(Number(calendar.month) || 1), 1, 12),
         year: clamp(Math.floor(Number(calendar.year) || 2026), 1900, 2500),
@@ -1194,7 +1205,14 @@ export function hydrateGameState(serialized) {
       },
       pendingExpeditionReports: Array.isArray(parsed.pendingExpeditionReports)
         ? parsed.pendingExpeditionReports.filter((report) => typeof report?.id === 'string'
-          && typeof report.inhabitantId === 'string' && typeof report.success === 'boolean').slice(0, 16)
+          && typeof report.inhabitantId === 'string' && typeof report.success === 'boolean').map((report) => ({
+          id: report.id,
+          inhabitantId: report.inhabitantId,
+          success: report.success,
+          destination: typeof report.destination === 'string' ? report.destination.slice(0, 120) : null,
+          vipFound: report.vipFound === true,
+          vipName: typeof report.vipName === 'string' ? report.vipName.slice(0, 60) : null,
+        })).slice(0, 16)
         : [],
       wasteland_turn: Math.max(0, Math.floor(Number(parsed.wasteland_turn ?? parsed.wastelandMonthCounter) || 0)),
       wastelandMonthCounter: Math.max(0, Math.floor(Number(parsed.wasteland_turn ?? parsed.wastelandMonthCounter) || 0)),

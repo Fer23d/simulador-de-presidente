@@ -17,6 +17,8 @@ import { INTERNAL_PROJECTS } from '../core/infrastructure.js';
 import { broadcastShelterSignal, buildShelterRoom, calculateShelterCapacity, equipShelterGuard, findBuildSlots, getRoom, INITIAL_SHELTER_GRID, repairShelterGenerator, SHELTER_TYPES, upgradeShelterRoom, useShelterMedkit } from '../core/shelter_engine.js';
 import { createRpgBunkerEngine } from '../core/rpg_bunker.js';
 import { canResolveWastelandEvent, detainRebel, dismissExpeditionReport, getWastelandEvent, resolveWastelandEvent, startExpedition } from '../core/game_mechanics.js';
+import { advanceEnvironmentCycle } from '../core/environment.js';
+import { createExpeditionLocation, resolveExpeditionLocation } from '../core/expeditions.js';
 import {
   advanceMonth,
   absorverPaisParaUniao,
@@ -355,9 +357,23 @@ export function bunkerView(state) {
     <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2></div><div class="bunker-header-actions"><button type="button" class="primary-action" data-action="advance" ${state.pendingExpeditionReports?.length || state.pendingBunkerEvent ? 'disabled' : ''}>[ AVANÇAR MÊS ]</button><button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button></div></div>
     <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'scrap'))}</span><span>CIÊNCIA ${formatNumber.format(state.science ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'science'))}</span><span>COMIDA ${formatNumber.format(state.shelter_supplies?.food ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'food'))}</span><span>ENERGIA ${formatNumber.format(state.shelter_supplies?.energy ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'energy'))}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'weapons'))}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'medkits'))}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
     <div class="bunker-build-controls" hidden aria-label="Módulos de construção">${modules.map(([id, module]) => `<button type="button" class="bunker-module-button" data-action="shelter-module" data-module="${id}" aria-pressed="${id === 'dormitory'}" ${state.scrap < module.cost ? 'disabled' : ''}>${module.name}<small>${module.cost} sucatas</small></button>`).join('')}<div class="bunker-slot-controls"><label for="shelter-build-slot">Setor livre</label><select id="shelter-build-slot" class="bunker-build-slot"></select><button type="button" class="primary-action" data-action="shelter-place">[ CONSTRUIR ]</button></div></div>
-    <div class="bunker-stage"><canvas id="shelterCanvas" class="bunker-canvas" width="960" height="600" tabindex="0" aria-label="Bunker lateral. A e D movem o Presidente, W e S operam o elevador, E interage. Na construção, clique num setor livre."></canvas><div class="bunker-tooltip" data-bunker-tooltip role="status" hidden></div></div>
+    <div class="bunker-stage"><canvas id="shelterCanvas" class="bunker-canvas" width="960" height="600" tabindex="0" aria-label="Bunker lateral. A e D movem o Presidente, W e S operam o elevador, E interage. Na construção, clique num setor livre."></canvas>${bunkerEnvironmentHudView(state.environment, state.isNight)}<div class="bunker-tooltip" data-bunker-tooltip role="status" hidden></div></div>
     <div class="bunker-foot"><div><p class="bunker-status" data-shelter-status role="status">PRESIDENTE EM PATRULHA</p><p class="bunker-notice ${state.notice?.includes('SINAL DO EXPLORADOR') || state.notice?.includes('ALERTA CRÍTICO') ? 'danger' : ''}" role="status">${escapeHtml(state.notice ?? '')}</p></div><div class="shelter-room-controls"><label for="shelter-room-select">Setor</label><select id="shelter-room-select" class="bunker-build-slot">${rooms.map((room) => `<option value="${room.floor}:${room.column}">${SHELTER_TYPES[room.type].name} · A${room.floor + 1} S${room.column}</option>`).join('')}</select><button type="button" class="quiet-action" data-action="shelter-open-room">[ GERIR SALA ]</button></div></div>
   </section>`;
+}
+
+function formatEnvironmentClock(milliseconds) {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1_000));
+  return `${String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:${String(totalSeconds % 60).padStart(2, '0')}`;
+}
+
+export function bunkerEnvironmentHudView(environment = {}, isNight = environment?.isNight === true) {
+  const cycle = advanceEnvironmentCycle({ ...environment, isNight }, 0);
+  const phaseName = cycle.isNight ? 'NOITE' : 'DIA';
+  const phaseElapsed = cycle.isNight ? cycle.elapsedMs - 300_000 : cycle.elapsedMs;
+  const remaining = 300_000 - phaseElapsed;
+  const progressPercent = Math.max(0, Math.min(100, cycle.progress * 100));
+  return `<aside class="bunker-environment-hud ${cycle.isNight ? 'is-night' : 'is-day'}" data-environment-hud role="status" aria-label="Ciclo ${phaseName.toLowerCase()}"><span class="environment-phase-icon" aria-hidden="true">${cycle.isNight ? '☾' : '☼'}</span><span class="environment-phase-label">${phaseName}</span><span class="environment-phase-clock">${formatEnvironmentClock(remaining)}</span><span class="environment-progress" role="meter" aria-label="Progresso do turno ${phaseName.toLowerCase()}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progressPercent.toFixed(0)}"><span style="width:${progressPercent.toFixed(2)}%"></span></span></aside>`;
 }
 
 export function renderRoomManagement(state, room) {
@@ -384,7 +400,11 @@ export function renderRoomManagement(state, room) {
 export function expeditionLogisticsView(state) {
   const inhabitants = state.inhabitants ?? [];
   if (!inhabitants.length) return '<p class="shelter-empty">Nenhum habitante disponível para expedição.</p>';
-  return `<section class="expedition-logistics" aria-label="Logística de expedição"><h3>LOGÍSTICA DE EXPEDIÇÃO</h3><p>Missões de três meses. A superfície não oferece garantias de retorno.</p><ul>${inhabitants.map((npc) => {
+  const location = state.expeditionLocation ?? createExpeditionLocation();
+  const attribution = location.source === 'geolocation'
+    ? '<small class="expedition-attribution">Localização aproximada por <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>.</small>'
+    : '<small class="expedition-attribution">Localização indisponível; destinos genéricos em uso.</small>';
+  return `<section class="expedition-logistics" aria-label="Logística de expedição"><h3>LOGÍSTICA DE EXPEDIÇÃO</h3><p>Missões de três meses. A superfície não oferece garantias de retorno.</p><p class="expedition-privacy">A posição aproximada é consultada no serviço OpenStreetMap Nominatim; apenas o nome da cidade é salvo.</p><p class="expedition-location">SETOR EXTERNO: ${escapeHtml(location.city)}</p>${attribution}<label class="expedition-route-label" for="expedition-destination">Destino</label><select id="expedition-destination" class="bunker-build-slot" data-expedition-destination>${location.nodes.map((node) => `<option value="${escapeHtml(node)}">${escapeHtml(node)}</option>`).join('')}</select><ul>${inhabitants.map((npc) => {
     const unavailable = npc.currentState === 'rebel' || npc.is_prisoner || npc.is_on_expedition;
     const status = npc.is_on_expedition ? `EM EXPEDIÇÃO · ${npc.expedition_timer} MESES`
       : npc.is_prisoner ? 'DETIDO' : npc.currentState === 'rebel' ? 'REBELDE' : 'SAUDÁVEL';
@@ -396,7 +416,7 @@ export function expeditionReportView(state) {
   const report = state.pendingExpeditionReports?.[0];
   if (!report) return '';
   const message = report.success
-    ? `> ${escapeHtml(report.inhabitantId)} regressou da superfície.\n> RECUPERADO: 500 SUCATAS / 1 PONTO DE TECNOLOGIA.${report.vipFound ? `\n> ESPECIALISTA RESGATADO: ⭐ ${escapeHtml(report.vipName)} (MODIFICADOR x2).` : ''}`
+    ? `> ${escapeHtml(report.inhabitantId)} regressou da superfície.${report.destination ? `\n> DESTINO: ${escapeHtml(report.destination)}.` : ''}\n> RECUPERADO: 500 SUCATAS / 1 PONTO DE TECNOLOGIA.${report.vipFound ? `\n> ESPECIALISTA RESGATADO: ⭐ ${escapeHtml(report.vipName)} (MODIFICADOR x2).` : ''}`
     : `> O SINAL DE ${escapeHtml(report.inhabitantId)} FOI PERDIDO NO WASTELAND.`;
   return `<section class="bunker-dialog expedition-report" role="dialog" aria-modal="true" aria-labelledby="expedition-report-title"><p class="eyebrow">/// RELATÓRIO DE MISSÃO ///</p><h2 id="expedition-report-title">${report.success ? 'Explorador retornou' : 'Sinal perdido'}</h2><pre>${message}</pre><button type="button" class="primary-action" data-action="dismiss-expedition-report">[ ARQUIVAR RELATÓRIO ]</button></section>`;
 }
@@ -650,9 +670,12 @@ export function mountDashboard(root) {
   let bunkerController = null;
   let bunkerBuildMode = false;
   let bunkerBuildType = 'dormitory';
+  let locationRequestPending = false;
+  let activeShelterRoom = null;
 
-  function openShelterRoom(room) {
+  function openShelterRoom(room, { requestLocation = true } = {}) {
     if (!room || !bunkerGeneratorModal) return;
+    activeShelterRoom = room;
     const isGenerator = room.type === 'generator';
     const description = {
       vault: 'Porta blindada e centro de comando dos sobreviventes.',
@@ -671,6 +694,16 @@ export function mountDashboard(root) {
 &gt; ${description}</pre>${room.type === 'vault' ? expeditionLogisticsView(state) : ''}<div class="action-row">${isGenerator && !room.operational ? `<button type="button" class="primary-action" data-action="repair-generator" data-floor="${room.floor}" data-column="${room.column}" ${state.scrap >= 25 ? '' : 'disabled'}>[ REPARAR: 25 SUCATAS ]</button>` : ''}${room.type === 'arsenal' ? `<button type="button" class="primary-action" data-action="equip-guard" ${state.shelter_supplies?.weapons > 0 ? '' : 'disabled'}>[ EQUIPAR GUARDA: 1 ARMA ]</button>` : ''}${room.type === 'medical' ? `<button type="button" class="primary-action" data-action="treat-radiation" ${state.shelter_supplies?.medkits > 0 ? '' : 'disabled'}>[ TRATAR RADIAÇÃO: 1 CURATIVO ]</button>` : ''}${room.type === 'radio' ? `<button type="button" class="primary-action" data-action="broadcast-radio" ${state.scrap >= 10 ? '' : 'disabled'}>[ TRANSMITIR SINAL: 10 SUCATAS ]</button>` : ''}${room.type === 'office' ? (state.geopolitics?.contacts ?? []).map((contact) => `<button type="button" class="quiet-action" data-action="vault-scout" data-contact="${escapeHtml(contact.id)}" ${state.scrap >= 25 ? '' : 'disabled'}>[ BATEDORES: ${escapeHtml(contact.name)} ]</button>`).join('') : ''}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div></section>`;
     bunkerGeneratorModal.hidden = false;
     bunkerController?.pause();
+    if (requestLocation && room.type === 'vault' && !state.expeditionLocation && !locationRequestPending) {
+      locationRequestPending = true;
+      void resolveExpeditionLocation().then((location) => {
+        state = { ...state, expeditionLocation: location };
+        storageNotice = saveState(state);
+        if (activeShelterRoom?.type === 'vault' && !bunkerGeneratorModal.hidden) {
+          openShelterRoom(activeShelterRoom, { requestLocation: false });
+        }
+      }).finally(() => { locationRequestPending = false; });
+    }
   }
 
   function refreshShelterSlots() {
@@ -732,6 +765,8 @@ export function mountDashboard(root) {
         player: bunkerSnapshot?.player ?? state.rpg_player,
         inhabitants: state.inhabitants,
         cabinFloor: bunkerSnapshot?.cabinFloor,
+        environment: bunkerSnapshot?.environment ?? state.environment,
+        isNight: state.isNight,
         onBuild: (type, floor, column) => commit(buildShelterRoom(state, type, floor, column)),
         onPlayerChanged: (player) => {
           state = { ...state, rpg_player: player };
@@ -740,6 +775,12 @@ export function mountDashboard(root) {
         onInhabitantsChanged: (inhabitants) => {
           state = { ...state, inhabitants };
           storageNotice = saveState(state);
+        },
+        onEnvironmentChanged: (environment, { persist }) => {
+          state = { ...state, environment: { elapsedMs: environment.elapsedMs }, isNight: environment.isNight };
+          const hud = root.querySelector('[data-environment-hud]');
+          if (hud) hud.outerHTML = bunkerEnvironmentHudView(environment, environment.isNight);
+          if (persist) storageNotice = saveState(state);
         },
         onRoom: openShelterRoom,
         onDetain: (inhabitantId) => commit(detainRebel(state, inhabitantId)),
@@ -1028,16 +1069,20 @@ export function mountDashboard(root) {
     }
     if (action === 'close-bunker-modal') {
       bunkerGeneratorModal.hidden = true;
+      activeShelterRoom = null;
       bunkerController?.resume();
     }
     if (action === 'start-expedition') {
+      const destination = root.querySelector('[data-expedition-destination]')?.value ?? null;
       bunkerGeneratorModal.hidden = true;
+      activeShelterRoom = null;
       bunkerController?.resume();
-      commit(startExpedition(state, button.dataset.inhabitant));
+      commit(startExpedition(state, button.dataset.inhabitant, destination));
       root.querySelector('#shelterCanvas')?.focus();
     }
     if (action === 'repair-generator' || action === 'equip-guard' || action === 'treat-radiation' || action === 'broadcast-radio' || action === 'vault-scout') {
       bunkerGeneratorModal.hidden = true;
+      activeShelterRoom = null;
       bunkerController?.resume();
       const floor = Number(button.dataset.floor);
       const column = Number(button.dataset.column);

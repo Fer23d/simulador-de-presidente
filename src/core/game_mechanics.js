@@ -1,5 +1,7 @@
 import { nextRandom } from './geopolitics.js';
 import { getRoomWorkforce } from './bunker_economy.js';
+import { getNighttimeRiskChance } from './environment.js';
+import { createExpeditionNodes } from './expeditions.js';
 
 const EXPEDITION_MONTHS = 3;
 const EXPEDITION_SUCCESS_CHANCE = 0.7;
@@ -83,17 +85,19 @@ export function getRoomProductivityMultiplier(state, room) {
   return getRoomWorkforce(state, room).effective;
 }
 
-export function startExpedition(state, inhabitantId) {
+export function startExpedition(state, inhabitantId, destination = null) {
   const inhabitant = state.inhabitants?.find((item) => item.id === inhabitantId);
   if (!state.is_wasteland || !inhabitant || inhabitant.is_on_expedition || inhabitant.is_prisoner || inhabitant.currentState === 'rebel') {
     return { ...state, notice: 'Este habitante nao pode iniciar uma expedicao.' };
   }
+  const availableDestinations = state.expeditionLocation?.nodes ?? createExpeditionNodes(state.expeditionLocation?.city);
+  const expeditionDestination = availableDestinations.includes(destination) ? destination : availableDestinations[0];
   return {
     ...state,
     inhabitants: state.inhabitants.map((item) => item.id === inhabitantId
-      ? { ...item, is_on_expedition: true, expedition_timer: EXPEDITION_MONTHS }
+      ? { ...item, is_on_expedition: true, expedition_timer: EXPEDITION_MONTHS, expedition_destination: expeditionDestination }
       : item),
-    notice: `${inhabitant.id} partiu para uma expedicao de tres meses na superficie.`,
+    notice: `${inhabitant.id} partiu para ${expeditionDestination} numa expedicao de tres meses.`,
   };
 }
 
@@ -120,7 +124,8 @@ export function advanceMonthlyGameMechanics(state) {
     randomSeed = roll.seed;
     const success = roll.value < EXPEDITION_SUCCESS_CHANCE;
     const reportIndex = reports.length;
-    reports.push({ id: `${state.monthCounter}-${inhabitant.id}`, inhabitantId: inhabitant.id, success });
+    reports.push({ id: `${state.monthCounter}-${inhabitant.id}`, inhabitantId: inhabitant.id,
+      destination: inhabitant.expedition_destination ?? null, success });
     if (success) {
       inhabitants.push({ ...inhabitant, is_on_expedition: false, expedition_timer: 0 });
       scrap += 500;
@@ -177,7 +182,7 @@ export function advanceMonthlyGameMechanics(state) {
       const roll = nextRandom(randomSeed);
       randomSeed = roll.seed;
       rebellionCheckDone = true;
-      if (roll.value < REBELLION_CHANCE) currentState = 'rebel';
+      if (roll.value < getNighttimeRiskChance(REBELLION_CHANCE, state.isNight === true)) currentState = 'rebel';
     }
     return { ...inhabitant, loyalty, currentState,
       ...(currentState === 'rebel' ? { targetOffsetX: null } : {}), rebellionCheckDone };
@@ -190,7 +195,7 @@ export function advanceMonthlyGameMechanics(state) {
     && inhabitant.currentState === 'rebel' && !inhabitant.is_prisoner && !inhabitant.is_on_expedition)) {
     const attackRoll = nextRandom(randomSeed);
     randomSeed = attackRoll.seed;
-    if (attackRoll.value >= VIP_ASSASSINATION_CHANCE) continue;
+    if (attackRoll.value >= getNighttimeRiskChance(VIP_ASSASSINATION_CHANCE, state.isNight === true)) continue;
     const candidates = updatedInhabitants.filter((inhabitant) => !inhabitant.isVIP
       && inhabitant.currentState !== 'rebel' && !inhabitant.is_prisoner && !inhabitant.is_on_expedition
       && Number.isInteger(inhabitant.workFloor) && Number.isInteger(inhabitant.workColumn)

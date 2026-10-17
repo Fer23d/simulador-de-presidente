@@ -1,12 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  AssetManager, DEFAULT_ASSETS, drawActorSprite, getActorPlacement, renderSpriteScene,
+  AssetManager, DEFAULT_ASSETS, applyNightOverlay, drawActorSprite, getActorPlacement, renderSpriteScene,
   ROOM_FLOOR_THICKNESS, SPRITE_BOTTOM_PADDING,
 } from '../src/core/sprite_engine.js';
 import { buildShelterRoom, cellCenter, FLOOR_SPACING, INITIAL_SHELTER_GRID,
   ROOM_HEIGHT, WORLD_TOP } from '../src/core/shelter_engine.js';
 import { Inhabitant } from '../src/core/inhabitant.js';
+
+test('night overlay tints only the canvas scene and restores the previous composition state', () => {
+  const calls = [];
+  const stack = [];
+  const ctx = {
+    globalAlpha: 1,
+    globalCompositeOperation: 'source-over',
+    save() { stack.push([this.globalAlpha, this.globalCompositeOperation]); },
+    restore() { [this.globalAlpha, this.globalCompositeOperation] = stack.pop(); },
+    fillRect(...args) { calls.push([this.fillStyle, ...args]); },
+  };
+
+  applyNightOverlay(ctx, 960, 600, false);
+  assert.equal(calls.length, 0);
+  applyNightOverlay(ctx, 960, 600, true);
+
+  assert.deepEqual(calls, [['#000', 0, 0, 960, 600]]);
+  assert.equal(ctx.globalAlpha, 1);
+  assert.equal(ctx.globalCompositeOperation, 'source-over');
+});
 
 test('asset manager preloads every image and records failed URLs', async () => {
   class FakeImage {
