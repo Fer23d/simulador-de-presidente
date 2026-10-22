@@ -41,14 +41,14 @@ test('only assigned active staff contributes output and low morale halves each w
 
 test('upgrade prices and supported room levels reach level five', () => {
   const room = { id: 'producer', type: 'generator', floor: 0, column: 2, level: 1, operational: true };
-  assert.deepEqual([1, 2, 3, 4, 5].map((level) => getRoomUpgradeCost({ ...room, level })), [300, 800, 1500, 2500, null]);
+  assert.deepEqual([1, 2, 3, 4, 5].map((level) => getRoomUpgradeCost({ ...room, level })), [330, 880, 1650, 2750, null]);
 
   const grid = normalizeShelterGrid(INITIAL_SHELTER_GRID.map((row) => [...row]));
   grid[0][2] = { ...room, level: 4 };
   const atFour = { is_wasteland: true, scrap: 3000, science: 1500, shelter_grid: grid };
   const upgraded = upgradeShelterRoom(atFour, 0, 2);
   assert.equal(upgraded.shelter_grid[0][2].level, 5);
-  assert.equal(upgraded.scrap, 500);
+  assert.equal(upgraded.scrap, 250);
   assert.equal(upgraded.science, 0);
   assert.equal(upgradeShelterRoom(upgraded, 0, 2).shelter_grid[0][2].level, 5);
 });
@@ -94,7 +94,7 @@ test('room management view shows workers, current and projected production, upgr
   assert.match(markup, /Produção atual<\/dt><dd>400 comida\/mês/);
   assert.match(markup, /Trabalhadores ativos<\/dt><dd>1 \/ 1/);
   assert.match(markup, /Projeção de melhoria<\/dt><dd>Nível 4: 550 comida\/mês/);
-  assert.match(markup, /SUCATA: 1\.500/);
+  assert.match(markup, /SUCATA: 1\.650/);
   assert.match(markup, /CIÊNCIA: 500/);
   assert.match(markup, /resource-cost--short/);
 

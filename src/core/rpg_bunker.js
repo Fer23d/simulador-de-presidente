@@ -16,6 +16,7 @@ const LABELS = Object.freeze({
   greenhouse: 'INSPECIONAR A ESTUFA', dormitory: 'GERIR DORMITÓRIO',
   arsenal: 'ABRIR O ARSENAL', medical: 'ACEDER AO CENTRO MÉDICO',
   radio: 'OPERAR A SALA DE RÁDIO', office: 'ENTRAR NO GABINETE',
+  life_support: 'ACEDER AO SUPORTE DE VIDA',
   detention: 'INSPECIONAR A CELA DE DETENÇÃO',
 });
 
@@ -68,14 +69,15 @@ export function findNearbyRebel(player, grid, inhabitants = []) {
   return { npc: nearby.npc, label: hasCell ? '[ E ] PRENDER DISSIDENTE' : '[ E ] CONSTRUA UMA CELA PARA PRENDER O DISSIDENTE' };
 }
 
-export function updatePlayer(player, input, grid, deltaSeconds) {
+export function updatePlayer(player, input, grid, deltaSeconds, oxygenDeprived = false) {
   const dt = Math.max(0, Math.min(0.05, Number(deltaSeconds) || 0));
+  const movementScale = oxygenDeprived ? 0.5 : 1;
   const next = { ...player };
   next.liftHeld = Boolean(input.up || input.down);
   if (next.liftTarget !== null) {
     const destination = cellCenter(next.liftTarget, 0).y;
     const distance = destination - next.y;
-    next.y += Math.sign(distance) * Math.min(Math.abs(distance), LIFT_SPEED * dt);
+    next.y += Math.sign(distance) * Math.min(Math.abs(distance), LIFT_SPEED * movementScale * dt);
     next.vx = 0;
     next.vy = 0;
     if (next.y === destination) {
@@ -92,7 +94,7 @@ export function updatePlayer(player, input, grid, deltaSeconds) {
     return next;
   }
   const direction = Number(Boolean(input.right)) - Number(Boolean(input.left));
-  next.vx = direction * WALK_SPEED;
+  next.vx = direction * WALK_SPEED * movementScale;
   if (direction) next.facing = direction;
   const proposed = next.x + next.vx * dt;
   const column = Math.floor((proposed - WORLD_LEFT) / SLOT_WIDTH);
@@ -192,7 +194,8 @@ export const renderRpgBunker = renderSpriteScene;
 
 export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, player: savedPlayer,
   inhabitants = [], cabinFloor: savedCabinFloor, onBuild, onRoom, onPlayerChanged, onInhabitantsChanged, onHint,
-  onDetain, onAssetsReady, onEnvironmentChanged, environment = {}, isNight = environment?.isNight ?? false, assetUrls = {} } = {}) {
+  onDetain, onAssetsReady, onEnvironmentChanged, environment = {}, isNight = environment?.isNight ?? false,
+  oxygenDeprived = false, assetUrls = {} } = {}) {
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
   const assets = new AssetManager({ ...DEFAULT_ASSETS, ...assetUrls });
@@ -234,11 +237,12 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     if (!paused && !buildMode) {
       const previousFloor = player.floor;
       player = updatePlayer(player, { left: keys.has('a') || keys.has('arrowleft'), right: keys.has('d') || keys.has('arrowright'),
-        up: keys.has('w') || keys.has('arrowup'), down: keys.has('s') || keys.has('arrowdown') }, grid, dt);
+        up: keys.has('w') || keys.has('arrowup'), down: keys.has('s') || keys.has('arrowdown') }, grid, dt, oxygenDeprived);
       if (player.liftTarget !== null || getRoom(grid, player.floor, playerColumn(player))?.type === 'elevator') cabinFloor = player.floor;
       if (player.floor !== previousFloor) { cabinFloor = player.floor; savePlayer(); }
       if (Math.abs(player.vx) > 0 && time - lastSave > 700) { savePlayer(); lastSave = time; }
-      for (const actor of actors) actor.update(dt, getNpcMovementDelta(1, dayNight.isNight, activeGenerators));
+      const oxygenMovementDelta = oxygenDeprived ? 0.5 : 1;
+      for (const actor of actors) actor.update(dt, getNpcMovementDelta(1, dayNight.isNight, activeGenerators) * oxygenMovementDelta);
       if (time - lastNpcSave > 2500) {
         onInhabitantsChanged?.(actors.map((actor) => actor.snapshot()));
         lastNpcSave = time;
@@ -249,7 +253,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     camera.offset_x += (targetX - camera.offset_x) * Math.min(1, dt * 8);
     camera.offset_y += (targetY - camera.offset_y) * Math.min(1, dt * 8);
     renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants: actors, cabinFloor, time,
-      isNight: dayNight.isNight, activeGenerators });
+      isNight: dayNight.isNight, activeGenerators, oxygenDeprived });
     const rebel = findNearbyRebel(player, grid, actors.map((actor) => actor.snapshot()));
     const hint = paused || buildMode ? '' : rebel?.label || getElevatorPrompt(player, grid) || findNearbyTrigger(player, grid)?.label || '';
     if (hint !== lastHint) { lastHint = hint; onHint?.(hint); }

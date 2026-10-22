@@ -76,6 +76,8 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 .bunker-header-actions button { white-space: nowrap; }
 .bunker-hud { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 12px 0; color: var(--phosphor); font-size: 13px; text-transform: uppercase; }
 .bunker-hud span { border: 1px solid var(--line); padding: 6px 8px; background: rgba(255, 122, 24, .06); }
+.bunker-hud .oxygen-deprived { color: #ff7893; border-color: #d63c67; animation: oxygen-hud-pulse 1.8s ease-in-out infinite; }
+@keyframes oxygen-hud-pulse { 50% { box-shadow: 0 0 9px rgba(214, 60, 103, .42); } }
 .bunker-canvas { display: block; width: 100%; aspect-ratio: 8 / 5; margin: 12px auto 0; border: 4px double var(--amber); background: #252523; outline: none; box-shadow: 0 0 22px rgba(255, 122, 24, .24); cursor: crosshair; touch-action: none; }
 .bunker-stage { position: relative; }
 .bunker-environment-hud { position: absolute; z-index: 1; top: 24px; right: 24px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 8px; min-width: 238px; padding: 7px 9px; border: 1px solid var(--amber); background: rgba(8, 7, 5, .88); color: var(--phosphor); font: 13px/1.2 "Share Tech Mono", monospace; pointer-events: none; text-shadow: 0 0 6px currentColor; }

@@ -10,9 +10,12 @@ import { bunkerView, expeditionLogisticsView, expeditionReportView } from '../sr
 function wastelandState() {
   const base = createGameState('bra');
   const wasteland = transicionarParaWasteland(base);
+  const shelterGrid = wasteland.shelter_grid.map((row) => [...row]);
+  shelterGrid[0][4] = { id: 'life-support-0-4', type: 'life_support', floor: 0, column: 4, level: 1 };
   return {
     ...wasteland,
     randomSeed: 1,
+    shelter_grid: shelterGrid,
     country: { ...wasteland.country, populacao: 1000, populacao_base: 1000 },
     shelter_supplies: { ...wasteland.shelter_supplies, food: 100, energy: 100 },
   };
@@ -108,6 +111,9 @@ test('zero food or energy reduces loyalty gradually without an automatic rebelli
   const prepared = wastelandState();
   const state = {
     ...prepared,
+    shelter_grid: prepared.shelter_grid.map((row, floor) => row.map((room, column) => floor === 0 && column === 2
+      ? { id: 'test-life-support', type: 'life_support', floor, column, level: 5 }
+      : room)),
     shelter_supplies: { ...prepared.shelter_supplies, food: 0, energy: 0 },
     inhabitants: prepared.inhabitants.map((npc) => ({ ...npc, loyalty: 30 })),
   };
@@ -213,7 +219,7 @@ test('wasteland supplies, rebel status, active expeditions, and reports survive 
   assert.equal(restored.inhabitants[1].currentState, 'rebel');
   assert.equal(restored.shelter_grid[0][2].type, 'detention');
   assert.equal(restored.pendingExpeditionReports[0].id, 'report-1');
-  assert.equal(restored.version, 19);
+  assert.equal(restored.version, 20);
 });
 
 test('bunker UI exposes food, energy, expedition logistics, and a blocking mission report', () => {

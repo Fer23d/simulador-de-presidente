@@ -9,6 +9,7 @@ const ATLAS_CELLS = Object.freeze({
 const ROOM_AMBIENT_LIGHTS = Object.freeze({
   medical: Object.freeze(['rgba(200, 240, 255, .3)', 'rgba(200, 240, 255, .12)']),
   laboratory: Object.freeze(['rgba(100, 255, 100, .2)', 'rgba(100, 255, 100, .08)']),
+  life_support: Object.freeze(['rgba(150, 225, 255, .2)', 'rgba(100, 190, 225, .08)']),
 });
 const NPC_ROWS = Object.freeze({ resident: 0, engineer: 0, scientist: 1, medic: 2, guard: 3 });
 const frameBoundsCache = new WeakMap();
@@ -28,6 +29,7 @@ export const DEFAULT_ASSETS = Object.freeze({
   dirt_texture: './assets/img/dirt_texture.png',
   room_atlas: './assets/img/room_atlas.png',
   room_laboratory: './assets/img/room_laboratory.png',
+  room_life_support: './assets/img/room_life_support.png',
   elevator_cabin: './assets/img/elevator_cabin.png',
   character_sheet: './assets/img/character_sheet.png',
   npc_walk_sheet: './assets/img/npc_walk_sheet.png',
@@ -95,7 +97,7 @@ function renderDirt(ctx, camera, assets) {
   ctx.fillRect(0, top, ctx.canvas.width, ctx.canvas.height - top);
 }
 
-export function renderRoom(ctx, room, assets) {
+export function renderRoom(ctx, room, assets, time = 0) {
   const x = WORLD_LEFT + room.column * SLOT_WIDTH;
   const y = WORLD_TOP + room.floor * FLOOR_SPACING;
   if (room.type === 'greenhouse') {
@@ -113,6 +115,21 @@ export function renderRoom(ctx, room, assets) {
     renderRoomAmbientLight(ctx, room, x, y);
     return;
   }
+  if (room.type === 'life_support') {
+    const supportRoom = assets.getImage('room_life_support');
+    const emptyBase = assets.getImage('room_base_empty');
+    if (supportRoom || emptyBase) drawOrMissing(ctx, supportRoom ?? emptyBase, x, y, SLOT_WIDTH, ROOM_HEIGHT);
+    else {
+      const atlas = assets.getImage('room_atlas');
+      const cellWidth = atlas?.width / 3;
+      const cellHeight = atlas?.height / 3;
+      drawOrMissing(ctx, atlas, x, y, SLOT_WIDTH, ROOM_HEIGHT,
+        atlas ? [0, cellHeight * 2, cellWidth, cellHeight] : null);
+    }
+    renderLifeSupportDetails(ctx, x, y, time);
+    renderRoomAmbientLight(ctx, room, x, y);
+    return;
+  }
   const individual = assets.getImage(`room_${room.type}`);
   if (individual) {
     drawOrMissing(ctx, individual, x, y, SLOT_WIDTH, ROOM_HEIGHT);
@@ -125,6 +142,56 @@ export function renderRoom(ctx, room, assets) {
       atlas ? [column * cellWidth, row * cellHeight, cellWidth, cellHeight] : null);
   }
   renderRoomAmbientLight(ctx, room, x, y);
+}
+
+function renderLifeSupportDetails(ctx, x, y, time = 0) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x + 4, y + 4, SLOT_WIDTH - 8, ROOM_HEIGHT - 8);
+  ctx.clip();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  ctx.strokeStyle = 'rgba(164, 224, 239, .82)';
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(x + 8, y + 28);
+  ctx.lineTo(x + SLOT_WIDTH - 10, y + 28);
+  ctx.lineTo(x + SLOT_WIDTH - 10, y + 50);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(245, 250, 246, .72)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x + 8, y + 36);
+  ctx.lineTo(x + SLOT_WIDTH - 20, y + 36);
+  ctx.stroke();
+
+  for (const centerX of [x + 57, x + 132, x + 207]) {
+    const centerY = y + 91;
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.fillStyle = 'rgba(18, 36, 42, .88)';
+    ctx.strokeStyle = '#a8d8df';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(0, 0, 28, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.rotate(time * 0.006);
+    ctx.fillStyle = 'rgba(154, 212, 222, .9)';
+    for (let blade = 0; blade < 4; blade++) {
+      ctx.rotate(Math.PI / 2);
+      ctx.beginPath();
+      ctx.ellipse(0, -13, 6, 12, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#d9f0f1';
+    ctx.beginPath();
+    ctx.arc(0, 0, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
 }
 
 function renderRoomAmbientLight(ctx, room, x, y) {
@@ -241,8 +308,18 @@ export function applyNightOverlay(ctx, width, height, isNight, { activeGenerator
   ctx.restore();
 }
 
+export function applyOxygenDeprivationOverlay(ctx, width, height, oxygenDeprived, time = 0) {
+  if (!oxygenDeprived) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-atop';
+  ctx.globalAlpha = 0.055 + (Math.sin(time / 520) + 1) * 0.018;
+  ctx.fillStyle = '#9b275f';
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
+}
+
 export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants = [], cabinFloor = player.floor,
-  time = 0, isNight = false, activeGenerators = 0 }) {
+  time = 0, isNight = false, activeGenerators = 0, oxygenDeprived = false }) {
   renderSurface(ctx, camera, assets);
   renderDirt(ctx, camera, assets);
   ctx.save();
@@ -252,7 +329,7 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
     for (let column = 0; column < grid[floor].length; column++) {
       const room = grid[floor][column];
       if (!room) continue;
-      renderRoom(ctx, room, assets);
+      renderRoom(ctx, room, assets, time);
       if (room.type === 'elevator' && atlas && grid[floor + 1]?.[column]?.type === 'elevator') {
         const cellWidth = atlas.width / 3;
         const cellHeight = atlas.height / 3;
@@ -319,6 +396,7 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
     const surfaceHeight = Math.max(0, Math.min(ctx.canvas.height, SURFACE_Y + camera.offset_y));
     applyNightOverlay(ctx, ctx.canvas.width, ctx.canvas.height, true, { activeGenerators, surfaceHeight });
   }
+  if (ctx.canvas) applyOxygenDeprivationOverlay(ctx, ctx.canvas.width, ctx.canvas.height, oxygenDeprived, time);
 }
 
 function renderDetentionBars(ctx, room) {

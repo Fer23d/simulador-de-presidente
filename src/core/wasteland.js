@@ -1,8 +1,11 @@
 import { calculateShelterCapacity, INITIAL_SHELTER_GRID, normalizeShelterGrid } from './shelter_engine.js';
-import { getBunkerEnergyConsumption, getBunkerFoodConsumption, getRoomEconomyProfile, getRoomStorageCapacity } from './bunker_economy.js';
+import { getBunkerEnergyConsumption, getBunkerFoodConsumption, getBunkerOxygenConsumption,
+  getLifeSupportEnergyMaintenance, getLifeSupportOxygenProduction, getRoomEconomyProfile,
+  getRoomStorageCapacity } from './bunker_economy.js';
 import { createInitialInhabitants, createRpgPlayer } from './rpg_bunker.js';
 import { advanceMonthlyGameMechanics, getRoomProductivityMultiplier, getWastelandEvent, WASTELAND_EVENTS } from './game_mechanics.js';
 import { createEnvironmentState } from './environment.js';
+import { nextRandom } from './geopolitics.js';
 
 const VAULT_CASH_COST = 500_000_000_000;
 const VAULT_STEEL_COST = 50_000;
@@ -69,7 +72,9 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
     wastelandMonthCounter: 0,
     wastelandEventCursor: 0,
     rpg_player: createRpgPlayer(INITIAL_SHELTER_GRID),
-    shelter_supplies: { weapons: 0, medkits: 0, food: 20, energy: 20 },
+    shelter_supplies: { weapons: 0, medkits: 0, food: 20, energy: 20, oxygen: 300 },
+    oxygen_shortage_turns: 0,
+    oxygen_deprived: false,
     shelter_guards: 0,
     shelter_radiation: 25,
     vault_built: true,
@@ -116,6 +121,7 @@ export function advanceWastelandMonth(state) {
     total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0);
   const foodProduction = activeGreenhouses.reduce((total, room) =>
     total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0);
+  const oxygenProduction = getLifeSupportOxygenProduction(grid);
   const scienceProduction = laboratories.reduce((total, room) =>
     total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0);
   const generatorWorkUnits = generators.reduce((total, room) =>
@@ -129,13 +135,20 @@ export function advanceWastelandMonth(state) {
   const offices = countLevels('office');
   const population = Math.min(calculateShelterCapacity(grid), state.country.populacao_base + greenhouseWorkUnits * 5 + medical * 2 + radio * 3);
   const foodConsumption = getBunkerFoodConsumption(state, population);
-  const energyConsumption = getBunkerEnergyConsumption(state, population);
+  const energyConsumption = getBunkerEnergyConsumption(state, population) + getLifeSupportEnergyMaintenance(grid);
+  const oxygenConsumption = getBunkerOxygenConsumption(state, grid);
+  const oxygenCapacity = getRoomStorageCapacity(grid, 'oxygen');
+  const oxygenDeficit = oxygenProduction < oxygenConsumption;
   const supplies = {
     weapons: Math.min(getRoomStorageCapacity(grid, 'weapons'), (Number(state.shelter_supplies?.weapons) || 0) + arsenals),
     medkits: Math.min(getRoomStorageCapacity(grid, 'medkits'), (Number(state.shelter_supplies?.medkits) || 0) + medical * 2),
     food: Math.min(getRoomStorageCapacity(grid, 'food'), Math.max(0, (Number(state.shelter_supplies?.food) || 0) + foodProduction - foodConsumption)),
     energy: Math.min(getRoomStorageCapacity(grid, 'energy'), Math.max(0, (Number(state.shelter_supplies?.energy) || 0) + energyProduction - energyConsumption)),
+    oxygen: Math.min(oxygenCapacity, Math.max(0, (Number(state.shelter_supplies?.oxygen) || 0) + oxygenProduction - oxygenConsumption)),
   };
+  const oxygenShortageTurns = oxygenDeficit
+    ? Math.max(0, Math.floor(Number(state.oxygen_shortage_turns) || 0)) + 1
+    : 0;
   const wastelandMonthCounter = Math.max(0, Math.floor(Number(state.wasteland_turn ?? state.wastelandMonthCounter) || 0)) + 1;
   const nextGrid = grid.map((row) => row.map((room) => room?.type === 'greenhouse' && room.disabledMonthsRemaining > 0
     ? { ...room, disabledMonthsRemaining: room.disabledMonthsRemaining - 1 }
@@ -151,11 +164,41 @@ export function advanceWastelandMonth(state) {
     science: Math.min(getRoomStorageCapacity(grid, 'science'), (Number(state.science) || 0) + scienceProduction),
     scrap: Math.min(getRoomStorageCapacity(grid, 'scrap'), (Number(state.scrap) || 0) + 25 + generatorWorkUnits * 15 + offices * 5),
     shelter_supplies: supplies,
+    oxygen_shortage_turns: oxygenShortageTurns,
+    oxygen_deprived: oxygenDeficit,
     shelter_radiation: Math.max(0, Math.min(100, (Number(state.shelter_radiation) || 0) + 2 - medical)),
     country: { ...state.country, populacao: population, populacao_base: population },
     notice: 'O Vault sobrevive mais um mês. Os módulos operacionais sustentam a população.',
   };
-  const processed = advanceMonthlyGameMechanics(advanced);
+  let processed = advanceMonthlyGameMechanics(advanced);
+  if (oxygenDeficit) {
+    processed = {
+      ...processed,
+      inhabitants: (processed.inhabitants ?? []).map((inhabitant) => inhabitant.is_on_expedition
+        ? inhabitant
+        : { ...inhabitant, loyalty: Math.max(0, Number(inhabitant.loyalty ?? 100) - 25) }),
+    };
+    const victims = processed.inhabitants.filter((inhabitant) => !inhabitant.is_on_expedition && !inhabitant.is_prisoner);
+    let randomSeed = processed.randomSeed;
+    let suffocationNotice = null;
+    if (oxygenShortageTurns >= 3 && victims.length) {
+      const deathRoll = nextRandom(randomSeed);
+      randomSeed = deathRoll.seed;
+      if (deathRoll.value < 0.3) {
+        const victimRoll = nextRandom(randomSeed);
+        randomSeed = victimRoll.seed;
+        const victim = victims[Math.floor(victimRoll.value * victims.length)];
+        processed = { ...processed, inhabitants: processed.inhabitants.filter((inhabitant) => inhabitant.id !== victim.id) };
+        suffocationNotice = `> ASFIXIA: ${victim.name || victim.id} morreu por falta de oxigênio.`;
+      }
+    }
+    processed = {
+      ...processed,
+      randomSeed,
+      notice: [processed.notice, suffocationNotice ?? '> ALERTA: produção de oxigênio insuficiente. Habitantes perdem lealdade e mobilidade.']
+        .filter(Boolean).join(' '),
+    };
+  }
   if (wastelandMonthCounter % 3 !== 0 || processed.pendingBunkerEvent) return processed;
   const cursor = advanced.wastelandEventCursor;
   let selectedIndex = -1;
@@ -169,11 +212,13 @@ export function advanceWastelandMonth(state) {
     }
   }
   if (selectedIndex < 0) return processed;
+  const urgentNotice = /SINAL DO EXPLORADOR|ALERTA CRÍTICO|ASFIXIA|oxigênio insuficiente/i.test(processed.notice ?? '')
+    ? `${processed.notice} ` : '';
   return {
     ...processed,
     pendingBunkerEvent: { id: WASTELAND_EVENTS[selectedIndex].id },
     wastelandEventCursor: (selectedIndex + 1) % WASTELAND_EVENTS.length,
-    notice: `${processed.notice?.includes('SINAL DO EXPLORADOR') || processed.notice?.includes('ALERTA CRÍTICO') ? `${processed.notice} ` : ''}Uma decisao urgente aguarda o comando do Vault.`,
+    notice: `${urgentNotice}Uma decisao urgente aguarda o comando do Vault.`,
   };
 }
 

@@ -31,7 +31,7 @@ test('o Vault comeca como uma sala inteira ao lado do elevador', () => {
 test('construcao desconta sucata, exige suporte e nao altera o estado anterior', () => {
   const state = { is_wasteland: true, scrap: 200, shelter_grid: INITIAL_SHELTER_GRID };
   const built = buildShelterRoom(state, 'dormitory', 0, 2);
-  assert.equal(built.scrap, 120);
+  assert.equal(built.scrap, 112);
   assert.equal(getRoom(built.shelter_grid, 0, 2).type, 'dormitory');
   assert.equal(getRoom(state.shelter_grid, 0, 2), null);
   assert.equal(buildShelterRoom(state, 'dormitory', 1, 2).shelter_grid, state.shelter_grid);
@@ -126,7 +126,7 @@ test('gerador precisa de reparo; upgrades geram beneficios persistentes', () => 
   const repaired = repairShelterGenerator(built, 0, 2);
   assert.equal(repaired.scrap, built.scrap - 25);
   assert.equal(advanceWastelandMonth(repaired).scrap, repaired.scrap + 40);
-  const readyToUpgrade = { ...repaired, scrap: 300 };
+  const readyToUpgrade = { ...repaired, scrap: 330 };
   const upgraded = upgradeShelterRoom(readyToUpgrade, 0, 2);
   assert.equal(getRoom(upgraded.shelter_grid, 0, 2).level, 2);
   assert.equal(upgraded.scrap, 0);
@@ -144,7 +144,7 @@ test('saves antigos migram para a grelha lateral sem perder salas', () => {
   const restored = hydrateGameState(JSON.stringify({ ...state, version: 15, bunker_rooms: old, bunker_player: { x: 6, y: 2, facing: 'east' }, shelter_grid: undefined, shelter_inhabitants: undefined }));
   assert.equal(restored.shelter_grid.flat().filter(Boolean).length, 4);
   assert.equal(restored.shelter_inhabitants.find((actor) => actor.id === 'president')?.column, 2);
-  assert.equal(restored.version, 19);
+  assert.equal(restored.version, 20);
 });
 
 test('grid normalization preserves a clamped quarantine timer only on greenhouses', () => {

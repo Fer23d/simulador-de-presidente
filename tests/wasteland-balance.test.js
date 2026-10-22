@@ -8,9 +8,12 @@ import { bunkerView, renderStoryCard } from '../src/ui/dashboard.js';
 
 function makeWastelandState() {
   const state = transicionarParaWasteland(createGameState('bra'));
+  const shelterGrid = state.shelter_grid.map((row) => [...row]);
+  shelterGrid[0][4] = { id: 'life-support-0-4', type: 'life_support', floor: 0, column: 4, level: 1 };
   return {
     ...state,
     randomSeed: 1,
+    shelter_grid: shelterGrid,
     country: { ...state.country, populacao: 1000, populacao_base: 1000 },
     shelter_supplies: { ...state.shelter_supplies, food: 100, energy: 100 },
   };
@@ -34,16 +37,20 @@ test('low morale halves assigned greenhouse and generator output while inhabitan
 
   const next = advanceWastelandMonth(state);
   assert.equal(next.shelter_supplies.food, 144);
-  assert.equal(next.shelter_supplies.energy, 147);
+  assert.equal(next.shelter_supplies.energy, 142);
   assert.equal(next.inhabitants.find((npc) => npc.id === 'worker-0-2').currentState, 'idle');
   assert.equal(next.inhabitants.find((npc) => npc.id === 'worker-0-2').loyalty, 30);
 });
 
 test('resource shortages reduce loyalty by ten and reaching zero only rebels after a one-time 20 percent roll', () => {
+  const prepared = makeWastelandState();
   const state = {
-    ...makeWastelandState(),
+    ...prepared,
+    shelter_grid: prepared.shelter_grid.map((row, floor) => row.map((room, column) => floor === 0 && column === 2
+      ? { id: 'test-life-support', type: 'life_support', floor, column, level: 5 }
+      : room)),
     shelter_supplies: { food: 0, energy: 0 },
-    inhabitants: makeWastelandState().inhabitants.map((npc, index) => ({ ...npc, loyalty: index ? 30 : 20 })),
+    inhabitants: prepared.inhabitants.map((npc, index) => ({ ...npc, loyalty: index ? 30 : 20 })),
   };
 
   const result = advanceWastelandMonth(state);

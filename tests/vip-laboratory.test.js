@@ -42,8 +42,8 @@ test('laboratory is buildable, staffed as a research room, and produces science'
 test('level four and five upgrades require scrap and science and debit both atomically', () => {
   const grid = INITIAL_SHELTER_GRID.map((row) => [...row]);
   grid[0][2] = { id: 'laboratory-0-2', type: 'laboratory', floor: 0, column: 2, level: 3 };
-  const noScience = { ...createVault(), shelter_grid: grid, scrap: 1500, science: 499 };
-  assert.deepEqual(getRoomUpgradeCosts(grid[0][2]), { scrap: 1500, science: 500 });
+  const noScience = { ...createVault(), shelter_grid: grid, scrap: 1650, science: 499 };
+  assert.deepEqual(getRoomUpgradeCosts(grid[0][2]), { scrap: 1650, science: 500 });
   assert.equal(upgradeShelterRoom(noScience, 0, 2).shelter_grid[0][2].level, 3);
 
   const levelFour = upgradeShelterRoom({ ...noScience, science: 500 }, 0, 2);
@@ -51,7 +51,7 @@ test('level four and five upgrades require scrap and science and debit both atom
   assert.equal(levelFour.scrap, 0);
   assert.equal(levelFour.science, 0);
 
-  const levelFive = upgradeShelterRoom({ ...levelFour, scrap: 2500, science: 1500 }, 0, 2);
+  const levelFive = upgradeShelterRoom({ ...levelFour, scrap: 2750, science: 1500 }, 0, 2);
   assert.equal(levelFive.shelter_grid[0][2].level, 5);
   assert.equal(levelFive.scrap, 0);
   assert.equal(levelFive.science, 0);
@@ -122,7 +122,7 @@ test('the HUD shows science capacity, upgrade costs use red and green states, an
   const grid = base.shelter_grid.map((row) => [...row]);
   grid[0][2] = { id: 'greenhouse-0-2', type: 'greenhouse', floor: 0, column: 2, level: 3 };
   grid[0][3] = { id: 'laboratory-0-3', type: 'laboratory', floor: 0, column: 3, level: 1 };
-  const affordable = { ...base, shelter_grid: grid, scrap: 1500, science: 500 };
+  const affordable = { ...base, shelter_grid: grid, scrap: 1650, science: 500 };
   const roomMarkup = renderRoomManagement(affordable, grid[0][2]);
   assert.match(bunkerView(affordable), /CIÊNCIA 500 \/ 500/);
   assert.match(roomMarkup, /resource-cost--enough/);

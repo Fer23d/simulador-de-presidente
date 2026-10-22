@@ -40,7 +40,7 @@ import { INITIAL_SHELTER_GRID, migrateLegacyPlayer, migrateLegacyRooms, normaliz
 import { createEnvironmentState } from './environment.js';
 import { createExpeditionLocation } from './expeditions.js';
 
-const STATE_VERSION = 19;
+const STATE_VERSION = 20;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 
 function clamp(value, minimum, maximum) {
@@ -193,7 +193,9 @@ export function createGameState(countryId = 'bra') {
     shelter_inhabitants: [],
     inhabitants: [],
     rpg_player: createRpgPlayer(INITIAL_SHELTER_GRID),
-    shelter_supplies: { weapons: 0, medkits: 0, food: 0, energy: 0 },
+    shelter_supplies: { weapons: 0, medkits: 0, food: 0, energy: 0, oxygen: 0 },
+    oxygen_shortage_turns: 0,
+    oxygen_deprived: false,
     pendingExpeditionReports: [],
     expeditionLocation: null,
     environment: createEnvironmentState(),
@@ -1202,7 +1204,10 @@ export function hydrateGameState(serialized) {
         medkits: Math.max(0, Math.floor(Number(parsed.shelter_supplies?.medkits) || 0)),
         food: Math.max(0, Math.floor(Number(parsed.shelter_supplies?.food ?? (parsed.is_wasteland ? 20 : 0)) || 0)),
         energy: Math.max(0, Math.floor(Number(parsed.shelter_supplies?.energy ?? (parsed.is_wasteland ? 20 : 0)) || 0)),
+        oxygen: Math.max(0, Math.floor(Number(parsed.shelter_supplies?.oxygen ?? (parsed.is_wasteland ? 300 : 0)) || 0)),
       },
+      oxygen_shortage_turns: Math.max(0, Math.floor(Number(parsed.oxygen_shortage_turns) || 0)),
+      oxygen_deprived: Boolean(parsed.oxygen_deprived),
       pendingExpeditionReports: Array.isArray(parsed.pendingExpeditionReports)
         ? parsed.pendingExpeditionReports.filter((report) => typeof report?.id === 'string'
           && typeof report.inhabitantId === 'string' && typeof report.success === 'boolean').map((report) => ({

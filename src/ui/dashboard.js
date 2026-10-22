@@ -14,7 +14,7 @@ import { RESOLUTIONS } from '../core/un_assembly.js';
 import { getStoryEvent } from '../core/story_engine.js';
 import { LORE_CHAPTERS, STORY_NOTICE } from '../core/story_lore.js';
 import { INTERNAL_PROJECTS } from '../core/infrastructure.js';
-import { broadcastShelterSignal, buildShelterRoom, calculateShelterCapacity, equipShelterGuard, findBuildSlots, getRoom, INITIAL_SHELTER_GRID, repairShelterGenerator, SHELTER_TYPES, upgradeShelterRoom, useShelterMedkit } from '../core/shelter_engine.js';
+import { broadcastShelterSignal, buildShelterRoom, calculateShelterCapacity, equipShelterGuard, findBuildSlots, getRoom, getShelterBuildCost, INITIAL_SHELTER_GRID, repairShelterGenerator, SHELTER_TYPES, upgradeShelterRoom, useShelterMedkit } from '../core/shelter_engine.js';
 import { createRpgBunkerEngine } from '../core/rpg_bunker.js';
 import { calculateSuppression, canResolveWastelandEvent, detainRebel, dismissExpeditionReport, getWastelandEvent, resolveWastelandEvent, startExpedition } from '../core/game_mechanics.js';
 import { advanceEnvironmentCycle } from '../core/environment.js';
@@ -355,10 +355,10 @@ export function bunkerView(state) {
   const rooms = grid.flat().filter(Boolean);
   return `<section class="bunker-chamber">
     <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2></div><div class="bunker-header-actions"><button type="button" class="primary-action" data-action="advance" ${state.pendingExpeditionReports?.length || state.pendingBunkerEvent ? 'disabled' : ''}>[ AVANÇAR MÊS ]</button><button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button></div></div>
-    <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'scrap'))}</span><span>CIÊNCIA ${formatNumber.format(state.science ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'science'))}</span><span>COMIDA ${formatNumber.format(state.shelter_supplies?.food ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'food'))}</span><span>ENERGIA ${formatNumber.format(state.shelter_supplies?.energy ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'energy'))}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'weapons'))}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'medkits'))}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
+    <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'scrap'))}</span><span>CIÊNCIA ${formatNumber.format(state.science ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'science'))}</span><span>COMIDA ${formatNumber.format(state.shelter_supplies?.food ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'food'))}</span><span>ENERGIA ${formatNumber.format(state.shelter_supplies?.energy ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'energy'))}</span><span class="oxygen-resource ${state.oxygen_deprived ? 'oxygen-deprived' : ''}" aria-label="Oxigênio ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} de ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ', produção insuficiente' : ''}">💨 O₂ ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ' · ALERTA' : ''}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'weapons'))}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'medkits'))}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
     <div class="bunker-build-controls" hidden aria-label="Módulos de construção">${modules.map(([id, module]) => `<button type="button" class="bunker-module-button" data-action="shelter-module" data-module="${id}" aria-pressed="${id === 'dormitory'}" ${state.scrap < module.cost ? 'disabled' : ''}>${module.name}<small>${module.cost} sucatas</small></button>`).join('')}<div class="bunker-slot-controls"><label for="shelter-build-slot">Setor livre</label><select id="shelter-build-slot" class="bunker-build-slot"></select><button type="button" class="primary-action" data-action="shelter-place">[ CONSTRUIR ]</button></div></div>
     <div class="bunker-stage"><canvas id="shelterCanvas" class="bunker-canvas" width="960" height="600" tabindex="0" aria-label="Bunker lateral. A e D movem o Presidente, W e S operam o elevador, E interage. Na construção, clique num setor livre."></canvas>${bunkerEnvironmentHudView(state.environment, state.isNight, state.inhabitants, state.shelter_guards)}<div class="bunker-tooltip" data-bunker-tooltip role="status" hidden></div></div>
-    <div class="bunker-foot"><div><p class="bunker-status" data-shelter-status role="status">PRESIDENTE EM PATRULHA</p><p class="bunker-notice ${state.notice?.includes('SINAL DO EXPLORADOR') || state.notice?.includes('ALERTA CRÍTICO') ? 'danger' : ''}" role="status">${escapeHtml(state.notice ?? '')}</p></div><div class="shelter-room-controls"><label for="shelter-room-select">Setor</label><select id="shelter-room-select" class="bunker-build-slot">${rooms.map((room) => `<option value="${room.floor}:${room.column}">${SHELTER_TYPES[room.type].name} · A${room.floor + 1} S${room.column}</option>`).join('')}</select><button type="button" class="quiet-action" data-action="shelter-open-room">[ GERIR SALA ]</button></div></div>
+    <div class="bunker-foot"><div><p class="bunker-status" data-shelter-status role="status">PRESIDENTE EM PATRULHA</p><p class="bunker-notice ${/SINAL DO EXPLORADOR|ALERTA CRÍTICO|ASFIXIA|oxigênio insuficiente/i.test(state.notice ?? '') ? 'danger' : ''}" role="status">${escapeHtml(state.notice ?? '')}</p></div><div class="shelter-room-controls"><label for="shelter-room-select">Setor</label><select id="shelter-room-select" class="bunker-build-slot">${rooms.map((room) => `<option value="${room.floor}:${room.column}">${SHELTER_TYPES[room.type].name} · A${room.floor + 1} S${room.column}</option>`).join('')}</select><button type="button" class="quiet-action" data-action="shelter-open-room">[ GERIR SALA ]</button></div></div>
   </section>`;
 }
 
@@ -389,13 +389,14 @@ export function renderRoomManagement(state, room) {
   const costs = getRoomUpgradeCosts(room);
   const scrapAvailable = Number(state.scrap) || 0;
   const scienceAvailable = Number(state.science) || 0;
+  const oxygenDetails = `<div><dt>Dreno de oxigênio desta sala</dt><dd>${formatNumber.format(profile.oxygen.roomDrain)} O₂/mês · profundidade ${room.floor + 1}</dd></div>${profile.oxygen.energyMaintenance ? `<div><dt>Manutenção do suporte</dt><dd>${formatNumber.format(profile.oxygen.energyMaintenance)} energia/mês</dd></div>` : ''}`;
   const upgradeControl = costs === null
     ? ['vault', 'elevator'].includes(room.type)
       ? ''
       : '<button type="button" class="primary-action" disabled>[ NÍVEL MÁXIMO ATINGIDO ]</button>'
     : `<div class="upgrade-costs"><span class="resource-cost ${scrapAvailable >= costs.scrap ? 'resource-cost--enough' : 'resource-cost--short'}">SUCATA: ${formatNumber.format(costs.scrap)} (SALDO ${formatNumber.format(scrapAvailable)})</span><span class="resource-cost ${scienceAvailable >= costs.science ? 'resource-cost--enough' : 'resource-cost--short'}">CIÊNCIA: ${formatNumber.format(costs.science)} (SALDO ${formatNumber.format(scienceAvailable)})</span></div><button type="button" class="primary-action" data-action="upgrade-shelter-room" data-floor="${room.floor}" data-column="${room.column}" ${scrapAvailable < costs.scrap || scienceAvailable < costs.science ? 'disabled' : ''}>[ MELHORAR SALA ]</button>`;
   return `<h2 id="bunker-room-title">${SHELTER_TYPES[room.type].name} (NÍVEL ${profile.level})</h2>
-    <dl class="room-economy-stats"><div><dt>Produção atual</dt><dd>${productionText}</dd></div><div><dt>Trabalhadores ativos</dt><dd>${profile.workers.active} / ${profile.workers.assigned}</dd></div><div><dt>Consumo populacional do Vault</dt><dd>${formatNumber.format(profile.consumption.food)} comida + ${formatNumber.format(profile.consumption.energy)} energia/mês</dd></div><div><dt>Projeção de melhoria</dt><dd>${nextText}</dd></div><div><dt>Sucata disponível</dt><dd>${formatNumber.format(scrapAvailable)}</dd></div><div><dt>Ciência disponível</dt><dd>${formatNumber.format(scienceAvailable)}</dd></div></dl>${upgradeControl}`;
+    <dl class="room-economy-stats"><div><dt>Produção atual</dt><dd>${productionText}</dd></div><div><dt>Trabalhadores ativos</dt><dd>${profile.workers.active} / ${profile.workers.assigned}</dd></div><div><dt>Consumo populacional do Vault</dt><dd>${formatNumber.format(profile.consumption.food)} comida + ${formatNumber.format(profile.consumption.energy)} energia/mês</dd></div>${oxygenDetails}<div><dt>Projeção de melhoria</dt><dd>${nextText}</dd></div><div><dt>Sucata disponível</dt><dd>${formatNumber.format(scrapAvailable)}</dd></div><div><dt>Ciência disponível</dt><dd>${formatNumber.format(scienceAvailable)}</dd></div></dl>${upgradeControl}`;
 }
 
 export function expeditionLogisticsView(state) {
@@ -685,6 +686,7 @@ export function mountDashboard(root) {
       generator: room.operational ? 'Unidade energética operacional.' : 'Unidade energética aguardando manutenção.',
       greenhouse: 'Cultivo hidropônico para sustentar o Vault.',
       laboratory: 'Centro de pesquisa científica. Produz Ciência conforme o nível e os especialistas alocados.',
+      life_support: 'Unidade de ventilação e refrigeração. Produz oxigênio e consome energia para manter os setores habitáveis.',
       arsenal: 'Produz 1 arma por nível a cada mês. Equipamento para a defesa do Vault.',
       medical: 'Produz 2 curativos por nível e melhora o crescimento da população.',
       radio: 'Transmite sinais para atrair 3 sobreviventes por nível a cada mês.',
@@ -711,9 +713,16 @@ export function mountDashboard(root) {
     const select = root.querySelector('#shelter-build-slot');
     if (!select) return;
     const slots = findBuildSlots(state.shelter_grid, bunkerBuildType);
-    select.innerHTML = slots.map(({ floor, column }) => `<option value="${floor}:${column}">Andar ${floor + 1} · setor ${column === 0 ? 'elevador' : column}</option>`).join('');
+    const previous = select.value;
+    select.innerHTML = slots.map(({ floor, column }) => `<option value="${floor}:${column}">Andar ${floor + 1} · setor ${column === 0 ? 'elevador' : column} · ${formatNumber.format(getShelterBuildCost(bunkerBuildType, floor))} sucatas</option>`).join('');
+    if (slots.some(({ floor, column }) => `${floor}:${column}` === previous)) select.value = previous;
+    const [floor] = select.value.split(':').map(Number);
+    const selectedCost = slots.length && Number.isInteger(floor) ? getShelterBuildCost(bunkerBuildType, floor) : null;
     const place = root.querySelector('[data-action="shelter-place"]');
-    if (place) place.disabled = !slots.length || state.scrap < SHELTER_TYPES[bunkerBuildType].cost;
+    if (place) {
+      place.textContent = selectedCost === null ? '[ SEM SETOR DISPONÍVEL ]' : `[ CONSTRUIR: ${formatNumber.format(selectedCost)} SUCATAS ]`;
+      place.disabled = !slots.length || state.scrap < selectedCost;
+    }
   }
 
   function render() {
@@ -768,6 +777,7 @@ export function mountDashboard(root) {
         cabinFloor: bunkerSnapshot?.cabinFloor,
         environment: bunkerSnapshot?.environment ?? state.environment,
         isNight: state.isNight,
+        oxygenDeprived: state.oxygen_deprived,
         onBuild: (type, floor, column) => commit(buildShelterRoom(state, type, floor, column)),
         onPlayerChanged: (player) => {
           state = { ...state, rpg_player: player };
@@ -1182,6 +1192,10 @@ export function mountDashboard(root) {
   });
 
   root.addEventListener('change', (event) => {
+    if (event.target.matches('#shelter-build-slot')) {
+      refreshShelterSlots();
+      return;
+    }
     if (event.target.matches('[data-action="budget"]')) {
       commit(setBudget(state, event.target.dataset.budget, Number(event.target.value)));
       return;
