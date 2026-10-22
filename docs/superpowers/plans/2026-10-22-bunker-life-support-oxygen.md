@@ -59,8 +59,8 @@
 
 - [x] Run the complete `npm test` suite and `git diff --check`.
 - [x] Review the staged diff to ensure the pre-existing changes in `src/core/geopolitics.js`, `tests/dashboard.test.js`, and `tests/geopolitics.test.js` are excluded.
-- [ ] Commit only the oxygen feature and its spec/plan.
-- [ ] Push the verified commit to the public deployment branch and confirm GitHub Pages deployment succeeds.
+- [x] Commit only the oxygen feature and its spec/plan.
+- [x] Push the verified commit to the public deployment branch and confirm GitHub Pages deployment succeeds.
 
 ## Implementation Notes
 
