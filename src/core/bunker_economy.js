@@ -1,4 +1,5 @@
 import { getEnergyConsumptionForPhase } from './environment.js';
+import { getPresidentClassModifiers } from './player_state.js';
 
 export const ROOM_MAX_LEVEL = 5;
 
@@ -34,12 +35,14 @@ export function getRoomUpgradeCost(room) {
   return getRoomUpgradeCosts(room)?.scrap ?? null;
 }
 
-export function getRoomUpgradeCosts(room) {
+export function getRoomUpgradeCosts(room, presidentClass = null) {
   const level = boundedLevel(room?.level);
   if (!room || ['vault', 'elevator'].includes(room.type) || level >= ROOM_MAX_LEVEL) return null;
   const baseCosts = UPGRADE_COST_BY_TARGET_LEVEL[level + 1];
   if (!baseCosts) return null;
-  return { ...baseCosts, scrap: getDepthAdjustedScrapCost(baseCosts.scrap, room.floor) };
+  const depthAdjustedScrap = getDepthAdjustedScrapCost(baseCosts.scrap, room.floor);
+  const classMultiplier = getPresidentClassModifiers(presidentClass).upgradeCostMultiplier;
+  return { ...baseCosts, scrap: Math.ceil(depthAdjustedScrap * classMultiplier) };
 }
 
 export function getDepthAdjustedScrapCost(baseCost, floor = 0) {
@@ -73,8 +76,9 @@ export function getBunkerFoodConsumption(state, population = state.country?.popu
   const inhabitants = state.inhabitants ?? [];
   const present = inhabitants.filter((inhabitant) => !inhabitant.is_on_expedition);
   const unseenPopulation = Math.max(0, (Number(population) || 0) - present.length);
-  return Math.ceil(unseenPopulation / 500) + present.reduce((total, inhabitant) =>
+  const baseConsumption = Math.ceil(unseenPopulation / 500) + present.reduce((total, inhabitant) =>
     total + (inhabitant.isVIP ? 2 : 1), 0);
+  return Math.ceil(baseConsumption * getPresidentClassModifiers(state.presidentClass).foodConsumptionMultiplier);
 }
 
 export function getBunkerEnergyConsumption(state, population = state.country?.populacao_base) {
@@ -108,13 +112,15 @@ function roomOutput(state, room, level) {
     if (room.type === 'generator' && !room.operational) amount = 0;
     else amount *= getRoomWorkforce(state, room).effective;
   }
+  if (room.type === 'generator') amount *= getPresidentClassModifiers(state.presidentClass).generatorOutputMultiplier;
+  if (room.type === 'laboratory') amount *= getPresidentClassModifiers(state.presidentClass).scienceOutputMultiplier;
   return { resource: spec.resource, label: spec.label, amount: Math.floor(amount) };
 }
 
 export function getRoomEconomyProfile(state, room) {
   if (!room) return null;
   const level = boundedLevel(room.level);
-  const costs = getRoomUpgradeCosts({ ...room, level });
+  const costs = getRoomUpgradeCosts({ ...room, level }, state.presidentClass);
   const output = roomOutput(state, room, level);
   const workforce = getRoomWorkforce(state, room);
   const populationConsumption = Math.ceil(Math.max(0, Number(state.country?.populacao_base) || 0) / 500);

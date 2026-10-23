@@ -93,6 +93,21 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 .bunker-environment-hud.is-night .environment-progress > span { box-shadow: 0 0 7px #a9c2ff; }
 .bunker-tooltip { position: absolute; z-index: 2; top: 22px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); padding: 9px 14px; border: 2px solid var(--amber); background: rgba(12, 12, 10, .94); color: var(--phosphor); font-family: 'Share Tech Mono', monospace; font-size: 15px; text-align: center; white-space: nowrap; box-shadow: 4px 4px 0 #080400; pointer-events: none; }
 .bunker-tooltip[hidden] { display: none; }
+.bunker-dialogue[hidden] { display: none; }
+.bunker-dialogue { position: absolute; z-index: 4; right: clamp(12px, 4vw, 42px); bottom: clamp(12px, 4vw, 36px); left: clamp(12px, 4vw, 42px); display: grid; grid-template-columns: 108px minmax(0, 1fr) auto; align-items: center; gap: 18px; min-height: 150px; border: 3px double var(--amber); padding: 16px 18px; background: rgba(5, 8, 7, .97); color: var(--phosphor); box-shadow: 0 0 22px rgba(255, 206, 102, .2), 8px 8px 0 rgba(0, 0, 0, .72); }
+.dialogue-portrait { width: 108px; height: 72px; border: 2px solid var(--line-hot); background-color: #17201a; background-image: url('./img/npc_walk_sheet.png'); background-repeat: no-repeat; background-size: 432px 288px; image-rendering: pixelated; box-shadow: inset 0 0 12px rgba(0, 0, 0, .65); }
+.dialogue-portrait--worker { background-position: 0 0; }
+.dialogue-portrait--engineer { background-position: 0 0; }
+.dialogue-portrait--doctor { background-position: 0 -144px; }
+.dialogue-portrait--soldier { background-position: 0 -216px; }
+.dialogue-copy { min-width: 0; }
+.dialogue-copy .eyebrow { margin: 0 0 4px; color: var(--amber); font-size: 11px; }
+.dialogue-copy h3 { margin: 0; color: var(--phosphor); font: 700 18px/1.2 'Share Tech Mono', monospace; }
+.dialogue-text { min-height: 2.8em; margin: 8px 0 0; color: #f1f4ef; font: 16px/1.4 'Share Tech Mono', monospace; white-space: pre-wrap; }
+.dialogue-feedback { display: inline-block; margin-top: 5px; color: #39ff14; font: 700 12px 'Share Tech Mono', monospace; }
+.dialogue-close { align-self: end; white-space: nowrap; }
+.dialogue-close:focus-visible { outline: 2px solid var(--phosphor); outline-offset: 3px; }
+@media (max-width: 640px) { .bunker-dialogue { grid-template-columns: 64px minmax(0, 1fr); gap: 10px; padding: 12px; } .dialogue-portrait { width: 64px; height: 43px; background-size: 256px 171px; } .dialogue-portrait--doctor { background-position-y: -85px; } .dialogue-portrait--soldier { background-position-y: -128px; } .dialogue-text { font-size: 14px; } .dialogue-close { grid-column: 1 / -1; justify-self: end; } }
 .bunker-canvas:focus { border-color: var(--phosphor); box-shadow: 0 0 22px rgba(255, 179, 71, .45); }
 .bunker-status { margin: 12px 0 0; color: var(--muted); }
 .bunker-notice { margin: 4px 0 0; color: var(--amber); font-size: 13px; }
@@ -505,4 +520,28 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
   .law-row > div { grid-column: 1 / -1; }
   .country-table-head, .country-row { grid-template-columns: minmax(115px, 1fr) 74px 65px; gap: 6px; }
   .country-row .quiet-action { padding: 4px; font-size: 11px; }
+}
+
+.president-selection-screen { max-width: 1100px; margin: 0 auto; padding: 22px; text-align: center; }
+.president-selection-screen > h2 { color: var(--cor-primaria); font-size: 24px; }
+.president-select-canvas { display: block; width: min(100%, 960px); height: auto; margin: 18px auto 12px; border: 2px solid var(--cor-primaria); background: #080e0c; }
+.president-choice-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-width: 960px; margin: 0 auto; }
+.president-choice { min-width: 0; display: grid; gap: 7px; padding: 12px 9px; border: 2px solid var(--cor-primaria); background: #101a14; color: #d8e4db; text-align: left; cursor: pointer; }
+.president-choice strong { color: var(--cor-primaria); font: 16px "Share Tech Mono", monospace; }
+.president-choice span { font: 13px "Share Tech Mono", monospace; line-height: 1.4; }
+.president-choice:hover, .president-choice:focus-visible { outline: 2px solid #e6bf58; background: #1a2b20; }
+.wardrobe-dialog { width: min(820px, calc(100vw - 28px)); }
+.wardrobe-balance { color: var(--cor-primaria); font: 16px "Share Tech Mono", monospace; }
+.wardrobe-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
+.wardrobe-skin { min-width: 0; padding: 12px; border: 1px solid var(--line); background: rgba(8, 14, 12, .92); }
+.wardrobe-skin--equipped { border-color: #e6bf58; }
+.wardrobe-preview { height: 96px; display: grid; place-items: center; margin-bottom: 8px; border: 1px dashed var(--line); background: #111a16; }
+.wardrobe-preview span { color: #b9c7bd; font-size: 50px; filter: var(--skin-filter); text-shadow: 0 0 12px currentColor; }
+.wardrobe-skin h3 { min-height: 2.4em; color: #d8e4db; font: 16px "Share Tech Mono", monospace; }
+.wardrobe-skin p, .wardrobe-note { color: var(--muted); font: 13px "Share Tech Mono", monospace; }
+@media (max-width: 620px) {
+  .president-selection-screen { padding: 12px 6px; }
+  .president-choice-buttons, .wardrobe-grid { grid-template-columns: 1fr; }
+  .president-choice { text-align: center; }
+  .wardrobe-dialog { max-height: 88vh; overflow-y: auto; }
 }

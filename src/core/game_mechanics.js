@@ -1,5 +1,6 @@
 import { nextRandom } from './geopolitics.js';
 import { getRoomWorkforce } from './bunker_economy.js';
+import { getPresidentClassModifiers } from './player_state.js';
 import { countActiveGenerators, getNighttimeRiskChance } from './environment.js';
 import { createExpeditionLoot, createExpeditionNodes } from './expeditions.js';
 
@@ -9,6 +10,64 @@ const REBEL_SCRAP_COST = 5;
 const REBELLION_CHANCE = 0.2;
 const VIP_DISCOVERY_CHANCE = 0.1;
 const VIP_ASSASSINATION_CHANCE = 0.3;
+const NON_WORK_ROOM_TYPES = new Set(['vault', 'elevator', 'detention', 'dormitory', 'life_support', 'presidential_suite']);
+
+function shelterRooms(state) {
+  return (state.shelter_grid ?? []).flat().filter(Boolean);
+}
+
+function findRoomById(state, roomId) {
+  return shelterRooms(state).find((room) => room.id === roomId) ?? null;
+}
+
+function findAssignedRoom(state, inhabitant) {
+  const rooms = shelterRooms(state);
+  const byId = rooms.find((room) => room.id === inhabitant.currentRoomId);
+  if (byId && !NON_WORK_ROOM_TYPES.has(byId.type)) return byId;
+  return rooms.find((room) => !NON_WORK_ROOM_TYPES.has(room.type)
+    && room.floor === inhabitant.workFloor && room.column === inhabitant.workColumn) ?? null;
+}
+
+function getRoomWorkerCount(state, room, excludeId = null) {
+  return (state.inhabitants ?? []).filter((inhabitant) => inhabitant.id !== excludeId
+    && !inhabitant.is_prisoner && !inhabitant.is_on_expedition
+    && !inhabitant.currentState?.startsWith('rebel')
+    && ((inhabitant.state === 'working' && inhabitant.currentRoomId === room.id)
+      || (inhabitant.workFloor === room.floor && inhabitant.workColumn === room.column))).length;
+}
+
+function hasRoomWorkerSpace(state, room, excludeId = null) {
+  if (!room || NON_WORK_ROOM_TYPES.has(room.type)) return false;
+  const maxWorkers = Math.max(1, Math.floor(Number(room.maxWorkers ?? room.level) || 1));
+  return getRoomWorkerCount(state, room, excludeId) < maxWorkers;
+}
+
+function moveInhabitantToRoom(inhabitant, room, { employed = false } = {}) {
+  return {
+    ...inhabitant,
+    floor: room.floor,
+    column: room.column,
+    offsetX: 0,
+    currentRoomId: room.id,
+    previousRoomId: null,
+    state: employed ? 'working' : 'idle',
+    currentState: 'idle',
+    pose: employed ? 'working' : 'idle',
+    targetOffsetX: null,
+    is_prisoner: false,
+    ...(employed ? { workFloor: room.floor, workColumn: room.column } : { workFloor: null, workColumn: null }),
+  };
+}
+
+function removeWorkerFromRoom(inhabitant, roomId) {
+  return { ...inhabitant, previousRoomId: roomId ?? inhabitant.currentRoomId ?? null,
+    workFloor: null, workColumn: null, state: 'idle', pose: 'idle' };
+}
+
+function assignWorkerToRoom(state, inhabitant, room) {
+  return hasRoomWorkerSpace(state, room, inhabitant.id)
+    ? moveInhabitantToRoom(inhabitant, room, { employed: true }) : null;
+}
 const SCOUT_EXPEDITION_SUCCESS_CHANCE = 0.65;
 const GREENHOUSE_CURE_SUCCESS_CHANCE = 0.6;
 const SUPPRESSION_PER_SOLDIER = 0.1;
@@ -76,7 +135,8 @@ export function calculateSuppression(state = {}) {
     || (inhabitant.isVIP === true && ['guard', 'military', 'soldier'].includes(inhabitant.role)))).length;
   const arsenalGuards = Math.max(0, Math.floor(Number(state.shelter_guards) || 0));
   const totalSoldiers = inhabitantSoldiers + arsenalGuards;
-  const suppressionFactor = Math.min(1, totalSoldiers * SUPPRESSION_PER_SOLDIER);
+  const suppressionMultiplier = getPresidentClassModifiers(state.presidentClass).suppressionMultiplier;
+  const suppressionFactor = Math.min(1, totalSoldiers * SUPPRESSION_PER_SOLDIER * suppressionMultiplier);
   return { totalSoldiers, suppressionFactor, percent: Math.round(suppressionFactor * 100) };
 }
 
@@ -172,11 +232,15 @@ export function advanceMonthlyGameMechanics(state) {
           modifier: 2,
           floor,
           column,
+          currentRoomId: destination?.id ?? null,
+          state: assignedWorkplace ? 'working' : 'idle',
           offsetX: profileIndex % 2 ? 38 : -38,
           currentState: 'idle',
           targetOffsetX: null,
           waitSeconds: 1,
           loyalty: 100,
+          revoltChance: 20,
+          lastTalkedDay: 0,
           rebellionCheckDone: false,
           is_on_expedition: false,
           expedition_timer: 0,
@@ -199,7 +263,8 @@ export function advanceMonthlyGameMechanics(state) {
     || (Number(state.shelter_supplies?.energy) || 0) <= 0;
   const updatedInhabitants = inhabitants.map((inhabitant) => {
     if (inhabitant.is_prisoner || inhabitant.is_on_expedition || inhabitant.currentState === 'rebel') return inhabitant;
-    const loyaltyLoss = resourcesDepleted ? 10 * (1 - suppressionFactor) : 0;
+    const loyaltyLoss = resourcesDepleted
+      ? 10 * (1 - suppressionFactor) * getPresidentClassModifiers(state.presidentClass).loyaltyLossMultiplier : 0;
     const loyalty = Math.max(0, Math.min(100, Number(inhabitant.loyalty ?? 100) - loyaltyLoss));
     let currentState = inhabitant.currentState;
     let rebellionCheckDone = inhabitant.rebellionCheckDone === true;
@@ -208,8 +273,11 @@ export function advanceMonthlyGameMechanics(state) {
       const roll = nextRandom(randomSeed);
       randomSeed = roll.seed;
       rebellionCheckDone = true;
+      const baseRebellionChance = Math.max(0, Math.min(1,
+        Number.isFinite(Number(inhabitant.revoltChance))
+          ? Number(inhabitant.revoltChance) / 100 : REBELLION_CHANCE));
       const rebellionChance = calculateSuppressedChance(
-        getNighttimeRiskChance(REBELLION_CHANCE, state.isNight === true, activeGenerators), suppressionFactor);
+        getNighttimeRiskChance(baseRebellionChance, state.isNight === true, activeGenerators), suppressionFactor);
       if (roll.value < rebellionChance) currentState = 'rebel';
     }
     return { ...inhabitant, loyalty, currentState,
@@ -306,7 +374,10 @@ export function resolveWastelandEvent(state, optionId) {
     }));
   }
   const loyaltyChange = Number(option.effects?.loyalty) || 0;
-  const eventLoyaltyChange = optionId === 'attempt-cure' && !outcome ? -10 : loyaltyChange;
+  const immuneToAirborneDisease = getPresidentClassModifiers(state.presidentClass).diseaseImmunity
+    && event.id === 'air-filter-crisis';
+  const eventLoyaltyChange = immuneToAirborneDisease && loyaltyChange < 0 ? 0
+    : optionId === 'attempt-cure' && !outcome ? -10 : loyaltyChange;
   const inhabitants = eventLoyaltyChange ? (state.inhabitants ?? []).map((inhabitant) => ({
     ...inhabitant,
     loyalty: Math.max(0, Math.min(100, (Number(inhabitant.loyalty) || 0) + eventLoyaltyChange)),
@@ -333,19 +404,61 @@ export function dismissExpeditionReport(state) {
   };
 }
 
-export function detainRebel(state, inhabitantId) {
+export function releaseNPC(state, inhabitantId) {
   const inhabitant = state.inhabitants?.find((item) => item.id === inhabitantId);
-  const cell = state.shelter_grid?.flat().find((room) => room?.type === 'detention');
+  if (!state.is_wasteland || !inhabitant?.is_prisoner) return state;
+
+  const previousRoom = findRoomById(state, inhabitant.previousRoomId);
+  const restoredWorker = assignWorkerToRoom(state, inhabitant, previousRoom);
+  if (restoredWorker) {
+    return {
+      ...state,
+      inhabitants: state.inhabitants.map((item) => item.id === inhabitant.id
+        ? restoredWorker : item),
+      notice: `${inhabitant.id} foi libertado e voltou ao setor anterior.`,
+    };
+  }
+
+  const fallbackRoom = shelterRooms(state).find((room) => room.type === 'dormitory')
+    ?? shelterRooms(state).find((room) => room.type === 'vault');
+  if (!fallbackRoom) return state;
+  return {
+    ...state,
+    inhabitants: state.inhabitants.map((item) => item.id === inhabitant.id
+      ? moveInhabitantToRoom(item, fallbackRoom) : item),
+    notice: `${inhabitant.id} foi libertado e aguarda novas ordens no ${fallbackRoom.type === 'dormitory' ? 'dormitório' : 'Vault'}.`,
+  };
+}
+
+export function arrestNPC(state, inhabitantId) {
+  let nextState = state;
+  let inhabitant = nextState.inhabitants?.find((item) => item.id === inhabitantId);
+  const cell = shelterRooms(nextState).find((room) => room.type === 'detention');
   if (!state.is_wasteland || !inhabitant || inhabitant.currentState !== 'rebel' || inhabitant.is_prisoner) {
     return { ...state, notice: 'O dissidente nao esta disponivel para detencao.' };
   }
   if (!cell) return { ...state, notice: 'Construa uma Cela de Detencao antes de prender dissidentes.' };
+
+  // A cela tem uma vaga: libertar primeiro qualquer ocupante para evitar NPCs sobrepostos.
+  const cellOccupants = nextState.inhabitants.filter((item) => item.is_prisoner
+    && (item.currentRoomId === cell.id || (item.floor === cell.floor && item.column === cell.column)));
+  for (const occupant of cellOccupants) nextState = releaseNPC(nextState, occupant.id);
+  inhabitant = nextState.inhabitants.find((item) => item.id === inhabitantId);
+  const previousRoom = findAssignedRoom(nextState, inhabitant);
+  const unassigned = removeWorkerFromRoom(inhabitant, previousRoom?.id);
+
   return {
-    ...state,
-    inhabitants: state.inhabitants.map((item) => item.id === inhabitantId
-      ? { ...item, floor: cell.floor, column: cell.column, offsetX: 0, currentState: 'idle', targetOffsetX: null,
+    ...nextState,
+    inhabitants: nextState.inhabitants.map((item) => item.id === inhabitantId
+      ? { ...unassigned,
+        floor: cell.floor, column: cell.column, offsetX: 0, currentRoomId: cell.id,
+        state: 'imprisoned', currentState: 'idle', pose: 'idle', targetOffsetX: null,
         is_prisoner: true, is_on_expedition: false, expedition_timer: 0 }
       : item),
     notice: `${inhabitant.id} foi transferido para a Cela de Detencao.`,
   };
+}
+
+export function detainRebel(state, inhabitantId) {
+  return arrestNPC(state, inhabitantId);
 }

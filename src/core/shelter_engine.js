@@ -1,4 +1,5 @@
 import { getDepthAdjustedScrapCost, getRoomUpgradeCosts, ROOM_MAX_LEVEL } from './bunker_economy.js';
+import { getPresidentClassModifiers } from './player_state.js';
 
 export const SLOT_WIDTH = 264;
 export const ROOM_HEIGHT = 146;
@@ -21,6 +22,7 @@ export const SHELTER_TYPES = Object.freeze({
   detention: Object.freeze({ name: 'Cela de Detenção', cost: 180, capacity: 0, accent: '#a9574c' }),
   laboratory: Object.freeze({ name: 'Laboratório de Pesquisa', cost: 300, capacity: 0, accent: '#79c7d1' }),
   life_support: Object.freeze({ name: 'Suporte de Vida', cost: 180, capacity: 0, accent: '#84cbd4' }),
+  presidential_suite: Object.freeze({ name: 'Suíte Presidencial', cost: 220, capacity: 0, accent: '#d3ae5d' }),
 });
 
 function emptyGrid() {
@@ -70,10 +72,10 @@ export function findBuildSlots(grid, type) {
   return slots;
 }
 
-export function getShelterBuildCost(type, floor) {
+export function getShelterBuildCost(type, floor, presidentClass = null) {
   const baseCost = SHELTER_TYPES[type]?.cost;
   if (!Number.isFinite(baseCost) || !Number.isInteger(floor) || floor < 0) return null;
-  return getDepthAdjustedScrapCost(baseCost, floor);
+  return Math.ceil(getDepthAdjustedScrapCost(baseCost, floor) * getPresidentClassModifiers(presidentClass).buildCostMultiplier);
 }
 
 export function normalizeShelterGrid(value) {
@@ -127,18 +129,20 @@ export function buildShelterRoom(state, type, floor, column) {
   if (!findBuildSlots(state.shelter_grid, type).some((slot) => slot.floor === floor && slot.column === column)) {
     return { ...state, notice: 'Construa ao lado de uma sala ou prolongue o elevador.' };
   }
-  const buildCost = getShelterBuildCost(type, floor);
+  const buildCost = getShelterBuildCost(type, floor, state.presidentClass);
   if ((Number(state.scrap) || 0) < buildCost) return { ...state, notice: 'Sucata insuficiente.' };
   const grid = state.shelter_grid.map((row) => [...row]);
   const roles = { generator: 'engineer', greenhouse: 'scientist', laboratory: 'scientist', medical: 'medic', arsenal: 'guard', radio: 'engineer', office: 'resident' };
-  const hasWorker = Array.isArray(state.inhabitants) && !['elevator', 'detention', 'life_support'].includes(type);
+  const hasWorker = Array.isArray(state.inhabitants) && !['elevator', 'detention', 'life_support', 'presidential_suite'].includes(type);
   const workerId = `worker-${floor}-${column}`;
   const productiveRoom = ['generator', 'greenhouse', 'laboratory'].includes(type);
   grid[floor][column] = makeRoom(type, floor, column, productiveRoom ? { staffedBy: workerId } : {});
-  const inhabitants = Array.isArray(state.inhabitants) && !['elevator', 'detention', 'life_support'].includes(type)
+  const inhabitants = Array.isArray(state.inhabitants) && !['elevator', 'detention', 'life_support', 'presidential_suite'].includes(type)
     ? [...state.inhabitants, { id: `worker-${floor}-${column}`, floor, column, offsetX: column % 2 ? -78 : 78,
+      currentRoomId: `${type}-${floor}-${column}`, state: productiveRoom ? 'working' : 'idle',
       role: roles[type] ?? 'resident', pose: ['generator', 'greenhouse', 'laboratory', 'medical', 'radio'].includes(type) ? 'working' : 'idle', facing: column % 2 ? 1 : -1,
       currentState: 'idle', targetOffsetX: null, waitSeconds: 1, loyalty: 100,
+      revoltChance: 20, lastTalkedDay: 0,
       name: 'Habitante Genérico', isVIP: false, modifier: 1,
       is_on_expedition: false, expedition_timer: 0, is_prisoner: false }]
     : state.inhabitants;
@@ -162,7 +166,7 @@ export function repairShelterGenerator(state, floor, column) {
 
 export function upgradeShelterRoom(state, floor, column) {
   const room = getRoom(state.shelter_grid, floor, column);
-  const costs = getRoomUpgradeCosts(room);
+  const costs = getRoomUpgradeCosts(room, state.presidentClass);
   if (!state.is_wasteland || !room || costs === null) {
     return { ...state, notice: 'Esta sala não pode receber mais melhorias.' };
   }

@@ -39,8 +39,9 @@ import { createRpgPlayer, normalizeInhabitants, normalizeRpgPlayer } from './rpg
 import { INITIAL_SHELTER_GRID, migrateLegacyPlayer, migrateLegacyRooms, normalizeShelterGrid, normalizeShelterInhabitants } from './shelter_engine.js';
 import { createEnvironmentState } from './environment.js';
 import { createExpeditionLocation } from './expeditions.js';
+import { normalizePlayerCosmetics } from './player_state.js';
 
-const STATE_VERSION = 21;
+const STATE_VERSION = 22;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
 const LOOT_RESOURCES = new Set(['scrap', 'food', 'energy', 'science', 'technology', 'medkits']);
 
@@ -201,6 +202,10 @@ export function createGameState(countryId = 'bra') {
     wasteland_cinematic_pending: false,
     wasteland_cinematic_ready: false,
     vault_built: false,
+    presidentClass: null,
+    president_selection_pending: false,
+    unlockedSkins: ['default'],
+    equippedSkin: 'default',
     scrap: 0,
     science: 0,
     shelter_grid: normalizeShelterGrid(INITIAL_SHELTER_GRID),
@@ -221,6 +226,7 @@ export function createGameState(countryId = 'bra') {
     lootbox_revealed_at: null,
     expeditionLocation: null,
     environment: createEnvironmentState(),
+    currentDay: 1,
     isNight: false,
     wasteland_turn: 0,
     wastelandMonthCounter: 0,
@@ -1060,6 +1066,7 @@ export function hydrateGameState(serialized) {
     const shelterGrid = normalizeShelterGrid(parsed.shelter_grid ?? migrateLegacyRooms(parsed.bunker_rooms));
     const currentLoot = normalizeLootItems(parsed.currentLoot);
     const pendingLoot = Boolean(parsed.is_wasteland && parsed.pendingLoot && currentLoot.length);
+    const playerCosmetics = normalizePlayerCosmetics(parsed);
     const hydrated = {
       ...base,
       country: {
@@ -1079,6 +1086,7 @@ export function hydrateGameState(serialized) {
         has_nukes: base.country.has_nukes,
       },
       environment,
+      currentDay: Math.max(1, Math.floor(Number(parsed.currentDay) || 1)),
       isNight: environment.isNight,
       expeditionLocation: typeof parsed.expeditionLocation?.city === 'string'
         ? createExpeditionLocation(parsed.expeditionLocation.city, parsed.expeditionLocation.source)
@@ -1212,6 +1220,9 @@ export function hydrateGameState(serialized) {
       title: typeof parsed.title === 'string' ? parsed.title : base.title,
       pendingGovernmentChoice: Boolean(parsed.pendingGovernmentChoice),
       is_wasteland: Boolean(parsed.is_wasteland),
+      ...playerCosmetics,
+      president_selection_pending: Boolean(parsed.president_selection_pending)
+        || (Boolean(parsed.is_wasteland) && !playerCosmetics.presidentClass),
       wasteland_cinematic_pending: Boolean(parsed.wasteland_cinematic_pending),
       wasteland_cinematic_ready: Boolean(parsed.wasteland_cinematic_ready),
       vault_built: Boolean(parsed.vault_built || parsed.megaprojects?.megaVault?.completed),

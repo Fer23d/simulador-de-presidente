@@ -35,16 +35,19 @@ test('only signs a trade treaty above relation 30 and outside war', () => {
   assert.equal(proposeTradeTreaty(eligible, 'usa').ok, true);
 });
 
-test('requires a trade treaty before an alliance can be proposed', () => {
+test('requires relation 50 before an alliance can be proposed', () => {
   const state = {
     ...createGeopolitics(),
-    contacts: createGeopolitics().contacts.map((item) => item.id === 'arg' ? { ...item, relation: 60 } : item),
+    contacts: createGeopolitics().contacts.map((item) => item.id === 'arg' ? { ...item, relation: 49 } : item),
   };
-  const withoutTreaty = proposeAlliance(state, 'arg');
-  const withTreaty = proposeTradeTreaty(state, 'arg');
+  const rejected = proposeAlliance(state, 'arg');
+  const accepted = proposeAlliance({
+    ...state,
+    contacts: state.contacts.map((item) => item.id === 'arg' ? { ...item, relation: 50 } : item),
+  }, 'arg');
 
-  assert.equal(withoutTreaty.ok, false);
-  assert.equal(proposeAlliance(withTreaty.geopolitics, 'arg').ok, true);
+  assert.equal(rejected.ok, false);
+  assert.equal(accepted.ok, true);
 });
 
 test('requires relation 50 or higher for an alliance invitation', () => {

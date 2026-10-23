@@ -122,7 +122,7 @@ test('the HUD shows science capacity, upgrade costs use red and green states, an
   const grid = base.shelter_grid.map((row) => [...row]);
   grid[0][2] = { id: 'greenhouse-0-2', type: 'greenhouse', floor: 0, column: 2, level: 3 };
   grid[0][3] = { id: 'laboratory-0-3', type: 'laboratory', floor: 0, column: 3, level: 1 };
-  const affordable = { ...base, shelter_grid: grid, scrap: 1650, science: 500 };
+  const affordable = { ...base, president_selection_pending: false, presidentClass: 'worker', shelter_grid: grid, scrap: 1650, science: 500 };
   const roomMarkup = renderRoomManagement(affordable, grid[0][2]);
   assert.match(bunkerView(affordable), /CIÊNCIA 500 \/ 500/);
   assert.match(roomMarkup, /resource-cost--enough/);

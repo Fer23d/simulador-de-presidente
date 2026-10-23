@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  AssetManager, DEFAULT_ASSETS, applyNightOverlay, drawActorSprite, getActorPlacement, renderRoom, renderSpriteScene,
+  AssetManager, DEFAULT_ASSETS, applyNightOverlay, drawActorSprite, drawPresident, getActorPlacement, renderRoom, renderSpriteScene,
   ROOM_FLOOR_THICKNESS, SPRITE_BOTTOM_PADDING,
 } from '../src/core/sprite_engine.js';
 import { buildShelterRoom, cellCenter, FLOOR_SPACING, INITIAL_SHELTER_GRID,
@@ -130,7 +130,7 @@ test('sprite scene draws images, repeats dirt, and never draws procedural geomet
     player: { ...cellCenter(0, 1), floor: 0, vx: 170, facing: 1, liftTarget: null },
     camera: { offset_x: 0, offset_y: 0 }, inhabitants: [], cabinFloor: 0, assets, time: 250 });
   assert.ok(drawn.length >= 6);
-  assert.ok(drawn.some((args) => args.length === 9));
+  assert.ok(drawn.some((args) => args.length === 5));
 });
 
 test('character sprite advances walk frames and rests on idle frame', () => {
@@ -181,6 +181,42 @@ test('the scene anchors both residents and the president to their own floor', ()
   assert.equal(feet.length, 2);
   assert.equal(feet[0][1], getActorPlacement({ floor: 0, column: 1, type: 'vault' }).floorY);
   assert.equal(feet[1][1], getActorPlacement({ floor: 0, column: 0, type: 'elevator' }).floorY);
+});
+
+test('president uses the exact NPC spritesheet frame, proportions, and floor placement for each profession', () => {
+  const operations = [];
+  const requested = [];
+  const npcSheet = { width: 1200, height: 800, id: 'npc_walk_sheet' };
+  const oldPresidentSheet = { width: 1536, height: 1024, id: 'character_sheet' };
+  const ctx = { save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, ellipse() {}, fill() {},
+    drawImage(...args) { operations.push([this.filter, ...args]); } };
+  const assets = { getImage(key) { requested.push(key); return key === 'npc_walk_sheet' ? npcSheet : oldPresidentSheet; } };
+  const placement = { height: 72, floorY: 410 };
+
+  drawPresident(ctx, { x: 50, y: placement.floorY, facing: 1 }, assets,
+    { presidentClass: 'commander', equippedSkin: 'golden', placement });
+  drawActorSprite(ctx, { x: 50, y: placement.floorY, facing: 1, role: 'guard' }, npcSheet, 0, placement,
+    'sepia(.82) saturate(1.8) brightness(1.12)');
+  assert.equal(requested[0], 'npc_walk_sheet');
+  assert.deepEqual(operations[0], operations[1]);
+  assert.equal(operations[0][1], npcSheet);
+  assert.deepEqual(operations[0].slice(2, 6), [0, 600, 300, 200]);
+
+  for (const [classId, row] of [['worker', 0], ['doctor', 2]]) {
+    operations.length = 0;
+    drawPresident(ctx, { x: 50, y: placement.floorY, facing: 1 }, assets,
+      { presidentClass: classId, equippedSkin: 'default', placement });
+    assert.equal(operations[0][1], npcSheet);
+    assert.equal(operations[0][3], row * 200);
+  }
+
+  operations.length = 0;
+  drawPresident(ctx, { x: 50, y: placement.floorY, facing: 1 }, assets,
+    { presidentClass: 'survivor', equippedSkin: 'default', placement });
+  assert.equal(requested.at(-1), 'character_sheet');
+  assert.equal(operations[0][1], oldPresidentSheet);
+  assert.equal(operations[0][3], 0);
+  assert.equal(operations[0][4], 384);
 });
 
 test('VIP render shows a gold star and specialist name over the distinct scientist sprite row', () => {

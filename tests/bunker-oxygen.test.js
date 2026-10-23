@@ -152,7 +152,7 @@ test('oxygen save fields hydrate safely, including legacy Wasteland reserves', (
 test('bunker HUD and life-support management display oxygen, depth demand, production, and maintenance', () => {
   const base = transicionarParaWasteland(createGameState('bra'));
   const grid = makeGrid([{ type: 'life_support', floor: 3, column: 1, level: 2 }]);
-  const state = { ...base, scrap: 1000, shelter_grid: grid, oxygen_deprived: true,
+  const state = { ...base, president_selection_pending: false, presidentClass: 'survivor', scrap: 1000, shelter_grid: grid, oxygen_deprived: true,
     shelter_supplies: { ...base.shelter_supplies, oxygen: 450 } };
   assert.match(bunkerView(state), /O₂ 450 \/ 900 · ALERTA/);
   assert.match(bunkerView(state), /oxygen-deprived/);

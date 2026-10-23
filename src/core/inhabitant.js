@@ -10,6 +10,9 @@ export class Inhabitant {
     this.id = data.id;
     this.floor = data.floor;
     this.column = data.column;
+    this.currentRoomId = typeof data.currentRoomId === 'string' ? data.currentRoomId : null;
+    this.previousRoomId = typeof data.previousRoomId === 'string' ? data.previousRoomId : null;
+    this.state = data.state === 'imprisoned' ? 'imprisoned' : data.state === 'working' ? 'working' : 'idle';
     this.role = data.role ?? 'resident';
     this.name = typeof data.name === 'string' && data.name.trim() ? data.name.slice(0, 60) : 'Habitante Genérico';
     this.isVIP = data.isVIP === true;
@@ -21,6 +24,8 @@ export class Inhabitant {
       ? clamp(data.targetOffsetX, -MAX_OFFSET, MAX_OFFSET) : null;
     this.currentState = STATES.has(data.currentState) ? data.currentState : 'idle';
     this.loyalty = clamp(Number(data.loyalty ?? 100), 0, 100);
+    this.revoltChance = clamp(Number(data.revoltChance ?? 20), 0, 100);
+    this.lastTalkedDay = Math.max(0, Math.floor(Number(data.lastTalkedDay) || 0));
     this.workFloor = Number.isInteger(data.workFloor) ? data.workFloor : null;
     this.workColumn = Number.isInteger(data.workColumn) ? data.workColumn : null;
     this.rebellionCheckDone = data.rebellionCheckDone === true;
@@ -70,6 +75,8 @@ export class Inhabitant {
       name: this.name, isVIP: this.isVIP, modifier: this.modifier,
       currentState: this.currentState, targetOffsetX: this.targetOffsetX, waitSeconds: this.waitSeconds,
       loyalty: this.loyalty, workFloor: this.workFloor, workColumn: this.workColumn,
+      revoltChance: this.revoltChance, lastTalkedDay: this.lastTalkedDay,
+      currentRoomId: this.currentRoomId, previousRoomId: this.previousRoomId, state: this.state,
       rebellionCheckDone: this.rebellionCheckDone,
       is_on_expedition: this.is_on_expedition, expedition_timer: this.expedition_timer,
       ...(this.expedition_destination ? { expedition_destination: this.expedition_destination } : {}),
