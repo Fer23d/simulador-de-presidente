@@ -5,6 +5,7 @@ import { createInitialInhabitants, createRpgPlayer, findNearbyTrigger, getElevat
   getElevatorPrompt, getElevatorShaftBounds, normalizeInhabitants, updatePlayer } from '../src/core/rpg_bunker.js';
 import { createGameState, hydrateGameState } from '../src/core/game-state.js';
 import { advanceWastelandMonth, transicionarParaWasteland } from '../src/core/wasteland.js';
+import { createRpgBunkerEngine, findNearbyInhabitant } from '../src/core/rpg_bunker.js';
 
 function expandedGrid() {
   let state = { is_wasteland: true, scrap: 1000, shelter_grid: INITIAL_SHELTER_GRID };
@@ -50,6 +51,56 @@ test('object trigger belongs to the current room', () => {
   const atGenerator = { ...createRpgPlayer(grid), x: cellCenter(0, 2).x };
   assert.equal(findNearbyTrigger(atGenerator, grid)?.room.type, 'generator');
   assert.equal(findNearbyTrigger({ ...atGenerator, x: atGenerator.x - 100 }, grid), null);
+});
+
+test('nearby inhabitant prompt uses world coordinates and ignores expedition NPCs', () => {
+  const grid = INITIAL_SHELTER_GRID;
+  const player = createRpgPlayer(grid);
+  const npc = { id: 'doctor-1', role: 'medic', floor: 0, column: 1, offsetX: 0 };
+  assert.equal(findNearbyInhabitant(player, grid, [npc])?.npc.id, npc.id);
+  assert.match(findNearbyInhabitant(player, grid, [npc])?.label ?? '', /\[ E \] FALAR/);
+  assert.equal(findNearbyInhabitant(player, grid, [{ ...npc, is_on_expedition: true }]), null);
+});
+
+test('E opens a nearby dialogue and Space closes it, resuming the bunker', async () => {
+  const listeners = new Map();
+  const previous = { window: globalThis.window, Image: globalThis.Image,
+    document: globalThis.document, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame };
+  globalThis.window = { addEventListener: (name, fn) => listeners.set(name, fn), removeEventListener: (name) => listeners.delete(name) };
+  globalThis.document = { activeElement: null };
+  globalThis.requestAnimationFrame = () => 1;
+  globalThis.cancelAnimationFrame = () => {};
+  globalThis.Image = class {
+    set src(_value) { queueMicrotask(() => this.onerror?.()); }
+  };
+  const noop = () => {};
+  const ctx = new Proxy({ canvas: { width: 960, height: 600 }, createPattern: () => ({}),
+    createRadialGradient: () => ({ addColorStop: noop }), measureText: () => ({ width: 0 }) }, {
+    get(target, key) { return key in target ? target[key] : noop; },
+  });
+  const canvas = { width: 960, height: 600, getContext: () => ctx,
+    addEventListener: noop, removeEventListener: noop, getBoundingClientRect: () => ({ left: 0, top: 0, width: 960, height: 600 }) };
+  const opened = [];
+  const closed = [];
+  try {
+    const engine = createRpgBunkerEngine(canvas, { inhabitants: [
+      { id: 'doctor-1', role: 'medic', floor: 0, column: 1, offsetX: 0 },
+    ], onDialogue: (npc) => opened.push(npc), onDialogueClose: (npc) => closed.push(npc) });
+    await engine.ready;
+    listeners.get('keydown')({ key: 'e', repeat: false, preventDefault: noop });
+    assert.equal(opened[0]?.id, 'doctor-1');
+    assert.equal(engine.getSnapshot().dialogueOpen, true);
+    listeners.get('keydown')({ key: ' ', repeat: false, preventDefault: noop });
+    assert.equal(closed[0]?.id, 'doctor-1');
+    assert.equal(engine.getSnapshot().dialogueOpen, false);
+    engine.destroy();
+  } finally {
+    globalThis.window = previous.window;
+    globalThis.Image = previous.Image;
+    globalThis.document = previous.document;
+    globalThis.requestAnimationFrame = previous.requestAnimationFrame;
+    globalThis.cancelAnimationFrame = previous.cancelAnimationFrame;
+  }
 });
 
 test('new functional rooms can be constructed and produce resources', () => {
@@ -110,4 +161,15 @@ test('NPC walk state survives hydration without leaving the assigned room', () =
   assert.equal(restored.inhabitants[0].currentState, 'walking_right');
   assert.equal(restored.inhabitants[0].targetOffsetX, 96);
   assert.equal(restored.inhabitants[0].floor, 0);
+});
+
+test('daily dialogue cooldown persists with the game save', () => {
+  const base = transicionarParaWasteland(createGameState('bra'));
+  const saved = { ...base, currentDay: 9, inhabitants: base.inhabitants.map((npc, index) => index === 0
+    ? { ...npc, lastTalkedDay: 8, revoltChance: 5 } : npc) };
+  const restored = hydrateGameState(JSON.stringify(saved));
+
+  assert.equal(restored.currentDay, 9);
+  assert.equal(restored.inhabitants[0].lastTalkedDay, 8);
+  assert.equal(restored.inhabitants[0].revoltChance, 5);
 });

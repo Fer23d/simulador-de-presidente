@@ -1,11 +1,12 @@
 import { cellCenter, FLOOR_SPACING, ROOM_HEIGHT, SLOT_WIDTH, WORLD_LEFT, WORLD_TOP } from './shelter_engine.js';
 import { renderLootboxOverlay } from './lootbox_renderer.js';
+import { getPresidentClass, getSkin } from './player_state.js';
 
 const SURFACE_Y = WORLD_TOP - 30;
 const ATLAS_CELLS = Object.freeze({
   vault: [0, 0], elevator: [1, 0], dormitory: [2, 0],
   generator: [0, 1], greenhouse: [1, 1], arsenal: [2, 1],
-  medical: [0, 2], radio: [1, 2], office: [2, 2], detention: [2, 2],
+  medical: [0, 2], radio: [1, 2], office: [2, 2], detention: [2, 2], presidential_suite: [2, 2],
 });
 const ROOM_AMBIENT_LIGHTS = Object.freeze({
   medical: Object.freeze(['rgba(200, 240, 255, .3)', 'rgba(200, 240, 255, .12)']),
@@ -258,7 +259,7 @@ export function getActorPlacement(room, { liftY } = {}) {
     floorY: roomY + ROOM_HEIGHT - ROOM_FLOOR_THICKNESS + SPRITE_BOTTOM_PADDING };
 }
 
-export function drawActorSprite(ctx, actor, image, time = 0, placement = { height: ROOM_HEIGHT * .55 }) {
+export function drawActorSprite(ctx, actor, image, time = 0, placement = { height: ROOM_HEIGHT * .55 }, filter = 'none') {
   const president = actor.role === 'president';
   const walking = president ? Math.abs(actor.vx ?? 0) > 1 : actor.currentState?.startsWith('walking_');
   const frame = walking ? 1 + Math.floor(time / 140) % 3 : 0;
@@ -277,8 +278,23 @@ export function drawActorSprite(ctx, actor, image, time = 0, placement = { heigh
   ctx.save();
   ctx.translate(actor.x, actor.y);
   if (actor.facing === -1) ctx.scale(-1, 1);
+  ctx.filter = filter;
   drawOrMissing(ctx, image, -width / 2, -height, width, height, crop);
   ctx.restore();
+}
+
+export function drawPresident(ctx, actor, assets, { presidentClass, equippedSkin = 'default', time = 0,
+  placement = { height: ROOM_HEIGHT * .55 } } = {}) {
+  const skin = getSkin(equippedSkin);
+  const filter = skin?.filter ?? 'none';
+  const profile = getPresidentClass(presidentClass)
+    ?? getPresidentClass('survivor');
+  const role = profile.spriteRole;
+  const currentState = Math.abs(actor.vx ?? 0) > 1
+    ? (actor.vx < 0 ? 'walking_left' : 'walking_right') : 'idle';
+  const image = assets?.getImage?.(profile.spriteSheet)
+    ?? assets?.getImage?.('character_sheet');
+  return drawActorSprite(ctx, { ...actor, role, currentState }, image, time, placement, filter);
 }
 
 function renderGreenhouseGlow(ctx, room) {
@@ -321,7 +337,8 @@ export function applyOxygenDeprivationOverlay(ctx, width, height, oxygenDeprived
 }
 
 export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants = [], cabinFloor = player.floor,
-  time = 0, isNight = false, activeGenerators = 0, oxygenDeprived = false, lootbox = {} }) {
+  time = 0, isNight = false, activeGenerators = 0, oxygenDeprived = false, lootbox = {},
+  presidentClass = null, equippedSkin = 'default' }) {
   renderSurface(ctx, camera, assets);
   renderDirt(ctx, camera, assets);
   ctx.save();
@@ -386,11 +403,9 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
   const playerRoom = grid[player.floor]?.[playerColumn] ?? { floor: player.floor, column: playerColumn, type: 'vault' };
   const placement = getActorPlacement(playerRoom,
     player.liftTarget !== null ? { liftY: player.y } : {});
-  const physicalFloorY = cellCenter(player.floor, playerColumn).y;
-  const playerY = playerRoom.type === 'elevator' ? placement.floorY
-    : placement.floorY + Math.min(0, player.y - physicalFloorY);
-  drawActorSprite(ctx, { ...player, y: playerY, role: 'president' },
-    assets.getImage('character_sheet'), time, placement);
+  const playerY = placement.floorY;
+  drawPresident(ctx, { ...player, y: playerY, role: 'president' }, assets,
+    { presidentClass, equippedSkin, time, placement });
   for (const room of grid.flat()) if (room?.type === 'detention') renderDetentionBars(ctx, room);
   for (const room of grid.flat()) if (room?.type === 'greenhouse') renderGreenhouseGlow(ctx, room);
   ctx.restore();

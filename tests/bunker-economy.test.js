@@ -39,6 +39,15 @@ test('only assigned active staff contributes output and low morale halves each w
   assert.equal(empty.production.amount, 0);
 });
 
+test('Commander increases food consumption while Operário discounts upgrade costs', () => {
+  const room = { id: 'producer', type: 'generator', floor: 0, column: 2, level: 1, operational: true };
+  const commander = { is_wasteland: true, presidentClass: 'commander', country: { populacao_base: 1000 },
+    shelter_grid: [[null, null, room]], inhabitants: [] };
+  assert.equal(getRoomEconomyProfile(commander, room).consumption.food, 3);
+  const worker = { ...productionState({ ...room, level: 1 }), presidentClass: 'worker' };
+  assert.equal(getRoomEconomyProfile(worker, room).nextLevel.cost.scrap, 281);
+});
+
 test('upgrade prices and supported room levels reach level five', () => {
   const room = { id: 'producer', type: 'generator', floor: 0, column: 2, level: 1, operational: true };
   assert.deepEqual([1, 2, 3, 4, 5].map((level) => getRoomUpgradeCost({ ...room, level })), [330, 880, 1650, 2750, null]);

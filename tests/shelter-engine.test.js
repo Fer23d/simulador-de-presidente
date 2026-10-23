@@ -18,6 +18,7 @@ import {
   normalizeShelterInhabitants,
   normalizeShelterGrid,
   repairShelterGenerator,
+  SHELTER_TYPES,
   upgradeShelterRoom,
 } from '../src/core/shelter_engine.js';
 
@@ -26,6 +27,13 @@ test('o Vault comeca como uma sala inteira ao lado do elevador', () => {
   assert.equal(INITIAL_SHELTER_GRID[0][1].type, 'vault');
   assert.equal(findBuildSlots(INITIAL_SHELTER_GRID, 'dormitory').some((slot) => slot.floor === 0 && slot.column === 2), true);
   assert.equal(findBuildSlots(INITIAL_SHELTER_GRID, 'elevator').some((slot) => slot.floor === 1 && slot.column === 0), true);
+});
+
+test('a presidential suite is a buildable room with its own capacity and is available in the room catalog', () => {
+  assert.equal(SHELTER_TYPES.presidential_suite.name, 'Suíte Presidencial');
+  const built = buildShelterRoom({ is_wasteland: true, scrap: 1000, shelter_grid: INITIAL_SHELTER_GRID }, 'presidential_suite', 0, 2);
+  assert.equal(getRoom(built.shelter_grid, 0, 2).type, 'presidential_suite');
+  assert.equal(built.scrap, 758);
 });
 
 test('construcao desconta sucata, exige suporte e nao altera o estado anterior', () => {
@@ -144,7 +152,7 @@ test('saves antigos migram para a grelha lateral sem perder salas', () => {
   const restored = hydrateGameState(JSON.stringify({ ...state, version: 15, bunker_rooms: old, bunker_player: { x: 6, y: 2, facing: 'east' }, shelter_grid: undefined, shelter_inhabitants: undefined }));
   assert.equal(restored.shelter_grid.flat().filter(Boolean).length, 4);
   assert.equal(restored.shelter_inhabitants.find((actor) => actor.id === 'president')?.column, 2);
-  assert.equal(restored.version, 21);
+  assert.equal(restored.version, 22);
 });
 
 test('grid normalization preserves a clamped quarantine timer only on greenhouses', () => {
@@ -189,7 +197,14 @@ test('destinos e posicoes dos habitantes sobrevivem ao save e entradas invalidas
 
 test('a interface oferece controle direto, gestão de salas e expansão', () => {
   const state = transicionarParaWasteland(createGameState('bra'));
-  const markup = bunkerView(state);
+  const selectionMarkup = bunkerView(state);
+  assert.match(selectionMarkup, /presidentSelectCanvas/);
+  assert.match(selectionMarkup, /data-class="worker"/);
+  assert.match(selectionMarkup, /data-class="commander"/);
+  assert.match(selectionMarkup, /data-class="doctor"/);
+  assert.match(selectionMarkup, /data-class="survivor"/);
+
+  const markup = bunkerView({ ...state, president_selection_pending: false, presidentClass: 'worker' });
   assert.match(markup, /data-action="shelter-build-mode"/);
   assert.match(markup, /id="shelterCanvas"/);
   assert.match(markup, /PRESIDENTE EM PATRULHA/);

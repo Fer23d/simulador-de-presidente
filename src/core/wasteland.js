@@ -6,6 +6,7 @@ import { createInitialInhabitants, createRpgPlayer } from './rpg_bunker.js';
 import { advanceMonthlyGameMechanics, getRoomProductivityMultiplier, getWastelandEvent, WASTELAND_EVENTS } from './game_mechanics.js';
 import { createEnvironmentState } from './environment.js';
 import { nextRandom } from './geopolitics.js';
+import { getPresidentClassModifiers } from './player_state.js';
 
 const VAULT_CASH_COST = 500_000_000_000;
 const VAULT_STEEL_COST = 50_000;
@@ -55,6 +56,10 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
   return {
     ...state,
     is_wasteland: true,
+    presidentClass: null,
+    president_selection_pending: true,
+    unlockedSkins: ['default'],
+    equippedSkin: 'default',
     wasteland_cinematic_pending: true,
     wasteland_cinematic_ready: false,
     unlocked_chapters: [...new Set([...(state.unlocked_chapters ?? []), 'cap_5_wasteland'])],
@@ -140,6 +145,7 @@ export function advanceWastelandMonth(state) {
   const countLevels = (type) => rooms.filter((room) => room.type === type).reduce((total, room) => total + room.level, 0);
   const arsenals = countLevels('arsenal');
   const medical = countLevels('medical');
+  const radiationGain = 2 * getPresidentClassModifiers(state.presidentClass).radiationGainMultiplier;
   const radio = countLevels('radio');
   const offices = countLevels('office');
   const population = Math.min(calculateShelterCapacity(grid), state.country.populacao_base + greenhouseWorkUnits * 5 + medical * 2 + radio * 3);
@@ -175,7 +181,7 @@ export function advanceWastelandMonth(state) {
     shelter_supplies: supplies,
     oxygen_shortage_turns: oxygenShortageTurns,
     oxygen_deprived: oxygenDeficit,
-    shelter_radiation: Math.max(0, Math.min(100, (Number(state.shelter_radiation) || 0) + 2 - medical)),
+    shelter_radiation: Math.max(0, Math.min(100, (Number(state.shelter_radiation) || 0) + radiationGain - medical)),
     country: { ...state.country, populacao: population, populacao_base: population },
     notice: 'O Vault sobrevive mais um mês. Os módulos operacionais sustentam a população.',
   };

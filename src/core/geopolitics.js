@@ -136,7 +136,7 @@ export function proposeAlliance(geopolitics, contactId) {
   const contact = geopolitics.contacts.find((item) => item.id === contactId);
   if (!contact) return rejected(geopolitics, 'Pais nao encontrado.');
   if (contact.atWar) return rejected(geopolitics, 'Nao e possivel formar alianca durante uma guerra.');
-  if (!contact.tradeTreaty || contact.relation < 50) return rejected(geopolitics, 'Alianca exige acordo comercial e relacao de ao menos 50.');
+  if (contact.relation < 50) return rejected(geopolitics, 'A aliança exige relação diplomática de ao menos 50.');
   if (contact.alliance) return rejected(geopolitics, 'Alianca ja esta em vigor.');
   return {
     ok: true,

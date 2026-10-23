@@ -6,7 +6,8 @@ import {
 import { AssetManager, DEFAULT_ASSETS, renderSpriteScene } from './sprite_engine.js';
 import { isLootboxCrateClick } from './lootbox_renderer.js';
 import { Inhabitant } from './inhabitant.js';
-import { advanceEnvironmentCycle, countActiveGenerators, createEnvironmentState, getNpcMovementDelta } from './environment.js';
+import { advanceEnvironmentCycle, countActiveGenerators, createEnvironmentState, FULL_CYCLE_MS, getNpcMovementDelta } from './environment.js';
+import { chooseDialogueLine } from './dialogues.js';
 
 const WALK_SPEED = 170;
 const LIFT_SPEED = 280;
@@ -19,6 +20,7 @@ const LABELS = Object.freeze({
   radio: 'OPERAR A SALA DE RÁDIO', office: 'ENTRAR NO GABINETE',
   life_support: 'ACEDER AO SUPORTE DE VIDA',
   detention: 'INSPECIONAR A CELA DE DETENÇÃO',
+  presidential_suite: 'ABRIR O GUARDA-ROUPA',
 });
 
 export function createRpgPlayer(grid = INITIAL_SHELTER_GRID) {
@@ -54,6 +56,54 @@ export function findNearbyTrigger(player, grid) {
   const center = cellCenter(room.floor, room.column);
   return Math.abs(player.x - center.x) <= TRIGGER_RADIUS
     ? { room, label: `[ E ] ${LABELS[room.type] ?? 'GERIR SALA'}` } : null;
+}
+
+export function findNearbyInhabitant(player, grid, inhabitants = [], range = 50) {
+  if (!player || player.liftTarget !== null) return null;
+  const nearby = inhabitants.filter((npc) => npc && !npc.is_on_expedition
+    && npc.currentState !== 'rebel' && npc.floor === player.floor && getRoom(grid, npc.floor, npc.column))
+    .map((npc) => {
+      const npcX = WORLD_LEFT + npc.column * SLOT_WIDTH + SLOT_WIDTH / 2 + (Number(npc.offsetX) || 0);
+      const npcY = cellCenter(npc.floor, npc.column).y;
+      return { npc, distance: Math.hypot(player.x - npcX, player.y - npcY) };
+    })
+    .filter(({ distance }) => distance <= range)
+    .sort((a, b) => a.distance - b.distance)[0];
+  return nearby ? { ...nearby, label: '[ E ] FALAR' } : null;
+}
+
+function drawDialoguePrompt(ctx, npc, camera) {
+  const x = WORLD_LEFT + npc.column * SLOT_WIDTH + SLOT_WIDTH / 2 + (Number(npc.offsetX) || 0) + camera.offset_x;
+  const y = cellCenter(npc.floor, npc.column).y + camera.offset_y - 72;
+  const label = '[ E ] FALAR';
+  ctx.save();
+  ctx.font = 'bold 14px "Share Tech Mono", monospace';
+  const width = Math.ceil(ctx.measureText(label).width) + 18;
+  ctx.fillStyle = 'rgba(5, 10, 8, .94)';
+  ctx.fillRect(x - width / 2, y - 19, width, 25);
+  ctx.strokeStyle = '#ffce66';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x - width / 2, y - 19, width, 25);
+  ctx.fillStyle = '#8dffae';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x, y - 6);
+  ctx.restore();
+}
+
+function drawPacificationFeedback(ctx, npc, camera, elapsed) {
+  const x = WORLD_LEFT + npc.column * SLOT_WIDTH + SLOT_WIDTH / 2 + (Number(npc.offsetX) || 0) + camera.offset_x;
+  const y = cellCenter(npc.floor, npc.column).y + camera.offset_y - 75 - elapsed * .025;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, 1 - elapsed / 1_600);
+  ctx.font = 'bold 16px "Share Tech Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#39ff14';
+  ctx.shadowColor = '#39ff14';
+  ctx.shadowBlur = 8;
+  ctx.fillText('+15 LEALDADE', x, y);
+  ctx.restore();
 }
 
 export function findNearbyRebel(player, grid, inhabitants = []) {
@@ -118,15 +168,17 @@ export function updatePlayer(player, input, grid, deltaSeconds, oxygenDeprived =
 export function createInitialInhabitants(grid = INITIAL_SHELTER_GRID) {
   if (!getRoom(grid, 0, 1)) return [];
   return [
-    { id: 'vault-resident-1', floor: 0, column: 1, offsetX: -78, role: 'resident', pose: 'seated', facing: 1,
+    { id: 'vault-resident-1', floor: 0, column: 1, offsetX: -78, currentRoomId: 'vault-0-1', role: 'resident', pose: 'seated', facing: 1,
       currentState: 'idle', targetOffsetX: null, waitSeconds: 1, loyalty: 100,
+      revoltChance: 20, lastTalkedDay: 0,
       name: 'Habitante Genérico', isVIP: false, modifier: 1,
-      workFloor: null, workColumn: null, rebellionCheckDone: false,
+      workFloor: null, workColumn: null, state: 'idle', rebellionCheckDone: false,
       is_on_expedition: false, expedition_timer: 0, is_prisoner: false },
-    { id: 'vault-engineer-1', floor: 0, column: 1, offsetX: 78, role: 'engineer', pose: 'working', facing: -1,
+    { id: 'vault-engineer-1', floor: 0, column: 1, offsetX: 78, currentRoomId: 'vault-0-1', role: 'engineer', pose: 'working', facing: -1,
       currentState: 'idle', targetOffsetX: null, waitSeconds: 1, loyalty: 100,
+      revoltChance: 20, lastTalkedDay: 0,
       name: 'Habitante Genérico', isVIP: false, modifier: 1,
-      workFloor: null, workColumn: null, rebellionCheckDone: false,
+      workFloor: null, workColumn: null, state: 'idle', rebellionCheckDone: false,
       is_on_expedition: false, expedition_timer: 0, is_prisoner: false },
   ];
 }
@@ -159,8 +211,17 @@ export function normalizeInhabitants(value, grid) {
       targetOffsetX: npc.currentState === 'rebel' ? null : targetOffsetX,
       waitSeconds: Number.isFinite(npc.waitSeconds) ? Math.max(0, Math.min(6, npc.waitSeconds)) : 1,
       loyalty: Math.max(0, Math.min(100, Number(npc.loyalty ?? 100))),
+      revoltChance: Math.max(0, Math.min(100, Number(npc.revoltChance ?? 20))),
+      lastTalkedDay: Math.max(0, Math.floor(Number(npc.lastTalkedDay) || 0)),
       workFloor: Number.isInteger(npc.workFloor) ? npc.workFloor : legacyWorkRoom ? npc.floor : null,
       workColumn: Number.isInteger(npc.workColumn) ? npc.workColumn : legacyWorkRoom ? npc.column : null,
+      currentRoomId: typeof npc.currentRoomId === 'string' && grid.flat().some((room) => room?.id === npc.currentRoomId)
+        ? npc.currentRoomId : grid.flat().find((candidate) => candidate?.floor === (npc.workFloor ?? (legacyWorkRoom ? npc.floor : null))
+          && candidate?.column === (npc.workColumn ?? (legacyWorkRoom ? npc.column : null)))?.id ?? room.id,
+      ...(typeof npc.previousRoomId === 'string' && grid.flat().some((candidate) => candidate?.id === npc.previousRoomId)
+        ? { previousRoomId: npc.previousRoomId } : {}),
+      state: npc.is_prisoner === true || npc.state === 'imprisoned' ? 'imprisoned'
+        : npc.state === 'working' ? 'working' : 'idle',
       rebellionCheckDone: npc.rebellionCheckDone === true,
       is_on_expedition: npc.is_on_expedition === true,
       expedition_timer: Math.max(0, Math.floor(Number(npc.expedition_timer) || 0)),
@@ -196,7 +257,9 @@ export const renderRpgBunker = renderSpriteScene;
 export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, player: savedPlayer,
   inhabitants = [], cabinFloor: savedCabinFloor, onBuild, onRoom, onPlayerChanged, onInhabitantsChanged, onHint,
   onDetain, onAssetsReady, onEnvironmentChanged, environment = {}, isNight = environment?.isNight ?? false,
-  oxygenDeprived = false, assetUrls = {}, lootbox = {}, onLootboxClick } = {}) {
+  oxygenDeprived = false, assetUrls = {}, lootbox = {}, onLootboxClick,
+  presidentClass = null, equippedSkin = 'default', currentDay = 1, onDayPassed,
+  onDialogue, onDialogueClose } = {}) {
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
   const assets = new AssetManager({ ...DEFAULT_ASSETS, ...assetUrls });
@@ -207,6 +270,8 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   let buildMode = false;
   let buildType = 'dormitory';
   let paused = false;
+  let dialogueNpc = null;
+  let pacificationFeedback = null;
   let destroyed = false;
   let frameId = null;
   let lastTime = 0;
@@ -226,7 +291,13 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     const dt = lastTime ? (time - lastTime) / 1000 : 0;
     lastTime = time;
     const previousNight = dayNight.isNight;
+    const fullCycleProgress = dayNight.elapsedMs + Math.max(0, dt * 1000);
+    const daysPassed = Math.floor(fullCycleProgress / FULL_CYCLE_MS);
     dayNight = advanceEnvironmentCycle(dayNight, dt * 1000);
+    if (daysPassed > 0) {
+      currentDay = Math.max(1, (Number(currentDay) || 1) + daysPassed);
+      onDayPassed?.(daysPassed);
+    }
     const phaseChanged = previousNight !== dayNight.isNight;
     if (phaseChanged || time - lastEnvironmentNotice >= 1_000) {
       const persist = phaseChanged || time - lastEnvironmentSave >= 10_000;
@@ -254,19 +325,46 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     camera.offset_x += (targetX - camera.offset_x) * Math.min(1, dt * 8);
     camera.offset_y += (targetY - camera.offset_y) * Math.min(1, dt * 8);
     renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants: actors, cabinFloor, time,
-      isNight: dayNight.isNight, activeGenerators, oxygenDeprived, lootbox });
+      isNight: dayNight.isNight, activeGenerators, oxygenDeprived, lootbox, presidentClass, equippedSkin });
     const rebel = findNearbyRebel(player, grid, actors.map((actor) => actor.snapshot()));
+    const nearbyInhabitant = findNearbyInhabitant(player, grid, actors.map((actor) => actor.snapshot()));
+    if (!paused && !buildMode && nearbyInhabitant) drawDialoguePrompt(ctx, nearbyInhabitant.npc, camera);
+    if (pacificationFeedback && time - pacificationFeedback.startedAt < 1_600) {
+      drawPacificationFeedback(ctx, pacificationFeedback.npc, camera, time - pacificationFeedback.startedAt);
+    } else pacificationFeedback = null;
     const hint = paused || buildMode ? '' : rebel?.label || getElevatorPrompt(player, grid) || findNearbyTrigger(player, grid)?.label || '';
     if (hint !== lastHint) { lastHint = hint; onHint?.(hint); }
     frameId = requestAnimationFrame(frame);
   }
 
   function editable() {
-    return ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
+    const activeElement = globalThis.document?.activeElement;
+    return ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement?.tagName) || activeElement?.isContentEditable;
+  }
+  function finishDialogue() {
+    if (!dialogueNpc) return;
+    const npc = dialogueNpc;
+    dialogueNpc = null;
+    paused = false;
+    keys.clear();
+    const update = onDialogueClose?.(npc);
+    if (update && typeof update === 'object') {
+      const actor = actors.find((candidate) => candidate.id === npc.id);
+      if (actor) Object.assign(actor, update);
+      pacificationFeedback = { npc: actor?.snapshot() ?? { ...npc, ...update }, startedAt: performance.now() };
+    }
+    onHint?.('');
   }
   function keydown(event) {
-    if (paused || buildMode || editable()) return;
     const key = event.key.toLowerCase();
+    if (dialogueNpc) {
+      if (key === 'e' || key === ' ' || key === 'spacebar') {
+        event.preventDefault();
+        finishDialogue();
+      }
+      return;
+    }
+    if (paused || buildMode || editable()) return;
     if (!['a', 'd', 'w', 's', 'e', 'arrowleft', 'arrowright', 'arrowup', 'arrowdown'].includes(key)) return;
     event.preventDefault();
     if (key === 'e' && !event.repeat) {
@@ -278,6 +376,14 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
           keys.clear();
           onDetain(rebel.npc.id);
         }
+        return;
+      }
+      const nearby = findNearbyInhabitant(player, grid, actors.map((actor) => actor.snapshot()));
+      if (nearby) {
+        dialogueNpc = nearby.npc;
+        paused = true;
+        keys.clear();
+        onDialogue?.(nearby.npc, chooseDialogueLine(nearby.npc));
         return;
       }
       const trigger = findNearbyTrigger(player, grid);
@@ -312,12 +418,14 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   return {
     ready,
     getSnapshot: () => ({ player: { ...player }, camera: { ...camera }, cabinFloor,
+      dialogueOpen: Boolean(dialogueNpc), currentDay,
       environment: { elapsedMs: dayNight.elapsedMs, isNight: dayNight.isNight },
       inhabitants: actors.map((actor) => actor.snapshot()) }),
     setBuildMode(value) { buildMode = Boolean(value); keys.clear(); },
     setBuildType(value) { if (SHELTER_TYPES[value]) buildType = value; },
     pause() { paused = true; keys.clear(); },
     resume() { paused = false; },
+    closeDialogue() { finishDialogue(); },
     destroy() {
       destroyed = true;
       if (frameId !== null) cancelAnimationFrame(frameId);

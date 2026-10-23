@@ -7,6 +7,18 @@ test('dashboard module exports a mount point', async () => {
   assert.equal(typeof mountDashboard, 'function');
 });
 
+test('bunker screen includes an initially hidden dialogue overlay', async () => {
+  const { bunkerView } = await import('../src/ui/dashboard.js');
+  const { createGameState } = await import('../src/core/game-state.js');
+  const { transicionarParaWasteland } = await import('../src/core/wasteland.js');
+  const wasteland = transicionarParaWasteland(createGameState('bra'));
+  const markup = bunkerView({ ...wasteland, president_selection_pending: false, presidentClass: 'survivor' });
+
+  assert.match(markup, /data-dialogue-modal[^>]*hidden/);
+  assert.match(markup, /data-dialogue-text/);
+  assert.match(markup, /data-action="close-dialogue"/);
+});
+
 test('formats dashboard money values through a callable formatter', async () => {
   const { formatMoney } = await import('../src/ui/dashboard.js');
 
@@ -48,6 +60,24 @@ test('renders a searchable and scrollable full diplomacy list', async () => {
   assert.match(view, /Propor Acordo Comercial/);
   assert.match(view, /Argentina/);
   assert.match(view, /data-diplomacy-row/);
+});
+
+test('renders the alliance invitation and disables it below relation 50', async () => {
+  const { diplomacyView } = await import('../src/ui/dashboard.js');
+  const { createGameState } = await import('../src/core/game-state.js');
+  const state = createGameState('bra');
+  const belowThreshold = diplomacyView({
+    ...state,
+    world: state.world.map((contact) => contact.id === 'arg' ? { ...contact, relation: 49 } : contact),
+  });
+  const atThreshold = diplomacyView({
+    ...state,
+    world: state.world.map((contact) => contact.id === 'arg' ? { ...contact, relation: 50 } : contact),
+  });
+
+  assert.match(belowThreshold, /Propor Aliança/);
+  assert.match(belowThreshold, /data-action="alliance" data-contact="arg" disabled/);
+  assert.match(atThreshold, /data-action="alliance" data-contact="arg" \>/);
 });
 
 test('renders the blocking Article 5 alliance invocation modal', async () => {
@@ -121,8 +151,8 @@ test('renders cyber operations only after military research and the internal pro
   const state = createGameState('bra');
   const unlocked = { ...state, unlocked_techs: ['cyber'] };
 
-  assert.doesNotMatch(diplomacyView(state), /Lancar Ciberataque/);
-  assert.match(diplomacyView(unlocked), /Lancar Ciberataque/);
+  assert.doesNotMatch(diplomacyView(state), /Lançar Ciberataque/);
+  assert.match(diplomacyView(unlocked), /Lançar Ciberataque/);
   assert.match(projectsView(state), /Automatizar Parque Industrial/);
 });
 
@@ -136,7 +166,7 @@ test('renders biological warfare and the constitutional action when they are unl
     unlocked_techs: ['bio'],
   };
 
-  assert.match(diplomacyView(prepared, 'argentina'), /Lancar Virus Sintetico/);
+  assert.match(diplomacyView(prepared, 'argentina'), /Lançar Vírus Sintético/);
   assert.match(congressView(prepared), /Promulgar Nova Constituicao/);
 });
 
@@ -176,7 +206,7 @@ test('renders final dilemma, escape, interrogation terminals, and Deep State con
   assert.match(renderEscapeEnding({ escape_ending_triggered: true, slush_fund: 50_000_000_000 }), /HELICOPTERO PRIVADO/);
   assert.match(renderInterrogation({ pendingInterrogation: { phase: 'choice' } }), /PRISIONEIRO #847/);
   assert.match(budgetView(state, projectBudget(state.economy, state.budget)), /Ilhas Cayman/);
-  assert.match(diplomacyView(state, 'argentina'), /Infiltrar Sosia do Lider/);
+  assert.match(diplomacyView(state, 'argentina'), /Infiltrar Sósia do Líder/);
 });
 
 test('renders nuclear codes only for a ready arsenal and an active war target', async () => {

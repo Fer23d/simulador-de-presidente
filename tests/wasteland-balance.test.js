@@ -97,7 +97,7 @@ test('every third Wasteland month blocks further advancement until the dilemma i
   const blocked = advanceWastelandMonth(state);
   assert.equal(blocked.monthCounter, state.monthCounter);
   assert.deepEqual(blocked.shelter_supplies, state.shelter_supplies);
-  assert.match(bunkerView(state), /data-action="advance" disabled/);
+  assert.match(bunkerView({ ...state, president_selection_pending: false, presidentClass: 'worker' }), /data-action="advance" disabled/);
   assert.match(renderStoryCard(state), /A Ração de Emergência/);
 });
 

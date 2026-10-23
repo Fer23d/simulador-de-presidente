@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createGameState } from '../src/core/game-state.js';
 import { advanceWastelandMonth, transicionarParaWasteland } from '../src/core/wasteland.js';
 import { buildShelterRoom } from '../src/core/shelter_engine.js';
-import { advanceMonthlyGameMechanics, calculateSuppression, calculateSuppressedChance, detainRebel, dismissExpeditionReport, getWastelandEvent, resolveWastelandEvent, startExpedition } from '../src/core/game_mechanics.js';
+import { advanceMonthlyGameMechanics, arrestNPC, calculateSuppression, calculateSuppressedChance, detainRebel, dismissExpeditionReport, getWastelandEvent, releaseNPC, resolveWastelandEvent, startExpedition } from '../src/core/game_mechanics.js';
 import { hydrateGameState } from '../src/core/game-state.js';
 import { bunkerView, expeditionLogisticsView, expeditionReportView } from '../src/ui/dashboard.js';
 import { advanceLootboxClick, collectExpeditionLoot, openExpeditionLootbox } from '../src/core/expeditions.js';
@@ -190,6 +190,18 @@ test('soldier suppression reduces rebellion odds after the nighttime modifier', 
   assert.equal(result.inhabitants[0].currentState, 'idle');
 });
 
+test('a dialogue pacification lowers the rebellion roll chance used by the monthly engine', () => {
+  const base = {
+    randomSeed: 1,
+    scrap: 100,
+    shelter_supplies: { food: 100, energy: 100 },
+    inhabitants: [{ id: 'resident-1', loyalty: 0, revoltChance: 0, currentState: 'idle', rebellionCheckDone: false }],
+  };
+  const result = advanceMonthlyGameMechanics(base);
+  assert.equal(result.inhabitants[0].currentState, 'idle');
+  assert.equal(result.inhabitants[0].rebellionCheckDone, true);
+});
+
 test('a rebel can be detained only after building a detention cell and then stops sabotaging', () => {
   const prepared = wastelandState();
   const rebelState = {
@@ -210,6 +222,92 @@ test('a rebel can be detained only after building a detention cell and then stop
   assert.equal(nextMonth.scrap, detained.scrap + 25);
 });
 
+test('arrest remembers the workplace and frees its production assignment', () => {
+  let state = { ...wastelandState(), scrap: 1_000 };
+  state = buildShelterRoom(state, 'generator', 0, 2);
+  state = buildShelterRoom(state, 'detention', 0, 3);
+  const generator = state.shelter_grid[0][2];
+  const detainee = state.inhabitants.find((npc) => npc.id === 'worker-0-2');
+  state = { ...state, inhabitants: state.inhabitants.map((npc) => npc.id === detainee.id
+    ? { ...npc, currentState: 'rebel' } : npc) };
+
+  const arrested = arrestNPC(state, detainee.id);
+  const prisoner = arrested.inhabitants.find((npc) => npc.id === detainee.id);
+
+  assert.equal(prisoner.previousRoomId, generator.id);
+  assert.equal(prisoner.currentRoomId, arrested.shelter_grid[0][3].id);
+  assert.equal(prisoner.workFloor, null);
+  assert.equal(prisoner.workColumn, null);
+  assert.equal(prisoner.state, 'imprisoned');
+});
+
+test('replacing a cell occupant releases the old prisoner back to their available workplace', () => {
+  let state = { ...wastelandState(), scrap: 1_000 };
+  state = buildShelterRoom(state, 'generator', 0, 2);
+  state = buildShelterRoom(state, 'greenhouse', 0, 3);
+  state = buildShelterRoom(state, 'detention', 0, 5);
+  const first = state.inhabitants.find((npc) => npc.id === 'worker-0-2');
+  const second = state.inhabitants.find((npc) => npc.id === 'worker-0-3');
+  state = { ...state, inhabitants: state.inhabitants.map((npc) => [first.id, second.id].includes(npc.id)
+    ? { ...npc, currentState: 'rebel' } : npc) };
+
+  state = arrestNPC(state, first.id);
+  state = arrestNPC(state, second.id);
+  const released = state.inhabitants.find((npc) => npc.id === first.id);
+  const imprisoned = state.inhabitants.find((npc) => npc.id === second.id);
+
+  assert.equal(released.is_prisoner, false);
+  assert.equal(released.state, 'working');
+  assert.equal(released.currentRoomId, state.shelter_grid[0][2].id);
+  assert.equal(released.workFloor, 0);
+  assert.equal(released.workColumn, 2);
+  assert.equal(imprisoned.is_prisoner, true);
+  assert.equal(imprisoned.currentRoomId, state.shelter_grid[0][5].id);
+});
+
+test('released prisoner goes idle in the dormitory when their previous workplace is full', () => {
+  let state = { ...wastelandState(), scrap: 1_000 };
+  state = buildShelterRoom(state, 'generator', 0, 2);
+  state = buildShelterRoom(state, 'dormitory', 0, 3);
+  state = buildShelterRoom(state, 'detention', 0, 5);
+  const worker = state.inhabitants.find((npc) => npc.id === 'worker-0-2');
+  state = { ...state, inhabitants: state.inhabitants.map((npc) => npc.id === worker.id
+    ? { ...npc, currentState: 'rebel' } : npc) };
+  state = arrestNPC(state, worker.id);
+  const extraWorker = { ...worker, id: 'extra-generator-worker', state: 'working', currentRoomId: state.shelter_grid[0][2].id,
+    workFloor: 0, workColumn: 2, is_prisoner: false };
+  state = { ...state, inhabitants: [...state.inhabitants, extraWorker] };
+
+  const releasedState = releaseNPC(state, worker.id);
+  const released = releasedState.inhabitants.find((npc) => npc.id === worker.id);
+
+  assert.equal(released.is_prisoner, false);
+  assert.equal(released.state, 'idle');
+  assert.equal(released.currentState, 'idle');
+  assert.equal(released.currentRoomId, releasedState.shelter_grid[0][3].id);
+  assert.equal(released.workFloor, null);
+  assert.equal(released.workColumn, null);
+});
+
+test('prisoner workplace memory survives save hydration and can be restored after loading', () => {
+  let state = { ...wastelandState(), scrap: 1_000 };
+  state = buildShelterRoom(state, 'generator', 0, 2);
+  state = buildShelterRoom(state, 'detention', 0, 3);
+  const worker = state.inhabitants.find((npc) => npc.id === 'worker-0-2');
+  state = { ...state, inhabitants: state.inhabitants.map((npc) => npc.id === worker.id
+    ? { ...npc, currentState: 'rebel' } : npc) };
+  const prisonerState = arrestNPC(state, worker.id);
+  const restoredSave = hydrateGameState(JSON.stringify(prisonerState));
+
+  assert.equal(restoredSave.inhabitants.find((npc) => npc.id === worker.id).previousRoomId, 'generator-0-2');
+  assert.equal(restoredSave.inhabitants.find((npc) => npc.id === worker.id).currentRoomId, 'detention-0-3');
+  const releasedState = releaseNPC(restoredSave, worker.id);
+  const released = releasedState.inhabitants.find((npc) => npc.id === worker.id);
+  assert.equal(released.currentRoomId, 'generator-0-2');
+  assert.equal(released.workFloor, 0);
+  assert.equal(released.workColumn, 2);
+});
+
 test('wasteland supplies, rebel status, active expeditions, and reports survive save hydration', () => {
   const state = wastelandState();
   const expedition = startExpedition(state, 'vault-resident-1');
@@ -228,11 +326,12 @@ test('wasteland supplies, rebel status, active expeditions, and reports survive 
   assert.equal(restored.inhabitants[1].currentState, 'rebel');
   assert.equal(restored.shelter_grid[0][2].type, 'detention');
   assert.equal(restored.pendingExpeditionReports[0].id, 'report-1');
-  assert.equal(restored.version, 21);
+  assert.equal(restored.version, 22);
 });
 
 test('bunker UI exposes food, energy, expedition logistics, and a blocking mission report', () => {
-  const state = { ...wastelandState(), pendingExpeditionReports: [{ id: 'report-1', inhabitantId: 'vault-resident-1', success: false }] };
+  const state = { ...wastelandState(), president_selection_pending: false, presidentClass: 'worker',
+    pendingExpeditionReports: [{ id: 'report-1', inhabitantId: 'vault-resident-1', success: false }] };
   const markup = bunkerView(state);
   const logistics = expeditionLogisticsView(state);
   const report = expeditionReportView(state);

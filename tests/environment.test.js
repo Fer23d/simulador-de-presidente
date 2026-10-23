@@ -63,7 +63,7 @@ test('environment phase survives save hydration and the HUD renders the phase an
     [{ role: 'soldier' }, { role: 'engineer', isMilitary: true }], 1);
 
   assert.equal(restored.isNight, true);
-  assert.equal(restored.version, 21);
+  assert.equal(restored.version, 22);
   assert.match(hud, /data-environment-hud/);
   assert.match(hud, /NOITE/);
   assert.match(hud, /04:30/);
