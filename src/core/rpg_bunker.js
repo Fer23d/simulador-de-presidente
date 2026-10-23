@@ -4,6 +4,7 @@ import {
   FLOOR_SPACING, WORLD_LEFT, WORLD_TOP,
 } from './shelter_engine.js';
 import { AssetManager, DEFAULT_ASSETS, renderSpriteScene } from './sprite_engine.js';
+import { isLootboxCrateClick } from './lootbox_renderer.js';
 import { Inhabitant } from './inhabitant.js';
 import { advanceEnvironmentCycle, countActiveGenerators, createEnvironmentState, getNpcMovementDelta } from './environment.js';
 
@@ -195,7 +196,7 @@ export const renderRpgBunker = renderSpriteScene;
 export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, player: savedPlayer,
   inhabitants = [], cabinFloor: savedCabinFloor, onBuild, onRoom, onPlayerChanged, onInhabitantsChanged, onHint,
   onDetain, onAssetsReady, onEnvironmentChanged, environment = {}, isNight = environment?.isNight ?? false,
-  oxygenDeprived = false, assetUrls = {} } = {}) {
+  oxygenDeprived = false, assetUrls = {}, lootbox = {}, onLootboxClick } = {}) {
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
   const assets = new AssetManager({ ...DEFAULT_ASSETS, ...assetUrls });
@@ -253,7 +254,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     camera.offset_x += (targetX - camera.offset_x) * Math.min(1, dt * 8);
     camera.offset_y += (targetY - camera.offset_y) * Math.min(1, dt * 8);
     renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants: actors, cabinFloor, time,
-      isNight: dayNight.isNight, activeGenerators, oxygenDeprived });
+      isNight: dayNight.isNight, activeGenerators, oxygenDeprived, lootbox });
     const rebel = findNearbyRebel(player, grid, actors.map((actor) => actor.snapshot()));
     const hint = paused || buildMode ? '' : rebel?.label || getElevatorPrompt(player, grid) || findNearbyTrigger(player, grid)?.label || '';
     if (hint !== lastHint) { lastHint = hint; onHint?.(hint); }
@@ -285,6 +286,15 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   }
   function keyup(event) { keys.delete(event.key.toLowerCase()); }
   function click(event) {
+    if (lootbox?.opened) {
+      const rect = canvas.getBoundingClientRect();
+      const point = {
+        x: (event.clientX - rect.left) * canvas.width / rect.width,
+        y: (event.clientY - rect.top) * canvas.height / rect.height,
+      };
+      if (isLootboxCrateClick(point, canvas.width, canvas.height)) onLootboxClick?.();
+      return;
+    }
     if (!buildMode) return;
     const rect = canvas.getBoundingClientRect();
     const point = getCellAtPoint((event.clientX - rect.left) * canvas.width / rect.width,

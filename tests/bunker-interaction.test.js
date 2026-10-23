@@ -5,6 +5,7 @@ import { createRpgBunkerEngine, findNearbyRebel } from '../src/core/rpg_bunker.j
 
 function fakeBrowser() {
   const listeners = new Map();
+  const canvasListeners = new Map();
   globalThis.window = {
     addEventListener(type, listener) { listeners.set(type, listener); },
     removeEventListener(type) { listeners.delete(type); },
@@ -14,8 +15,10 @@ function fakeBrowser() {
   globalThis.cancelAnimationFrame = () => {};
   const ctx = {};
   const canvas = { width: 960, height: 600, getContext: () => ctx,
-    addEventListener() {}, removeEventListener() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 960, height: 600 }) };
-  return { canvas, listeners };
+    addEventListener(type, listener) { canvasListeners.set(type, listener); },
+    removeEventListener(type) { canvasListeners.delete(type); },
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 960, height: 600 }) };
+  return { canvas, listeners, canvasListeners };
 }
 
 test('pressing E beside a rebel invokes detention only when a cell exists', async () => {
@@ -36,6 +39,28 @@ test('pressing E beside a rebel invokes detention only when a cell exists', asyn
     await engine.ready;
     listeners.get('keydown')({ key: 'e', repeat: false, preventDefault() {} });
     assert.deepEqual(detained, ['rebel-1']);
+    engine.destroy();
+  } finally {
+    for (const [key, value] of Object.entries(original)) {
+      if (value === undefined) delete globalThis[key];
+      else globalThis[key] = value;
+    }
+  }
+});
+
+test('an open lootbox captures canvas clicks on the chest and ignores clicks outside it', async () => {
+  const original = { window: globalThis.window, document: globalThis.document,
+    requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame };
+  try {
+    const { canvas, canvasListeners } = fakeBrowser();
+    let clicks = 0;
+    const engine = createRpgBunkerEngine(canvas, { lootbox: { opened: true, clickCount: 0 },
+      onLootboxClick: () => { clicks++; } });
+    await engine.ready;
+    const click = canvasListeners.get('click');
+    click({ clientX: 480, clientY: 300 });
+    click({ clientX: 30, clientY: 30 });
+    assert.equal(clicks, 1);
     engine.destroy();
   } finally {
     for (const [key, value] of Object.entries(original)) {

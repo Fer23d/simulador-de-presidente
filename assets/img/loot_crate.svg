@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 192" role="img" aria-label="Cofre militar do Ermo">
+  <defs>
+    <linearGradient id="body" x2="0" y2="1">
+      <stop stop-color="#777466"/><stop offset=".22" stop-color="#4d514b"/><stop offset=".7" stop-color="#303733"/><stop offset="1" stop-color="#171d1a"/>
+    </linearGradient>
+    <linearGradient id="lid" x2="0" y2="1"><stop stop-color="#b1a27b"/><stop offset=".3" stop-color="#686650"/><stop offset="1" stop-color="#343b35"/></linearGradient>
+    <linearGradient id="steel" x2="0" y2="1"><stop stop-color="#d4c99f"/><stop offset=".4" stop-color="#76796e"/><stop offset="1" stop-color="#282e2a"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <ellipse cx="128" cy="176" rx="105" ry="10" fill="#000" opacity=".55"/>
+  <path d="M29 63 47 40h162l18 23-7 94H36z" fill="url(#body)" stroke="#141916" stroke-width="5"/>
+  <path d="m31 62 17-25h160l17 25-12 17H42z" fill="url(#lid)" stroke="#b8aa7b" stroke-width="3"/>
+  <path d="M44 80h168v69H44z" fill="url(#body)" stroke="#999078" stroke-width="3"/>
+  <path d="M51 87h154v54H51z" fill="#3d443c" stroke="#171d19" stroke-width="5"/>
+  <path d="M62 92h16v44H62zm116 0h16v44h-16z" fill="url(#steel)" stroke="#202722" stroke-width="3"/>
+  <path d="M82 98h92v32H82z" fill="#333a34" stroke="#8a866e" stroke-width="3"/>
+  <path d="M93 104h70M93 111h70M93 118h70" stroke="#747867" stroke-width="2" opacity=".8"/>
+  <path d="M109 42h38v17h-38z" fill="#8c876d" stroke="#171c18" stroke-width="3"/>
+  <path d="M115 46h26v9h-26z" fill="#262c28"/>
+  <path d="M29 68h198M37 151h182" stroke="#d2c289" stroke-width="4" opacity=".7"/>
+  <path d="m42 72 11 8-7 8 8 8-7 9m157-31-9 8 8 9-7 8 6 8" fill="none" stroke="#ad4b26" stroke-width="3" opacity=".8"/>
+  <path d="M32 114h12m168 0h12" stroke="#edb83d" stroke-width="8"/>
+  <path d="M32 114h12m168 0h12" stroke="#1d211e" stroke-width="3" stroke-dasharray="4 4"/>
+  <circle cx="128" cy="113" r="7" fill="#d2bd71" stroke="#121714" stroke-width="3"/>
+  <circle cx="128" cy="113" r="2" fill="#f7d968" filter="url(#glow)"/>
+  <path d="M52 43v13m152-13v13M52 153v10m152-10v10" stroke="#c1b58d" stroke-width="4"/>
+  <path d="M60 53h136" stroke="#ded0a1" stroke-width="2" opacity=".55"/>
+  <path d="M48 164h160l-8 12H56z" fill="#202722" stroke="#111613" stroke-width="3"/>
+</svg>

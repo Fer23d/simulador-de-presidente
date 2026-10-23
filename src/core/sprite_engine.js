@@ -1,4 +1,5 @@
 import { cellCenter, FLOOR_SPACING, ROOM_HEIGHT, SLOT_WIDTH, WORLD_LEFT, WORLD_TOP } from './shelter_engine.js';
+import { renderLootboxOverlay } from './lootbox_renderer.js';
 
 const SURFACE_Y = WORLD_TOP - 30;
 const ATLAS_CELLS = Object.freeze({
@@ -36,6 +37,7 @@ export const DEFAULT_ASSETS = Object.freeze({
   room_base_empty: './assets/img/room_base_empty.png',
   plant_prop_1: './assets/img/plant_prop_1.png',
   uv_light_prop: './assets/img/uv_light_prop.png',
+  loot_crate: './assets/img/loot_crate.svg',
 });
 
 export class AssetManager {
@@ -319,7 +321,7 @@ export function applyOxygenDeprivationOverlay(ctx, width, height, oxygenDeprived
 }
 
 export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants = [], cabinFloor = player.floor,
-  time = 0, isNight = false, activeGenerators = 0, oxygenDeprived = false }) {
+  time = 0, isNight = false, activeGenerators = 0, oxygenDeprived = false, lootbox = {} }) {
   renderSurface(ctx, camera, assets);
   renderDirt(ctx, camera, assets);
   ctx.save();
@@ -397,6 +399,7 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
     applyNightOverlay(ctx, ctx.canvas.width, ctx.canvas.height, true, { activeGenerators, surfaceHeight });
   }
   if (ctx.canvas) applyOxygenDeprivationOverlay(ctx, ctx.canvas.width, ctx.canvas.height, oxygenDeprived, time);
+  renderLootboxOverlay(ctx, { ...lootbox, time, crateImage: assets.getImage('loot_crate') });
 }
 
 function renderDetentionBars(ctx, room) {

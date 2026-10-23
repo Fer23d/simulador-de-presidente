@@ -200,6 +200,26 @@ test('VIP render shows a gold star and specialist name over the distinct scienti
   assert.ok(sprites.some((args) => args[0] === image && args[2] > 0));
 });
 
+test('opened expedition lootbox is rendered as a blocking overlay above the bunker scene', () => {
+  const drawnImages = [];
+  const fills = [];
+  const ctx = { canvas: { width: 960, height: 600 }, save() {}, restore() {}, translate() {}, scale() {},
+    beginPath() {}, ellipse() {}, fill() {}, arc() {}, drawImage(image) { drawnImages.push(image.key); },
+    createPattern() { return 'soil'; }, fillRect(...args) { fills.push(args); }, fillText() {} };
+  const assets = { getImage(key) { return { width: 1200, height: 800, key }; } };
+  const scene = { grid: INITIAL_SHELTER_GRID,
+    player: { ...cellCenter(0, 0), floor: 0, vx: 0, facing: 1, liftTarget: null },
+    inhabitants: [], camera: { offset_x: 0, offset_y: 0 }, assets, cabinFloor: 0, time: 1500 };
+  renderSpriteScene(ctx, { ...scene, lootbox: { opened: true, clickCount: 2, revealed: false, shakeStartedAt: 1200 } });
+  assert.ok(drawnImages.includes('loot_crate'));
+  drawnImages.length = 0;
+  renderSpriteScene(ctx, { ...scene, lootbox: { opened: true, clickCount: 3, revealed: true, revealedAt: 1000 } });
+
+  assert.equal(drawnImages.includes('loot_crate'), false);
+  assert.ok(fills.some(([x, y, width, height]) => x === 0 && y === 0 && width === 960 && height === 600));
+  assert.ok(fills.filter(([, , width, height]) => width <= 7 && height <= 7).length >= 20);
+});
+
 test('an inhabitant chooses a target inside one room, walks, then idles', () => {
   const rolls = [0.1, 0.9];
   const npc = new Inhabitant({ id: 'worker', floor: 0, column: 1, offsetX: 0, role: 'engineer',

@@ -1,7 +1,7 @@
 import { nextRandom } from './geopolitics.js';
 import { getRoomWorkforce } from './bunker_economy.js';
 import { countActiveGenerators, getNighttimeRiskChance } from './environment.js';
-import { createExpeditionNodes } from './expeditions.js';
+import { createExpeditionLoot, createExpeditionNodes } from './expeditions.js';
 
 const EXPEDITION_MONTHS = 3;
 const EXPEDITION_SUCCESS_CHANCE = 0.7;
@@ -129,6 +129,8 @@ export function advanceMonthlyGameMechanics(state) {
   let scrap = Math.max(0, Number(state.scrap) || 0);
   let technology = state.technology ?? { points: 0, unlocked: [] };
   let lostExplorer = false;
+  let currentLoot = Array.isArray(state.currentLoot) ? [...state.currentLoot] : [];
+  let returnedWithLoot = false;
 
   for (const inhabitant of state.inhabitants ?? []) {
     if (!inhabitant.is_on_expedition) {
@@ -149,8 +151,6 @@ export function advanceMonthlyGameMechanics(state) {
       destination: inhabitant.expedition_destination ?? null, success });
     if (success) {
       inhabitants.push({ ...inhabitant, is_on_expedition: false, expedition_timer: 0 });
-      scrap += 500;
-      technology = { ...technology, points: (Number(technology.points) || 0) + 1 };
       const rarityRoll = nextRandom(randomSeed);
       randomSeed = rarityRoll.seed;
       if (rarityRoll.value < VIP_DISCOVERY_CHANCE && inhabitants.length < 48) {
@@ -186,6 +186,10 @@ export function advanceMonthlyGameMechanics(state) {
         inhabitants.push(vip);
         reports[reportIndex] = { ...reports[reportIndex], vipFound: true, vipName: vip.name };
       }
+      const lootDrop = createExpeditionLoot(randomSeed);
+      randomSeed = lootDrop.randomSeed;
+      currentLoot.push(...lootDrop.loot);
+      returnedWithLoot = true;
     } else {
       lostExplorer = true;
     }
@@ -243,11 +247,20 @@ export function advanceMonthlyGameMechanics(state) {
     technology,
     inhabitants: survivingInhabitants,
     pendingExpeditionReports: reports,
+    pendingLoot: returnedWithLoot || state.pendingLoot === true,
+    currentLoot,
+    lootbox_opened: returnedWithLoot ? false : Boolean(state.lootbox_opened),
+    lootbox_click_count: returnedWithLoot ? 0 : Math.max(0, Math.min(3, Number(state.lootbox_click_count) || 0)),
+    lootbox_revealed: returnedWithLoot ? false : Boolean(state.lootbox_revealed),
+    lootbox_cards_visible: returnedWithLoot ? false : Boolean(state.lootbox_cards_visible),
+    lootbox_shake_started_at: returnedWithLoot ? null : (state.lootbox_shake_started_at ?? null),
+    lootbox_revealed_at: returnedWithLoot ? null : (state.lootbox_revealed_at ?? null),
     notice: assassinationNotice ?? (lostExplorer
       ? '> O SINAL DO EXPLORADOR FOI PERDIDO NO WASTELAND.'
       : rebels > 0 ? `Dissidentes causaram danos discretos ao Vault. Sucata perdida: ${rebels * REBEL_SCRAP_COST}.`
         : resourcesDepleted ? 'Alimentos ou energia esgotados. A lealdade dos habitantes caiu.'
-          : reports.length > (state.pendingExpeditionReports?.length ?? 0) ? 'Relatorio de expedicao pronto para consulta.' : state.notice),
+          : returnedWithLoot ? '> NOVA CARGA DO ERMO DETECTADA NO PORTÃO.'
+            : reports.length > (state.pendingExpeditionReports?.length ?? 0) ? 'Relatorio de expedicao pronto para consulta.' : state.notice),
   };
 }
 

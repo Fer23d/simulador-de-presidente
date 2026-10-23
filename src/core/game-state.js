@@ -40,8 +40,22 @@ import { INITIAL_SHELTER_GRID, migrateLegacyPlayer, migrateLegacyRooms, normaliz
 import { createEnvironmentState } from './environment.js';
 import { createExpeditionLocation } from './expeditions.js';
 
-const STATE_VERSION = 20;
+const STATE_VERSION = 21;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
+const LOOT_RESOURCES = new Set(['scrap', 'food', 'energy', 'science', 'technology', 'medkits']);
+
+function normalizeLootItems(items) {
+  if (!Array.isArray(items)) return [];
+  return items.filter((item) => typeof item?.id === 'string' && LOOT_RESOURCES.has(item.resource))
+    .slice(0, 144)
+    .map((item) => ({
+      id: item.id.slice(0, 100),
+      resource: item.resource,
+      label: typeof item.label === 'string' ? item.label.slice(0, 60) : item.resource,
+      amount: Math.max(0, Math.floor(Number(item.amount) || 0)),
+      rarity: ['common', 'rare', 'epic'].includes(item.rarity) ? item.rarity : 'common',
+    }));
+}
 
 function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
@@ -197,6 +211,14 @@ export function createGameState(countryId = 'bra') {
     oxygen_shortage_turns: 0,
     oxygen_deprived: false,
     pendingExpeditionReports: [],
+    pendingLoot: false,
+    currentLoot: [],
+    lootbox_opened: false,
+    lootbox_click_count: 0,
+    lootbox_revealed: false,
+    lootbox_cards_visible: false,
+    lootbox_shake_started_at: null,
+    lootbox_revealed_at: null,
     expeditionLocation: null,
     environment: createEnvironmentState(),
     isNight: false,
@@ -1036,6 +1058,8 @@ export function hydrateGameState(serialized) {
     const countryIsWasteland = Boolean(parsed.country?.wasteland);
     const environment = createEnvironmentState(parsed.environment ?? {});
     const shelterGrid = normalizeShelterGrid(parsed.shelter_grid ?? migrateLegacyRooms(parsed.bunker_rooms));
+    const currentLoot = normalizeLootItems(parsed.currentLoot);
+    const pendingLoot = Boolean(parsed.is_wasteland && parsed.pendingLoot && currentLoot.length);
     const hydrated = {
       ...base,
       country: {
@@ -1219,6 +1243,16 @@ export function hydrateGameState(serialized) {
           vipName: typeof report.vipName === 'string' ? report.vipName.slice(0, 60) : null,
         })).slice(0, 16)
         : [],
+      pendingLoot,
+      currentLoot: pendingLoot ? currentLoot : [],
+      lootbox_opened: pendingLoot && Boolean(parsed.lootbox_opened),
+      lootbox_click_count: pendingLoot ? Math.max(0, Math.min(3, Math.floor(Number(parsed.lootbox_click_count) || 0))) : 0,
+      lootbox_revealed: pendingLoot && Boolean(parsed.lootbox_revealed) && Math.max(0, Math.floor(Number(parsed.lootbox_click_count) || 0)) >= 3,
+      lootbox_cards_visible: pendingLoot && Boolean(parsed.lootbox_revealed)
+        && Math.max(0, Math.floor(Number(parsed.lootbox_click_count) || 0)) >= 3
+        && (Boolean(parsed.lootbox_cards_visible) || Boolean(parsed.lootbox_revealed)),
+      lootbox_shake_started_at: pendingLoot && Number.isFinite(parsed.lootbox_shake_started_at) ? parsed.lootbox_shake_started_at : null,
+      lootbox_revealed_at: pendingLoot && Number.isFinite(parsed.lootbox_revealed_at) ? parsed.lootbox_revealed_at : null,
       wasteland_turn: Math.max(0, Math.floor(Number(parsed.wasteland_turn ?? parsed.wastelandMonthCounter) || 0)),
       wastelandMonthCounter: Math.max(0, Math.floor(Number(parsed.wasteland_turn ?? parsed.wastelandMonthCounter) || 0)),
       wastelandEventCursor: ((Math.floor(Number(parsed.wastelandEventCursor) || 0) % WASTELAND_EVENTS.length) + WASTELAND_EVENTS.length) % WASTELAND_EVENTS.length,

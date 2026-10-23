@@ -144,7 +144,7 @@ test('saves antigos migram para a grelha lateral sem perder salas', () => {
   const restored = hydrateGameState(JSON.stringify({ ...state, version: 15, bunker_rooms: old, bunker_player: { x: 6, y: 2, facing: 'east' }, shelter_grid: undefined, shelter_inhabitants: undefined }));
   assert.equal(restored.shelter_grid.flat().filter(Boolean).length, 4);
   assert.equal(restored.shelter_inhabitants.find((actor) => actor.id === 'president')?.column, 2);
-  assert.equal(restored.version, 20);
+  assert.equal(restored.version, 21);
 });
 
 test('grid normalization preserves a clamped quarantine timer only on greenhouses', () => {

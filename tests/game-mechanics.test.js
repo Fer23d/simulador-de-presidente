@@ -6,6 +6,7 @@ import { buildShelterRoom } from '../src/core/shelter_engine.js';
 import { advanceMonthlyGameMechanics, calculateSuppression, calculateSuppressedChance, detainRebel, dismissExpeditionReport, getWastelandEvent, resolveWastelandEvent, startExpedition } from '../src/core/game_mechanics.js';
 import { hydrateGameState } from '../src/core/game-state.js';
 import { bunkerView, expeditionLogisticsView, expeditionReportView } from '../src/ui/dashboard.js';
+import { advanceLootboxClick, collectExpeditionLoot, openExpeditionLootbox } from '../src/core/expeditions.js';
 
 function wastelandState() {
   const base = createGameState('bra');
@@ -31,7 +32,7 @@ test('starting an expedition marks one eligible inhabitant for three months', ()
   assert.equal(state.inhabitants[0].is_on_expedition, false);
 });
 
-test('a successful expedition returns the explorer and queues its reward report after three months', () => {
+test('a successful expedition returns after three turns and pauses for loot collection', () => {
   let state = startExpedition(wastelandState(), 'vault-resident-1');
   state = advanceWastelandMonth(state);
   state = advanceWastelandMonth(state);
@@ -40,14 +41,22 @@ test('a successful expedition returns the explorer and queues its reward report 
 
   assert.equal(state.inhabitants[0].is_on_expedition, false);
   assert.equal(state.inhabitants[0].expedition_timer, 0);
-  assert.equal(state.scrap, 825);
-  assert.equal(state.technology.points, 1);
+  assert.equal(state.scrap, 325);
+  assert.equal(state.technology.points, 0);
+  assert.equal(state.pendingLoot, true);
+  assert.equal(state.currentLoot.length, 3);
   assert.equal(state.pendingExpeditionReports[0].success, true);
   assert.equal(advanceWastelandMonth(state).monthCounter, state.monthCounter);
-  const reportDismissed = dismissExpeditionReport(state);
-  assert.equal(advanceWastelandMonth(reportDismissed).monthCounter, state.monthCounter);
-  const eventResolved = resolveWastelandEvent(reportDismissed, 'support-scientists');
-  assert.equal(advanceWastelandMonth(eventResolved).monthCounter, state.monthCounter + 1);
+  const eventResolved = resolveWastelandEvent(state, 'refuse-ration-cuts');
+  let opened = openExpeditionLootbox(eventResolved);
+  opened = advanceLootboxClick(opened, 1);
+  opened = advanceLootboxClick(opened, 2);
+  opened = advanceLootboxClick(opened, 3);
+  opened = { ...opened, lootbox_cards_visible: true };
+  const collected = collectExpeditionLoot(opened);
+  assert.equal(collected.pendingLoot, false);
+  assert.equal(collected.pendingExpeditionReports.length, 0);
+  assert.equal(advanceWastelandMonth(collected).monthCounter, state.monthCounter + 1);
 });
 
 test('a failed expedition removes the explorer and records the lost signal notice', () => {
@@ -219,7 +228,7 @@ test('wasteland supplies, rebel status, active expeditions, and reports survive 
   assert.equal(restored.inhabitants[1].currentState, 'rebel');
   assert.equal(restored.shelter_grid[0][2].type, 'detention');
   assert.equal(restored.pendingExpeditionReports[0].id, 'report-1');
-  assert.equal(restored.version, 20);
+  assert.equal(restored.version, 21);
 });
 
 test('bunker UI exposes food, energy, expedition logistics, and a blocking mission report', () => {

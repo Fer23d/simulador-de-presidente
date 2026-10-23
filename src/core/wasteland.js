@@ -64,6 +64,14 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
     shelter_inhabitants: [],
     inhabitants: createInitialInhabitants(INITIAL_SHELTER_GRID),
     pendingExpeditionReports: [],
+    pendingLoot: false,
+    currentLoot: [],
+    lootbox_opened: false,
+    lootbox_click_count: 0,
+    lootbox_revealed: false,
+    lootbox_cards_visible: false,
+    lootbox_shake_started_at: null,
+    lootbox_revealed_at: null,
     expeditionLocation: null,
     environment: createEnvironmentState(),
     isNight: false,
@@ -107,10 +115,11 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
 }
 
 export function advanceWastelandMonth(state) {
-  if (state.pendingBunkerEvent || state.pendingExpeditionReports?.length) {
+  if (state.pendingBunkerEvent || state.pendingLoot || state.pendingExpeditionReports?.length) {
     return { ...state, notice: state.pendingBunkerEvent
       ? 'Resolva o dilema do Vault antes de avancar o mes.'
-      : 'Leia o relatorio da expedicao antes de avancar o mes.' };
+      : state.pendingLoot ? 'Abra e recolha a carga do Ermo antes de avancar o mes.'
+        : 'Leia o relatorio da expedicao antes de avancar o mes.' };
   }
   const grid = normalizeShelterGrid(state.shelter_grid);
   const rooms = grid.flat().filter(Boolean);
