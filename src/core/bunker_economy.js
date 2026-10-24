@@ -1,5 +1,6 @@
 import { getEnergyConsumptionForPhase } from './environment.js';
 import { getPresidentClassModifiers } from './player_state.js';
+import { getNeedsProductivityMultiplier } from './needs.js';
 
 export const ROOM_MAX_LEVEL = 5;
 
@@ -99,7 +100,8 @@ export function getRoomWorkforce(state, room) {
     lowMorale,
     effective: activeWorkers.reduce((total, inhabitant) => {
       const modifier = Math.max(1, Number(inhabitant.modifier) || (inhabitant.isVIP ? 2 : 1));
-      return total + (Number(inhabitant.loyalty ?? 100) < 40 ? 0.5 : 1) * modifier;
+      return total + (Number(inhabitant.loyalty ?? 100) < 40 ? 0.5 : 1) * modifier
+        * getNeedsProductivityMultiplier(inhabitant.needs);
     }, 0),
   };
 }

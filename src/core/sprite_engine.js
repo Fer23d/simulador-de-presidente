@@ -2,6 +2,7 @@ import { cellCenter, FLOOR_SPACING, ROOM_HEIGHT, SLOT_WIDTH, WORLD_LEFT, WORLD_T
 import { renderLootboxOverlay } from './lootbox_renderer.js';
 import { getPresidentClass, getSkin } from './player_state.js';
 import { hasReliableNightPower } from './environment.js';
+import { getCriticalNeeds, NEED_CRITICAL_THRESHOLD, NEED_ICONS, NEED_KEYS, NEED_LABELS, normalizeNeeds } from './needs.js';
 
 const SURFACE_Y = WORLD_TOP - 30;
 const ATLAS_CELLS = Object.freeze({
@@ -466,14 +467,19 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
       ctx.textAlign = 'center';
       ctx.fillText('!', x, placement.floorY - placement.height - 7);
       ctx.restore();
-    } else if (Number(npc.loyalty ?? 100) < 40 && !npc.is_prisoner && !npc.is_on_expedition) {
-      ctx.save();
-      ctx.globalAlpha = .55 + (Math.sin(time / 430) + 1) * .12;
-      ctx.fillStyle = '#e6c75a';
-      ctx.font = 'bold 17px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText('⚠', x, placement.floorY - placement.height - 7);
-      ctx.restore();
+    } else if (!npc.is_prisoner && !npc.is_on_expedition) {
+      const icons = [...(Number(npc.loyalty ?? 100) < 40 ? ['⚠'] : []),
+        ...getCriticalNeeds(npc.needs).map((key) => NEED_ICONS[key])];
+      if (icons.length) {
+        ctx.save();
+        ctx.globalAlpha = .55 + (Math.sin(time / 430) + 1) * .12;
+        ctx.fillStyle = '#e6c75a';
+        ctx.font = 'bold 17px monospace';
+        ctx.textAlign = 'center';
+        icons.forEach((icon, index) => ctx.fillText(icon, x + (index - (icons.length - 1) / 2) * 19,
+          placement.floorY - placement.height - 7));
+        ctx.restore();
+      }
     }
   }
   const playerColumn = Math.max(0, Math.min(grid[player.floor]?.length - 1 ?? 0,
@@ -640,5 +646,38 @@ function renderDetentionBars(ctx, room, time = 0) {
   ctx.fillRect(doorRight - 12, crossY + 3, 4, 6);
   ctx.fillStyle = Math.sin(time / 260) > 0 ? '#ff3b30' : '#6b1b17';
   ctx.fillRect(doorRight - 11, crossY - 4, 3, 3);
+  ctx.restore();
+}
+
+const NEED_BAR_COLORS = Object.freeze({ good: '#39ff14', warning: '#e6c75a', critical: '#ff263d' });
+
+// Painel compacto de necessidades exibido sobre o habitante mais proximo do Presidente.
+export function drawNeedsPanel(ctx, centerX, bottomY, needs) {
+  const values = normalizeNeeds(needs);
+  const width = 92;
+  const rowHeight = 10;
+  const height = NEED_KEYS.length * rowHeight + 8;
+  const left = Math.round(centerX - width / 2);
+  const top = Math.round(bottomY - height);
+  ctx.save();
+  ctx.fillStyle = 'rgba(10, 12, 11, .82)';
+  ctx.fillRect(left, top, width, height);
+  ctx.strokeStyle = 'rgba(255, 176, 0, .65)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect?.(left + .5, top + .5, width - 1, height - 1);
+  ctx.font = '8px "Share Tech Mono", monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  NEED_KEYS.forEach((key, index) => {
+    const rowY = top + 4 + index * rowHeight;
+    const value = values[key];
+    const tone = value < NEED_CRITICAL_THRESHOLD ? 'critical' : value < 60 ? 'warning' : 'good';
+    ctx.fillStyle = '#ffd88a';
+    ctx.fillText(NEED_LABELS[key], left + 4, rowY + 4);
+    ctx.fillStyle = '#2a2f2c';
+    ctx.fillRect(left + 46, rowY + 1, 42, 6);
+    ctx.fillStyle = NEED_BAR_COLORS[tone];
+    ctx.fillRect(left + 46, rowY + 1, Math.round(42 * value / 100), 6);
+  });
   ctx.restore();
 }

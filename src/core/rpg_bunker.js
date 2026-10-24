@@ -3,11 +3,12 @@ import {
   MAX_COLUMNS, MAX_FLOORS, ROOM_HEIGHT, SHELTER_TYPES, SLOT_WIDTH,
   FLOOR_SPACING, WORLD_LEFT, WORLD_TOP,
 } from './shelter_engine.js';
-import { AssetManager, DEFAULT_ASSETS, renderSpriteScene } from './sprite_engine.js';
+import { AssetManager, DEFAULT_ASSETS, drawNeedsPanel, getActorPlacement, renderSpriteScene } from './sprite_engine.js';
 import { isLootboxCrateClick } from './lootbox_renderer.js';
 import { Inhabitant } from './inhabitant.js';
 import { advanceEnvironmentCycle, countActiveGenerators, createEnvironmentState, FULL_CYCLE_MS, getNpcMovementDelta } from './environment.js';
 import { chooseDialogueLine } from './dialogues.js';
+import { normalizeNeeds } from './needs.js';
 
 const WALK_SPEED = 170;
 const LIFT_SPEED = 280;
@@ -174,13 +175,13 @@ export function createInitialInhabitants(grid = INITIAL_SHELTER_GRID) {
       revoltChance: 20, lastTalkedDay: 0,
       name: 'Habitante Genérico', isVIP: false, modifier: 1,
       workFloor: null, workColumn: null, state: 'idle', rebellionCheckDone: false,
-      is_on_expedition: false, expedition_timer: 0, is_prisoner: false },
+      is_on_expedition: false, expedition_timer: 0, is_prisoner: false, needs: normalizeNeeds() },
     { id: 'vault-engineer-1', floor: 0, column: 1, offsetX: 78, currentRoomId: 'vault-0-1', role: 'engineer', pose: 'working', facing: -1,
       currentState: 'idle', targetOffsetX: null, waitSeconds: 1, loyalty: 100,
       revoltChance: 20, lastTalkedDay: 0,
       name: 'Habitante Genérico', isVIP: false, modifier: 1,
       workFloor: null, workColumn: null, state: 'idle', rebellionCheckDone: false,
-      is_on_expedition: false, expedition_timer: 0, is_prisoner: false },
+      is_on_expedition: false, expedition_timer: 0, is_prisoner: false, needs: normalizeNeeds() },
   ];
 }
 
@@ -228,7 +229,8 @@ export function normalizeInhabitants(value, grid) {
       expedition_timer: Math.max(0, Math.floor(Number(npc.expedition_timer) || 0)),
       ...(typeof npc.expedition_destination === 'string' && npc.expedition_destination.trim()
         ? { expedition_destination: npc.expedition_destination.slice(0, 120) } : {}),
-      is_prisoner: npc.is_prisoner === true });
+      is_prisoner: npc.is_prisoner === true,
+      needs: normalizeNeeds(npc.needs) });
   }
   return result;
 }
@@ -330,6 +332,13 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
       isNight: dayNight.isNight, activeGenerators, oxygenDeprived, lootbox, presidentClass, equippedSkin });
     const rebel = paused || buildMode ? null : findNearbyRebel(player, grid, actors);
     const nearbyInhabitant = paused || buildMode ? null : trackNearbyInhabitant(player, grid, actors, time);
+    const nearbyRoom = nearbyInhabitant && getRoom(grid, nearbyInhabitant.npc.floor, nearbyInhabitant.npc.column);
+    if (nearbyRoom) {
+      const placement = getActorPlacement(nearbyRoom);
+      drawNeedsPanel(ctx, WORLD_LEFT + nearbyInhabitant.npc.column * SLOT_WIDTH + SLOT_WIDTH / 2
+        + (Number(nearbyInhabitant.npc.offsetX) || 0) + camera.offset_x,
+      placement.floorY - placement.height - 26 + camera.offset_y, nearbyInhabitant.npc.needs);
+    }
     if (pacificationFeedback && time - pacificationFeedback.startedAt < 1_600) {
       drawPacificationFeedback(ctx, pacificationFeedback.npc, camera, time - pacificationFeedback.startedAt);
     } else pacificationFeedback = null;

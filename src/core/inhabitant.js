@@ -1,4 +1,5 @@
 import { SLOT_WIDTH } from './shelter_engine.js';
+import { getNeedsSpeedMultiplier, normalizeNeeds } from './needs.js';
 
 const EDGE_MARGIN = 24;
 const MAX_OFFSET = SLOT_WIDTH / 2 - EDGE_MARGIN;
@@ -33,6 +34,7 @@ export class Inhabitant {
     this.expedition_timer = Math.max(0, Math.floor(Number(data.expedition_timer) || 0));
     this.expedition_destination = typeof data.expedition_destination === 'string' ? data.expedition_destination.slice(0, 120) : undefined;
     this.is_prisoner = data.is_prisoner === true;
+    this.needs = normalizeNeeds(data.needs);
     if (this.targetOffsetX === null && this.currentState !== 'rebel') this.currentState = 'idle';
     this.waitSeconds = Number.isFinite(data.waitSeconds) ? clamp(data.waitSeconds, 0, 6) : 1;
     this.speed = 26 + [...this.id].reduce((sum, letter) => sum + letter.charCodeAt(0), 0) % 12;
@@ -60,7 +62,8 @@ export class Inhabitant {
       return;
     }
     const remaining = this.targetOffsetX - this.offsetX;
-    this.offsetX += Math.sign(remaining) * Math.min(Math.abs(remaining), this.speed * dt * Math.max(0, Number(speedMultiplier) || 0));
+    this.offsetX += Math.sign(remaining) * Math.min(Math.abs(remaining),
+      this.speed * dt * Math.max(0, Number(speedMultiplier) || 0) * getNeedsSpeedMultiplier(this.needs));
     if (this.offsetX === this.targetOffsetX) {
       if (this.pose === 'working' && Math.abs(this.offsetX) === 84) this.facing = this.offsetX < 0 ? 1 : -1;
       this.currentState = 'idle';
@@ -80,6 +83,6 @@ export class Inhabitant {
       rebellionCheckDone: this.rebellionCheckDone,
       is_on_expedition: this.is_on_expedition, expedition_timer: this.expedition_timer,
       ...(this.expedition_destination ? { expedition_destination: this.expedition_destination } : {}),
-      is_prisoner: this.is_prisoner };
+      is_prisoner: this.is_prisoner, needs: { ...this.needs } };
   }
 }

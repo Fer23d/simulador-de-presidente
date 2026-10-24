@@ -4,7 +4,8 @@ import { getBunkerEnergyConsumption, getBunkerFoodConsumption, getBunkerOxygenCo
   getRoomStorageCapacity } from './bunker_economy.js';
 import { createInitialInhabitants, createRpgPlayer } from './rpg_bunker.js';
 import { advanceMonthlyGameMechanics, getRoomProductivityMultiplier, getWastelandEvent, WASTELAND_EVENTS } from './game_mechanics.js';
-import { createEnvironmentState } from './environment.js';
+import { countActiveGenerators, createEnvironmentState, hasReliableNightPower } from './environment.js';
+import { advanceInhabitantNeeds, countDormitoryBeds } from './needs.js';
 import { nextRandom } from './geopolitics.js';
 import { getPresidentClassModifiers } from './player_state.js';
 
@@ -154,6 +155,12 @@ export function advanceWastelandMonth(state) {
   const oxygenConsumption = getBunkerOxygenConsumption(state, grid);
   const oxygenCapacity = getRoomStorageCapacity(grid, 'oxygen');
   const oxygenDeficit = oxygenProduction < oxygenConsumption;
+  const fed = (Number(state.shelter_supplies?.food) || 0) + foodProduction >= foodConsumption;
+  const beds = countDormitoryBeds(grid);
+  const inhabitantsWithNeeds = advanceInhabitantNeeds(state.inhabitants ?? [], {
+    fed, beds, darkNights: !hasReliableNightPower(countActiveGenerators(grid)),
+  });
+  const presentCount = inhabitantsWithNeeds.filter((inhabitant) => !inhabitant.is_on_expedition).length;
   const supplies = {
     weapons: Math.min(getRoomStorageCapacity(grid, 'weapons'), (Number(state.shelter_supplies?.weapons) || 0) + arsenals),
     medkits: Math.min(getRoomStorageCapacity(grid, 'medkits'), (Number(state.shelter_supplies?.medkits) || 0) + medical * 2),
@@ -176,6 +183,7 @@ export function advanceWastelandMonth(state) {
     wastelandMonthCounter,
     wastelandEventCursor: Math.max(0, Math.floor(Number(state.wastelandEventCursor) || 0)) % WASTELAND_EVENTS.length,
     shelter_grid: nextGrid,
+    ...(Array.isArray(state.inhabitants) ? { inhabitants: inhabitantsWithNeeds } : {}),
     science: Math.min(getRoomStorageCapacity(grid, 'science'), (Number(state.science) || 0) + scienceProduction),
     scrap: Math.min(getRoomStorageCapacity(grid, 'scrap'), (Number(state.scrap) || 0) + 25 + generatorWorkUnits * 15 + offices * 5),
     shelter_supplies: supplies,
@@ -186,6 +194,11 @@ export function advanceWastelandMonth(state) {
     notice: 'O Vault sobrevive mais um mês. Os módulos operacionais sustentam a população.',
   };
   let processed = advanceMonthlyGameMechanics(advanced);
+  const needsNotice = [
+    !fed && presentCount ? '> FOME: o estoque de comida não alimentou o Vault. Famintos produzem menos.' : null,
+    beds < presentCount ? `> DORMITÓRIOS LOTADOS: ${beds} leitos para ${presentCount} habitantes.` : null,
+  ].filter(Boolean).join(' ');
+  if (needsNotice) processed = { ...processed, notice: `${processed.notice} ${needsNotice}` };
   if (oxygenDeficit) {
     processed = {
       ...processed,

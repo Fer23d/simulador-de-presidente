@@ -1,3 +1,5 @@
+import { normalizeNeeds } from './needs.js';
+
 export const DIALOGUES = Object.freeze({
   doctor: Object.freeze([
     'A radiação está controlada, Senhor. Por enquanto.',
@@ -50,6 +52,7 @@ export function applyDialoguePacification(state, inhabitantId) {
     revoltChance: Math.max(0, Math.min(100, Number(npc.revoltChance ?? 20) || 0) - 15),
     lastTalkedDay: currentDay,
     rebellionCheckDone: false,
+    needs: { ...normalizeNeeds(npc.needs), morale: Math.min(100, normalizeNeeds(npc.needs).morale + 15) },
   };
   const nextInhabitants = [...inhabitants];
   nextInhabitants[index] = nextNpc;

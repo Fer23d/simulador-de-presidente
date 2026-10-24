@@ -934,6 +934,7 @@ export function mountDashboard(root) {
               revoltChance: result.npc.revoltChance,
               lastTalkedDay: result.npc.lastTalkedDay,
               rebellionCheckDone: result.npc.rebellionCheckDone,
+              needs: result.npc.needs,
             } : false;
           },
           onRoom: openShelterRoom,

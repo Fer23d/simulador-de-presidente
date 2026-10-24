@@ -3,6 +3,7 @@ import { getRoomWorkforce } from './bunker_economy.js';
 import { getPresidentClassModifiers } from './player_state.js';
 import { countActiveGenerators, getNighttimeRiskChance } from './environment.js';
 import { createExpeditionLoot, createExpeditionNodes } from './expeditions.js';
+import { normalizeNeeds } from './needs.js';
 
 const EXPEDITION_MONTHS = 3;
 const EXPEDITION_SUCCESS_CHANCE = 0.7;
@@ -245,6 +246,7 @@ export function advanceMonthlyGameMechanics(state) {
           is_on_expedition: false,
           expedition_timer: 0,
           is_prisoner: false,
+          needs: normalizeNeeds(),
           ...(assignedWorkplace ? { workFloor: floor, workColumn: column, pose: 'working' } : {}),
         };
         inhabitants.push(vip);

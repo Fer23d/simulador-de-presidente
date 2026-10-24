@@ -1,5 +1,6 @@
 import { getDepthAdjustedScrapCost, getRoomUpgradeCosts, ROOM_MAX_LEVEL } from './bunker_economy.js';
 import { getPresidentClassModifiers } from './player_state.js';
+import { normalizeNeeds } from './needs.js';
 
 export const SLOT_WIDTH = 264;
 export const ROOM_HEIGHT = 146;
@@ -144,7 +145,7 @@ export function buildShelterRoom(state, type, floor, column) {
       currentState: 'idle', targetOffsetX: null, waitSeconds: 1, loyalty: 100,
       revoltChance: 20, lastTalkedDay: 0,
       name: 'Habitante Genérico', isVIP: false, modifier: 1,
-      is_on_expedition: false, expedition_timer: 0, is_prisoner: false }]
+      is_on_expedition: false, expedition_timer: 0, is_prisoner: false, needs: normalizeNeeds() }]
     : state.inhabitants;
   if (hasWorker && productiveRoom) {
     inhabitants[inhabitants.length - 1].workFloor = floor;
