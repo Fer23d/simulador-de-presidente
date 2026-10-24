@@ -24,10 +24,10 @@ test('night overlay tints only the canvas scene and restores the previous compos
   applyNightOverlay(ctx, 960, 600, true);
 
   assert.deepEqual(calls, [['#000', 0, 0, 960, 600]]);
-  applyNightOverlay(ctx, 960, 600, true, { activeGenerators: 3, surfaceHeight: 180 });
-  assert.deepEqual(calls[1], ['#000', 0, 0, 960, 180]);
+  applyNightOverlay(ctx, 960, 600, true, { activeGenerators: 3 });
+  assert.equal(calls.length, 1);
   applyNightOverlay(ctx, 960, 600, true, { activeGenerators: 2, surfaceHeight: 180 });
-  assert.deepEqual(calls[2], ['#000', 0, 0, 960, 600]);
+  assert.deepEqual(calls[1], ['#000', 0, 180, 960, 420]);
   assert.equal(ctx.globalAlpha, 1);
   assert.equal(ctx.globalCompositeOperation, 'source-over');
 });
@@ -95,8 +95,8 @@ test('night surface-only darkness follows the camera while blackout still covers
   renderSpriteScene(ctx, { ...scene, activeGenerators: 3 });
   renderSpriteScene(ctx, { ...scene, activeGenerators: 2 });
 
-  assert.deepEqual(blackRects[0], [0, 0, 960, Math.min(600, Math.max(0, WORLD_TOP - 30 + camera.offset_y))]);
-  assert.deepEqual(blackRects[1], [0, 0, 960, 600]);
+  const surfaceHeight = WORLD_TOP - 30 + camera.offset_y;
+  assert.deepEqual(blackRects, [[0, surfaceHeight, 960, 600 - surfaceHeight]]);
 });
 
 test('asset manager preloads every image and records failed URLs', async () => {

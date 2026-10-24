@@ -1,6 +1,7 @@
 import { cellCenter, FLOOR_SPACING, ROOM_HEIGHT, SLOT_WIDTH, WORLD_LEFT, WORLD_TOP } from './shelter_engine.js';
 import { renderLootboxOverlay } from './lootbox_renderer.js';
 import { getPresidentClass, getSkin } from './player_state.js';
+import { hasReliableNightPower } from './environment.js';
 
 const SURFACE_Y = WORLD_TOP - 30;
 const ATLAS_CELLS = Object.freeze({
@@ -80,12 +81,87 @@ function drawRepeatingLayer(ctx, image, parallaxX, y, width, height) {
   for (let x = start; x < ctx.canvas.width; x += width) drawOrMissing(ctx, image, x, y, width, height);
 }
 
-function renderSurface(ctx, camera, assets) {
+function renderSurface(ctx, camera, assets, { isNight = false, time = 0 } = {}) {
   const boundary = SURFACE_Y + camera.offset_y;
   if (boundary <= 0) return;
   drawRepeatingLayer(ctx, assets.getImage('bg_sky'), camera.offset_x * .08, boundary - 520, 1400, 540);
   drawRepeatingLayer(ctx, assets.getImage('bg_mountains'), camera.offset_x * .2, boundary - 230, 1400, 260);
   drawRepeatingLayer(ctx, assets.getImage('fg_wasteland'), camera.offset_x, boundary - 180, 1600, 210);
+  if (isNight) renderNightSurface(ctx, camera, boundary, time);
+}
+
+// Superficie noturna radioativa: tinta azul-violeta, estrelas cintilantes, lua esverdeada e fogueiras.
+const NIGHT_STARS = Object.freeze(Array.from({ length: 64 }, (_, index) => {
+  const hash = (seed) => ((Math.sin(seed * 12.9898 + index * 78.233) * 43758.5453) % 1 + 1) % 1;
+  return Object.freeze({ x: hash(1) * 1400, y: hash(2) * 300, size: hash(3) > .85 ? 2 : 1, phase: hash(4) * Math.PI * 2 });
+}));
+// Fogueiras de sobreviventes espalhadas pelas ruinas, em coordenadas do tile de primeiro plano.
+const NIGHT_FIRES = Object.freeze([[190, 22], [640, 30], [1010, 18], [1420, 26]]);
+
+function renderNightSurface(ctx, camera, boundary, time) {
+  const top = boundary - 520;
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  if (typeof ctx.createLinearGradient === 'function') {
+    const tint = ctx.createLinearGradient(0, top, 0, boundary);
+    tint.addColorStop(0, '#26306a');
+    tint.addColorStop(.7, '#463c78');
+    tint.addColorStop(1, '#7a5266');
+    ctx.fillStyle = tint;
+  } else ctx.fillStyle = '#3a3670';
+  ctx.fillRect(0, 0, ctx.canvas.width, boundary);
+  ctx.globalCompositeOperation = 'source-over';
+  // Estrelas e lua ficam na faixa de ceu visivel, que costuma ser estreita com a camera no bunker.
+  const skyBottom = Math.max(20, boundary - 120);
+  const offset = camera.offset_x * .05;
+  ctx.fillStyle = '#e8ecff';
+  for (const star of NIGHT_STARS) {
+    const x = ((star.x + offset) % 1400 + 1400) % 1400;
+    if (x > ctx.canvas.width) continue;
+    ctx.globalAlpha = .35 + (Math.sin(time / 700 + star.phase) + 1) * .3;
+    ctx.fillRect(Math.round(x), Math.round(Math.max(top, 0) + star.y / 300 * (skyBottom - Math.max(top, 0))), star.size, star.size);
+  }
+  const moonX = ctx.canvas.width * .27 + camera.offset_x * .03;
+  const moonY = Math.max(36, Math.min(top + 150, boundary - 150));
+  ctx.globalAlpha = 1;
+  if (typeof ctx.createRadialGradient === 'function') {
+    const halo = ctx.createRadialGradient(moonX, moonY, 10, moonX, moonY, 90);
+    halo.addColorStop(0, 'rgba(190, 255, 170, .35)');
+    halo.addColorStop(1, 'rgba(190, 255, 170, 0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(moonX - 90, moonY - 90, 180, 180);
+  }
+  ctx.fillStyle = '#dff5c8';
+  ctx.beginPath();
+  ctx.arc?.(moonX, moonY, 22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(120, 150, 110, .45)';
+  ctx.beginPath();
+  ctx.arc?.(moonX - 7, moonY - 4, 5, 0, Math.PI * 2);
+  ctx.arc?.(moonX + 8, moonY + 7, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 1;
+  if (typeof ctx.createRadialGradient === 'function') {
+    const start = ((camera.offset_x % 1600) + 1600) % 1600 - 1600;
+    for (let tileX = start; tileX < ctx.canvas.width; tileX += 1600) {
+      for (const [index, [fireX, depth]] of NIGHT_FIRES.entries()) {
+        const x = tileX + fireX;
+        if (x < -80 || x > ctx.canvas.width + 80) continue;
+        const y = boundary - depth;
+        const flicker = .8 + Math.sin(time / 90 + index * 1.7) * .12 + Math.sin(time / 37 + index) * .08;
+        const glow = ctx.createRadialGradient(x, y, 2, x, y, 60 * flicker);
+        glow.addColorStop(0, 'rgba(255, 170, 70, .55)');
+        glow.addColorStop(.4, 'rgba(230, 95, 35, .2)');
+        glow.addColorStop(1, 'rgba(230, 95, 35, 0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(x - 60, y - 60, 120, 120);
+        ctx.fillStyle = 'rgba(255, 220, 140, .9)';
+        ctx.fillRect(x - 2, y - 3 * flicker, 4, 4);
+      }
+    }
+  }
+  ctx.restore();
 }
 
 function renderDirt(ctx, camera, assets) {
@@ -312,17 +388,15 @@ function renderGreenhouseGlow(ctx, room) {
   ctx.restore();
 }
 
-export function applyNightOverlay(ctx, width, height, isNight, { activeGenerators = 0, surfaceHeight = height } = {}) {
-  if (!isNight) return;
-  const overlayHeight = Number(activeGenerators) >= 3
-    ? Math.max(0, Math.min(height, Number(surfaceHeight) || 0))
-    : height;
-  if (overlayHeight <= 0) return;
+export function applyNightOverlay(ctx, width, height, isNight, { activeGenerators = 0, surfaceHeight = 0 } = {}) {
+  if (!isNight || hasReliableNightPower(activeGenerators)) return;
+  const top = Math.max(0, Math.min(height, Number(surfaceHeight) || 0));
+  if (top >= height) return;
   ctx.save();
   ctx.globalAlpha = 0.4;
   ctx.globalCompositeOperation = 'multiply';
   ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, width, overlayHeight);
+  ctx.fillRect(0, top, width, height - top);
   ctx.restore();
 }
 
@@ -339,7 +413,7 @@ export function applyOxygenDeprivationOverlay(ctx, width, height, oxygenDeprived
 export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants = [], cabinFloor = player.floor,
   time = 0, isNight = false, activeGenerators = 0, oxygenDeprived = false, lootbox = {},
   presidentClass = null, equippedSkin = 'default' }) {
-  renderSurface(ctx, camera, assets);
+  renderSurface(ctx, camera, assets, { isNight, time });
   renderDirt(ctx, camera, assets);
   ctx.save();
   ctx.translate(camera.offset_x, camera.offset_y);
