@@ -22,7 +22,7 @@ import { advanceLootboxClick, collectExpeditionLoot, createExpeditionLocation, o
 import { playLootboxSound } from '../core/lootbox_renderer.js';
 import { createPresidentSelectionMenu } from '../core/menu.js';
 import { applyDialoguePacification } from '../core/dialogues.js';
-import { DIALOGUE_CHAR_INTERVAL_MS, renderDialogueView } from './dialogue_renderer.js';
+import { DIALOGUE_CHAR_INTERVAL_MS, isDialogueTextComplete, renderDialogueView } from './dialogue_renderer.js';
 import { equipSkin, getPresidentClassModifiers, PRESIDENT_CLASSES, PRESIDENT_SKINS, purchaseSkin, startGame } from '../core/player_state.js';
 import {
   advanceMonth,
@@ -719,6 +719,7 @@ export function mountDashboard(root) {
   let dialogueTimer = null;
   let dialogueTextComplete = false;
   let dialogueFullText = '';
+  let dialogueCharactersRendered = 0;
 
   function openShelterRoom(room, { requestLocation = true } = {}) {
     if (!room || !bunkerGeneratorModal) return;
@@ -885,25 +886,30 @@ export function mountDashboard(root) {
             if (dialogueTimer !== null) window.clearInterval(dialogueTimer);
             dialogueTextComplete = false;
             dialogueFullText = String(text ?? '');
+            dialogueCharactersRendered = 0;
             const modal = root.querySelector('[data-dialogue-modal]');
             if (!modal) return;
             modal.outerHTML = renderDialogueView(npc);
             const activeModal = root.querySelector('[data-dialogue-modal]');
             activeModal.hidden = false;
             const textNode = activeModal.querySelector('[data-dialogue-text]');
-            let index = 0;
             dialogueTimer = window.setInterval(() => {
-              if (!textNode || index >= dialogueFullText.length) {
+              if (!textNode) {
                 window.clearInterval(dialogueTimer);
                 dialogueTimer = null;
                 dialogueTextComplete = true;
                 return;
               }
-              textNode.textContent += dialogueFullText[index++];
+              textNode.textContent += dialogueFullText[dialogueCharactersRendered++];
+              if (isDialogueTextComplete(dialogueCharactersRendered, dialogueFullText.length)) {
+                window.clearInterval(dialogueTimer);
+                dialogueTimer = null;
+                dialogueTextComplete = true;
+              }
             }, DIALOGUE_CHAR_INTERVAL_MS);
           },
           onDialogueAdvance: () => {
-            if (dialogueTextComplete) return false;
+            if (dialogueTextComplete || isDialogueTextComplete(dialogueCharactersRendered, dialogueFullText.length)) return false;
             if (dialogueTimer !== null) window.clearInterval(dialogueTimer);
             dialogueTimer = null;
             dialogueTextComplete = true;

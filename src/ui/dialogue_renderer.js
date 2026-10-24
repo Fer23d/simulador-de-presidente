@@ -13,6 +13,10 @@ const ROLE_NAME = Object.freeze({
 
 export const DIALOGUE_CHAR_INTERVAL_MS = 18;
 
+export function isDialogueTextComplete(renderedCharacters, totalCharacters) {
+  return renderedCharacters >= totalCharacters;
+}
+
 export function renderDialogueView(npc, text = '') {
   const role = PORTRAIT_ROLE[npc?.role] ?? 'worker';
   const storedName = typeof npc?.name === 'string' && npc.name.trim() ? npc.name.trim() : 'Habitante';
