@@ -38,6 +38,7 @@ import { getWastelandEvent, WASTELAND_EVENTS } from './game_mechanics.js';
 import { createRpgPlayer, normalizeInhabitants, normalizeRpgPlayer } from './rpg_bunker.js';
 import { INITIAL_SHELTER_GRID, migrateLegacyPlayer, migrateLegacyRooms, normalizeShelterGrid, normalizeShelterInhabitants } from './shelter_engine.js';
 import { createEnvironmentState } from './environment.js';
+import { createWeatherState } from './weather.js';
 import { createExpeditionLocation } from './expeditions.js';
 import { normalizePlayerCosmetics } from './player_state.js';
 
@@ -226,6 +227,7 @@ export function createGameState(countryId = 'bra') {
     lootbox_revealed_at: null,
     expeditionLocation: null,
     environment: createEnvironmentState(),
+    weather: createWeatherState(),
     currentDay: 1,
     isNight: false,
     wasteland_turn: 0,
@@ -1086,6 +1088,7 @@ export function hydrateGameState(serialized) {
         has_nukes: base.country.has_nukes,
       },
       environment,
+      weather: createWeatherState(parsed.weather),
       currentDay: Math.max(1, Math.floor(Number(parsed.currentDay) || 1)),
       isNight: environment.isNight,
       expeditionLocation: typeof parsed.expeditionLocation?.city === 'string'

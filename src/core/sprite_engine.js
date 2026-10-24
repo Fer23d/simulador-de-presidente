@@ -81,13 +81,14 @@ function drawRepeatingLayer(ctx, image, parallaxX, y, width, height) {
   for (let x = start; x < ctx.canvas.width; x += width) drawOrMissing(ctx, image, x, y, width, height);
 }
 
-function renderSurface(ctx, camera, assets, { isNight = false, time = 0 } = {}) {
+function renderSurface(ctx, camera, assets, { isNight = false, time = 0, weather = 'clear' } = {}) {
   const boundary = SURFACE_Y + camera.offset_y;
   if (boundary <= 0) return;
   drawRepeatingLayer(ctx, assets.getImage('bg_sky'), camera.offset_x * .08, boundary - 520, 1400, 540);
   drawRepeatingLayer(ctx, assets.getImage('bg_mountains'), camera.offset_x * .2, boundary - 230, 1400, 260);
   drawRepeatingLayer(ctx, assets.getImage('fg_wasteland'), camera.offset_x, boundary - 180, 1600, 210);
-  if (isNight) renderNightSurface(ctx, camera, boundary, time);
+  if (isNight) renderNightSurface(ctx, camera, boundary, time, { overcast: weather !== 'clear' });
+  if (weather !== 'clear') renderWeather(ctx, camera, boundary, time, weather);
 }
 
 // Superficie noturna radioativa: tinta azul-violeta, estrelas cintilantes, lua esverdeada e fogueiras.
@@ -98,20 +99,8 @@ const NIGHT_STARS = Object.freeze(Array.from({ length: 64 }, (_, index) => {
 // Fogueiras de sobreviventes espalhadas pelas ruinas, em coordenadas do tile de primeiro plano.
 const NIGHT_FIRES = Object.freeze([[190, 22], [640, 30], [1010, 18], [1420, 26]]);
 
-function renderNightSurface(ctx, camera, boundary, time) {
-  const top = boundary - 520;
-  ctx.save();
-  ctx.globalCompositeOperation = 'multiply';
-  if (typeof ctx.createLinearGradient === 'function') {
-    const tint = ctx.createLinearGradient(0, top, 0, boundary);
-    tint.addColorStop(0, '#26306a');
-    tint.addColorStop(.7, '#463c78');
-    tint.addColorStop(1, '#7a5266');
-    ctx.fillStyle = tint;
-  } else ctx.fillStyle = '#3a3670';
-  ctx.fillRect(0, 0, ctx.canvas.width, boundary);
-  ctx.globalCompositeOperation = 'source-over';
-  // Estrelas e lua ficam na faixa de ceu visivel, que costuma ser estreita com a camera no bunker.
+// Estrelas e lua ficam na faixa de ceu visivel, que costuma ser estreita com a camera no bunker.
+function renderNightSkyLights(ctx, camera, boundary, time, top) {
   const skyBottom = Math.max(20, boundary - 120);
   const offset = camera.offset_x * .05;
   ctx.fillStyle = '#e8ecff';
@@ -140,6 +129,22 @@ function renderNightSurface(ctx, camera, boundary, time) {
   ctx.arc?.(moonX - 7, moonY - 4, 5, 0, Math.PI * 2);
   ctx.arc?.(moonX + 8, moonY + 7, 3.5, 0, Math.PI * 2);
   ctx.fill();
+}
+
+function renderNightSurface(ctx, camera, boundary, time, { overcast = false } = {}) {
+  const top = boundary - 520;
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  if (typeof ctx.createLinearGradient === 'function') {
+    const tint = ctx.createLinearGradient(0, top, 0, boundary);
+    tint.addColorStop(0, '#26306a');
+    tint.addColorStop(.7, '#463c78');
+    tint.addColorStop(1, '#7a5266');
+    ctx.fillStyle = tint;
+  } else ctx.fillStyle = '#3a3670';
+  ctx.fillRect(0, 0, ctx.canvas.width, boundary);
+  ctx.globalCompositeOperation = 'source-over';
+  if (!overcast) renderNightSkyLights(ctx, camera, boundary, time, top);
   ctx.globalCompositeOperation = 'lighter';
   ctx.globalAlpha = 1;
   if (typeof ctx.createRadialGradient === 'function') {
@@ -159,6 +164,91 @@ function renderNightSurface(ctx, camera, boundary, time) {
         ctx.fillStyle = 'rgba(255, 220, 140, .9)';
         ctx.fillRect(x - 2, y - 3 * flicker, 4, 4);
       }
+    }
+  }
+  ctx.restore();
+}
+
+// Particulas fixas reaproveitadas pelas tempestades; cada uma guarda posicao, velocidade e tamanho relativos.
+const WEATHER_PARTICLES = Object.freeze(Array.from({ length: 140 }, (_, index) => {
+  const hash = (seed) => ((Math.sin(seed * 91.7 + index * 47.13) * 24634.6345) % 1 + 1) % 1;
+  return Object.freeze({ x: hash(1), y: hash(2), speed: .6 + hash(3) * .8, size: hash(4) });
+}));
+
+function renderWeather(ctx, camera, boundary, time, weather) {
+  const width = ctx.canvas.width;
+  const height = Math.min(boundary, ctx.canvas.height);
+  if (height <= 0) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect?.(0, 0, width, height);
+  ctx.clip?.();
+  const drift = camera.offset_x * .6;
+  if (weather === 'dust') {
+    ctx.fillStyle = 'rgba(168, 98, 42, .5)';
+    ctx.fillRect(0, 0, width, height);
+    if (typeof ctx.createLinearGradient === 'function') {
+      const haze = ctx.createLinearGradient(0, height * .35, 0, height);
+      haze.addColorStop(0, 'rgba(196, 126, 62, 0)');
+      haze.addColorStop(1, 'rgba(196, 126, 62, .55)');
+      ctx.fillStyle = haze;
+      ctx.fillRect(0, 0, width, height);
+    }
+    for (const particle of WEATHER_PARTICLES) {
+      const x = ((particle.x * (width + 80) + time * .45 * particle.speed + drift) % (width + 80) + width + 80) % (width + 80) - 40;
+      const y = particle.y * height + Math.sin(time / 300 + particle.x * 20) * 3;
+      ctx.fillStyle = `rgba(${200 + Math.round(particle.size * 40)}, ${128 + Math.round(particle.size * 40)}, 70, ${.2 + particle.size * .35})`;
+      ctx.fillRect(x, y, 3 + particle.size * 9, 1 + Math.round(particle.size * 1.4));
+    }
+  } else if (weather === 'acid_rain') {
+    ctx.fillStyle = 'rgba(58, 104, 52, .26)';
+    ctx.fillRect(0, 0, width, height);
+    ctx.strokeStyle = 'rgba(176, 255, 140, .55)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const particle of WEATHER_PARTICLES) {
+      const y = (particle.y * height + time * .55 * particle.speed) % height;
+      const x = ((particle.x * width - y * .3 + drift) % width + width) % width;
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - 3, y + 9 + particle.size * 6);
+    }
+    ctx.stroke();
+    for (let index = 0; index < 9; index++) {
+      const x = ((index * 131 + drift) % width + width) % width;
+      ctx.globalAlpha = .35 + (Math.sin(time / 240 + index * 2.1) + 1) * .2;
+      ctx.fillStyle = '#b8ff8f';
+      ctx.fillRect(x, height - 7, 14, 2);
+    }
+  } else if (weather === 'radstorm') {
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = '#6fae74';
+    ctx.fillRect(0, 0, width, height);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(80, 255, 130, .1)';
+    ctx.fillRect(0, 0, width, height);
+    const strike = Math.floor(time / 4_200);
+    if (time % 4_200 < 160) {
+      ctx.fillStyle = 'rgba(205, 255, 215, .38)';
+      ctx.fillRect(0, 0, width, height);
+      const hash = (seed) => ((Math.sin((strike + seed) * 12.9898) * 43758.5453) % 1 + 1) % 1;
+      let boltX = width * (.15 + hash(1) * .7);
+      ctx.strokeStyle = '#e9ffe9';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = '#6dff9a';
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.moveTo(boltX, 0);
+      for (let segment = 1; segment <= 7; segment++) {
+        boltX += (hash(segment + 2) - .5) * 46;
+        ctx.lineTo(boltX, height * .62 * segment / 7);
+      }
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(160, 255, 170, .5)';
+    for (const particle of WEATHER_PARTICLES.slice(0, 50)) {
+      const y = (particle.y * height + time * .08 * particle.speed) % height;
+      const x = ((particle.x * width + Math.sin(time / 900 + particle.size * 6) * 12 + drift) % width + width) % width;
+      ctx.fillRect(x, y, 2, 2);
     }
   }
   ctx.restore();
@@ -417,8 +507,8 @@ export function applyOxygenDeprivationOverlay(ctx, width, height, oxygenDeprived
 
 export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants = [], cabinFloor = player.floor,
   time = 0, isNight = false, activeGenerators = 0, oxygenDeprived = false, lootbox = {},
-  presidentClass = null, equippedSkin = 'default' }) {
-  renderSurface(ctx, camera, assets, { isNight, time });
+  presidentClass = null, equippedSkin = 'default', weather = 'clear' }) {
+  renderSurface(ctx, camera, assets, { isNight, time, weather });
   renderDirt(ctx, camera, assets);
   ctx.save();
   ctx.translate(camera.offset_x, camera.offset_y);

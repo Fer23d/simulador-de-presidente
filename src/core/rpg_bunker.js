@@ -9,6 +9,7 @@ import { Inhabitant } from './inhabitant.js';
 import { advanceEnvironmentCycle, countActiveGenerators, createEnvironmentState, FULL_CYCLE_MS, getNpcMovementDelta } from './environment.js';
 import { chooseDialogueLine } from './dialogues.js';
 import { normalizeNeeds } from './needs.js';
+import { advanceWeather, createWeatherState } from './weather.js';
 
 const WALK_SPEED = 170;
 const LIFT_SPEED = 280;
@@ -259,7 +260,7 @@ export const renderRpgBunker = renderSpriteScene;
 
 export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, player: savedPlayer,
   inhabitants = [], cabinFloor: savedCabinFloor, onBuild, onRoom, onPlayerChanged, onInhabitantsChanged, onHint,
-  onDetain, onAssetsReady, onEnvironmentChanged, environment = {}, isNight = environment?.isNight ?? false,
+  onDetain, onAssetsReady, onEnvironmentChanged, environment = {}, isNight = environment?.isNight ?? false, weather: savedWeather = {},
   oxygenDeprived = false, assetUrls = {}, lootbox = {}, onLootboxClick,
   presidentClass = null, equippedSkin = 'default', currentDay = 1, onDayPassed,
   onDialogue, onDialogueAdvance, onDialogueClose } = {}) {
@@ -285,6 +286,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   let lastEnvironmentSave = 0;
   let lastHint = '';
   let dayNight = createEnvironmentState({ ...environment, isNight });
+  let weather = createWeatherState(savedWeather);
   const activeGenerators = countActiveGenerators(grid);
   const keys = new Set();
   const actors = inhabitants.map((data) => new Inhabitant(data));
@@ -302,11 +304,14 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
       currentDay = Math.max(1, (Number(currentDay) || 1) + daysPassed);
       onDayPassed?.(daysPassed);
     }
+    const { changed: weatherChanged, ...nextWeather } = advanceWeather(weather, dt * 1000);
+    weather = nextWeather;
     const phaseChanged = previousNight !== dayNight.isNight;
-    if (phaseChanged || time - lastEnvironmentNotice >= 1_000) {
-      const persist = phaseChanged || time - lastEnvironmentSave >= 10_000;
+    if (phaseChanged || weatherChanged || time - lastEnvironmentNotice >= 1_000) {
+      const persist = phaseChanged || weatherChanged || time - lastEnvironmentSave >= 10_000;
       onEnvironmentChanged?.({ elapsedMs: dayNight.elapsedMs, isNight: dayNight.isNight,
-        remainingMs: dayNight.remainingMs, progress: dayNight.progress }, { phaseChanged, persist });
+        remainingMs: dayNight.remainingMs, progress: dayNight.progress, weather: { ...weather } },
+      { phaseChanged, weatherChanged, persist });
       lastEnvironmentNotice = time;
       if (persist) lastEnvironmentSave = time;
     }
@@ -329,7 +334,8 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     camera.offset_x += (targetX - camera.offset_x) * Math.min(1, dt * 8);
     camera.offset_y += (targetY - camera.offset_y) * Math.min(1, dt * 8);
     renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants: actors, cabinFloor, time,
-      isNight: dayNight.isNight, activeGenerators, oxygenDeprived, lootbox, presidentClass, equippedSkin });
+      isNight: dayNight.isNight, activeGenerators, oxygenDeprived, lootbox, presidentClass, equippedSkin,
+      weather: weather.type });
     const rebel = paused || buildMode ? null : findNearbyRebel(player, grid, actors);
     const nearbyInhabitant = paused || buildMode ? null : trackNearbyInhabitant(player, grid, actors, time);
     const nearbyRoom = nearbyInhabitant && getRoom(grid, nearbyInhabitant.npc.floor, nearbyInhabitant.npc.column);
@@ -436,6 +442,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     getSnapshot: () => ({ player: { ...player }, camera: { ...camera }, cabinFloor,
       dialogueOpen: Boolean(dialogueNpc), currentDay,
       environment: { elapsedMs: dayNight.elapsedMs, isNight: dayNight.isNight },
+      weather: { ...weather },
       inhabitants: actors.map((actor) => actor.snapshot()) }),
     isDialogueOpen: () => Boolean(dialogueNpc),
     setBuildMode(value) { buildMode = Boolean(value); keys.clear(); },

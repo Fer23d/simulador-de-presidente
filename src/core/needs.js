@@ -31,7 +31,7 @@ export function countDormitoryBeds(grid) {
 }
 
 // Avanco mensal: comida do estoque sacia, dormitorios recuperam o descanso e a moral reage a ambos.
-export function advanceInhabitantNeeds(inhabitants = [], { fed = true, beds = 0, darkNights = false } = {}) {
+export function advanceInhabitantNeeds(inhabitants = [], { fed = true, beds = 0, darkNights = false, stormPenalty = 0 } = {}) {
   const present = inhabitants.filter((inhabitant) => !inhabitant.is_on_expedition);
   const bedRatio = present.length ? Math.min(1, Math.max(0, Number(beds) || 0) / present.length) : 1;
   return inhabitants.map((inhabitant) => {
@@ -43,7 +43,7 @@ export function advanceInhabitantNeeds(inhabitants = [], { fed = true, beds = 0,
     const hungry = satiety < NEED_CRITICAL_THRESHOLD;
     const exhausted = rest < NEED_CRITICAL_THRESHOLD;
     const morale = clampNeed(needs.morale + (hungry || exhausted ? 0 : 5)
-      - (hungry ? 20 : 0) - (exhausted ? 15 : 0) - (darkNights ? 10 : 0));
+      - (hungry ? 20 : 0) - (exhausted ? 15 : 0) - (darkNights ? 10 : 0) - Math.max(0, Number(stormPenalty) || 0));
     const loyalty = Math.max(0, Math.min(100, Number(inhabitant.loyalty ?? 100)
       - (morale < NEED_CRITICAL_THRESHOLD ? 10 : 0)));
     return { ...inhabitant, loyalty, needs: { satiety, rest, morale } };

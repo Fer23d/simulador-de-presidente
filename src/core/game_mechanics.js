@@ -4,6 +4,7 @@ import { getPresidentClassModifiers } from './player_state.js';
 import { countActiveGenerators, getNighttimeRiskChance } from './environment.js';
 import { createExpeditionLoot, createExpeditionNodes } from './expeditions.js';
 import { normalizeNeeds } from './needs.js';
+import { getWeather } from './weather.js';
 
 const EXPEDITION_MONTHS = 3;
 const EXPEDITION_SUCCESS_CHANCE = 0.7;
@@ -169,6 +170,10 @@ export function startExpedition(state, inhabitantId, destination = null) {
   const inhabitant = state.inhabitants?.find((item) => item.id === inhabitantId);
   if (!state.is_wasteland || !inhabitant || inhabitant.is_on_expedition || inhabitant.is_prisoner || inhabitant.currentState === 'rebel') {
     return { ...state, notice: 'Este habitante nao pode iniciar uma expedicao.' };
+  }
+  const weather = getWeather(state);
+  if (weather.blocksExpeditions) {
+    return { ...state, notice: `${weather.label}: expedições suspensas até o tempo abrir.` };
   }
   const availableDestinations = state.expeditionLocation?.nodes ?? createExpeditionNodes(state.expeditionLocation?.city);
   const expeditionDestination = availableDestinations.includes(destination) ? destination : availableDestinations[0];

@@ -6,6 +6,7 @@ import { createInitialInhabitants, createRpgPlayer } from './rpg_bunker.js';
 import { advanceMonthlyGameMechanics, getRoomProductivityMultiplier, getWastelandEvent, WASTELAND_EVENTS } from './game_mechanics.js';
 import { countActiveGenerators, createEnvironmentState, hasReliableNightPower } from './environment.js';
 import { advanceInhabitantNeeds, countDormitoryBeds } from './needs.js';
+import { getWeather } from './weather.js';
 import { nextRandom } from './geopolitics.js';
 import { getPresidentClassModifiers } from './player_state.js';
 
@@ -129,6 +130,7 @@ export function advanceWastelandMonth(state) {
   }
   const grid = normalizeShelterGrid(state.shelter_grid);
   const rooms = grid.flat().filter(Boolean);
+  const weather = getWeather(state);
   const activeGreenhouses = rooms.filter((room) => room.type === 'greenhouse' && !(room.disabledMonthsRemaining > 0));
   const laboratories = rooms.filter((room) => room.type === 'laboratory');
   const generators = rooms.filter((room) => room.type === 'generator' && room.operational);
@@ -146,19 +148,19 @@ export function advanceWastelandMonth(state) {
   const countLevels = (type) => rooms.filter((room) => room.type === type).reduce((total, room) => total + room.level, 0);
   const arsenals = countLevels('arsenal');
   const medical = countLevels('medical');
-  const radiationGain = 2 * getPresidentClassModifiers(state.presidentClass).radiationGainMultiplier;
+  const radiationGain = (2 + weather.radiationGain) * getPresidentClassModifiers(state.presidentClass).radiationGainMultiplier;
   const radio = countLevels('radio');
   const offices = countLevels('office');
   const population = Math.min(calculateShelterCapacity(grid), state.country.populacao_base + greenhouseWorkUnits * 5 + medical * 2 + radio * 3);
   const foodConsumption = getBunkerFoodConsumption(state, population);
   const energyConsumption = getBunkerEnergyConsumption(state, population) + getLifeSupportEnergyMaintenance(grid);
-  const oxygenConsumption = getBunkerOxygenConsumption(state, grid);
+  const oxygenConsumption = Math.ceil(getBunkerOxygenConsumption(state, grid) * weather.oxygenMultiplier);
   const oxygenCapacity = getRoomStorageCapacity(grid, 'oxygen');
   const oxygenDeficit = oxygenProduction < oxygenConsumption;
   const fed = (Number(state.shelter_supplies?.food) || 0) + foodProduction >= foodConsumption;
   const beds = countDormitoryBeds(grid);
   const inhabitantsWithNeeds = advanceInhabitantNeeds(state.inhabitants ?? [], {
-    fed, beds, darkNights: !hasReliableNightPower(countActiveGenerators(grid)),
+    fed, beds, darkNights: !hasReliableNightPower(countActiveGenerators(grid)), stormPenalty: weather.moralePenalty,
   });
   const presentCount = inhabitantsWithNeeds.filter((inhabitant) => !inhabitant.is_on_expedition).length;
   const supplies = {
@@ -197,6 +199,7 @@ export function advanceWastelandMonth(state) {
   const needsNotice = [
     !fed && presentCount ? '> FOME: o estoque de comida não alimentou o Vault. Famintos produzem menos.' : null,
     beds < presentCount ? `> DORMITÓRIOS LOTADOS: ${beds} leitos para ${presentCount} habitantes.` : null,
+    weather.id !== 'clear' ? `> ${weather.label}: a superfície castiga o Vault.` : null,
   ].filter(Boolean).join(' ');
   if (needsNotice) processed = { ...processed, notice: `${processed.notice} ${needsNotice}` };
   if (oxygenDeficit) {

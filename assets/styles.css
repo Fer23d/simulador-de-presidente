@@ -88,6 +88,11 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 .environment-progress > span { display: block; height: 100%; background: var(--amber); box-shadow: 0 0 7px var(--amber); }
 .environment-security { grid-column: 1 / -1; border-top: 1px solid currentColor; padding-top: 5px; color: var(--amber); font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
 .bunker-environment-hud.is-night { border-color: #8fa8dc; color: #c5d7ff; }
+.environment-weather { grid-column: 1 / -1; padding: 2px 0; font-weight: 700; letter-spacing: .02em; white-space: nowrap; animation: weather-hud-pulse 1.6s ease-in-out infinite; }
+.environment-weather[data-weather="dust"] { color: #e8a25c; }
+.environment-weather[data-weather="acid_rain"] { color: #a8ff7a; }
+.environment-weather[data-weather="radstorm"] { color: #6dff9a; }
+@keyframes weather-hud-pulse { 50% { opacity: .62; } }
 .bunker-environment-hud.is-night .environment-phase-icon { color: #a9c2ff; }
 .bunker-environment-hud.is-night .environment-progress > span { background: #a9c2ff; }
 .bunker-environment-hud.is-night .environment-progress > span { box-shadow: 0 0 7px #a9c2ff; }
@@ -155,6 +160,7 @@ body.theme-wasteland .content-area { max-width: none; }
 .expedition-logistics p { color: var(--muted); }
 .expedition-location { margin: 12px 0 4px; color: var(--amber) !important; }
 .expedition-privacy { margin: 4px 0 10px; color: var(--muted); font-size: 12px; }
+.expedition-weather-warning { margin: 8px 0; padding: 6px 8px; border: 1px solid #a8ff7a; color: #a8ff7a !important; font-weight: 700; }
 .expedition-attribution { display: block; margin-bottom: 10px; color: var(--muted); font-size: 12px; }
 .expedition-attribution a { color: var(--cyan); }
 .expedition-route-label { display: block; margin: 8px 0 5px; color: var(--amber); font-size: 13px; text-transform: uppercase; }
