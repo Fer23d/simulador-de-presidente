@@ -7,7 +7,7 @@ const SURFACE_Y = WORLD_TOP - 30;
 const ATLAS_CELLS = Object.freeze({
   vault: [0, 0], elevator: [1, 0], dormitory: [2, 0],
   generator: [0, 1], greenhouse: [1, 1], arsenal: [2, 1],
-  medical: [0, 2], radio: [1, 2], office: [2, 2], detention: [2, 2], presidential_suite: [2, 2],
+  medical: [0, 2], radio: [1, 2], office: [2, 2], presidential_suite: [2, 2],
 });
 const ROOM_AMBIENT_LIGHTS = Object.freeze({
   medical: Object.freeze(['rgba(200, 240, 255, .3)', 'rgba(200, 240, 255, .12)']),
@@ -18,7 +18,6 @@ const NPC_ROWS = Object.freeze({ resident: 0, engineer: 0, scientist: 1, medic: 
 const frameBoundsCache = new WeakMap();
 const ROOM_CEILING_THICKNESS = 12;
 const ELEVATOR_CABIN_HEIGHT = 129;
-const ELEVATOR_INNER_HEIGHT = ELEVATOR_CABIN_HEIGHT * .47;
 const ELEVATOR_ART_FLOOR_INSET = 19;
 const ELEVATOR_SPRITE_FOOT_OFFSET = 3;
 
@@ -187,6 +186,11 @@ export function renderRoom(ctx, room, assets, time = 0) {
     drawOrMissing(ctx, assets.getImage('uv_light_prop'), x + 55, y + 7, 154, 48);
     return;
   }
+  if (room.type === 'detention') {
+    drawOrMissing(ctx, assets.getImage('room_base_empty'), x, y, SLOT_WIDTH, ROOM_HEIGHT);
+    renderDetentionInterior(ctx, x, y, time);
+    return;
+  }
   if (room.type === 'laboratory') {
     const laboratory = assets.getImage('room_laboratory');
     const emptyBase = assets.getImage('room_base_empty');
@@ -324,12 +328,12 @@ function visibleFrameBounds(image, frame, row, rows) {
 
 export function getActorPlacement(room, { liftY } = {}) {
   const physicalFloorY = cellCenter(room.floor, room.column).y;
+  // Atores mantem o mesmo tamanho em todo o bunker, inclusive dentro da cabine do elevador.
+  const innerHeight = ROOM_HEIGHT - ROOM_CEILING_THICKNESS - ROOM_FLOOR_THICKNESS;
   if (room.type === 'elevator') {
-    const innerHeight = ELEVATOR_INNER_HEIGHT;
-    return { innerHeight, height: innerHeight * .6,
+    return { innerHeight, height: innerHeight * .55,
       floorY: (liftY ?? physicalFloorY) + ELEVATOR_SPRITE_FOOT_OFFSET };
   }
-  const innerHeight = ROOM_HEIGHT - ROOM_CEILING_THICKNESS - ROOM_FLOOR_THICKNESS;
   const roomY = WORLD_TOP + room.floor * FLOOR_SPACING;
   return { innerHeight, height: innerHeight * .55,
     floorY: roomY + ROOM_HEIGHT - ROOM_FLOOR_THICKNESS + SPRITE_BOTTOM_PADDING };
@@ -480,7 +484,7 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
   const playerY = placement.floorY;
   drawPresident(ctx, { ...player, y: playerY, role: 'president' }, assets,
     { presidentClass, equippedSkin, time, placement });
-  for (const room of grid.flat()) if (room?.type === 'detention') renderDetentionBars(ctx, room);
+  for (const room of grid.flat()) if (room?.type === 'detention') renderDetentionBars(ctx, room, time);
   for (const room of grid.flat()) if (room?.type === 'greenhouse') renderGreenhouseGlow(ctx, room);
   ctx.restore();
   if (isNight && ctx.canvas) {
@@ -491,20 +495,150 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
   renderLootboxOverlay(ctx, { ...lootbox, time, crateImage: assets.getImage('loot_crate') });
 }
 
-function renderDetentionBars(ctx, room) {
-  const x = WORLD_LEFT + room.column * SLOT_WIDTH;
-  const y = WORLD_TOP + room.floor * FLOOR_SPACING;
+function steelGradient(ctx, x0, y0, x1, y1, fallback) {
+  if (typeof ctx.createLinearGradient !== 'function') return fallback;
+  const gradient = ctx.createLinearGradient(x0, y0, x1, y1);
+  gradient.addColorStop(0, '#16191a');
+  gradient.addColorStop(.45, '#6e6a62');
+  gradient.addColorStop(.6, '#4a4540');
+  gradient.addColorStop(1, '#141617');
+  return gradient;
+}
+
+// Cela de detencao: concreto frio com beliche, latrina de aco e lampada gradeada que falha.
+function renderDetentionInterior(ctx, x, y, time = 0) {
   ctx.save();
-  ctx.strokeStyle = 'rgba(30, 35, 35, .96)';
-  ctx.lineWidth = 8;
   ctx.beginPath();
-  for (let barX = x + 20; barX < x + SLOT_WIDTH - 12; barX += 34) {
-    ctx.moveTo(barX, y + 27);
-    ctx.lineTo(barX, y + ROOM_HEIGHT - 14);
+  ctx.rect?.(x + 4, y + 4, SLOT_WIDTH - 8, ROOM_HEIGHT - 8);
+  ctx.clip?.();
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.globalAlpha = .55;
+  ctx.fillStyle = '#56677d';
+  ctx.fillRect(x + 4, y + 4, SLOT_WIDTH - 8, ROOM_HEIGHT - 8);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+
+  for (let stripeX = x + 44; stripeX < x + 220; stripeX += 12) {
+    ctx.fillStyle = (stripeX - x) % 24 === 20 ? '#c9a227' : '#1b1b1a';
+    ctx.fillRect(stripeX, y + 103, 12, 5);
+  }
+
+  ctx.fillStyle = '#b8962a';
+  ctx.fillRect(x + 58, y + 54, 38, 11);
+  ctx.fillStyle = '#1a1a18';
+  ctx.font = 'bold 7px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText?.('CELA 01', x + 77, y + 60);
+
+  ctx.strokeStyle = 'rgba(225, 218, 200, .55)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  for (let group = 0; group < 3; group++) {
+    const groupX = x + 122 + group * 17;
+    for (let mark = 0; mark < 4; mark++) {
+      ctx.moveTo(groupX + mark * 3, y + 64);
+      ctx.lineTo(groupX + mark * 3, y + 76);
+    }
+    ctx.moveTo(groupX - 2, y + 74);
+    ctx.lineTo(groupX + 11, y + 66);
   }
   ctx.stroke();
-  ctx.strokeStyle = 'rgba(185, 195, 186, .48)';
-  ctx.lineWidth = 1.5;
+
+  ctx.fillStyle = '#16191a';
+  ctx.fillRect(x + 46, y + 64, 4, 54);
+  ctx.fillRect(x + 104, y + 64, 4, 54);
+  for (const bunkY of [y + 76, y + 100]) {
+    ctx.fillStyle = '#8a7f62';
+    ctx.fillRect(x + 50, bunkY, 54, 7);
+    ctx.fillStyle = '#c2b694';
+    ctx.fillRect(x + 52, bunkY - 3, 13, 4);
+    ctx.fillStyle = '#556238';
+    ctx.fillRect(x + 70, bunkY - 1, 32, 7);
+    ctx.fillStyle = '#16191a';
+    ctx.fillRect(x + 48, bunkY + 7, 58, 3);
+  }
+
+  ctx.fillStyle = '#4e575b';
+  ctx.fillRect(x + 197, y + 101, 3, 7);
+  ctx.fillStyle = '#b5bcc0';
+  ctx.fillRect(x + 188, y + 80, 20, 6);
+  ctx.fillStyle = '#2b3134';
+  ctx.fillRect(x + 196, y + 86, 4, 15);
+  ctx.fillStyle = '#c3cacd';
+  ctx.fillRect(x + 186, y + 108, 22, 5);
+  ctx.fillStyle = '#8d969b';
+  ctx.fillRect(x + 189, y + 113, 16, 6);
+  ctx.fillStyle = '#20272a';
+  ctx.fillRect(x + 189, y + 108, 16, 2);
+
+  const lampX = x + 150;
+  const lampY = y + 54;
+  const lit = Math.sin(time / 53) < .92 || Math.sin(time / 211) < 0;
+  ctx.fillStyle = '#1e2224';
+  ctx.fillRect(lampX - 1, y + 40, 2, 10);
+  ctx.fillStyle = lit ? '#e9f2ff' : '#59606a';
+  ctx.fillRect(lampX - 5, lampY - 4, 10, 7);
+  ctx.strokeStyle = '#2b3032';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (const cageX of [lampX - 5, lampX, lampX + 5]) {
+    ctx.moveTo(cageX, lampY - 4);
+    ctx.lineTo(cageX, lampY + 3);
+  }
   ctx.stroke();
+  if (lit && typeof ctx.createRadialGradient === 'function') {
+    const light = ctx.createRadialGradient(lampX, lampY, 4, lampX, lampY + 30, 90);
+    light.addColorStop(0, 'rgba(215, 232, 255, .3)');
+    light.addColorStop(.6, 'rgba(160, 190, 230, .1)');
+    light.addColorStop(1, 'rgba(160, 190, 230, 0)');
+    ctx.fillStyle = light;
+    ctx.fillRect(x + 20, y + 30, SLOT_WIDTH - 40, ROOM_HEIGHT - 40);
+  }
+  ctx.restore();
+}
+
+// Grade frontal desenhada depois dos atores: trilhos, barras de aco, rebites e porta trancada.
+function renderDetentionBars(ctx, room, time = 0) {
+  const x = WORLD_LEFT + room.column * SLOT_WIDTH;
+  const y = WORLD_TOP + room.floor * FLOOR_SPACING;
+  const left = x + 10;
+  const right = x + SLOT_WIDTH - 10;
+  const top = y + 20;
+  const bottom = y + ROOM_HEIGHT - 12;
+  const crossY = y + 76;
+  const doorLeft = x + 176;
+  const doorRight = x + 240;
+  ctx.save();
+  for (let barX = left + 10; barX < right - 4; barX += 26) {
+    ctx.fillStyle = steelGradient(ctx, barX, 0, barX + 5, 0, '#4a5254');
+    ctx.fillRect(barX, top, 5, bottom - top);
+    ctx.fillStyle = 'rgba(214, 200, 176, .22)';
+    ctx.fillRect(barX + 2, top + 6, 1, bottom - top - 12);
+    ctx.fillStyle = 'rgba(122, 64, 30, .45)';
+    ctx.fillRect(barX, crossY + 6, 5, 9);
+    ctx.fillRect(barX, bottom - 16, 5, 9);
+  }
+  for (const [railY, railHeight] of [[top, 7], [crossY, 6], [bottom - 7, 7]]) {
+    ctx.fillStyle = steelGradient(ctx, 0, railY, 0, railY + railHeight, '#3d4446');
+    ctx.fillRect(left, railY, right - left, railHeight);
+    ctx.fillStyle = 'rgba(122, 64, 30, .35)';
+    ctx.fillRect(left, railY + railHeight - 2, right - left, 2);
+    ctx.fillStyle = '#9a8f7c';
+    for (let rivetX = left + 11; rivetX < right - 4; rivetX += 26) ctx.fillRect(rivetX + 1, railY + railHeight / 2 - 1, 2, 2);
+  }
+  for (const postX of [doorLeft, doorRight]) {
+    ctx.fillStyle = steelGradient(ctx, postX, 0, postX + 7, 0, '#353c3e');
+    ctx.fillRect(postX, top, 7, bottom - top);
+  }
+  ctx.fillStyle = '#23292b';
+  ctx.fillRect(doorLeft - 3, top + 14, 4, 10);
+  ctx.fillRect(doorLeft - 3, bottom - 26, 4, 10);
+  ctx.fillStyle = '#5e5a4c';
+  ctx.fillRect(doorRight - 18, crossY - 7, 16, 20);
+  ctx.fillStyle = '#2a2822';
+  ctx.fillRect(doorRight - 12, crossY + 3, 4, 6);
+  ctx.fillStyle = Math.sin(time / 260) > 0 ? '#ff3b30' : '#6b1b17';
+  ctx.fillRect(doorRight - 11, crossY - 4, 3, 3);
   ctx.restore();
 }

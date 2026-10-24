@@ -156,13 +156,12 @@ test('character sprite advances walk frames and rests on idle frame', () => {
   assert.equal(shadows[0].filter, 'blur(2px)');
 });
 
-test('actors stand on the room grate and shrink to the elevator interior', () => {
+test('actors stand on the room grate and keep their size inside the elevator', () => {
   const room = getActorPlacement({ floor: 1, column: 1, type: 'dormitory' });
   const lift = getActorPlacement({ floor: 1, column: 0, type: 'elevator' });
   assert.equal(room.floorY, WORLD_TOP + FLOOR_SPACING + ROOM_HEIGHT - ROOM_FLOOR_THICKNESS + SPRITE_BOTTOM_PADDING);
   assert.equal(room.height, room.innerHeight * .55);
-  assert.equal(lift.height, lift.innerHeight * .6);
-  assert.ok(lift.height < room.height);
+  assert.equal(lift.height, room.height);
   assert.ok(lift.floorY < room.floorY);
 });
 
@@ -330,11 +329,12 @@ test('expedition NPCs are hidden, rebels show an alert, and detention cells draw
     'elevator_cabin', 'character_sheet', 'npc_walk_sheet'].map((key) => [key, { key, width: 1200, height: 800 }]));
   const npcDraws = [];
   const alerts = [];
-  let barsDrawn = 0;
+  const order = [];
   const ctx = { canvas: { width: 960, height: 600 }, save() {}, restore() {}, translate() {}, scale() {},
     createPattern() { return 'soil'; }, beginPath() {}, ellipse() {}, fill() {}, moveTo() {}, lineTo() {},
-    stroke() { barsDrawn++; }, drawImage(image) { if (image.key === 'npc_walk_sheet') npcDraws.push(image.key); },
-    fillText(text) { alerts.push(text); }, fillRect() {} };
+    stroke() {}, drawImage(image) { if (image.key === 'npc_walk_sheet') { npcDraws.push(image.key); order.push('npc'); } },
+    fillText(text) { alerts.push(text); },
+    fillRect(x, y, width) { if (this.fillStyle === '#4a5254' && width === 5) order.push('bar'); } };
   renderSpriteScene(ctx, { grid, player: { ...cellCenter(0, 1), floor: 0, vx: 0, facing: 1, liftTarget: null },
     inhabitants: [
       { id: 'away', floor: 0, column: 1, offsetX: -40, role: 'resident', is_on_expedition: true },
@@ -343,6 +343,8 @@ test('expedition NPCs are hidden, rebels show an alert, and detention cells draw
     ], camera: { offset_x: 0, offset_y: 0 }, assets: { getImage: (key) => assetsByKey[key] }, time: 300 });
 
   assert.equal(npcDraws.length, 2);
-  assert.deepEqual(alerts, ['⚠', '!']);
-  assert.equal(barsDrawn, 2);
+  assert.deepEqual(alerts.filter((text) => text !== 'CELA 01'), ['⚠', '!']);
+  assert.ok(alerts.includes('CELA 01'));
+  assert.ok(order.filter((entry) => entry === 'bar').length >= 8);
+  assert.ok(order.lastIndexOf('npc') < order.indexOf('bar'));
 });
