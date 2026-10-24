@@ -22,6 +22,17 @@ test('A/D crosses connected rooms and stops before earth', () => {
   assert.ok(moved.x < cellCenter(0, 1).x);
 });
 
+test('horizontal player movement covers the same distance at 30 and 60 FPS', () => {
+  const grid = expandedGrid();
+  const start = createRpgPlayer(grid);
+  const simulate = (frames, dt) => {
+    let player = { ...start };
+    for (let index = 0; index < frames; index++) player = updatePlayer(player, { right: true }, grid, dt);
+    return player.x - start.x;
+  };
+  assert.ok(Math.abs(simulate(30, 1 / 30) - simulate(60, 1 / 60)) < 0.01);
+});
+
 test('W/S only uses connected elevators and ends at an exact floor', () => {
   const grid = expandedGrid();
   assert.equal(updatePlayer(createRpgPlayer(grid), { down: true }, grid, .1).liftTarget, null);
@@ -62,7 +73,28 @@ test('nearby inhabitant prompt uses world coordinates and ignores expedition NPC
   assert.equal(findNearbyInhabitant(player, grid, [{ ...npc, is_on_expedition: true }]), null);
 });
 
-test('E opens a nearby dialogue and Space closes it, resuming the bunker', async () => {
+test('nearby inhabitant search ignores NPCs outside the player room', () => {
+  const grid = expandedGrid();
+  const player = createRpgPlayer(grid);
+  const sameRoom = { id: 'same-room', floor: 0, column: 1, offsetX: 30 };
+  const otherRoom = { id: 'other-room', floor: 0, column: 2, offsetX: -100 };
+  assert.equal(findNearbyInhabitant(player, grid, [otherRoom, sameRoom])?.npc.id, 'same-room');
+});
+
+test('dialogue proximity tracker refreshes every 200ms and can be forced for interaction', async () => {
+  const { createNearbyInhabitantTracker } = await import('../src/core/rpg_bunker.js');
+  const tracker = createNearbyInhabitantTracker();
+  const player = createRpgPlayer(INITIAL_SHELTER_GRID);
+  const grid = INITIAL_SHELTER_GRID;
+  const npc = { id: 'worker-1', floor: 0, column: 1, offsetX: 0 };
+  assert.equal(tracker(player, grid, [npc], 0)?.npc.id, 'worker-1');
+  const movedAway = { ...npc, offsetX: 100 };
+  assert.equal(tracker(player, grid, [movedAway], 199)?.npc.id, 'worker-1');
+  assert.equal(tracker(player, grid, [movedAway], 200), null);
+  assert.equal(tracker(player, grid, [npc], 201, true)?.npc.id, 'worker-1');
+});
+
+test('first dialogue input reveals all text and the second closes, resuming the bunker', async () => {
   const listeners = new Map();
   const previous = { window: globalThis.window, Image: globalThis.Image,
     document: globalThis.document, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame };
@@ -82,15 +114,26 @@ test('E opens a nearby dialogue and Space closes it, resuming the bunker', async
     addEventListener: noop, removeEventListener: noop, getBoundingClientRect: () => ({ left: 0, top: 0, width: 960, height: 600 }) };
   const opened = [];
   const closed = [];
+  let textComplete = false;
   try {
     const engine = createRpgBunkerEngine(canvas, { inhabitants: [
       { id: 'doctor-1', role: 'medic', floor: 0, column: 1, offsetX: 0 },
-    ], onDialogue: (npc) => opened.push(npc), onDialogueClose: (npc) => closed.push(npc) });
+    ], onDialogue: (npc) => opened.push(npc),
+      onDialogueAdvance: () => {
+        if (textComplete) return false;
+        textComplete = true;
+        return true;
+      }, onDialogueClose: (npc) => closed.push(npc) });
     await engine.ready;
     listeners.get('keydown')({ key: 'e', repeat: false, preventDefault: noop });
     assert.equal(opened[0]?.id, 'doctor-1');
     assert.equal(engine.getSnapshot().dialogueOpen, true);
-    listeners.get('keydown')({ key: ' ', repeat: false, preventDefault: noop });
+    listeners.get('keydown')({ key: 'e', repeat: true, preventDefault: noop });
+    assert.equal(engine.getSnapshot().dialogueOpen, true);
+    listeners.get('keydown')({ key: 'e', repeat: false, preventDefault: noop });
+    assert.equal(engine.getSnapshot().dialogueOpen, true);
+    listeners.get('keydown')({ key: 'e', repeat: false, preventDefault: noop });
+    assert.equal(engine.getSnapshot().dialogueOpen, false);
     assert.equal(closed[0]?.id, 'doctor-1');
     assert.equal(engine.getSnapshot().dialogueOpen, false);
     engine.destroy();

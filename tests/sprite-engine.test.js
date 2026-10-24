@@ -269,6 +269,16 @@ test('an inhabitant chooses a target inside one room, walks, then idles', () => 
   assert.equal(npc.snapshot().currentState, 'idle');
 });
 
+test('NPC movement uses delta time and covers the same distance at 30 and 60 FPS', () => {
+  const simulate = (frames, dt) => {
+    const npc = new Inhabitant({ id: 'delta-time-worker', floor: 0, column: 1, offsetX: 0,
+      currentState: 'walking_right', targetOffsetX: 100, waitSeconds: 0 });
+    for (let index = 0; index < frames; index++) npc.update(dt);
+    return npc.offsetX;
+  };
+  assert.ok(Math.abs(simulate(30, 1 / 30) - simulate(60, 1 / 60)) < 0.01);
+});
+
 test('a worker can return to a control station and face into the room', () => {
   const rolls = [0.1, 0.1];
   const npc = new Inhabitant({ id: 'technician', floor: 0, column: 1, offsetX: 0,

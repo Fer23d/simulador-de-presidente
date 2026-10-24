@@ -22,7 +22,7 @@ import { advanceLootboxClick, collectExpeditionLoot, createExpeditionLocation, o
 import { playLootboxSound } from '../core/lootbox_renderer.js';
 import { createPresidentSelectionMenu } from '../core/menu.js';
 import { applyDialoguePacification } from '../core/dialogues.js';
-import { renderDialogueView } from './dialogue_renderer.js';
+import { DIALOGUE_CHAR_INTERVAL_MS, isDialogueTextComplete, renderDialogueView } from './dialogue_renderer.js';
 import { equipSkin, getPresidentClassModifiers, PRESIDENT_CLASSES, PRESIDENT_SKINS, purchaseSkin, startGame } from '../core/player_state.js';
 import {
   advanceMonth,
@@ -717,6 +717,9 @@ export function mountDashboard(root) {
   let activeShelterRoom = null;
   let presidentSelectionMenu = null;
   let dialogueTimer = null;
+  let dialogueTextComplete = false;
+  let dialogueFullText = '';
+  let dialogueCharactersRendered = 0;
 
   function openShelterRoom(room, { requestLocation = true } = {}) {
     if (!room || !bunkerGeneratorModal) return;
@@ -881,25 +884,44 @@ export function mountDashboard(root) {
           },
           onDialogue: (npc, text) => {
             if (dialogueTimer !== null) window.clearInterval(dialogueTimer);
+            dialogueTextComplete = false;
+            dialogueFullText = String(text ?? '');
+            dialogueCharactersRendered = 0;
             const modal = root.querySelector('[data-dialogue-modal]');
             if (!modal) return;
             modal.outerHTML = renderDialogueView(npc);
             const activeModal = root.querySelector('[data-dialogue-modal]');
             activeModal.hidden = false;
             const textNode = activeModal.querySelector('[data-dialogue-text]');
-            let index = 0;
             dialogueTimer = window.setInterval(() => {
-              if (!textNode || index >= text.length) {
+              if (!textNode) {
                 window.clearInterval(dialogueTimer);
                 dialogueTimer = null;
+                dialogueTextComplete = true;
                 return;
               }
-              textNode.textContent += text[index++];
-            }, 24);
+              textNode.textContent += dialogueFullText[dialogueCharactersRendered++];
+              if (isDialogueTextComplete(dialogueCharactersRendered, dialogueFullText.length)) {
+                window.clearInterval(dialogueTimer);
+                dialogueTimer = null;
+                dialogueTextComplete = true;
+              }
+            }, DIALOGUE_CHAR_INTERVAL_MS);
+          },
+          onDialogueAdvance: () => {
+            if (dialogueTextComplete || isDialogueTextComplete(dialogueCharactersRendered, dialogueFullText.length)) return false;
+            if (dialogueTimer !== null) window.clearInterval(dialogueTimer);
+            dialogueTimer = null;
+            dialogueTextComplete = true;
+            const textNode = root.querySelector('[data-dialogue-text]');
+            if (textNode) textNode.textContent = dialogueFullText;
+            return true;
           },
           onDialogueClose: (npc) => {
             if (dialogueTimer !== null) window.clearInterval(dialogueTimer);
             dialogueTimer = null;
+            dialogueTextComplete = false;
+            dialogueFullText = '';
             const modal = root.querySelector('[data-dialogue-modal]');
             if (modal) modal.hidden = true;
             const result = applyDialoguePacification(state, npc.id);
@@ -1248,10 +1270,14 @@ export function mountDashboard(root) {
   });
 
   root.addEventListener('click', (event) => {
+    if (event.target.closest('.bunker-stage') && bunkerController?.isDialogueOpen()) {
+      bunkerController?.advanceDialogue();
+      return;
+    }
     const control = event.target.closest('[data-action]');
     if (!control || control.disabled) return;
     const { action } = control.dataset;
-    if (action === 'close-dialogue') { bunkerController?.closeDialogue(); return; }
+    if (action === 'close-dialogue') { bunkerController?.advanceDialogue(); return; }
     if (action === 'open-expedition-lootbox') {
       const next = openExpeditionLootbox(state);
       if (next === state) return;

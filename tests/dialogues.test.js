@@ -1,7 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DIALOGUES, chooseDialogueLine, applyDialoguePacification } from '../src/core/dialogues.js';
-import { renderDialogueView } from '../src/ui/dialogue_renderer.js';
+import { DIALOGUE_CHAR_INTERVAL_MS, isDialogueTextComplete, renderDialogueView } from '../src/ui/dialogue_renderer.js';
+
+test('dialogue typewriter reveals characters at a comfortable 15 to 20ms interval', () => {
+  assert.ok(DIALOGUE_CHAR_INTERVAL_MS >= 15 && DIALOGUE_CHAR_INTERVAL_MS <= 20);
+});
+
+test('dialogue is complete immediately when the final character has been rendered', () => {
+  assert.equal(isDialogueTextComplete(3, 4), false);
+  assert.equal(isDialogueTextComplete(4, 4), true);
+  assert.equal(isDialogueTextComplete(5, 4), true);
+});
 
 test('dialogue catalog covers bunker professions and uses worker dialogue as the resident fallback', () => {
   for (const role of ['medic', 'doctor', 'engineer', 'guard', 'soldier', 'resident', 'worker']) {
