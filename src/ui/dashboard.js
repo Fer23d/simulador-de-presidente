@@ -22,6 +22,9 @@ import { advanceLootboxClick, collectExpeditionLoot, createExpeditionLocation, o
 import { playLootboxSound } from '../core/lootbox_renderer.js';
 import { createPresidentSelectionMenu } from '../core/menu.js';
 import { getWeather } from '../core/weather.js';
+import { applyOfflineProgress, dismissOfflineReport } from '../core/offline.js';
+import { createSurfaceSectors, getExplorationPercent, getSectorExpedition, getSurfaceMap, SECTOR_TYPES } from '../core/surface_map.js';
+import { createEncyclopedia, detectDiscoveries, ENCYCLOPEDIA_CATEGORIES, ENCYCLOPEDIA_ENTRIES, getEncyclopediaProgress, recordDiscoveries } from '../core/encyclopedia.js';
 import { applyDialoguePacification } from '../core/dialogues.js';
 import { DIALOGUE_CHAR_INTERVAL_MS, isDialogueTextComplete, renderDialogueView } from './dialogue_renderer.js';
 import { equipSkin, getPresidentClassModifiers, PRESIDENT_CLASSES, PRESIDENT_SKINS, purchaseSkin, startGame } from '../core/player_state.js';
@@ -95,6 +98,8 @@ import {
 } from '../core/game-state.js';
 
 const STORAGE_KEY = 'simulador-presidente-state-v1';
+// A enciclopedia fica fora do save da partida para sobreviver a uma Nova Partida.
+const ENCYCLOPEDIA_KEY = 'simulador-presidente-enciclopedia-v1';
 const MONTHS = ['Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 const formatNumber = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
@@ -138,15 +143,61 @@ function nuclearBadge(country) {
 
 function loadState() {
   try {
-    return hydrateGameState(localStorage.getItem(STORAGE_KEY));
+    return applyOfflineProgress(hydrateGameState(localStorage.getItem(STORAGE_KEY)));
   } catch {
     return createGameState();
   }
 }
 
+function loadEncyclopedia() {
+  try {
+    return createEncyclopedia(JSON.parse(localStorage.getItem(ENCYCLOPEDIA_KEY) ?? '{}'));
+  } catch {
+    return createEncyclopedia();
+  }
+}
+
+function saveEncyclopedia(encyclopedia) {
+  try {
+    localStorage.setItem(ENCYCLOPEDIA_KEY, JSON.stringify(encyclopedia));
+  } catch {
+    // Sem armazenamento local, as descobertas valem so nesta sessao.
+  }
+}
+
+export function encyclopediaView(encyclopedia, activeCategory = ENCYCLOPEDIA_CATEGORIES[0][0]) {
+  const book = createEncyclopedia(encyclopedia);
+  const { discovered, total } = getEncyclopediaProgress(book);
+  const category = ENCYCLOPEDIA_CATEGORIES.some(([id]) => id === activeCategory) ? activeCategory : ENCYCLOPEDIA_CATEGORIES[0][0];
+  const tabs = ENCYCLOPEDIA_CATEGORIES.map(([id, label]) => {
+    const entries = ENCYCLOPEDIA_ENTRIES.filter((item) => item.category === id);
+    const found = entries.filter((item) => book.entries[item.id]).length;
+    return `<button type="button" class="encyclopedia-tab" data-encyclopedia-category="${id}" aria-pressed="${id === category}">${escapeHtml(label)} <span>${found}/${entries.length}</span></button>`;
+  }).join('');
+  const cards = ENCYCLOPEDIA_ENTRIES.filter((item) => item.category === category).map((item) => {
+    const record = book.entries[item.id];
+    if (!record) {
+      return `<article class="encyclopedia-card is-locked"><span class="encyclopedia-icon" aria-hidden="true">?</span><div><h3>???</h3><p>Entrada ainda não descoberta no Ermo.</p></div></article>`;
+    }
+    return `<article class="encyclopedia-card encyclopedia-card--${item.category}"><span class="encyclopedia-icon" aria-hidden="true">${item.icon}</span><div><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.text)}</p><small>DESCOBERTO NO DIA ${record.day}</small></div></article>`;
+  }).join('');
+  const percent = Math.round(discovered / total * 100);
+  return `<section class="bunker-dialog encyclopedia-dialog" role="dialog" aria-modal="true" aria-labelledby="encyclopedia-title"><p class="eyebrow">/// ARQUIVO DO VAULT ///</p><h2 id="encyclopedia-title">ENCICLOPÉDIA DO ERMO</h2><p class="encyclopedia-progress">${discovered}/${total} DESCOBERTOS · ${percent}%</p><span class="encyclopedia-meter" role="meter" aria-label="Progresso da enciclopédia" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${discovered}"><span style="width:${percent}%"></span></span><nav class="encyclopedia-tabs" aria-label="Categorias">${tabs}</nav><div class="encyclopedia-grid">${cards}</div><div class="action-row"><button type="button" class="quiet-action" data-action="close-encyclopedia">[ FECHAR ARQUIVO ]</button></div></section>`;
+}
+
+function showCodexToast(stack, item) {
+  if (!stack || !item || typeof document === 'undefined') return;
+  const toast = document.createElement('p');
+  toast.className = `codex-toast${item.category === 'rare' ? ' codex-toast--rare' : ''}`;
+  toast.setAttribute('role', 'status');
+  toast.textContent = `📖 NOVA ENTRADA: ${item.icon} ${item.name}`;
+  stack.append(toast);
+  window.setTimeout(() => toast.remove(), 4_200);
+}
+
 function saveState(state) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, lastSeenAt: Date.now() }));
     return '';
   } catch {
     return 'Partida ativa somente nesta sessao.';
@@ -370,7 +421,7 @@ export function bunkerView(state) {
       : '<button type="button" class="loot-alert" data-action="open-expedition-lootbox">[!] NOVA CARGA DETETADA NO PORTÃO [!]</button>'
     : '';
   return `<section class="bunker-chamber">
-    <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2></div><div class="bunker-header-actions">${lootNotice}<button type="button" class="primary-action" data-action="advance" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR MÊS ]</button><button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button></div></div>
+    <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2></div><div class="bunker-header-actions">${lootNotice}<button type="button" class="primary-action" data-action="advance" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR MÊS ]</button><button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button><button type="button" class="quiet-action" data-action="open-encyclopedia">[ 📖 ENCICLOPÉDIA ]</button></div></div>
     <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'scrap'))}</span><span>CIÊNCIA ${formatNumber.format(state.science ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'science'))}</span><span>COMIDA ${formatNumber.format(state.shelter_supplies?.food ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'food'))}</span><span>ENERGIA ${formatNumber.format(state.shelter_supplies?.energy ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'energy'))}</span><span class="oxygen-resource ${state.oxygen_deprived ? 'oxygen-deprived' : ''}" aria-label="Oxigênio ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} de ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ', produção insuficiente' : ''}">💨 O₂ ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ' · ALERTA' : ''}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'weapons'))}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'medkits'))}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
     <div class="bunker-build-controls" hidden aria-label="Módulos de construção">${modules.map(([id, module]) => { const cost = getShelterBuildCost(id, 0, state.presidentClass); return `<button type="button" class="bunker-module-button" data-action="shelter-module" data-module="${id}" aria-pressed="${id === 'dormitory'}" ${state.scrap < cost ? 'disabled' : ''}>${module.name}<small>${formatNumber.format(cost)} sucatas${buildCostMultiplier < 1 ? ' · DESCONTO DO OPERÁRIO' : ''}</small></button>`; }).join('')}<div class="bunker-slot-controls"><label for="shelter-build-slot">Setor livre</label><select id="shelter-build-slot" class="bunker-build-slot"></select><button type="button" class="primary-action" data-action="shelter-place">[ CONSTRUIR ]</button></div></div>
     <div class="bunker-stage"><canvas id="shelterCanvas" class="bunker-canvas" width="960" height="600" tabindex="0" aria-label="Bunker lateral. A e D movem o Presidente, W e S operam o elevador, E interage. Na construção, clique num setor livre."></canvas>${bunkerEnvironmentHudView(state.environment, state.isNight, state.inhabitants, state.shelter_guards, state.presidentClass, state.weather)}<div class="bunker-tooltip" data-bunker-tooltip role="status" hidden></div>${renderDialogueView(null)}</div>
@@ -432,6 +483,27 @@ export function renderWardrobeView(state) {
   return `<section class="bunker-dialog wardrobe-dialog" role="dialog" aria-modal="true" aria-labelledby="wardrobe-title"><p class="eyebrow">/// ACERVO PESSOAL DO COMANDANTE ///</p><h2 id="wardrobe-title">Guarda-Roupa</h2><p class="wardrobe-balance">SUCATA DISPONÍVEL: ${formatNumber.format(scrap)}</p><div class="wardrobe-grid">${cards}</div><p class="wardrobe-note">As vestimentas são cosméticas e não alteram atributos.</p><button type="button" class="quiet-action" data-action="wardrobe-back">[ VOLTAR À SUÍTE ]</button></section>`;
 }
 
+function sectorSummary(sector) {
+  const plan = getSectorExpedition(sector);
+  return `${sector.name} · ${plan.months} MESES · SUCESSO ${Math.round(plan.successChance * 100)}%`;
+}
+
+export function surfaceMapView(state) {
+  const map = getSurfaceMap(state);
+  const revealed = new Set(map.revealed);
+  const explored = new Set(map.explored);
+  const sectors = createSurfaceSectors(map.city);
+  const firstChoice = sectors.find((sector) => sector.type !== 'vault' && revealed.has(sector.id) && !explored.has(sector.id))
+    ?? sectors.find((sector) => sector.type !== 'vault' && revealed.has(sector.id));
+  const cells = sectors.map((sector) => {
+    if (sector.type === 'vault') return '<span class="surface-cell surface-cell--vault" title="Vault">▣</span>';
+    if (!revealed.has(sector.id)) return '<span class="surface-cell surface-cell--fog" aria-hidden="true">?</span>';
+    const summary = sectorSummary(sector);
+    return `<label class="surface-cell surface-cell--${sector.type}${explored.has(sector.id) ? ' is-explored' : ''}" title="${escapeHtml(summary)}"><input type="radio" name="expedition-sector" value="${sector.id}" data-expedition-sector data-sector-info="${escapeHtml(summary)}" ${sector === firstChoice ? 'checked' : ''} aria-label="${escapeHtml(summary)}"><span aria-hidden="true">${SECTOR_TYPES[sector.type].icon}</span></label>`;
+  }).join('');
+  return `<div class="surface-map-panel"><p class="expedition-route-label">MAPA DA SUPERFÍCIE · EXPLORADO ${getExplorationPercent(map)}%</p><div class="surface-map" role="radiogroup" aria-label="Setores da superfície de ${escapeHtml(map.city)}">${cells}</div><p class="surface-map-info" data-surface-map-info>&gt; ${escapeHtml(firstChoice ? sectorSummary(firstChoice) : 'Nenhum setor disponível.')}</p></div>`;
+}
+
 export function expeditionLogisticsView(state) {
   const inhabitants = state.inhabitants ?? [];
   if (!inhabitants.length) return '<p class="shelter-empty">Nenhum habitante disponível para expedição.</p>';
@@ -440,7 +512,7 @@ export function expeditionLogisticsView(state) {
   const attribution = location.source === 'geolocation'
     ? '<small class="expedition-attribution">Localização aproximada por <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>.</small>'
     : '<small class="expedition-attribution">Localização indisponível; destinos genéricos em uso.</small>';
-  return `<section class="expedition-logistics" aria-label="Logística de expedição"><h3>LOGÍSTICA DE EXPEDIÇÃO</h3><p>Missões de três meses. A superfície não oferece garantias de retorno.</p>${weather.blocksExpeditions ? `<p class="expedition-weather-warning" role="alert">${weather.icon} ${weather.label}: expedições suspensas até o tempo abrir.</p>` : ''}<p class="expedition-privacy">A posição aproximada é consultada no serviço OpenStreetMap Nominatim; apenas o nome da cidade é salvo.</p><p class="expedition-location">SETOR EXTERNO: ${escapeHtml(location.city)}</p>${attribution}<label class="expedition-route-label" for="expedition-destination">Destino</label><select id="expedition-destination" class="bunker-build-slot" data-expedition-destination>${location.nodes.map((node) => `<option value="${escapeHtml(node)}">${escapeHtml(node)}</option>`).join('')}</select><ul>${inhabitants.map((npc) => {
+  return `<section class="expedition-logistics" aria-label="Logística de expedição"><h3>LOGÍSTICA DE EXPEDIÇÃO</h3><p>Missões de 2 a 4 meses, conforme a distância do setor. A superfície não oferece garantias de retorno.</p>${weather.blocksExpeditions ? `<p class="expedition-weather-warning" role="alert">${weather.icon} ${weather.label}: expedições suspensas até o tempo abrir.</p>` : ''}<p class="expedition-privacy">A posição aproximada é consultada no serviço OpenStreetMap Nominatim; apenas o nome da cidade é salvo.</p><p class="expedition-location">SETOR EXTERNO: ${escapeHtml(location.city)}</p>${attribution}${surfaceMapView(state)}<ul>${inhabitants.map((npc) => {
     const unavailable = weather.blocksExpeditions || npc.currentState === 'rebel' || npc.is_prisoner || npc.is_on_expedition;
     const status = npc.is_on_expedition ? `EM EXPEDIÇÃO · ${npc.expedition_timer} MESES`
       : npc.is_prisoner ? 'DETIDO' : npc.currentState === 'rebel' ? 'REBELDE' : 'SAUDÁVEL';
@@ -448,12 +520,35 @@ export function expeditionLogisticsView(state) {
   }).join('')}</ul></section>`;
 }
 
+function formatAwayTime(milliseconds) {
+  const minutes = Math.max(0, Math.round((Number(milliseconds) || 0) / 60_000));
+  const hours = Math.floor(minutes / 60);
+  return hours ? `${hours}h${String(minutes % 60).padStart(2, '0')}` : `${minutes} MIN`;
+}
+
+export function offlineReportView(state) {
+  const report = state.pendingOfflineReport;
+  if (!report) return '';
+  const lines = [
+    ...report.resources.map((item) => `${item.delta > 0 ? '+' : ''}${formatNumber.format(item.delta)} ${item.label.toUpperCase()}`),
+    ...(report.daysPassed ? [`${report.daysPassed} ${report.daysPassed === 1 ? 'DIA SE PASSOU' : 'DIAS SE PASSARAM'} NA SUPERFÍCIE`] : []),
+    ...report.storms.map((storm) => `${storm.label}${storm.count > 1 ? ` ×${storm.count}` : ''} PASSOU PELA SUPERFÍCIE`),
+    ...report.critical.map((item) => `${item.icon} ${item.count} HABITANTE(S) ${item.label.toUpperCase()}`),
+    ...(report.rebels ? [`! ${report.rebels} REBELDE(S) SABOTANDO O VAULT`] : []),
+  ];
+  const body = lines.length ? lines.map((line) => `&gt; ${escapeHtml(line)}`).join('\n') : '&gt; O VAULT PERMANECEU EM SILÊNCIO.';
+  const decisions = report.pendingDecisions
+    ? `<p class="offline-decisions" role="alert">⚠ ${report.pendingDecisions} ${report.pendingDecisions === 1 ? 'DECISÃO TE ESPERA' : 'DECISÕES TE ESPERAM'} NO COMANDO.</p>` : '';
+  const cap = report.capped ? '<p class="offline-cap">O Vault só registra as últimas 8 horas. Volte antes para não desperdiçar produção.</p>' : '';
+  return `<section class="bunker-dialog offline-report" role="dialog" aria-modal="true" aria-labelledby="offline-report-title"><p class="eyebrow">/// DIÁRIO AUTOMÁTICO DO VAULT ///</p><h2 id="offline-report-title">ENQUANTO VOCÊ ESTAVA FORA · ${formatAwayTime(report.awayMs)}</h2><pre>${body}</pre>${decisions}${cap}<div class="action-row"><button type="button" class="primary-action" data-action="dismiss-offline-report">[ RETOMAR O COMANDO ]</button></div></section>`;
+}
+
 export function expeditionReportView(state) {
   if (state.pendingLoot) return state.lootbox_revealed && state.lootbox_cards_visible ? expeditionLootView(state) : '';
   const report = state.pendingExpeditionReports?.[0];
   if (!report) return '';
   const message = report.success
-    ? `> ${escapeHtml(report.inhabitantId)} regressou da superfície.${report.destination ? `\n> DESTINO: ${escapeHtml(report.destination)}.` : ''}${report.vipFound ? `\n> ESPECIALISTA RESGATADO: ⭐ ${escapeHtml(report.vipName)} (MODIFICADOR x2).` : ''}`
+    ? `> ${escapeHtml(report.inhabitantId)} regressou da superfície.${report.destination ? `\n> DESTINO: ${escapeHtml(report.destination)}.` : ''}${report.sectorId ? '\n> SETOR MAPEADO: novos setores revelados no mapa da superfície.' : ''}${report.vipFound ? `\n> ESPECIALISTA RESGATADO: ⭐ ${escapeHtml(report.vipName)} (MODIFICADOR x2).` : ''}`
     : `> O SINAL DE ${escapeHtml(report.inhabitantId)} FOI PERDIDO NO WASTELAND.`;
   return `<section class="bunker-dialog expedition-report" role="dialog" aria-modal="true" aria-labelledby="expedition-report-title"><p class="eyebrow">/// RELATÓRIO DE MISSÃO ///</p><h2 id="expedition-report-title">${report.success ? 'Explorador retornou' : 'Sinal perdido'}</h2><pre>${message}</pre><button type="button" class="primary-action" data-action="dismiss-expedition-report">[ ARQUIVAR RELATÓRIO ]</button></section>`;
 }
@@ -710,6 +805,10 @@ export function mountDashboard(root) {
   const wastelandCinematicModal = document.getElementById('modal-wasteland-cinematic');
   const bunkerGeneratorModal = document.getElementById('modal-bunker-gerador');
   const expeditionReportModal = document.getElementById('modal-expedition-report');
+  const offlineReportModal = document.getElementById('modal-offline-report');
+  const encyclopediaModal = document.getElementById('modal-enciclopedia');
+  const codexToastStack = document.querySelector('.codex-toast-stack');
+  let encyclopedia = loadEncyclopedia();
   const congressLawTitle = document.getElementById('congresso-lei-titulo');
   const congressLawDescription = document.getElementById('congresso-lei-descricao');
   let pendingCongressLawId = null;
@@ -887,6 +986,7 @@ export function mountDashboard(root) {
               openShelterRoom(activeShelterRoom, { requestLocation: false });
             }
             if (persist) storageNotice = saveState(state);
+            if (weatherChanged || persist) syncDiscoveries();
           },
           onDayPassed: (days) => {
             state = { ...state, currentDay: Math.max(1, (Number(state.currentDay) || 1) + days) };
@@ -972,8 +1072,14 @@ export function mountDashboard(root) {
         refreshShelterSlots();
       }
     }
+    const offlineMarkup = state.is_wasteland ? offlineReportView(state) : '';
+    if (offlineReportModal) {
+      offlineReportModal.innerHTML = offlineMarkup;
+      offlineReportModal.hidden = !offlineMarkup;
+      if (offlineMarkup) bunkerController?.pause();
+    }
     if (expeditionReportModal) {
-      const reportMarkup = state.pendingBunkerEvent ? '' : expeditionReportView(state);
+      const reportMarkup = state.pendingBunkerEvent || offlineMarkup ? '' : expeditionReportView(state);
       expeditionReportModal.innerHTML = reportMarkup;
       expeditionReportModal.hidden = !reportMarkup;
     }
@@ -1029,11 +1135,22 @@ export function mountDashboard(root) {
     });
   }
 
+  function syncDiscoveries() {
+    const { encyclopedia: next, added } = recordDiscoveries(encyclopedia, detectDiscoveries(state),
+      { day: state.currentDay, now: Date.now() });
+    if (!added.length) return;
+    encyclopedia = next;
+    saveEncyclopedia(encyclopedia);
+    for (const item of added) showCodexToast(codexToastStack, item);
+    if (encyclopediaModal && !encyclopediaModal.hidden) encyclopediaModal.innerHTML = encyclopediaView(encyclopedia);
+  }
+
   function commit(nextState) {
     state = nextState;
     storageNotice = saveState(state);
     render();
     startFalloutCinematicIfNeeded();
+    syncDiscoveries();
   }
 
   window.logHistoryEvent = (type, text) => commit(registrarEventoHistorico(state, type, text));
@@ -1223,6 +1340,12 @@ export function mountDashboard(root) {
     commit({ ...state, wasteland_cinematic_pending: false, wasteland_cinematic_ready: false, notice: 'Comando do Vault assumido. A superficie aguarda.' });
   });
 
+  bunkerGeneratorModal?.addEventListener('change', (event) => {
+    const sector = event.target.closest('[data-expedition-sector]');
+    const info = bunkerGeneratorModal.querySelector('[data-surface-map-info]');
+    if (sector && info) info.textContent = `> ${sector.dataset.sectorInfo}`;
+  });
+
   bunkerGeneratorModal?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-action]');
     const action = button?.dataset.action;
@@ -1247,7 +1370,7 @@ export function mountDashboard(root) {
       bunkerController?.resume();
     }
     if (action === 'start-expedition') {
-      const destination = root.querySelector('[data-expedition-destination]')?.value ?? null;
+      const destination = bunkerGeneratorModal.querySelector('[data-expedition-sector]:checked')?.value ?? null;
       bunkerGeneratorModal.hidden = true;
       activeShelterRoom = null;
       bunkerController?.resume();
@@ -1267,6 +1390,24 @@ export function mountDashboard(root) {
                 : enviarBatedoresWasteland(state, button.dataset.contact);
       commit(next);
     }
+  });
+
+  encyclopediaModal?.addEventListener('click', (event) => {
+    const category = event.target.closest('[data-encyclopedia-category]');
+    if (category) {
+      encyclopediaModal.innerHTML = encyclopediaView(encyclopedia, category.dataset.encyclopediaCategory);
+      return;
+    }
+    if (!event.target.closest('[data-action="close-encyclopedia"]') && event.target !== encyclopediaModal) return;
+    encyclopediaModal.hidden = true;
+    bunkerController?.resume();
+    root.querySelector('#shelterCanvas')?.focus();
+  });
+
+  offlineReportModal?.addEventListener('click', (event) => {
+    if (!event.target.closest('[data-action="dismiss-offline-report"]')) return;
+    commit(dismissOfflineReport(state));
+    root.querySelector('#shelterCanvas')?.focus();
   });
 
   expeditionReportModal?.addEventListener('click', (event) => {
@@ -1294,6 +1435,13 @@ export function mountDashboard(root) {
       if (next === state) return;
       commit(next);
       root.querySelector('#shelterCanvas')?.focus();
+      return;
+    }
+    if (action === 'open-encyclopedia' && encyclopediaModal) {
+      encyclopediaModal.innerHTML = encyclopediaView(encyclopedia);
+      encyclopediaModal.hidden = false;
+      bunkerController?.pause();
+      encyclopediaModal.querySelector('[data-action="close-encyclopedia"]')?.focus();
       return;
     }
     if (action === 'shelter-build-mode') {
@@ -1400,4 +1548,5 @@ export function mountDashboard(root) {
 
   render();
   startFalloutCinematicIfNeeded();
+  syncDiscoveries();
 }

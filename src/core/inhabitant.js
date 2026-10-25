@@ -33,6 +33,7 @@ export class Inhabitant {
     this.is_on_expedition = data.is_on_expedition === true;
     this.expedition_timer = Math.max(0, Math.floor(Number(data.expedition_timer) || 0));
     this.expedition_destination = typeof data.expedition_destination === 'string' ? data.expedition_destination.slice(0, 120) : undefined;
+    this.expedition_sector = typeof data.expedition_sector === 'string' && /^\d-\d$/.test(data.expedition_sector) ? data.expedition_sector : undefined;
     this.is_prisoner = data.is_prisoner === true;
     this.needs = normalizeNeeds(data.needs);
     if (this.targetOffsetX === null && this.currentState !== 'rebel') this.currentState = 'idle';
@@ -83,6 +84,7 @@ export class Inhabitant {
       rebellionCheckDone: this.rebellionCheckDone,
       is_on_expedition: this.is_on_expedition, expedition_timer: this.expedition_timer,
       ...(this.expedition_destination ? { expedition_destination: this.expedition_destination } : {}),
+      ...(this.expedition_sector ? { expedition_sector: this.expedition_sector } : {}),
       is_prisoner: this.is_prisoner, needs: { ...this.needs } };
   }
 }

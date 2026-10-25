@@ -39,6 +39,8 @@ import { createRpgPlayer, normalizeInhabitants, normalizeRpgPlayer } from './rpg
 import { INITIAL_SHELTER_GRID, migrateLegacyPlayer, migrateLegacyRooms, normalizeShelterGrid, normalizeShelterInhabitants } from './shelter_engine.js';
 import { createEnvironmentState } from './environment.js';
 import { createWeatherState } from './weather.js';
+import { normalizeOfflineReport } from './offline.js';
+import { normalizeSurfaceMap } from './surface_map.js';
 import { createExpeditionLocation } from './expeditions.js';
 import { normalizePlayerCosmetics } from './player_state.js';
 
@@ -1089,8 +1091,12 @@ export function hydrateGameState(serialized) {
       },
       environment,
       weather: createWeatherState(parsed.weather),
+      ...(Number.isFinite(Number(parsed.lastSeenAt)) && Number(parsed.lastSeenAt) > 0 ? { lastSeenAt: Number(parsed.lastSeenAt) } : {}),
+      ...(normalizeOfflineReport(parsed.pendingOfflineReport) ? { pendingOfflineReport: normalizeOfflineReport(parsed.pendingOfflineReport) } : {}),
       currentDay: Math.max(1, Math.floor(Number(parsed.currentDay) || 1)),
       isNight: environment.isNight,
+      ...(parsed.surface_map ? { surface_map: normalizeSurfaceMap(parsed.surface_map,
+        typeof parsed.expeditionLocation?.city === 'string' ? createExpeditionLocation(parsed.expeditionLocation.city).city : undefined) } : {}),
       expeditionLocation: typeof parsed.expeditionLocation?.city === 'string'
         ? createExpeditionLocation(parsed.expeditionLocation.city, parsed.expeditionLocation.source)
         : null,

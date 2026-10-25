@@ -67,7 +67,7 @@ test('the selected real-world route is attached to the explorer and shown in log
   const report = expeditionReportView({ pendingExpeditionReports: [{ id: 'm1-scout-1', inhabitantId: 'scout-1', success: true, destination }] });
 
   assert.equal(started.inhabitants[0].expedition_destination, destination);
-  assert.match(logistics, /data-expedition-destination/);
+  assert.match(logistics, /data-expedition-sector/);
   assert.match(logistics, /OpenStreetMap/);
   assert.match(report, /DESTINO: Cratera do Mineirão/);
 });

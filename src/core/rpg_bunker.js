@@ -230,6 +230,8 @@ export function normalizeInhabitants(value, grid) {
       expedition_timer: Math.max(0, Math.floor(Number(npc.expedition_timer) || 0)),
       ...(typeof npc.expedition_destination === 'string' && npc.expedition_destination.trim()
         ? { expedition_destination: npc.expedition_destination.slice(0, 120) } : {}),
+      ...(typeof npc.expedition_sector === 'string' && /^\d-\d$/.test(npc.expedition_sector)
+        ? { expedition_sector: npc.expedition_sector } : {}),
       is_prisoner: npc.is_prisoner === true,
       needs: normalizeNeeds(npc.needs) });
   }

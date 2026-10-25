@@ -5,6 +5,7 @@ import { countActiveGenerators, getNighttimeRiskChance } from './environment.js'
 import { createExpeditionLoot, createExpeditionNodes } from './expeditions.js';
 import { normalizeNeeds } from './needs.js';
 import { getWeather } from './weather.js';
+import { getSector, getSectorExpedition, getSurfaceMap, isSectorSelectable, revealSector } from './surface_map.js';
 
 const EXPEDITION_MONTHS = 3;
 const EXPEDITION_SUCCESS_CHANCE = 0.7;
@@ -175,6 +176,19 @@ export function startExpedition(state, inhabitantId, destination = null) {
   if (weather.blocksExpeditions) {
     return { ...state, notice: `${weather.label}: expedições suspensas até o tempo abrir.` };
   }
+  const map = getSurfaceMap(state);
+  if (isSectorSelectable(map, destination)) {
+    const sector = getSector(map, destination);
+    const plan = getSectorExpedition(sector);
+    return {
+      ...state,
+      surface_map: map,
+      inhabitants: state.inhabitants.map((item) => item.id === inhabitantId
+        ? { ...item, is_on_expedition: true, expedition_timer: plan.months, expedition_destination: sector.name, expedition_sector: sector.id }
+        : item),
+      notice: `${inhabitant.name || inhabitant.id} partiu para ${sector.name} numa expedicao de ${plan.months} meses.`,
+    };
+  }
   const availableDestinations = state.expeditionLocation?.nodes ?? createExpeditionNodes(state.expeditionLocation?.city);
   const expeditionDestination = availableDestinations.includes(destination) ? destination : availableDestinations[0];
   return {
@@ -197,6 +211,7 @@ export function advanceMonthlyGameMechanics(state) {
   let lostExplorer = false;
   let currentLoot = Array.isArray(state.currentLoot) ? [...state.currentLoot] : [];
   let returnedWithLoot = false;
+  let surfaceMap = state.surface_map ? getSurfaceMap(state) : null;
 
   for (const inhabitant of state.inhabitants ?? []) {
     if (!inhabitant.is_on_expedition) {
@@ -211,15 +226,20 @@ export function advanceMonthlyGameMechanics(state) {
 
     const roll = nextRandom(randomSeed);
     randomSeed = roll.seed;
-    const success = roll.value < EXPEDITION_SUCCESS_CHANCE;
+    const sectorMap = inhabitant.expedition_sector ? surfaceMap ?? getSurfaceMap(state) : null;
+    const sector = sectorMap ? getSector(sectorMap, inhabitant.expedition_sector) : null;
+    const plan = sector ? getSectorExpedition(sector) : null;
+    const success = roll.value < (plan?.successChance ?? EXPEDITION_SUCCESS_CHANCE);
     const reportIndex = reports.length;
     reports.push({ id: `${state.monthCounter}-${inhabitant.id}`, inhabitantId: inhabitant.id,
-      destination: inhabitant.expedition_destination ?? null, success });
+      destination: inhabitant.expedition_destination ?? null, success, ...(sector ? { sectorId: sector.id } : {}) });
     if (success) {
-      inhabitants.push({ ...inhabitant, is_on_expedition: false, expedition_timer: 0 });
+      const { expedition_sector: exploredSector, ...returned } = inhabitant;
+      inhabitants.push({ ...returned, is_on_expedition: false, expedition_timer: 0 });
+      if (sector) surfaceMap = revealSector(sectorMap, sector.id);
       const rarityRoll = nextRandom(randomSeed);
       randomSeed = rarityRoll.seed;
-      if (rarityRoll.value < VIP_DISCOVERY_CHANCE && inhabitants.length < 48) {
+      if (rarityRoll.value < VIP_DISCOVERY_CHANCE * (plan?.vipMultiplier ?? 1) && inhabitants.length < 48) {
         const profileIndex = Math.floor(rarityRoll.value * 10_000) % VIP_PROFILES.length;
         const profile = VIP_PROFILES[profileIndex];
         const rooms = state.shelter_grid?.flat() ?? [];
@@ -257,7 +277,7 @@ export function advanceMonthlyGameMechanics(state) {
         inhabitants.push(vip);
         reports[reportIndex] = { ...reports[reportIndex], vipFound: true, vipName: vip.name };
       }
-      const lootDrop = createExpeditionLoot(randomSeed);
+      const lootDrop = createExpeditionLoot(randomSeed, plan?.loot);
       randomSeed = lootDrop.randomSeed;
       currentLoot.push(...lootDrop.loot);
       returnedWithLoot = true;
@@ -322,6 +342,7 @@ export function advanceMonthlyGameMechanics(state) {
     technology,
     inhabitants: survivingInhabitants,
     pendingExpeditionReports: reports,
+    ...(surfaceMap ? { surface_map: surfaceMap } : {}),
     pendingLoot: returnedWithLoot || state.pendingLoot === true,
     currentLoot,
     lootbox_opened: returnedWithLoot ? false : Boolean(state.lootbox_opened),

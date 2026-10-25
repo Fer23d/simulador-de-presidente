@@ -13,7 +13,8 @@ const LOOT_OPTIONS = Object.freeze([
   Object.freeze({ resource: 'medkits', label: 'Curativos', minimum: 1, range: 3 }),
 ]);
 
-export function createExpeditionLoot(seed = 1) {
+// Opcoes do setor explorado: recurso garantido no primeiro item, multiplicador de quantidade e chance de item epico.
+export function createExpeditionLoot(seed = 1, { focus = null, amountMultiplier = 1, epicChance = 0.06 } = {}) {
   let randomSeed = Number(seed) >>> 0;
   const loot = [];
   for (let index = 0; index < 3; index++) {
@@ -23,13 +24,14 @@ export function createExpeditionLoot(seed = 1) {
     randomSeed = amountRoll.seed;
     const rarityRoll = nextRandom(randomSeed);
     randomSeed = rarityRoll.seed;
-    const option = LOOT_OPTIONS[Math.floor(selection.value * LOOT_OPTIONS.length)];
+    const rolled = LOOT_OPTIONS[Math.floor(selection.value * LOOT_OPTIONS.length)];
+    const option = index === 0 && focus ? LOOT_OPTIONS.find((candidate) => candidate.resource === focus) ?? rolled : rolled;
     loot.push({
       id: `loot-${randomSeed}-${index}`,
       resource: option.resource,
       label: option.label,
-      amount: option.minimum + Math.floor(amountRoll.value * option.range),
-      rarity: rarityRoll.value < 0.06 ? 'epic' : rarityRoll.value < 0.28 ? 'rare' : 'common',
+      amount: Math.round((option.minimum + Math.floor(amountRoll.value * option.range)) * Math.max(1, Number(amountMultiplier) || 1)),
+      rarity: rarityRoll.value < Math.max(0.06, Number(epicChance) || 0) ? 'epic' : rarityRoll.value < 0.28 ? 'rare' : 'common',
     });
   }
   return { loot, randomSeed };
