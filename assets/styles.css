@@ -144,7 +144,7 @@ body.theme-wasteland .sidebar, body.theme-wasteland .metrics { display: none; }
 body.theme-wasteland .content-area { max-width: none; }
 .modal-bunker[hidden] { display: none; }
 .modal-bunker { position: fixed; z-index: 55; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(8, 4, 1, .9); }
-.bunker-dialog { width: min(600px, 100%); border: 4px double var(--amber); padding: 24px; background: var(--panel); box-shadow: 0 0 28px rgba(255, 122, 24, .55), 9px 9px 0 var(--shadow); }
+.bunker-dialog { width: min(600px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; overscroll-behavior: contain; border: 4px double var(--amber); padding: 24px; background: var(--panel); box-shadow: 0 0 28px rgba(255, 122, 24, .55), 9px 9px 0 var(--shadow); }
 .bunker-dialog h2 { color: var(--amber); }
 .bunker-dialog pre { overflow: auto; border: 1px dashed var(--line); padding: 14px; color: var(--phosphor); line-height: 1.5; }
 .offline-report h2 { font-size: clamp(14px, 3.4vw, 20px); }

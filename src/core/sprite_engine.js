@@ -399,10 +399,23 @@ function visibleFrameBounds(image, frame, row, rows) {
     const probe = buffer.getContext('2d', { willReadFrequently: true });
     probe.drawImage(image, ...fallback, 0, 0, cellWidth, cellHeight);
     const pixels = probe.getImageData(0, 0, buffer.width, buffer.height).data;
+    const opaque = (x, y) => pixels[(y * buffer.width + x) * 4 + 3] >= 24;
+    // Pedacos de personagens vizinhos invadem a celula (ex.: um capacete da fileira de baixo);
+    // fica so o maior bloco continuo de linhas opacas, que e o personagem do quadro.
+    let runStart = -1, bestStart = 0, bestEnd = -1;
+    for (let y = 0; y <= buffer.height; y++) {
+      let filled = false;
+      for (let x = 0; y < buffer.height && x < buffer.width && !filled; x++) filled = opaque(x, y);
+      if (filled && runStart < 0) runStart = y;
+      if (!filled && runStart >= 0) {
+        if (y - runStart > bestEnd - bestStart + 1) { bestStart = runStart; bestEnd = y - 1; }
+        runStart = -1;
+      }
+    }
     let minX = buffer.width, minY = buffer.height, maxX = -1, maxY = -1;
-    for (let y = 0; y < buffer.height; y++) {
+    for (let y = bestStart; y <= bestEnd; y++) {
       for (let x = 0; x < buffer.width; x++) {
-        if (pixels[(y * buffer.width + x) * 4 + 3] < 24) continue;
+        if (!opaque(x, y)) continue;
         minX = Math.min(minX, x); maxX = Math.max(maxX, x);
         minY = Math.min(minY, y); maxY = Math.max(maxY, y);
       }
