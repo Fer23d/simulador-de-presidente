@@ -430,7 +430,275 @@ export function getActorPlacement(room, { liftY } = {}) {
     floorY: roomY + ROOM_HEIGHT - ROOM_FLOOR_THICKNESS + SPRITE_BOTTOM_PADDING };
 }
 
-export function drawActorSprite(ctx, actor, image, time = 0, placement = { height: ROOM_HEIGHT * .55 }, filter = 'none') {
+const headAnchorCache = new WeakMap();
+const skinCanvasCache = new Map();
+
+// Localiza a cabeca no quadro recortado: centro horizontal dos pixels opacos no topo do sprite.
+function findHeadAnchor(image, crop) {
+  const fallback = { x: .55, y: .08, r: .075 };
+  if (typeof document === 'undefined' || !image || !crop) return fallback;
+  let cache = headAnchorCache.get(image);
+  if (!cache) { cache = new Map(); headAnchorCache.set(image, cache); }
+  const key = crop.join(':');
+  if (cache.has(key)) return cache.get(key);
+  let anchor = fallback;
+  try {
+    const width = Math.max(1, Math.round(crop[2]));
+    const height = Math.max(1, Math.round(crop[3]));
+    const buffer = document.createElement('canvas');
+    buffer.width = width;
+    buffer.height = height;
+    const probe = buffer.getContext('2d', { willReadFrequently: true });
+    probe.drawImage(image, ...crop, 0, 0, width, height);
+    const rows = Math.max(1, Math.round(height * .13));
+    const pixels = probe.getImageData(0, 0, width, rows).data;
+    let sumX = 0;
+    let count = 0;
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < width; x++) {
+        if (pixels[(y * width + x) * 4 + 3] < 40) continue;
+        sumX += x;
+        count++;
+      }
+    }
+    if (count) anchor = { x: sumX / count / width, y: .075, r: .075 };
+  } catch {
+    anchor = fallback;
+  }
+  cache.set(key, anchor);
+  return anchor;
+}
+
+// Retinge apenas os pixels do sprite: filtro base, camada de cor com blend e mascara de alfa do recorte original.
+function renderSkinnedSprite(image, crop, skin, width, height, time) {
+  const w = Math.max(1, Math.round(width));
+  const h = Math.max(1, Math.round(height));
+  const animated = Boolean(skin.tint?.shimmer);
+  const key = `${skin.id}:${crop.join(':')}:${w}x${h}`;
+  let canvas = skinCanvasCache.get(key);
+  if (canvas && !animated) return canvas;
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    if (skinCanvasCache.size > 160) skinCanvasCache.clear();
+    skinCanvasCache.set(key, canvas);
+  }
+  const off = canvas.getContext('2d');
+  off.clearRect(0, 0, w, h);
+  off.filter = skin.filter && skin.filter !== 'none' ? skin.filter : 'none';
+  off.drawImage(image, ...crop, 0, 0, w, h);
+  off.filter = 'none';
+  if (skin.tint) {
+    const gradient = off.createLinearGradient(0, 0, 0, h);
+    gradient.addColorStop(0, skin.tint.colors[0]);
+    gradient.addColorStop(1, skin.tint.colors[1]);
+    off.globalCompositeOperation = skin.tint.blend;
+    off.globalAlpha = skin.tint.alpha;
+    off.fillStyle = gradient;
+    off.fillRect(0, 0, w, h);
+    if (animated) {
+      const band = ((time / 900) % 1) * (h * 1.8) - h * .4;
+      const shine = off.createLinearGradient(0, band - h * .25, w * .4, band + h * .25);
+      shine.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      shine.addColorStop(.5, 'rgba(255, 255, 255, .55)');
+      shine.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      off.globalCompositeOperation = 'screen';
+      off.globalAlpha = 1;
+      off.fillStyle = shine;
+      off.fillRect(0, 0, w, h);
+    }
+    off.globalAlpha = 1;
+    off.globalCompositeOperation = 'destination-in';
+    off.drawImage(image, ...crop, 0, 0, w, h);
+    off.globalCompositeOperation = 'source-over';
+  }
+  return canvas;
+}
+
+function drawSkinAccessory(ctx, skin, head, time) {
+  const { x, y, r } = head;
+  ctx.save();
+  if (skin.accessory === 'crown') {
+    const base = y - r * .4;
+    const half = r * 1.05;
+    ctx.fillStyle = '#ffd34d';
+    ctx.strokeStyle = '#8a5a00';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x - half, base);
+    ctx.lineTo(x - half, base - r * .9);
+    ctx.lineTo(x - half * .45, base - r * .45);
+    ctx.lineTo(x, base - r * 1.25);
+    ctx.lineTo(x + half * .45, base - r * .45);
+    ctx.lineTo(x + half, base - r * .9);
+    ctx.lineTo(x + half, base);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ff3b4a';
+    ctx.fillRect(x - 1, base - r * .5, 2, 2);
+  } else if (skin.accessory === 'eyes') {
+    const glow = .75 + Math.sin(time / 260) * .25;
+    ctx.globalAlpha = glow;
+    ctx.fillStyle = skin.eyeColor ?? '#ff3b30';
+    ctx.shadowColor = skin.eyeColor ?? '#ff3b30';
+    ctx.shadowBlur = 6;
+    ctx.fillRect(x + r * .35, y - r * .05, Math.max(2, r * .35), Math.max(1.5, r * .22));
+  } else if (skin.accessory === 'visor') {
+    ctx.beginPath();
+    ctx.ellipse?.(x + r * .1, y + r * .1, r * 1.35, r * 1.4, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(150, 230, 255, .28)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(225, 250, 255, .85)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 255, 255, .7)';
+    ctx.fillRect(x + r * .45, y - r * .7, Math.max(1.5, r * .25), r * .6);
+  } else if (skin.accessory === 'mohawk') {
+    ctx.fillStyle = '#e8322a';
+    ctx.strokeStyle = '#7a0f0b';
+    ctx.lineWidth = .8;
+    ctx.beginPath();
+    ctx.moveTo(x - r * .8, y - r * .6);
+    for (let spike = 0; spike < 4; spike++) {
+      const sx = x - r * .8 + spike * r * .38;
+      ctx.lineTo(sx + r * .14, y - r * (1.15 + (spike % 2) * .12));
+      ctx.lineTo(sx + r * .3, y - r * .72);
+    }
+    ctx.lineTo(x + r * .55, y - r * .55);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  } else if (skin.accessory === 'tie') {
+    ctx.fillStyle = '#c4161c';
+    ctx.beginPath();
+    ctx.moveTo(x + r * .45, y + r * 1.45);
+    ctx.lineTo(x + r * .68, y + r * 1.45);
+    ctx.lineTo(x + r * .72, y + r * 3.2);
+    ctx.lineTo(x + r * .57, y + r * 3.55);
+    ctx.lineTo(x + r * .42, y + r * 3.2);
+    ctx.closePath();
+    ctx.fill();
+  } else if (skin.accessory === 'medals') {
+    const colors = ['#ffd34d', '#d9d9d9', '#cd7f32'];
+    colors.forEach((color, index) => {
+      const mx = x - r * .1 + index * r * .34;
+      const my = y + r * 3.1;
+      ctx.fillStyle = index === 1 ? '#2b5bd7' : '#c4161c';
+      ctx.fillRect(mx - .9, my - r * .38, 1.8, r * .38);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc?.(mx, my + .6, Math.max(1.1, r * .15), 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.fillStyle = '#3c4520';
+    ctx.beginPath();
+    ctx.moveTo(x - r * 1.05, y - r * .25);
+    ctx.lineTo(x - r * .95, y - r * 1.05);
+    ctx.lineTo(x + r * .75, y - r * 1.15);
+    ctx.lineTo(x + r * .95, y - r * .3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#c4161c';
+    ctx.fillRect(x - r * 1.02, y - r * .5, r * 1.95, Math.max(1.2, r * .22));
+    ctx.fillStyle = '#ffd34d';
+    ctx.fillRect(x + r * .05, y - r * .9, Math.max(1.2, r * .2), Math.max(1.2, r * .2));
+    ctx.fillStyle = '#111';
+    ctx.fillRect(x + r * .55, y - r * .3, r * .75, Math.max(1.2, r * .16));
+  }
+  ctx.restore();
+}
+
+function particleRandom(seed) {
+  return ((Math.sin(seed * 127.1) * 43758.5453) % 1 + 1) % 1;
+}
+
+function drawSkinEffect(ctx, skin, width, height, time) {
+  if (!skin.effect) return;
+  ctx.save();
+  if (skin.effect === 'sparkle') {
+    ctx.strokeStyle = '#fff3b0';
+    ctx.lineWidth = 1;
+    for (let index = 0; index < 5; index++) {
+      const phase = (time / 700 + particleRandom(index + 1)) % 1;
+      const size = Math.sin(phase * Math.PI) * 3.5;
+      if (size < .4) continue;
+      const px = (particleRandom(index + 11) - .5) * width * 1.3;
+      const py = -height * (.15 + particleRandom(index + 21) * .8);
+      ctx.globalAlpha = Math.sin(phase * Math.PI);
+      ctx.beginPath();
+      ctx.moveTo(px - size, py); ctx.lineTo(px + size, py);
+      ctx.moveTo(px, py - size); ctx.lineTo(px, py + size);
+      ctx.stroke();
+    }
+  } else if (skin.effect === 'embers' || skin.effect === 'radiation') {
+    const color = skin.effect === 'embers' ? '#c38bff' : '#6dff9a';
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 4;
+    for (let index = 0; index < 7; index++) {
+      const phase = (time / (1_400 + index * 90) + particleRandom(index + 3)) % 1;
+      const px = (particleRandom(index + 7) - .5) * width * 1.1 + Math.sin(time / 300 + index) * 2;
+      const py = -height * phase;
+      ctx.globalAlpha = (1 - phase) * .85;
+      ctx.fillRect(px, py, 2, 2);
+    }
+    if (skin.effect === 'radiation') {
+      ctx.globalAlpha = .35 + Math.sin(time / 300) * .15;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse?.(0, -1, width * .55, 3, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  } else if (skin.effect === 'smoke') {
+    for (let index = 0; index < 6; index++) {
+      const phase = (time / 1_800 + particleRandom(index + 5)) % 1;
+      const px = (particleRandom(index + 9) - .5) * width * 1.4 + phase * 6;
+      const py = -height * .1 - phase * height * .5;
+      ctx.globalAlpha = (1 - phase) * .35;
+      ctx.fillStyle = '#120808';
+      ctx.beginPath();
+      ctx.arc?.(px, py, 3 + phase * 7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+function drawSkinnedActor(ctx, image, crop, width, height, skin, time) {
+  const sprite = renderSkinnedSprite(image, crop, skin, width, height, time);
+  drawSkinEffect(ctx, { ...skin, effect: skin.effect === 'smoke' ? 'smoke' : null }, width, height, time);
+  ctx.save();
+  if (skin.aura) {
+    ctx.shadowColor = skin.aura.color;
+    ctx.shadowBlur = skin.aura.blur * (skin.aura.pulse ? .65 + (Math.sin(time / 320) + 1) * .25 : 1);
+  }
+  ctx.drawImage(sprite, -width / 2, -height, width, height);
+  ctx.restore();
+  const anchor = findHeadAnchor(image, crop);
+  if (skin.accessory) drawSkinAccessory(ctx, skin, { x: -width / 2 + anchor.x * width, y: -height + anchor.y * height, r: anchor.r * height }, time);
+  if (skin.effect !== 'smoke') drawSkinEffect(ctx, skin, width, height, time);
+}
+
+// Vitrine do guarda-roupa: o presidente andando com a vestimenta aplicada.
+export function drawSkinPreview(ctx, { assets, presidentClass = null, skinId = 'default', time = 0, width = 120, height = 150 } = {}) {
+  ctx.clearRect(0, 0, width, height);
+  const backdrop = ctx.createLinearGradient?.(0, 0, 0, height);
+  if (backdrop) {
+    backdrop.addColorStop(0, '#1d2420');
+    backdrop.addColorStop(1, '#0c100e');
+    ctx.fillStyle = backdrop;
+  } else ctx.fillStyle = '#111a16';
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = 'rgba(255, 176, 0, .18)';
+  ctx.fillRect(0, height - 14, width, 2);
+  drawPresident(ctx, { x: width / 2, y: height - 13, vx: 40, facing: 1, role: 'president' }, assets,
+    { presidentClass, equippedSkin: skinId, time, placement: { height: height * .74 } });
+}
+
+export function drawActorSprite(ctx, actor, image, time = 0, placement = { height: ROOM_HEIGHT * .55 }, filter = 'none', skin = null) {
   const president = actor.role === 'president';
   const walking = president ? Math.abs(actor.vx ?? 0) > 1 : actor.currentState?.startsWith('walking_');
   const frame = walking ? 1 + Math.floor(time / 140) % 3 : 0;
@@ -449,8 +717,12 @@ export function drawActorSprite(ctx, actor, image, time = 0, placement = { heigh
   ctx.save();
   ctx.translate(actor.x, actor.y);
   if (actor.facing === -1) ctx.scale(-1, 1);
-  ctx.filter = filter;
-  drawOrMissing(ctx, image, -width / 2, -height, width, height, crop);
+  if (skin && skin.id !== 'default' && image && crop && typeof document !== 'undefined') {
+    drawSkinnedActor(ctx, image, crop, width, height, skin, time);
+  } else {
+    ctx.filter = filter;
+    drawOrMissing(ctx, image, -width / 2, -height, width, height, crop);
+  }
   ctx.restore();
 }
 
@@ -465,7 +737,7 @@ export function drawPresident(ctx, actor, assets, { presidentClass, equippedSkin
     ? (actor.vx < 0 ? 'walking_left' : 'walking_right') : 'idle';
   const image = assets?.getImage?.(profile.spriteSheet)
     ?? assets?.getImage?.('character_sheet');
-  return drawActorSprite(ctx, { ...actor, role, currentState }, image, time, placement, filter);
+  return drawActorSprite(ctx, { ...actor, role, currentState }, image, time, placement, filter, skin);
 }
 
 function renderGreenhouseGlow(ctx, room) {

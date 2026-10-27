@@ -7,6 +7,7 @@ import {
 import { buildShelterRoom, cellCenter, FLOOR_SPACING, INITIAL_SHELTER_GRID,
   ROOM_HEIGHT, WORLD_TOP } from '../src/core/shelter_engine.js';
 import { Inhabitant } from '../src/core/inhabitant.js';
+import { getSkin } from '../src/core/player_state.js';
 
 test('night overlay tints only the canvas scene and restores the previous composition state', () => {
   const calls = [];
@@ -195,7 +196,7 @@ test('president uses the exact NPC spritesheet frame, proportions, and floor pla
   drawPresident(ctx, { x: 50, y: placement.floorY, facing: 1 }, assets,
     { presidentClass: 'commander', equippedSkin: 'golden', placement });
   drawActorSprite(ctx, { x: 50, y: placement.floorY, facing: 1, role: 'guard' }, npcSheet, 0, placement,
-    'sepia(.82) saturate(1.8) brightness(1.12)');
+    getSkin('golden').filter);
   assert.equal(requested[0], 'npc_walk_sheet');
   assert.deepEqual(operations[0], operations[1]);
   assert.equal(operations[0][1], npcSheet);

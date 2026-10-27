@@ -553,13 +553,20 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .president-choice strong { color: var(--cor-primaria); font: 16px "Share Tech Mono", monospace; }
 .president-choice span { font: 13px "Share Tech Mono", monospace; line-height: 1.4; }
 .president-choice:hover, .president-choice:focus-visible { outline: 2px solid #e6bf58; background: #1a2b20; }
-.wardrobe-dialog { width: min(820px, calc(100vw - 28px)); }
+.wardrobe-dialog { width: min(820px, calc(100vw - 28px)); max-height: calc(100vh - 40px); overflow-y: auto; }
 .wardrobe-balance { color: var(--cor-primaria); font: 16px "Share Tech Mono", monospace; }
-.wardrobe-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
+.wardrobe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); gap: 10px; margin: 16px 0; }
 .wardrobe-skin { min-width: 0; padding: 12px; border: 1px solid var(--line); background: rgba(8, 14, 12, .92); }
 .wardrobe-skin--equipped { border-color: #e6bf58; }
-.wardrobe-preview { height: 96px; display: grid; place-items: center; margin-bottom: 8px; border: 1px dashed var(--line); background: #111a16; }
-.wardrobe-preview span { color: #b9c7bd; font-size: 50px; filter: var(--skin-filter); text-shadow: 0 0 12px currentColor; }
+.wardrobe-preview { display: grid; place-items: center; margin-bottom: 8px; border: 1px dashed var(--line); background: #111a16; }
+.wardrobe-preview canvas { display: block; width: 120px; max-width: 100%; height: auto; }
+.wardrobe-skin { border-color: color-mix(in srgb, var(--rarity-color, #b9c7bd) 45%, var(--line)); }
+.wardrobe-skin--legendary { box-shadow: 0 0 14px rgba(255, 176, 0, .28) inset; }
+.wardrobe-skin--epic { box-shadow: 0 0 12px rgba(197, 139, 255, .22) inset; }
+.wardrobe-rarity { display: inline-block; margin-bottom: 4px; padding: 1px 6px; border: 1px solid var(--rarity-color); color: var(--rarity-color); font: 700 11px 'Share Tech Mono', monospace; letter-spacing: .08em; }
+.wardrobe-description { min-height: 3.6em; }
+.wardrobe-lock { color: #e6c75a !important; }
+.wardrobe-lock.is-met { color: var(--phosphor) !important; }
 .wardrobe-skin h3 { min-height: 2.4em; color: #d8e4db; font: 16px "Share Tech Mono", monospace; }
 .wardrobe-skin p, .wardrobe-note { color: var(--muted); font: 13px "Share Tech Mono", monospace; }
 @media (max-width: 620px) {
