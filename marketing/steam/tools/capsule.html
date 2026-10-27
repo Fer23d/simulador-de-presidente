@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>capsule</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; overflow: hidden; background: transparent; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="art"></canvas>
+  <script type="module">
+    // Compositor de arte de capa: camadas do proprio jogo (ceu, montanhas, ruinas, bunker e presidentes com skins) + logo.
+    import { AssetManager, DEFAULT_ASSETS, drawPresident, renderSpriteScene } from '../../../src/core/sprite_engine.js';
+    import { buildInhabitants, buildVaultGrid } from './vault.js';
+
+    const params = new URLSearchParams(location.search);
+    const W = Number(params.get('w') ?? 920);
+    const H = Number(params.get('h') ?? 430);
+    const preset = params.get('preset') ?? 'header';
+    const canvas = document.getElementById('art');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+
+    await document.fonts.load('64px "Press Start 2P"');
+    await document.fonts.load('32px "Share Tech Mono"');
+    const assetUrls = Object.fromEntries(Object.entries(DEFAULT_ASSETS).map(([key, url]) => [key, new URL(url, `${location.origin}/`).href]));
+    const assets = await new AssetManager(assetUrls).preload();
+
+    // Layouts: horizonte, posicao do logo e dos personagens por formato.
+    // width: fracao da largura ocupada pela palavra PRESIDENTE (fonte pixel monoespacada: 1 em por letra).
+    const LAYOUTS = {
+      header: { horizon: .64, logo: { x: .045, y: .2, width: .56, align: 'left' }, cast: { x: .8, ground: .995, height: .84, spread: .1 } },
+      small: { horizon: .74, logo: { x: .5, y: .17, width: .84, align: 'center' }, cast: null },
+      main: { horizon: .6, logo: { x: .05, y: .17, width: .5, align: 'left' }, cast: { x: .77, ground: .995, height: .8, spread: .1 } },
+      vertical: { horizon: .5, logo: { x: .5, y: .06, width: .84, align: 'center' }, cast: { x: .5, ground: .99, height: .5, spread: .26 } },
+      library: { horizon: .48, logo: { x: .5, y: .055, width: .86, align: 'center' }, cast: { x: .5, ground: .99, height: .47, spread: .27 } },
+      hero: { horizon: .62, logo: null, cast: { x: .8, ground: .995, height: .82, spread: .055 }, castLeft: { x: .2, ground: .995, height: .76, spread: .055 } },
+      background: { horizon: .55, logo: null, cast: null, dim: .55 },
+      keyart: { horizon: .6, logo: { x: .05, y: .16, width: .46, align: 'left' }, cast: { x: .76, ground: .995, height: .8, spread: .1 } },
+      twitter: { horizon: .68, logo: { x: .04, y: .22, width: .48, align: 'left' }, cast: { x: .8, ground: .995, height: .9, spread: .075 } },
+      square: { horizon: .52, logo: { x: .5, y: .07, width: .82, align: 'center' }, cast: { x: .5, ground: .99, height: .5, spread: .26 } },
+      logo: { logoOnly: true, logo: { x: .5, y: .28, width: .84, align: 'center' } },
+    };
+    const layout = LAYOUTS[preset] ?? LAYOUTS.header;
+
+    function coverImage(image, x, y, width, height, focusY = .5) {
+      if (!image) return;
+      const scale = Math.max(width / image.width, height / image.height);
+      const sw = width / scale;
+      const sh = height / scale;
+      ctx.drawImage(image, (image.width - sw) / 2, (image.height - sh) * focusY, sw, sh, x, y, width, height);
+    }
+
+    function drawMushroom(cx, baseY, size) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      const flash = ctx.createRadialGradient(cx, baseY - size * .55, 0, cx, baseY - size * .55, size * 1.6);
+      flash.addColorStop(0, 'rgba(255, 236, 170, .95)');
+      flash.addColorStop(.25, 'rgba(255, 170, 60, .55)');
+      flash.addColorStop(.6, 'rgba(255, 90, 20, .18)');
+      flash.addColorStop(1, 'rgba(255, 90, 20, 0)');
+      ctx.fillStyle = flash;
+      ctx.fillRect(cx - size * 1.8, baseY - size * 2.2, size * 3.6, size * 2.4);
+      ctx.globalCompositeOperation = 'source-over';
+      const stem = ctx.createLinearGradient(cx, baseY, cx, baseY - size * .7);
+      stem.addColorStop(0, 'rgba(120, 50, 20, .95)');
+      stem.addColorStop(1, 'rgba(255, 150, 60, .9)');
+      ctx.fillStyle = stem;
+      ctx.beginPath();
+      ctx.moveTo(cx - size * .12, baseY);
+      ctx.quadraticCurveTo(cx - size * .06, baseY - size * .4, cx - size * .1, baseY - size * .72);
+      ctx.lineTo(cx + size * .1, baseY - size * .72);
+      ctx.quadraticCurveTo(cx + size * .06, baseY - size * .4, cx + size * .12, baseY);
+      ctx.closePath();
+      ctx.fill();
+      for (let puff = 0; puff < 14; puff++) {
+        const angle = (puff / 14) * Math.PI * 2;
+        const px = cx + Math.cos(angle) * size * .42;
+        const py = baseY - size * .86 + Math.sin(angle) * size * .17;
+        const radius = size * (.2 + (puff % 3) * .04);
+        const puffGradient = ctx.createRadialGradient(px - radius * .3, py - radius * .3, radius * .1, px, py, radius);
+        puffGradient.addColorStop(0, 'rgba(255, 214, 140, .95)');
+        puffGradient.addColorStop(.55, 'rgba(225, 110, 40, .9)');
+        puffGradient.addColorStop(1, 'rgba(110, 40, 20, .0)');
+        ctx.fillStyle = puffGradient;
+        ctx.beginPath();
+        ctx.arc(px, py, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      const cap = ctx.createRadialGradient(cx, baseY - size * .92, size * .05, cx, baseY - size * .86, size * .5);
+      cap.addColorStop(0, 'rgba(255, 250, 220, .95)');
+      cap.addColorStop(.5, 'rgba(255, 160, 70, .8)');
+      cap.addColorStop(1, 'rgba(255, 120, 40, 0)');
+      ctx.fillStyle = cap;
+      ctx.beginPath();
+      ctx.ellipse(cx, baseY - size * .88, size * .5, size * .26, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawEmbers(count, area) {
+      ctx.save();
+      for (let index = 0; index < count; index++) {
+        const random = (seed) => ((Math.sin((index + 1) * seed) * 43758.5453) % 1 + 1) % 1;
+        const x = random(12.9) * W;
+        const y = area * H * random(78.2);
+        const size = .6 + random(3.1) * 1.8 * (W / 920);
+        ctx.globalAlpha = .25 + random(9.7) * .6;
+        ctx.fillStyle = random(5.3) > .5 ? '#ffb347' : '#ff7a2a';
+        ctx.shadowColor = '#ff8a2a';
+        ctx.shadowBlur = 6;
+        ctx.fillRect(x, y, size, size);
+      }
+      ctx.restore();
+    }
+
+    function drawSurface(horizonY) {
+      const sky = assets.getImage('bg_sky');
+      const mountains = assets.getImage('bg_mountains');
+      const ruins = assets.getImage('fg_wasteland');
+      coverImage(sky, 0, 0, W, horizonY + H * .02, .65);
+      const dusk = ctx.createLinearGradient(0, 0, 0, horizonY);
+      dusk.addColorStop(0, 'rgba(30, 12, 18, .55)');
+      dusk.addColorStop(.6, 'rgba(60, 20, 10, .15)');
+      dusk.addColorStop(1, 'rgba(255, 120, 40, .12)');
+      ctx.fillStyle = dusk;
+      ctx.fillRect(0, 0, W, horizonY);
+      const blastX = layout.cast ? W * layout.cast.x : W * .5;
+      drawMushroom(blastX, horizonY - H * .04, Math.min(W * .5, H) * (layout.cast ? .55 : .45));
+      const bandHeight = Math.max(H * .26, horizonY * .42);
+      coverImage(mountains, 0, horizonY - bandHeight, W, bandHeight * 1.05, .4);
+      const ruinsHeight = Math.max(H * .16, bandHeight * .62);
+      coverImage(ruins, 0, horizonY - ruinsHeight * .82, W, ruinsHeight, .55);
+    }
+
+    function drawBunker(horizonY) {
+      if (horizonY >= H - 4) return;
+      const grid = buildVaultGrid();
+      const inhabitants = buildInhabitants(grid);
+      const depth = H - horizonY;
+      const scale = Math.max(.42, Math.min(1.1, depth / 560));
+      const off = document.createElement('canvas');
+      off.width = Math.ceil(W / scale);
+      off.height = Math.ceil(depth / scale) + 40;
+      const view = off.getContext('2d');
+      const worldCenter = 60 + 3.5 * 264;
+      const camera = { offset_x: off.width / 2 - worldCenter, offset_y: -146 + 6 };
+      renderSpriteScene(view, { grid, player: { x: -999, y: -999, floor: 0, vx: 0, facing: 1, liftTarget: null },
+        camera, assets, inhabitants, cabinFloor: 0, time: 900, isNight: false, activeGenerators: 4, weather: 'clear',
+        presidentClass: 'survivor', equippedSkin: 'default' });
+      ctx.drawImage(off, 0, 0, off.width, depth / scale, 0, horizonY, W, depth);
+      const shade = ctx.createLinearGradient(0, horizonY, 0, H);
+      shade.addColorStop(0, 'rgba(0, 0, 0, .05)');
+      shade.addColorStop(.6, 'rgba(8, 4, 2, .45)');
+      shade.addColorStop(1, 'rgba(6, 3, 1, .9)');
+      ctx.fillStyle = shade;
+      ctx.fillRect(0, horizonY, W, depth);
+      const seam = ctx.createLinearGradient(0, horizonY - 6, 0, horizonY + 14);
+      seam.addColorStop(0, 'rgba(255, 140, 50, 0)');
+      seam.addColorStop(.5, 'rgba(255, 140, 50, .35)');
+      seam.addColorStop(1, 'rgba(255, 140, 50, 0)');
+      ctx.fillStyle = seam;
+      ctx.fillRect(0, horizonY - 6, W, 20);
+    }
+
+    // O sprite do Sobrevivente tem a maior resolucao (quadros de 512 px): e o unico que aguenta tamanho de capa.
+    const CAST = [
+      { presidentClass: 'survivor', equippedSkin: 'hazmat', facing: 1, offset: -1, scale: .9 },
+      { presidentClass: 'survivor', equippedSkin: 'generalissimo', facing: 1, offset: 0, scale: 1 },
+      { presidentClass: 'survivor', equippedSkin: 'survivor_legend', facing: -1, offset: 1, scale: .92 },
+    ];
+    const MAX_CAST_HEIGHT = 560;
+
+    function drawCast(spec, members = CAST) {
+      if (!spec) return;
+      const groundY = H * spec.ground;
+      const base = Math.min(H * spec.height, MAX_CAST_HEIGHT);
+      const ordered = [...members].sort((a, b) => (b.offset === 0) - (a.offset === 0));
+      for (const member of ordered.reverse()) {
+        const x = W * (spec.x + member.offset * (spec.spread ?? .12));
+        const height = base * member.scale;
+        ctx.save();
+        const pool = ctx.createRadialGradient(x, groundY, 2, x, groundY, height * .5);
+        pool.addColorStop(0, 'rgba(255, 150, 60, .35)');
+        pool.addColorStop(1, 'rgba(255, 150, 60, 0)');
+        ctx.fillStyle = pool;
+        ctx.fillRect(x - height * .5, groundY - height * .3, height, height * .4);
+        ctx.restore();
+        ctx.save();
+        ctx.shadowColor = 'rgba(255, 140, 40, .45)';
+        ctx.shadowBlur = Math.min(10, height * .025);
+        drawPresident(ctx, { x, y: groundY, vx: 0, facing: member.facing, role: 'president' }, assets,
+          { presidentClass: member.presidentClass, equippedSkin: member.equippedSkin, time: 600, placement: { height } });
+        ctx.restore();
+      }
+    }
+
+    function drawTrefoil(x, y, radius) {
+      ctx.save();
+      ctx.fillStyle = '#1a0d00';
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 1.12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffc23a';
+      ctx.shadowColor = '#ff9a2a';
+      ctx.shadowBlur = radius * .4;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#1a0d00';
+      for (let blade = 0; blade < 3; blade++) {
+        const angle = -Math.PI / 2 + blade * (Math.PI * 2 / 3);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.arc(x, y, radius * .82, angle - .5, angle + .5);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.fillStyle = '#ffc23a';
+      ctx.beginPath();
+      ctx.arc(x, y, radius * .24, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1a0d00';
+      ctx.beginPath();
+      ctx.arc(x, y, radius * .14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawTitleLine(text, x, y, size, align) {
+      ctx.save();
+      ctx.font = `${size}px "Press Start 2P"`;
+      ctx.textAlign = align;
+      ctx.textBaseline = 'top';
+      ctx.lineJoin = 'round';
+      ctx.fillStyle = '#120700';
+      for (let step = 1; step <= Math.max(3, Math.round(size * .12)); step++) ctx.fillText(text, x + step, y + step);
+      ctx.strokeStyle = '#1a0d00';
+      ctx.lineWidth = size * .22;
+      ctx.strokeText(text, x, y);
+      const fill = ctx.createLinearGradient(0, y, 0, y + size);
+      fill.addColorStop(0, '#fff2b0');
+      fill.addColorStop(.45, '#ffc23a');
+      fill.addColorStop(1, '#ff6a14');
+      ctx.fillStyle = fill;
+      ctx.shadowColor = 'rgba(255, 140, 40, .8)';
+      ctx.shadowBlur = size * .45;
+      ctx.fillText(text, x, y);
+      ctx.restore();
+      return ctx.measureText ? size : size;
+    }
+
+    // Logo: "SIMULADOR DE" + "PRESIDENTE" em pixel art com contorno, degrade ambar e brilho; tagline em fonte de terminal.
+    function drawLogo(spec, tagline = true) {
+      if (!spec) return;
+      const big = Math.round(W * spec.width / 10);
+      const small = Math.round(big * .58);
+      const x = W * spec.x;
+      const y = H * spec.y;
+      const align = spec.align;
+      const topWidth = small * 12 + small * 1.5;
+      const topLeft = align === 'left' ? x : x - topWidth / 2;
+      drawTrefoil(topLeft + small * .6, y + small * .5, small * .6);
+      drawTitleLine('SIMULADOR DE', topLeft + small * 1.5, y, small, 'left');
+      drawTitleLine('PRESIDENTE', x, y + small * 1.5, big, align);
+      if (!tagline) return;
+      const tagSize = Math.max(11, Math.round(big * .34));
+      const tagY = y + small * 1.5 + big * 1.4;
+      ctx.save();
+      ctx.font = `${tagSize}px "Share Tech Mono"`;
+      ctx.textAlign = align;
+      ctx.textBaseline = 'top';
+      const tag = 'GOVERNE · APERTE O BOTÃO · SOBREVIVA NO VAULT';
+      const tagWidth = ctx.measureText(tag).width;
+      const lineX = align === 'left' ? x : x - tagWidth / 2;
+      ctx.fillStyle = 'rgba(10, 5, 0, .55)';
+      ctx.fillRect(lineX - tagSize * .5, tagY - tagSize * .35, tagWidth + tagSize, tagSize * 1.7);
+      ctx.fillStyle = '#ffd88a';
+      ctx.shadowColor = 'rgba(255, 140, 40, .7)';
+      ctx.shadowBlur = tagSize * .5;
+      ctx.fillText(tag, x, tagY);
+      ctx.fillStyle = '#ff9a2a';
+      ctx.fillRect(lineX - tagSize * .5, tagY + tagSize * 1.35, tagWidth + tagSize, Math.max(1, tagSize * .1));
+      ctx.restore();
+    }
+
+    if (layout.logoOnly) {
+      drawLogo(layout.logo, false);
+    } else {
+      const horizonY = H * layout.horizon;
+      drawSurface(horizonY);
+      drawBunker(horizonY);
+      drawEmbers(Math.round(W * H / 9000), layout.horizon);
+      if (layout.dim) {
+        ctx.fillStyle = `rgba(0, 0, 0, ${layout.dim})`;
+        ctx.fillRect(0, 0, W, H);
+      }
+      const vignette = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .35, W / 2, H / 2, Math.max(W, H) * .75);
+      vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      vignette.addColorStop(1, 'rgba(0, 0, 0, .55)');
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, W, H);
+      if (layout.logo && layout.logo.align === 'left') {
+        const scrim = ctx.createLinearGradient(0, 0, W * .62, 0);
+        scrim.addColorStop(0, 'rgba(8, 3, 0, .62)');
+        scrim.addColorStop(1, 'rgba(8, 3, 0, 0)');
+        ctx.fillStyle = scrim;
+        ctx.fillRect(0, 0, W * .62, H);
+      }
+      drawCast(layout.cast);
+      if (layout.castLeft) {
+        drawCast(layout.castLeft, [{ presidentClass: 'survivor', equippedSkin: 'golden', facing: 1, offset: 0, scale: 1 },
+          { presidentClass: 'survivor', equippedSkin: 'survivor_wanderer', facing: 1, offset: -1, scale: .9 }]);
+      }
+      drawLogo(layout.logo, preset !== 'small');
+    }
+    document.title = 'ready';
+  </script>
+</body>
+</html>

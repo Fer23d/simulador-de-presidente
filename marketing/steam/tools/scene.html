@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>scene</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../../assets/styles.css">
+  <style>
+    html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+    #stage { position: relative; width: 1920px; height: 1080px; }
+    canvas { display: block; }
+    .hud-wrap { position: absolute; top: 28px; right: 28px; transform: scale(1.55); transform-origin: top right; }
+    .hud-wrap .bunker-environment-hud { position: static; }
+  </style>
+</head>
+<body>
+  <div id="stage"><canvas id="scene" width="1920" height="1080"></canvas><div class="hud-wrap" id="hud"></div></div>
+  <script type="module">
+    // Renderiza uma cena com o motor do jogo (renderSpriteScene) em resolucao de divulgacao.
+    import { AssetManager, DEFAULT_ASSETS, drawNeedsPanel, getActorPlacement, renderSpriteScene } from '../../../src/core/sprite_engine.js';
+    import { cellCenter, SLOT_WIDTH, WORLD_LEFT } from '../../../src/core/shelter_engine.js';
+    import { bunkerEnvironmentHudView } from '../../../src/ui/dashboard.js';
+    import { buildInhabitants, buildVaultGrid } from './vault.js';
+
+    const params = new URLSearchParams(location.search);
+    const scale = Number(params.get('scale') ?? 1);
+    const centerX = Number(params.get('cx') ?? 960);
+    const centerY = Number(params.get('cy') ?? 520);
+    const isNight = params.get('night') === '1';
+    const weather = params.get('weather') ?? 'clear';
+    const time = Number(params.get('time') ?? 1300);
+    const presidentClass = params.get('class') ?? 'survivor';
+    const equippedSkin = params.get('skin') ?? 'default';
+    const presidentFloor = Number(params.get('pf') ?? 0);
+    const presidentColumn = Number(params.get('pc') ?? 2);
+    const presidentOffset = Number(params.get('po') ?? 0);
+    const needsFor = params.get('needs');
+
+    const grid = buildVaultGrid();
+    const inhabitants = buildInhabitants(grid);
+    // Os caminhos dos assets do jogo sao relativos a raiz do site; resolvemos a partir dela.
+    const assetUrls = Object.fromEntries(Object.entries(DEFAULT_ASSETS).map(([key, url]) => [key, new URL(url, `${location.origin}/`).href]));
+    const assets = await new AssetManager(assetUrls).preload();
+    const canvas = document.getElementById('scene');
+    const ctx = canvas.getContext('2d');
+    const spot = cellCenter(presidentFloor, presidentColumn);
+    const player = { x: spot.x + presidentOffset, y: spot.y, floor: presidentFloor, vx: params.get('walk') === '1' ? 60 : 0,
+      facing: Number(params.get('pfacing') ?? 1), liftTarget: null };
+    const viewWidth = 1920 / scale;
+    const viewHeight = 1080 / scale;
+    const camera = { offset_x: viewWidth / 2 - centerX, offset_y: viewHeight / 2 - centerY };
+    // Escala aplicada no proprio contexto: os sprites (imagens grandes) sao desenhados direto no tamanho final, sem perder nitidez.
+    const view = ctx;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    renderSpriteScene(view, { grid, player, camera, assets, inhabitants, cabinFloor: presidentFloor, time,
+      isNight, activeGenerators: Number(params.get('gens') ?? 4), weather, presidentClass, equippedSkin });
+    if (needsFor) {
+      const npc = inhabitants.find((item) => item.id === needsFor);
+      if (npc) {
+        const placement = getActorPlacement(grid[npc.floor][npc.column]);
+        drawNeedsPanel(view, WORLD_LEFT + npc.column * SLOT_WIDTH + SLOT_WIDTH / 2 + npc.offsetX + camera.offset_x,
+          placement.floorY - placement.height - 26 + camera.offset_y, npc.needs);
+      }
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (params.get('hud') !== '0') {
+      const elapsedMs = isNight ? 420_000 : 160_000;
+      document.getElementById('hud').innerHTML = bunkerEnvironmentHudView({ elapsedMs }, isNight, inhabitants, 6, presidentClass, { type: weather });
+    }
+    document.title = `ready ${location.search}`;
+  </script>
+</body>
+</html>

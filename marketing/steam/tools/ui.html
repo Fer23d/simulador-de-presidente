@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>ui</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+    iframe { display: block; width: 100%; height: 100%; border: 0; }
+  </style>
+</head>
+<body>
+  <script type="module">
+    // Abre o jogo real num iframe com um cenario salvo e clica nos botoes como um jogador faria.
+    import { createGameState } from '../../../src/core/game-state.js';
+    import { transicionarParaWasteland } from '../../../src/core/wasteland.js';
+    import { normalizeSurfaceMap, revealSector } from '../../../src/core/surface_map.js';
+    import { buildInhabitants, buildVaultGrid } from './vault.js';
+
+    const shot = new URLSearchParams(location.search).get('shot') ?? 'wardrobe';
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    function vaultState(overrides = {}) {
+      const base = transicionarParaWasteland(createGameState('bra'));
+      const grid = buildVaultGrid();
+      return {
+        ...base,
+        president_selection_pending: false, wasteland_cinematic_pending: false, wasteland_cinematic_ready: false,
+        presidentClass: 'worker', shelter_grid: grid, inhabitants: buildInhabitants(grid),
+        scrap: 9_400, science: 180, currentDay: 37, wasteland_turn: 14, shelter_radiation: 18,
+        shelter_supplies: { ...base.shelter_supplies, food: 412, energy: 960, oxygen: 640, weapons: 12, medkits: 9 },
+        environment: { elapsedMs: 120_000 }, isNight: false, weather: { type: 'clear', remainingMs: 200_000, seed: 3 },
+        rpg_player: { x: 600, y: 303, floor: 0, vx: 0, vy: 0, facing: 1, liftTarget: null, liftHeld: false },
+        lastSeenAt: Date.now(), notice: 'O Vault sobrevive mais um mês. Os módulos operacionais sustentam a população.',
+        ...overrides,
+      };
+    }
+
+    let state;
+    if (shot === 'wardrobe') {
+      state = vaultState({ scrap: 34_500, unlockedSkins: ['default', 'hazmat', 'golden'], equippedSkin: 'golden' });
+    } else if (shot === 'map') {
+      let map = normalizeSurfaceMap(null, 'Capital');
+      for (const id of ['2-3', '1-3', '3-2', '3-1', '4-4', '4-5', '2-2', '1-2', '5-4']) map = revealSector(map, id);
+      state = vaultState({ surface_map: map });
+    } else if (shot === 'encyclopedia') {
+      state = vaultState();
+    } else if (shot === 'offline') {
+      state = vaultState({ lastSeenAt: Date.now() - (5 * 3_600_000 + 18 * 60_000), pendingBunkerEvent: { id: 'radio-signal-unknown' } });
+    } else {
+      state = createGameState('bra');
+    }
+    localStorage.clear();
+    localStorage.setItem('simulador-presidente-state-v1', JSON.stringify(state));
+    if (shot === 'encyclopedia') {
+      const ids = ['weather-dust', 'weather-acid_rain', 'weather-radstorm', 'sector-ruins', 'sector-market', 'sector-hospital',
+        'sector-military', 'sector-crater', 'sector-camp', 'room-elevator', 'room-dormitory', 'room-generator', 'room-greenhouse',
+        'room-arsenal', 'room-medical', 'room-radio', 'room-detention', 'room-laboratory', 'vip-dr-isaac', 'event-greenhouse-fungus',
+        'loot-scrap', 'loot-food', 'loot-epic', 'condition-famine', 'condition-exhaustion', 'rare-radstorm-night'];
+      localStorage.setItem('simulador-presidente-enciclopedia-v1', JSON.stringify({ version: 1,
+        entries: Object.fromEntries(ids.map((id, index) => [id, { day: 2 + index, discoveredAt: index }])) }));
+    }
+
+    const frame = document.createElement('iframe');
+    frame.src = '/';
+    document.body.append(frame);
+    await new Promise((resolve) => frame.addEventListener('load', resolve, { once: true }));
+    await wait(1_800);
+    const doc = frame.contentDocument;
+    const click = (selector) => doc.querySelector(selector)?.click();
+    const openRoom = async (value) => {
+      const select = doc.querySelector('#shelter-room-select');
+      if (select) select.value = value;
+      click('[data-action="shelter-open-room"]');
+      await wait(500);
+    };
+
+    if (shot === 'wardrobe') {
+      await openRoom('0:5');
+      click('[data-action="open-wardrobe"]');
+      await wait(1_500);
+      doc.querySelector('.wardrobe-dialog')?.scrollBy(0, 170);
+      await wait(400);
+    } else if (shot === 'map') {
+      await openRoom('0:1');
+      doc.querySelector('.surface-map-panel')?.scrollIntoView({ block: 'center' });
+      const pick = doc.querySelector('[data-expedition-sector][value="5-4"]');
+      if (pick) { pick.checked = true; pick.dispatchEvent(new Event('change', { bubbles: true })); }
+      await wait(400);
+    } else if (shot === 'encyclopedia') {
+      click('[data-action="open-encyclopedia"]');
+      await wait(300);
+      click('[data-encyclopedia-category="sector"]');
+      await wait(300);
+    } else if (shot === 'president') {
+      click('[data-tab="military"]');
+      await wait(500);
+    }
+    document.title = 'ready';
+  </script>
+</body>
+</html>
