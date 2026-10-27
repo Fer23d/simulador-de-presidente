@@ -567,6 +567,21 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .wardrobe-description { min-height: 3.6em; }
 .wardrobe-lock { color: #e6c75a !important; }
 .wardrobe-lock.is-met { color: var(--phosphor) !important; }
+.wardrobe-section { margin-top: 14px; }
+.wardrobe-section-title { margin: 0 0 4px; color: var(--amber); font: 700 13px 'Share Tech Mono', monospace; letter-spacing: .12em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.wardrobe-section--exclusive .wardrobe-section-title { color: #ffd86b; border-color: rgba(255, 216, 107, .5); }
+.wardrobe-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.wardrobe-badges .wardrobe-rarity { margin-bottom: 0; }
+.wardrobe-badge { display: inline-block; padding: 1px 6px; font: 700 10px 'Share Tech Mono', monospace; letter-spacing: .06em; }
+.wardrobe-badge--exclusive { border: 1px solid #8fd3ff; color: #8fd3ff; }
+.wardrobe-badge--premium { border: 1px solid #ffd86b; background: linear-gradient(90deg, #3a2a08, #6a4a10); color: #ffe9a6; text-shadow: 0 0 6px rgba(255, 216, 107, .7); }
+.wardrobe-skin--premium { background: linear-gradient(180deg, rgba(48, 36, 10, .92), rgba(8, 14, 12, .92)); }
+.wardrobe-skin--premium .wardrobe-preview { border-color: rgba(255, 216, 107, .55); box-shadow: 0 0 14px rgba(255, 216, 107, .18) inset; }
+.wardrobe-skin--trying { outline: 2px solid #8fd3ff; outline-offset: -2px; }
+.wardrobe-price--premium { color: #ffd86b !important; }
+.wardrobe-actions { display: grid; gap: 6px; }
+.wardrobe-store-button { opacity: .7; }
+.wardrobe-trial { margin: 8px 0; padding: 6px 8px; border: 1px solid #8fd3ff; color: #8fd3ff; font: 700 12px 'Share Tech Mono', monospace; }
 .wardrobe-skin h3 { min-height: 2.4em; color: #d8e4db; font: 16px "Share Tech Mono", monospace; }
 .wardrobe-skin p, .wardrobe-note { color: var(--muted); font: 13px "Share Tech Mono", monospace; }
 @media (max-width: 620px) {

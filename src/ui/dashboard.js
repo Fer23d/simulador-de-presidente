@@ -27,7 +27,8 @@ import { createSurfaceSectors, getExplorationPercent, getSectorExpedition, getSu
 import { createEncyclopedia, detectDiscoveries, ENCYCLOPEDIA_CATEGORIES, ENCYCLOPEDIA_ENTRIES, getEncyclopediaProgress, recordDiscoveries } from '../core/encyclopedia.js';
 import { applyDialoguePacification } from '../core/dialogues.js';
 import { DIALOGUE_CHAR_INTERVAL_MS, isDialogueTextComplete, renderDialogueView } from './dialogue_renderer.js';
-import { equipSkin, getPresidentClassModifiers, isSkinRequirementMet, PRESIDENT_CLASSES, PRESIDENT_SKINS, purchaseSkin, SKIN_RARITIES, startGame } from '../core/player_state.js';
+import { equipSkin, getPresidentClassModifiers, getSkin, isSkinAvailableForClass, isSkinRequirementMet, PRESIDENT_CLASSES, PRESIDENT_SKINS, purchaseSkin, SKIN_RARITIES, startGame } from '../core/player_state.js';
+import { createEntitlements, getActiveTrial, startSkinTrial } from '../core/store.js';
 import { AssetManager, DEFAULT_ASSETS, drawSkinPreview } from '../core/sprite_engine.js';
 import {
   advanceMonth,
@@ -101,6 +102,8 @@ import {
 const STORAGE_KEY = 'simulador-presidente-state-v1';
 // A enciclopedia fica fora do save da partida para sobreviver a uma Nova Partida.
 const ENCYCLOPEDIA_KEY = 'simulador-presidente-enciclopedia-v1';
+// Direitos de uso da Loja do Vault (skins premium); tambem ficam fora do save da partida.
+const STORE_KEY = 'simulador-presidente-loja-v1';
 const MONTHS = ['Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 const formatNumber = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
@@ -147,6 +150,14 @@ function loadState() {
     return applyOfflineProgress(hydrateGameState(localStorage.getItem(STORAGE_KEY)));
   } catch {
     return createGameState();
+  }
+}
+
+function loadEntitlements() {
+  try {
+    return createEntitlements(JSON.parse(localStorage.getItem(STORE_KEY) ?? '{}'));
+  } catch {
+    return createEntitlements();
   }
 }
 
@@ -470,25 +481,55 @@ export function renderRoomManagement(state, room) {
     <dl class="room-economy-stats"><div><dt>Produção atual</dt><dd>${productionText}</dd></div><div><dt>Trabalhadores ativos</dt><dd>${profile.workers.active} / ${profile.workers.assigned}</dd></div><div><dt>Consumo populacional do Vault</dt><dd>${formatNumber.format(profile.consumption.food)} comida + ${formatNumber.format(profile.consumption.energy)} energia/mês</dd></div>${oxygenDetails}<div><dt>Projeção de melhoria</dt><dd>${nextText}</dd></div><div><dt>Sucata disponível</dt><dd>${formatNumber.format(scrapAvailable)}</dd></div><div><dt>Ciência disponível</dt><dd>${formatNumber.format(scienceAvailable)}</dd></div></dl>${upgradeControl}`;
 }
 
-export function renderWardrobeView(state, { discovered = [] } = {}) {
-  const scrap = Math.max(0, Number(state.scrap) || 0);
+function formatTrialClock(milliseconds) {
+  const seconds = Math.max(0, Math.ceil(milliseconds / 1_000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function wardrobeCard(state, skin, { discovered, entitled, trial, now }) {
   const unlocked = new Set(state.unlockedSkins ?? ['default']);
-  const cards = PRESIDENT_SKINS.map((skin) => {
-    const owned = unlocked.has(skin.id);
-    const equipped = state.equippedSkin === skin.id;
-    const requirementMet = isSkinRequirementMet(skin, discovered);
-    const requirement = ENCYCLOPEDIA_ENTRIES.find((item) => item.id === skin.requires);
-    const action = owned ? 'skin-equip' : 'skin-buy';
-    const label = equipped ? '[ EQUIPADA ]' : owned ? '[ EQUIPAR ]' : !requirementMet ? '[ 🔒 BLOQUEADA ]'
-      : `[ COMPRAR · ${formatNumber.format(skin.cost)} SUCATAS ]`;
-    const disabled = equipped || (!owned && (!requirementMet || scrap < skin.cost));
-    const rarity = SKIN_RARITIES[skin.rarity] ?? SKIN_RARITIES.common;
-    const lock = !owned && requirement
-      ? `<p class="wardrobe-lock${requirementMet ? ' is-met' : ''}">${requirementMet ? '✓' : '🔒'} Requer descoberta: ${escapeHtml(requirementMet ? requirement.name : '???')}</p>` : '';
-    return `<article class="wardrobe-skin wardrobe-skin--${skin.rarity}${equipped ? ' wardrobe-skin--equipped' : ''}" style="--rarity-color:${rarity.color}"><div class="wardrobe-preview"><canvas width="120" height="150" data-skin-preview="${skin.id}" aria-label="Prévia: ${escapeHtml(skin.name)}"></canvas></div><span class="wardrobe-rarity">${rarity.label}</span><h3>${escapeHtml(skin.name)}</h3><p class="wardrobe-description">${escapeHtml(skin.description)}</p>${lock}<p>${skin.cost ? `${formatNumber.format(skin.cost)} sucatas` : 'Sem custo'}</p><button type="button" class="${owned ? 'quiet-action' : 'primary-action'}" data-action="${action}" data-skin="${skin.id}" ${disabled ? 'disabled' : ''}>${label}</button></article>`;
-  }).join('');
-  const owned = PRESIDENT_SKINS.filter((skin) => unlocked.has(skin.id)).length;
-  return `<section class="bunker-dialog wardrobe-dialog" role="dialog" aria-modal="true" aria-labelledby="wardrobe-title"><p class="eyebrow">/// ACERVO PESSOAL DO COMANDANTE ///</p><h2 id="wardrobe-title">Guarda-Roupa</h2><p class="wardrobe-balance">SUCATA DISPONÍVEL: ${formatNumber.format(scrap)} · COLEÇÃO ${owned}/${PRESIDENT_SKINS.length}</p><div class="wardrobe-grid">${cards}</div><p class="wardrobe-note">As vestimentas são cosméticas e não alteram atributos. As mais raras exigem descobertas na Enciclopédia do Ermo.</p><button type="button" class="quiet-action" data-action="wardrobe-back">[ VOLTAR À SUÍTE ]</button></section>`;
+  const owned = unlocked.has(skin.id) || (skin.premium && entitled.includes(skin.id));
+  const equipped = state.equippedSkin === skin.id;
+  const trying = trial?.skinId === skin.id;
+  const rarity = SKIN_RARITIES[skin.rarity] ?? SKIN_RARITIES.common;
+  const requirementMet = isSkinRequirementMet(skin, discovered);
+  const requirement = ENCYCLOPEDIA_ENTRIES.find((item) => item.id === skin.requires);
+  const exclusive = skin.exclusiveClass ? PRESIDENT_CLASSES.find((profile) => profile.id === skin.exclusiveClass) : null;
+  const badges = [`<span class="wardrobe-rarity">${rarity.label}</span>`,
+    ...(exclusive ? [`<span class="wardrobe-badge wardrobe-badge--exclusive">EXCLUSIVA · ${escapeHtml(exclusive.name.toUpperCase())}</span>`] : []),
+    ...(skin.premium ? ['<span class="wardrobe-badge wardrobe-badge--premium">★ PREMIUM</span>'] : [])].join('');
+  const lock = !owned && requirement
+    ? `<p class="wardrobe-lock${requirementMet ? ' is-met' : ''}">${requirementMet ? '✓' : '🔒'} Requer descoberta: ${escapeHtml(requirementMet ? requirement.name : '???')}</p>` : '';
+  let actions;
+  if (owned) {
+    actions = `<button type="button" class="quiet-action" data-action="skin-equip" data-skin="${skin.id}" ${equipped ? 'disabled' : ''}>${equipped ? '[ EQUIPADA ]' : '[ EQUIPAR ]'}</button>`;
+  } else if (skin.premium) {
+    const trialLabel = trying ? `[ PROVANDO · ${formatTrialClock(trial.endsAt - now)} ]` : '[ 👁 EXPERIMENTAR 2 MIN ]';
+    actions = `<button type="button" class="primary-action" data-action="skin-trial" data-skin="${skin.id}" ${trying ? 'disabled' : ''}>${trialLabel}</button><button type="button" class="quiet-action wardrobe-store-button" disabled>[ 🛒 LOJA EM BREVE ]</button>`;
+  } else {
+    const label = !requirementMet ? '[ 🔒 BLOQUEADA ]' : `[ COMPRAR · ${formatNumber.format(skin.cost)} SUCATAS ]`;
+    const disabled = !requirementMet || Math.max(0, Number(state.scrap) || 0) < skin.cost;
+    actions = `<button type="button" class="primary-action" data-action="skin-buy" data-skin="${skin.id}" ${disabled ? 'disabled' : ''}>${label}</button>`;
+  }
+  const price = skin.premium ? '<p class="wardrobe-price wardrobe-price--premium">Conteúdo premium da Loja do Vault</p>'
+    : `<p class="wardrobe-price">${skin.cost ? `${formatNumber.format(skin.cost)} sucatas` : 'Sem custo'}</p>`;
+  return `<article class="wardrobe-skin wardrobe-skin--${skin.rarity}${equipped ? ' wardrobe-skin--equipped' : ''}${trying ? ' wardrobe-skin--trying' : ''}${skin.premium ? ' wardrobe-skin--premium' : ''}" style="--rarity-color:${rarity.color}"><div class="wardrobe-preview"><canvas width="120" height="150" data-skin-preview="${skin.id}" aria-label="Prévia: ${escapeHtml(skin.name)}"></canvas></div><div class="wardrobe-badges">${badges}</div><h3>${escapeHtml(skin.name)}</h3><p class="wardrobe-description">${escapeHtml(skin.description)}</p>${lock}${price}<div class="wardrobe-actions">${actions}</div></article>`;
+}
+
+// discovered: entradas da enciclopedia; entitled: skins premium da conta; trial: provador ativo nesta sessao.
+export function renderWardrobeView(state, { discovered = [], entitled = [], trial = null, now = Date.now() } = {}) {
+  const scrap = Math.max(0, Number(state.scrap) || 0);
+  const profile = PRESIDENT_CLASSES.find((item) => item.id === state.presidentClass);
+  const visible = PRESIDENT_SKINS.filter((skin) => isSkinAvailableForClass(skin, state.presidentClass));
+  const exclusives = visible.filter((skin) => skin.exclusiveClass);
+  const general = visible.filter((skin) => !skin.exclusiveClass);
+  const unlocked = new Set(state.unlockedSkins ?? ['default']);
+  const owned = visible.filter((skin) => unlocked.has(skin.id) || entitled.includes(skin.id)).length;
+  const context = { discovered, entitled, trial, now };
+  const exclusiveSection = exclusives.length
+    ? `<section class="wardrobe-section wardrobe-section--exclusive" aria-labelledby="wardrobe-exclusive-title"><h3 id="wardrobe-exclusive-title" class="wardrobe-section-title">EXCLUSIVAS · ${escapeHtml((profile?.name ?? '').toUpperCase())}</h3><div class="wardrobe-grid">${exclusives.map((skin) => wardrobeCard(state, skin, context)).join('')}</div></section>` : '';
+  const trialNotice = trial ? `<p class="wardrobe-trial" role="status">👁 PROVADOR ATIVO: ${escapeHtml(getSkin(trial.skinId)?.name ?? '')} · ${formatTrialClock(trial.endsAt - now)} restantes. Feche o guarda-roupa para desfilar pelo Vault.</p>` : '';
+  return `<section class="bunker-dialog wardrobe-dialog" role="dialog" aria-modal="true" aria-labelledby="wardrobe-title"><p class="eyebrow">/// ACERVO PESSOAL DO COMANDANTE ///</p><h2 id="wardrobe-title">Guarda-Roupa</h2><p class="wardrobe-balance">SUCATA DISPONÍVEL: ${formatNumber.format(scrap)} · COLEÇÃO ${owned}/${visible.length}</p>${trialNotice}${exclusiveSection}<section class="wardrobe-section" aria-labelledby="wardrobe-general-title"><h3 id="wardrobe-general-title" class="wardrobe-section-title">COLEÇÃO GERAL</h3><div class="wardrobe-grid">${general.map((skin) => wardrobeCard(state, skin, context)).join('')}</div></section><p class="wardrobe-note">As vestimentas são cosméticas e não alteram atributos. As mais raras exigem descobertas na Enciclopédia do Ermo; as PREMIUM podem ser experimentadas por 2 minutos.</p><button type="button" class="quiet-action" data-action="wardrobe-back">[ VOLTAR À SUÍTE ]</button></section>`;
 }
 
 function sectorSummary(sector) {
@@ -817,6 +858,9 @@ export function mountDashboard(root) {
   const encyclopediaModal = document.getElementById('modal-enciclopedia');
   const codexToastStack = document.querySelector('.codex-toast-stack');
   let encyclopedia = loadEncyclopedia();
+  const entitlements = loadEntitlements();
+  let skinTrial = null;
+  let skinTrialTimer = null;
   const congressLawTitle = document.getElementById('congresso-lei-titulo');
   const congressLawDescription = document.getElementById('congresso-lei-descricao');
   let pendingCongressLawId = null;
@@ -896,7 +940,8 @@ export function mountDashboard(root) {
 
   function openWardrobe() {
     if (!bunkerGeneratorModal || activeShelterRoom?.type !== 'presidential_suite') return;
-    bunkerGeneratorModal.innerHTML = renderWardrobeView(state, { discovered: Object.keys(encyclopedia.entries) });
+    bunkerGeneratorModal.innerHTML = renderWardrobeView(state, { discovered: Object.keys(encyclopedia.entries),
+      entitled: entitlements.skins, trial: getActiveTrial(skinTrial) });
     bunkerGeneratorModal.hidden = false;
     bunkerController?.pause();
     startWardrobePreviews();
@@ -982,7 +1027,7 @@ export function mountDashboard(root) {
           oxygenDeprived: state.oxygen_deprived,
           currentDay: state.currentDay,
           presidentClass: state.presidentClass,
-          equippedSkin: state.equippedSkin,
+          equippedSkin: getActiveTrial(skinTrial)?.skinId ?? state.equippedSkin,
           lootbox: {
             opened: Boolean(state.pendingLoot && state.lootbox_opened),
             clickCount: state.lootbox_click_count,
@@ -1386,10 +1431,25 @@ export function mountDashboard(root) {
     const action = button?.dataset.action;
     if (action === 'open-wardrobe') { openWardrobe(); return; }
     if (action === 'wardrobe-back') { openShelterRoom(activeShelterRoom, { requestLocation: false }); return; }
+    if (action === 'skin-trial') {
+      const trial = startSkinTrial(button.dataset.skin);
+      if (!trial || !isSkinAvailableForClass(getSkin(trial.skinId), state.presidentClass)) return;
+      skinTrial = trial;
+      if (skinTrialTimer !== null) window.clearTimeout(skinTrialTimer);
+      skinTrialTimer = window.setTimeout(() => {
+        skinTrial = null;
+        skinTrialTimer = null;
+        render();
+        if (!bunkerGeneratorModal.hidden && bunkerGeneratorModal.querySelector('.wardrobe-dialog')) openWardrobe();
+      }, trial.endsAt - Date.now());
+      render();
+      openWardrobe();
+      return;
+    }
     if (action === 'skin-buy' || action === 'skin-equip') {
       const next = action === 'skin-buy'
         ? purchaseSkin(state, button.dataset.skin, { discovered: Object.keys(encyclopedia.entries) })
-        : equipSkin(state, button.dataset.skin);
+        : equipSkin(state, button.dataset.skin, { entitled: entitlements.skins });
       if (next !== state) commit(next);
       openWardrobe();
       return;

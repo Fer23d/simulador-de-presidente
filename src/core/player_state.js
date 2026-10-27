@@ -52,6 +52,40 @@ export const PRESIDENT_SKINS = Object.freeze([
     filter: 'brightness(.18) contrast(1.5)', tint: null,
     aura: { color: 'rgba(255, 40, 40, .65)', blur: 12, pulse: true }, effect: 'smoke', accessory: 'eyes', eyeColor: '#ff3b30',
     description: 'Quem mapeou cada ruína do Ermo deixa de ser homem e vira lenda.' }),
+
+  // Exclusivas de classe: a primeira sai por sucata; a segunda e PREMIUM e so e liberada por direito de uso da loja.
+  skin({ id: 'worker_welder', name: 'Macacão de Soldador', cost: 18_000, rarity: 'epic', exclusiveClass: 'worker',
+    filter: 'saturate(.8) contrast(1.15)', tint: { blend: 'multiply', colors: ['#d98a45', '#6b3f22'], alpha: .85 },
+    pattern: 'soot', accessory: 'welding_mask', effect: 'sparks',
+    description: 'Macacão de lona chamuscado e máscara de solda com visor incandescente. Faíscas onde quer que ande.' }),
+  skin({ id: 'worker_foreman', name: 'Capataz de Ouro', cost: 0, rarity: 'legendary', exclusiveClass: 'worker', premium: true,
+    filter: 'sepia(.85) saturate(2.2) brightness(1.1)', tint: { blend: 'overlay', colors: ['#fff4b8', '#a8740a'], alpha: .6, shimmer: true },
+    aura: { color: 'rgba(255, 205, 80, .7)', blur: 11 }, accessory: 'headlamp', effect: 'sparkle',
+    description: 'Capacete folheado a ouro com lanterna de mineiro acesa. Constrói o Vault com estilo.' }),
+  skin({ id: 'commander_nightops', name: 'Operações Noturnas', cost: 18_000, rarity: 'epic', exclusiveClass: 'commander',
+    filter: 'grayscale(.9) brightness(1.05) contrast(1.25)', tint: { blend: 'multiply', colors: ['#8fa097', '#3d4943'], alpha: .9 },
+    pattern: 'camo', accessory: 'nvg', aura: { color: 'rgba(80, 255, 120, .35)', blur: 6 },
+    description: 'Camuflagem digital e óculos de visão noturna. Ninguém no Vault vê o comandante chegar.' }),
+  skin({ id: 'commander_supreme', name: 'Comandante Supremo', cost: 0, rarity: 'legendary', exclusiveClass: 'commander', premium: true,
+    filter: 'grayscale(.6) brightness(.8) contrast(1.25)', tint: { blend: 'color', colors: ['#1f2a4d', '#0d1226'], alpha: .9 },
+    pattern: 'braid', aura: { color: 'rgba(255, 196, 64, .55)', blur: 8 }, accessory: 'beret',
+    description: 'Farda azul-noite, boina vermelha, dragonas e alamares de ouro. O exército inteiro presta continência.' }),
+  skin({ id: 'doctor_containment', name: 'Jaleco de Contenção', cost: 18_000, rarity: 'epic', exclusiveClass: 'doctor',
+    filter: 'grayscale(.8) brightness(1.25) contrast(1.1)', tint: { blend: 'screen', colors: ['#f3f7f2', '#b9c4bd'], alpha: .35 },
+    pattern: 'hazard', accessory: 'respirator', effect: 'bio',
+    description: 'Jaleco selado com faixas de risco biológico e respirador de duplo filtro. Nenhum esporo passa.' }),
+  skin({ id: 'doctor_plague', name: 'Médico da Peste', cost: 0, rarity: 'legendary', exclusiveClass: 'doctor', premium: true,
+    filter: 'grayscale(.85) brightness(.72) contrast(1.3)', tint: { blend: 'multiply', colors: ['#9a7b58', '#3a2c1f'], alpha: .85 },
+    aura: { color: 'rgba(170, 120, 255, .45)', blur: 9, pulse: true }, accessory: 'plague_mask', effect: 'incense',
+    description: 'Máscara de bico com lentes de vidro, chapéu de abas largas e capa de couro encerado. A cura tem um preço.' }),
+  skin({ id: 'survivor_wanderer', name: 'Andarilho do Ermo', cost: 18_000, rarity: 'epic', exclusiveClass: 'survivor',
+    filter: 'sepia(.55) saturate(1.1) contrast(1.1)', tint: { blend: 'multiply', colors: ['#d8b98a', '#7a5a3a'], alpha: .75 },
+    accessory: 'poncho', effect: 'dust',
+    description: 'Poncho tecido à mão e cachecol ao vento. Cada fio carrega a poeira de mil quilômetros.' }),
+  skin({ id: 'survivor_legend', name: 'Lenda Viva', cost: 0, rarity: 'legendary', exclusiveClass: 'survivor', premium: true,
+    filter: 'grayscale(.8) brightness(.35) contrast(1.4)', tint: null, pattern: 'scars',
+    aura: { color: 'rgba(255, 120, 30, .7)', blur: 12, pulse: true }, accessory: 'eyes', eyeColor: '#ff9a2e', effect: 'embers_fire',
+    description: 'Cicatrizes que ainda queimam como brasa. Sobreviveu a tudo e o fogo da bomba vive dentro dele.' }),
 ]);
 
 const CLASS_IDS = new Set(PRESIDENT_CLASSES.map(({ id }) => id));
@@ -79,14 +113,21 @@ export function getSkin(skinId) {
   return SKINS_BY_ID.get(skinId) ?? null;
 }
 
+export function isSkinAvailableForClass(skin, classId) {
+  return Boolean(skin) && (!skin.exclusiveClass || skin.exclusiveClass === classId);
+}
+
 export function normalizePlayerCosmetics(state = {}) {
   const unlockedSkins = [...new Set(['default', ...(Array.isArray(state.unlockedSkins)
     ? state.unlockedSkins.filter((id) => SKINS_BY_ID.has(id)) : [])])];
+  const presidentClass = CLASS_IDS.has(state.presidentClass) ? state.presidentClass : null;
+  const equipped = getSkin(state.equippedSkin);
   return {
-    presidentClass: CLASS_IDS.has(state.presidentClass) ? state.presidentClass : null,
+    presidentClass,
     president_selection_pending: Boolean(state.president_selection_pending),
     unlockedSkins,
-    equippedSkin: unlockedSkins.includes(state.equippedSkin) ? state.equippedSkin : 'default',
+    equippedSkin: unlockedSkins.includes(state.equippedSkin)
+      && (!equipped?.exclusiveClass || equipped.exclusiveClass === presidentClass) ? state.equippedSkin : 'default',
   };
 }
 
@@ -109,6 +150,8 @@ export function purchaseSkin(state, skinId, { discovered = [] } = {}) {
   const skin = getSkin(skinId);
   if (!state?.is_wasteland || !skin || skin.id === 'default' || !state.shelter_grid?.flat().some((room) => room?.type === 'presidential_suite')
     || state.unlockedSkins?.includes(skin.id)) return state;
+  if (!isSkinAvailableForClass(skin, state.presidentClass)) return { ...state, notice: `${skin.name} é exclusiva de outra classe.` };
+  if (skin.premium) return { ...state, notice: `${skin.name} é PREMIUM e chega pela loja do Vault.` };
   if (!isSkinRequirementMet(skin, discovered)) return { ...state, notice: `${skin.name} exige uma descoberta rara na Enciclopédia do Ermo.` };
   if ((Number(state.scrap) || 0) < skin.cost) return { ...state, notice: 'Sucata insuficiente para adquirir esta vestimenta.' };
   return {
@@ -119,10 +162,14 @@ export function purchaseSkin(state, skinId, { discovered = [] } = {}) {
   };
 }
 
-export function equipSkin(state, skinId) {
+// entitled: skins premium cujo direito de uso ja pertence a conta do jogador (loja), fora do save da partida.
+export function equipSkin(state, skinId, { entitled = [] } = {}) {
+  const skin = getSkin(skinId);
+  const owned = state?.unlockedSkins?.includes(skinId) || (skin?.premium && entitled.includes(skinId));
   if (!state?.is_wasteland || !state.shelter_grid?.flat().some((room) => room?.type === 'presidential_suite')
-    || !state.unlockedSkins?.includes(skinId) || !getSkin(skinId) || state.equippedSkin === skinId) return state;
-  return { ...state, equippedSkin: skinId, notice: `${getSkin(skinId).name} equipada.` };
+    || !owned || !skin || !isSkinAvailableForClass(skin, state.presidentClass) || state.equippedSkin === skinId) return state;
+  return { ...state, equippedSkin: skinId, unlockedSkins: [...new Set([...(state.unlockedSkins ?? ['default']), skinId])],
+    notice: `${skin.name} equipada.` };
 }
 
 export function getPresidentSpriteKey(classId) {

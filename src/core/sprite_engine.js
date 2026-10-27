@@ -469,11 +469,113 @@ function findHeadAnchor(image, crop) {
   return anchor;
 }
 
-// Retinge apenas os pixels do sprite: filtro base, camada de cor com blend e mascara de alfa do recorte original.
+function particleRandom(seed) {
+  return ((Math.sin(seed * 127.1) * 43758.5453) % 1 + 1) % 1;
+}
+
+// Padroes pintados no tecido; o chamador aplica a mascara de alfa do sprite depois, entao nada vaza para fora do corpo.
+function drawBodyPattern(off, pattern, w, h, anchor, time) {
+  const headX = anchor.x * w;
+  const bodyTop = Math.round((anchor.y + anchor.r * 1.4) * h);
+  off.save();
+  off.globalCompositeOperation = 'source-over';
+  if (pattern === 'soot') {
+    for (let index = 0; index < 7; index++) {
+      const cx = w * (.15 + particleRandom(index + 40) * .7);
+      const cy = bodyTop + (h - bodyTop) * (.05 + particleRandom(index + 50) * .85);
+      const radius = Math.max(2, w * (.12 + particleRandom(index + 60) * .16));
+      const blot = off.createRadialGradient(cx, cy, 0, cx, cy, radius);
+      blot.addColorStop(0, 'rgba(18, 10, 4, .6)');
+      blot.addColorStop(1, 'rgba(18, 10, 4, 0)');
+      off.fillStyle = blot;
+      off.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+    }
+    const scorch = off.createLinearGradient(0, h * .45, 0, h * .62);
+    scorch.addColorStop(0, 'rgba(255, 120, 30, 0)');
+    scorch.addColorStop(.5, 'rgba(255, 120, 30, .28)');
+    scorch.addColorStop(1, 'rgba(255, 120, 30, 0)');
+    off.fillStyle = scorch;
+    off.fillRect(headX, h * .45, w - headX, h * .17);
+  } else if (pattern === 'camo') {
+    const cell = Math.max(2, Math.round(w / 17));
+    const tones = ['#7d8c84', '#a3b1a8', '#5b6862', '#c3cdc6'];
+    off.globalCompositeOperation = 'multiply';
+    off.globalAlpha = .7;
+    for (let y = bodyTop; y < h; y += cell) {
+      for (let x = 0; x < w; x += cell) {
+        const pick = particleRandom(x * 7.13 + y * 3.71 + 1);
+        if (pick < .28) continue;
+        off.fillStyle = tones[Math.floor(pick * tones.length) % tones.length];
+        off.fillRect(x, y, cell, cell);
+      }
+    }
+  } else if (pattern === 'hazard') {
+    const bands = [[.53, .065], [.36, .035]];
+    for (const [start, size] of bands) {
+      const top = h * start;
+      const height = Math.max(2, h * size);
+      off.save();
+      off.beginPath();
+      off.rect(0, top, w, height);
+      off.clip();
+      const stripe = Math.max(2, Math.round(w / 9));
+      for (let x = -h; x < w + h; x += stripe * 2) {
+        off.fillStyle = '#f2c230';
+        off.beginPath();
+        off.moveTo(x, top + height);
+        off.lineTo(x + stripe, top + height);
+        off.lineTo(x + stripe + height, top);
+        off.lineTo(x + height, top);
+        off.closePath();
+        off.fill();
+      }
+      off.restore();
+      off.fillStyle = 'rgba(20, 20, 20, .9)';
+      off.fillRect(0, top, w, 1);
+      off.fillRect(0, top + height - 1, w, 1);
+    }
+  } else if (pattern === 'braid') {
+    const chestX = Math.min(w * .92, headX + w * .08);
+    off.strokeStyle = '#f0c14b';
+    off.lineWidth = Math.max(1, w / 30);
+    for (let loop = 0; loop < 2; loop++) {
+      off.beginPath();
+      off.moveTo(chestX - w * .1, bodyTop + h * .03);
+      off.quadraticCurveTo(chestX - w * (.02 - loop * .03), bodyTop + h * (.12 + loop * .04), chestX + w * .06, bodyTop + h * .04);
+      off.stroke();
+    }
+    off.fillStyle = '#ffd86b';
+    for (let button = 0; button < 4; button++) {
+      off.fillRect(chestX, bodyTop + h * (.07 + button * .055), Math.max(1, w / 26), Math.max(1, w / 26));
+    }
+  } else if (pattern === 'scars') {
+    const pulse = .55 + (Math.sin(time / 260) + 1) * .22;
+    off.lineCap = 'round';
+    off.shadowColor = '#ff7a1a';
+    off.shadowBlur = 4;
+    for (let crack = 0; crack < 9; crack++) {
+      let x = w * (.1 + particleRandom(crack + 70) * .8);
+      let y = bodyTop + (h - bodyTop) * particleRandom(crack + 80) * .8;
+      off.strokeStyle = `rgba(255, ${120 + Math.round(particleRandom(crack + 90) * 80)}, 40, ${pulse})`;
+      off.lineWidth = Math.max(.8, w / 40);
+      off.beginPath();
+      off.moveTo(x, y);
+      for (let step = 0; step < 4; step++) {
+        x += (particleRandom(crack * 5 + step + 100) - .5) * w * .3;
+        y += h * (.02 + particleRandom(crack * 3 + step + 120) * .05);
+        off.lineTo(x, y);
+      }
+      off.stroke();
+    }
+  }
+  off.restore();
+}
+
+// Retinge apenas os pixels do sprite: filtro base, camada de cor com blend, padrao do tecido e mascara de alfa do recorte.
 function renderSkinnedSprite(image, crop, skin, width, height, time) {
   const w = Math.max(1, Math.round(width));
   const h = Math.max(1, Math.round(height));
-  const animated = Boolean(skin.tint?.shimmer);
+  const animated = Boolean(skin.tint?.shimmer || skin.pattern === 'scars');
   const key = `${skin.id}:${crop.join(':')}:${w}x${h}`;
   let canvas = skinCanvasCache.get(key);
   if (canvas && !animated) return canvas;
@@ -481,7 +583,7 @@ function renderSkinnedSprite(image, crop, skin, width, height, time) {
     canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
-    if (skinCanvasCache.size > 160) skinCanvasCache.clear();
+    if (skinCanvasCache.size > 240) skinCanvasCache.clear();
     skinCanvasCache.set(key, canvas);
   }
   const off = canvas.getContext('2d');
@@ -497,7 +599,7 @@ function renderSkinnedSprite(image, crop, skin, width, height, time) {
     off.globalAlpha = skin.tint.alpha;
     off.fillStyle = gradient;
     off.fillRect(0, 0, w, h);
-    if (animated) {
+    if (skin.tint.shimmer) {
       const band = ((time / 900) % 1) * (h * 1.8) - h * .4;
       const shine = off.createLinearGradient(0, band - h * .25, w * .4, band + h * .25);
       shine.addColorStop(0, 'rgba(255, 255, 255, 0)');
@@ -509,6 +611,10 @@ function renderSkinnedSprite(image, crop, skin, width, height, time) {
       off.fillRect(0, 0, w, h);
     }
     off.globalAlpha = 1;
+    off.globalCompositeOperation = 'source-over';
+  }
+  if (skin.pattern) drawBodyPattern(off, skin.pattern, w, h, findHeadAnchor(image, crop), time);
+  if (skin.tint || skin.pattern) {
     off.globalCompositeOperation = 'destination-in';
     off.drawImage(image, ...crop, 0, 0, w, h);
     off.globalCompositeOperation = 'source-over';
@@ -516,15 +622,27 @@ function renderSkinnedSprite(image, crop, skin, width, height, time) {
   return canvas;
 }
 
+function metalGradient(ctx, x0, y0, x1, y1, light, dark) {
+  const gradient = ctx.createLinearGradient?.(x0, y0, x1, y1);
+  if (!gradient) return dark;
+  gradient.addColorStop(0, light);
+  gradient.addColorStop(1, dark);
+  return gradient;
+}
+
+// Acessorios desenhados no sistema local do sprite (virado para +x), ancorados na cabeca detectada.
 function drawSkinAccessory(ctx, skin, head, time) {
   const { x, y, r } = head;
+  const line = Math.max(.6, r * .12);
   ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
   if (skin.accessory === 'crown') {
     const base = y - r * .4;
     const half = r * 1.05;
-    ctx.fillStyle = '#ffd34d';
-    ctx.strokeStyle = '#8a5a00';
-    ctx.lineWidth = 1;
+    ctx.fillStyle = metalGradient(ctx, 0, base - r * 1.2, 0, base, '#fff2a0', '#c8900f');
+    ctx.strokeStyle = '#7a4d00';
+    ctx.lineWidth = line;
     ctx.beginPath();
     ctx.moveTo(x - half, base);
     ctx.lineTo(x - half, base - r * .9);
@@ -537,10 +655,9 @@ function drawSkinAccessory(ctx, skin, head, time) {
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = '#ff3b4a';
-    ctx.fillRect(x - 1, base - r * .5, 2, 2);
+    ctx.fillRect(x - r * .12, base - r * .5, r * .25, r * .25);
   } else if (skin.accessory === 'eyes') {
-    const glow = .75 + Math.sin(time / 260) * .25;
-    ctx.globalAlpha = glow;
+    ctx.globalAlpha = .75 + Math.sin(time / 260) * .25;
     ctx.fillStyle = skin.eyeColor ?? '#ff3b30';
     ctx.shadowColor = skin.eyeColor ?? '#ff3b30';
     ctx.shadowBlur = 6;
@@ -606,12 +723,245 @@ function drawSkinAccessory(ctx, skin, head, time) {
     ctx.fillRect(x + r * .05, y - r * .9, Math.max(1.2, r * .2), Math.max(1.2, r * .2));
     ctx.fillStyle = '#111';
     ctx.fillRect(x + r * .55, y - r * .3, r * .75, Math.max(1.2, r * .16));
+  } else if (skin.accessory === 'welding_mask') {
+    ctx.strokeStyle = '#141412';
+    ctx.lineWidth = line * 1.4;
+    ctx.beginPath();
+    ctx.arc?.(x - r * .1, y - r * .05, r * 1.02, Math.PI * 1.05, Math.PI * 1.75);
+    ctx.stroke();
+    ctx.fillStyle = metalGradient(ctx, x, y - r, x + r * 1.2, y + r, '#5a5a52', '#1c1c19');
+    ctx.strokeStyle = '#0b0b0a';
+    ctx.lineWidth = line;
+    ctx.beginPath();
+    ctx.moveTo(x - r * .15, y - r * 1.0);
+    ctx.lineTo(x + r * .95, y - r * .95);
+    ctx.quadraticCurveTo(x + r * 1.35, y, x + r * 1.0, y + r * 1.05);
+    ctx.lineTo(x - r * .15, y + r * 1.0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    const glow = .75 + Math.sin(time / 90) * .15 + Math.sin(time / 37) * .1;
+    ctx.fillStyle = metalGradient(ctx, x + r * .3, 0, x + r * 1.1, 0, `rgba(255, 210, 120, ${glow})`, `rgba(255, 90, 10, ${glow})`);
+    ctx.shadowColor = '#ff8a1a';
+    ctx.shadowBlur = 7;
+    ctx.fillRect(x + r * .35, y - r * .32, r * .72, r * .38);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#9a968a';
+    ctx.fillRect(x + r * .05, y + r * .55, r * .18, r * .18);
+    ctx.fillRect(x + r * .05, y - r * .7, r * .18, r * .18);
+  } else if (skin.accessory === 'headlamp') {
+    const lampX = x + r * .8;
+    const lampY = y - r * .65;
+    const flicker = .85 + Math.sin(time / 140) * .08;
+    ctx.globalCompositeOperation = 'lighter';
+    const beam = ctx.createLinearGradient?.(lampX, lampY, lampX + r * 7, lampY);
+    if (beam) {
+      beam.addColorStop(0, `rgba(255, 240, 180, ${.42 * flicker})`);
+      beam.addColorStop(1, 'rgba(255, 240, 180, 0)');
+      ctx.fillStyle = beam;
+      ctx.beginPath();
+      ctx.moveTo(lampX, lampY - r * .2);
+      ctx.lineTo(lampX + r * 7, lampY - r * 2.2);
+      ctx.lineTo(lampX + r * 7, lampY + r * 1.9);
+      ctx.lineTo(lampX, lampY + r * .2);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = metalGradient(ctx, lampX - r * .3, lampY - r * .3, lampX + r * .3, lampY + r * .3, '#e6e2d4', '#5b584f');
+    ctx.beginPath();
+    ctx.arc?.(lampX, lampY, r * .34, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff6c8';
+    ctx.shadowColor = '#fff1a0';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc?.(lampX + r * .12, lampY, r * .2, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (skin.accessory === 'nvg') {
+    ctx.strokeStyle = '#111513';
+    ctx.lineWidth = line * 1.6;
+    ctx.beginPath();
+    ctx.moveTo(x - r * .9, y - r * .55);
+    ctx.lineTo(x + r * .45, y - r * .45);
+    ctx.stroke();
+    for (const [offset, depth] of [[-.18, .9], [.12, 1]]) {
+      const tubeY = y - r * (.42 - offset);
+      ctx.fillStyle = metalGradient(ctx, 0, tubeY - r * .25, 0, tubeY + r * .25, '#4a524e', '#151816');
+      ctx.fillRect(x + r * .35, tubeY - r * .24, r * (1.05 * depth), r * .48);
+      ctx.fillStyle = 'rgba(255, 255, 255, .25)';
+      ctx.fillRect(x + r * .4, tubeY - r * .22, r * .8 * depth, Math.max(.6, r * .07));
+    }
+    const pulse = .7 + (Math.sin(time / 300) + 1) * .15;
+    ctx.fillStyle = `rgba(110, 255, 150, ${pulse})`;
+    ctx.shadowColor = '#5dff8a';
+    ctx.shadowBlur = 9;
+    ctx.beginPath();
+    ctx.arc?.(x + r * 1.42, y - r * .3, r * .24, 0, Math.PI * 2);
+    ctx.arc?.(x + r * 1.32, y - r * .62, r * .2, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (skin.accessory === 'beret') {
+    ctx.save();
+    ctx.translate(x - r * .1, y - r * .72);
+    ctx.rotate(-.18);
+    ctx.fillStyle = metalGradient(ctx, -r, -r * .5, r, r * .5, '#e8333d', '#6e0b12');
+    ctx.beginPath();
+    ctx.ellipse?.(0, 0, r * 1.2, r * .52, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#4a070c';
+    ctx.fillRect(-r * 1.05, r * .2, r * 2.1, Math.max(.8, r * .18));
+    ctx.restore();
+    ctx.fillStyle = '#ffd34d';
+    ctx.shadowColor = '#ffd34d';
+    ctx.shadowBlur = 3;
+    ctx.beginPath();
+    ctx.arc?.(x + r * .55, y - r * .78, Math.max(1, r * .2), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    const shoulderX = x - r * .35;
+    const shoulderY = y + r * 1.75;
+    ctx.fillStyle = metalGradient(ctx, 0, shoulderY - r * .2, 0, shoulderY + r * .3, '#ffe28a', '#b07d12');
+    ctx.fillRect(shoulderX - r * .75, shoulderY - r * .2, r * 1.5, r * .45);
+    ctx.strokeStyle = '#e8b93a';
+    ctx.lineWidth = Math.max(.6, r * .1);
+    ctx.beginPath();
+    for (let fringe = 0; fringe < 5; fringe++) {
+      const fx = shoulderX - r * .65 + fringe * r * .32;
+      ctx.moveTo(fx, shoulderY + r * .25);
+      ctx.lineTo(fx, shoulderY + r * .65);
+    }
+    ctx.stroke();
+  } else if (skin.accessory === 'respirator') {
+    ctx.strokeStyle = '#1f2324';
+    ctx.lineWidth = line * 1.3;
+    ctx.beginPath();
+    ctx.moveTo(x - r * .7, y + r * .1);
+    ctx.lineTo(x + r * .3, y + r * .3);
+    ctx.stroke();
+    ctx.fillStyle = metalGradient(ctx, x, y, x + r, y + r, '#6d7477', '#262b2d');
+    ctx.beginPath();
+    ctx.moveTo(x + r * .2, y + r * .05);
+    ctx.quadraticCurveTo(x + r * 1.15, y + r * .05, x + r * 1.1, y + r * .55);
+    ctx.quadraticCurveTo(x + r * 1.0, y + r * 1.05, x + r * .3, y + r * .95);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = metalGradient(ctx, x + r * .8, y + r * .3, x + r * 1.5, y + r, '#c4cbcd', '#596164');
+    ctx.beginPath();
+    ctx.arc?.(x + r * 1.15, y + r * .62, r * .42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#1b1f20';
+    ctx.beginPath();
+    ctx.arc?.(x + r * 1.15, y + r * .62, r * .22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(160, 235, 255, .45)';
+    ctx.strokeStyle = '#d9dfe0';
+    ctx.lineWidth = Math.max(.5, r * .08);
+    ctx.beginPath();
+    ctx.arc?.(x + r * .62, y - r * .28, r * .3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  } else if (skin.accessory === 'plague_mask') {
+    ctx.fillStyle = '#0d0b09';
+    ctx.beginPath();
+    ctx.ellipse?.(x, y - r * .62, r * 2.0, r * .34, -.05, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = metalGradient(ctx, x - r, y - r * 1.8, x + r, y - r * .6, '#2a241e', '#0a0806');
+    ctx.fillRect(x - r * .85, y - r * 1.65, r * 1.7, r * 1.05);
+    ctx.fillStyle = '#5e1a1a';
+    ctx.fillRect(x - r * .85, y - r * .95, r * 1.7, Math.max(1, r * .22));
+    ctx.fillStyle = metalGradient(ctx, x + r * .5, y - r * .2, x + r * 2.7, y + r, '#d0b07a', '#5e4630');
+    ctx.strokeStyle = '#2b1f14';
+    ctx.lineWidth = line;
+    ctx.beginPath();
+    ctx.moveTo(x + r * .55, y - r * .15);
+    ctx.quadraticCurveTo(x + r * 1.9, y + r * .05, x + r * 2.75, y + r * 1.05);
+    ctx.quadraticCurveTo(x + r * 1.7, y + r * .95, x + r * .55, y + r * .7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(43, 31, 20, .7)';
+    ctx.beginPath();
+    ctx.moveTo(x + r * 1.1, y + r * .1);
+    ctx.lineTo(x + r * 1.0, y + r * .75);
+    ctx.stroke();
+    const lens = ctx.createRadialGradient?.(x + r * .45, y - r * .25, r * .05, x + r * .5, y - r * .2, r * .38);
+    if (lens) {
+      lens.addColorStop(0, 'rgba(255, 255, 255, .9)');
+      lens.addColorStop(.35, 'rgba(150, 120, 255, .55)');
+      lens.addColorStop(1, 'rgba(40, 20, 60, .85)');
+      ctx.fillStyle = lens;
+    } else ctx.fillStyle = '#7a5fd0';
+    ctx.strokeStyle = '#b8892c';
+    ctx.lineWidth = Math.max(.6, r * .12);
+    ctx.beginPath();
+    ctx.arc?.(x + r * .5, y - r * .2, r * .36, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  } else if (skin.accessory === 'poncho') {
+    const wave = (index) => Math.sin(time / 210 + index * 1.3) * r * .22;
+    const neckX = x - r * .15;
+    const neckY = y + r * 1.15;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(neckX - r * .3, neckY);
+    ctx.lineTo(x - r * 2.5, y + r * 4.6 + wave(0));
+    ctx.lineTo(x - r * 1.2, y + r * 5.0 + wave(1));
+    ctx.lineTo(x + r * .1, y + r * 5.3 + wave(2));
+    ctx.lineTo(x + r * 1.3, y + r * 4.9 + wave(3));
+    ctx.lineTo(x + r * .75, neckY);
+    ctx.closePath();
+    ctx.globalAlpha = .94;
+    ctx.fillStyle = metalGradient(ctx, x - r * 2.6, 0, x + r * 1.3, 0, '#4a3020', '#9a6a40');
+    ctx.fill();
+    ctx.clip();
+    const stripes = [['#8e3b28', 2.7], ['#b8893f', 3.05], ['#3c4f57', 3.35], ['#b8893f', 3.65], ['#8e3b28', 4.25]];
+    for (const [color, offset] of stripes) {
+      ctx.fillStyle = color;
+      ctx.globalAlpha = .8;
+      ctx.fillRect(x - r * 3, y + r * offset + wave(offset), r * 5, Math.max(.7, r * .16));
+    }
+    ctx.globalAlpha = .35;
+    ctx.strokeStyle = '#24160b';
+    ctx.lineWidth = Math.max(.6, r * .14);
+    ctx.beginPath();
+    for (const fold of [-1.7, -.9, -.1, .7]) {
+      ctx.moveTo(x + r * fold * .6, neckY + r * .4);
+      ctx.lineTo(x + r * fold, y + r * 4.9 + wave(fold));
+    }
+    ctx.stroke();
+    const shade = ctx.createLinearGradient?.(0, neckY, 0, y + r * 5.3);
+    if (shade) {
+      shade.addColorStop(0, 'rgba(255, 220, 170, .18)');
+      shade.addColorStop(1, 'rgba(0, 0, 0, .3)');
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = shade;
+      ctx.fillRect(x - r * 3, neckY, r * 5, r * 5);
+    }
+    ctx.restore();
+    ctx.strokeStyle = '#3a220f';
+    ctx.lineWidth = Math.max(.5, r * .09);
+    ctx.beginPath();
+    for (let fringe = 0; fringe < 9; fringe++) {
+      const t = fringe / 8;
+      const fx = x - r * 2.5 + t * r * 3.8;
+      const fy = y + r * (4.6 + Math.sin(t * Math.PI) * .7) + wave(fringe * .4);
+      ctx.moveTo(fx, fy);
+      ctx.lineTo(fx - r * .1, fy + r * .45);
+    }
+    ctx.stroke();
+    const flutter = Math.sin(time / 160) * r * .5;
+    ctx.fillStyle = metalGradient(ctx, x - r * 3, 0, x, 0, '#7a2a18', '#c4522f');
+    ctx.beginPath();
+    ctx.moveTo(x - r * .5, y + r * .9);
+    ctx.quadraticCurveTo(x - r * 2.0, y + r * 1.0 + flutter, x - r * 3.4, y + r * 1.4 + flutter * 1.4);
+    ctx.lineTo(x - r * 3.3, y + r * 1.85 + flutter * 1.4);
+    ctx.quadraticCurveTo(x - r * 1.9, y + r * 1.5 + flutter, x - r * .45, y + r * 1.45);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#c4522f';
+    ctx.fillRect(x - r * .55, y + r * .9, r * 1.35, r * .55);
   }
   ctx.restore();
-}
-
-function particleRandom(seed) {
-  return ((Math.sin(seed * 127.1) * 43758.5453) % 1 + 1) % 1;
 }
 
 function drawSkinEffect(ctx, skin, width, height, time) {
@@ -632,17 +982,22 @@ function drawSkinEffect(ctx, skin, width, height, time) {
       ctx.moveTo(px, py - size); ctx.lineTo(px, py + size);
       ctx.stroke();
     }
-  } else if (skin.effect === 'embers' || skin.effect === 'radiation') {
-    const color = skin.effect === 'embers' ? '#c38bff' : '#6dff9a';
+  } else if (skin.effect === 'embers' || skin.effect === 'radiation' || skin.effect === 'embers_fire' || skin.effect === 'bio') {
+    const color = { embers: '#c38bff', radiation: '#6dff9a', embers_fire: '#ff8a2a', bio: '#9dff6a' }[skin.effect];
+    const count = skin.effect === 'embers_fire' ? 11 : 7;
     ctx.fillStyle = color;
     ctx.shadowColor = color;
     ctx.shadowBlur = 4;
-    for (let index = 0; index < 7; index++) {
+    for (let index = 0; index < count; index++) {
       const phase = (time / (1_400 + index * 90) + particleRandom(index + 3)) % 1;
       const px = (particleRandom(index + 7) - .5) * width * 1.1 + Math.sin(time / 300 + index) * 2;
       const py = -height * phase;
       ctx.globalAlpha = (1 - phase) * .85;
-      ctx.fillRect(px, py, 2, 2);
+      if (skin.effect === 'bio') {
+        ctx.beginPath();
+        ctx.arc?.(px, py, 1.2 + particleRandom(index + 30) * 1.4, 0, Math.PI * 2);
+        ctx.fill();
+      } else ctx.fillRect(px, py, 2, 2);
     }
     if (skin.effect === 'radiation') {
       ctx.globalAlpha = .35 + Math.sin(time / 300) * .15;
@@ -652,24 +1007,46 @@ function drawSkinEffect(ctx, skin, width, height, time) {
       ctx.ellipse?.(0, -1, width * .55, 3, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
-  } else if (skin.effect === 'smoke') {
+  } else if (skin.effect === 'sparks') {
+    const originX = width * .32;
+    const originY = -height * .5;
+    ctx.lineWidth = 1;
+    ctx.shadowColor = '#ffb347';
+    ctx.shadowBlur = 5;
+    for (let index = 0; index < 9; index++) {
+      const phase = (time / 520 + particleRandom(index + 200)) % 1;
+      const angle = -Math.PI * (.15 + particleRandom(index + 210) * .7);
+      const speed = width * (.5 + particleRandom(index + 220) * .9);
+      const px = originX + Math.cos(angle) * speed * phase;
+      const py = originY + Math.sin(angle) * speed * phase + height * .35 * phase * phase;
+      ctx.globalAlpha = 1 - phase;
+      ctx.strokeStyle = phase < .4 ? '#fff4c2' : '#ff8a1a';
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px - Math.cos(angle) * 3, py - Math.sin(angle) * 3);
+      ctx.stroke();
+    }
+  } else if (skin.effect === 'smoke' || skin.effect === 'incense' || skin.effect === 'dust') {
+    const style = { smoke: ['#120808', .35, .1], incense: ['#8c6cc8', .28, .55], dust: ['#b8936a', .32, .02] }[skin.effect];
     for (let index = 0; index < 6; index++) {
       const phase = (time / 1_800 + particleRandom(index + 5)) % 1;
-      const px = (particleRandom(index + 9) - .5) * width * 1.4 + phase * 6;
-      const py = -height * .1 - phase * height * .5;
-      ctx.globalAlpha = (1 - phase) * .35;
-      ctx.fillStyle = '#120808';
+      const px = (particleRandom(index + 9) - .5) * width * 1.4 - phase * (skin.effect === 'dust' ? 14 : -6);
+      const py = -height * style[2] - phase * height * (skin.effect === 'dust' ? .15 : .5);
+      ctx.globalAlpha = (1 - phase) * style[1];
+      ctx.fillStyle = style[0];
       ctx.beginPath();
-      ctx.arc?.(px, py, 3 + phase * 7, 0, Math.PI * 2);
+      ctx.arc?.(px, py, 2 + phase * (skin.effect === 'dust' ? 4 : 7), 0, Math.PI * 2);
       ctx.fill();
     }
   }
   ctx.restore();
 }
 
+const BEHIND_EFFECTS = new Set(['smoke', 'dust']);
+
 function drawSkinnedActor(ctx, image, crop, width, height, skin, time) {
   const sprite = renderSkinnedSprite(image, crop, skin, width, height, time);
-  drawSkinEffect(ctx, { ...skin, effect: skin.effect === 'smoke' ? 'smoke' : null }, width, height, time);
+  if (BEHIND_EFFECTS.has(skin.effect)) drawSkinEffect(ctx, skin, width, height, time);
   ctx.save();
   if (skin.aura) {
     ctx.shadowColor = skin.aura.color;
@@ -679,7 +1056,7 @@ function drawSkinnedActor(ctx, image, crop, width, height, skin, time) {
   ctx.restore();
   const anchor = findHeadAnchor(image, crop);
   if (skin.accessory) drawSkinAccessory(ctx, skin, { x: -width / 2 + anchor.x * width, y: -height + anchor.y * height, r: anchor.r * height }, time);
-  if (skin.effect !== 'smoke') drawSkinEffect(ctx, skin, width, height, time);
+  if (!BEHIND_EFFECTS.has(skin.effect)) drawSkinEffect(ctx, skin, width, height, time);
 }
 
 // Vitrine do guarda-roupa: o presidente andando com a vestimenta aplicada.
