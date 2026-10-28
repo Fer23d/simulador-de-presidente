@@ -33,7 +33,7 @@ test('laboratory is buildable, staffed as a research room, and produces science'
 
   assert.equal(lab.type, 'laboratory');
   assert.equal(worker.role, 'scientist');
-  assert.equal(worker.name, 'Habitante Genérico');
+  assert.match(worker.name, /^[A-ZÀ-Ú][a-zà-ú]+ [A-ZÀ-Ú][a-zà-ú]+$/);
   assert.equal(worker.isVIP, false);
   assert.equal(getRoomEconomyProfile(built, lab).production.amount, 40);
   assert.equal(advanceWastelandMonth({ ...built, science: 0 }).science, 40);

@@ -9,6 +9,7 @@ import { Inhabitant } from './inhabitant.js';
 import { advanceEnvironmentCycle, countActiveGenerators, createEnvironmentState, FULL_CYCLE_MS, getNpcMovementDelta } from './environment.js';
 import { chooseDialogueLine } from './dialogues.js';
 import { normalizeNeeds } from './needs.js';
+import { generateResidentIdentity, resolveResidentIdentity } from './names.js';
 import { advanceWeather, createWeatherState } from './weather.js';
 
 const WALK_SPEED = 170;
@@ -174,13 +175,13 @@ export function createInitialInhabitants(grid = INITIAL_SHELTER_GRID) {
     { id: 'vault-resident-1', floor: 0, column: 1, offsetX: -78, currentRoomId: 'vault-0-1', role: 'resident', pose: 'seated', facing: 1,
       currentState: 'idle', targetOffsetX: null, waitSeconds: 1, loyalty: 100,
       revoltChance: 20, lastTalkedDay: 0,
-      name: 'Habitante Genérico', isVIP: false, modifier: 1,
+      ...generateResidentIdentity('vault-resident-1'), isVIP: false, modifier: 1,
       workFloor: null, workColumn: null, state: 'idle', rebellionCheckDone: false,
       is_on_expedition: false, expedition_timer: 0, is_prisoner: false, needs: normalizeNeeds() },
     { id: 'vault-engineer-1', floor: 0, column: 1, offsetX: 78, currentRoomId: 'vault-0-1', role: 'engineer', pose: 'working', facing: -1,
       currentState: 'idle', targetOffsetX: null, waitSeconds: 1, loyalty: 100,
       revoltChance: 20, lastTalkedDay: 0,
-      name: 'Habitante Genérico', isVIP: false, modifier: 1,
+      ...generateResidentIdentity('vault-engineer-1'), isVIP: false, modifier: 1,
       workFloor: null, workColumn: null, state: 'idle', rebellionCheckDone: false,
       is_on_expedition: false, expedition_timer: 0, is_prisoner: false, needs: normalizeNeeds() },
   ];
@@ -203,7 +204,7 @@ export function normalizeInhabitants(value, grid) {
       || room?.type === 'generator' && npc.role === 'engineer';
     result.push({ id: npc.id, floor: npc.floor, column: npc.column,
       offsetX: Math.max(-108, Math.min(108, Number(npc.offsetX) || 0)),
-      name: typeof npc.name === 'string' && npc.name.trim() ? npc.name.slice(0, 60) : 'Habitante Genérico',
+      ...resolveResidentIdentity(npc),
       isVIP: npc.isVIP === true,
       modifier: Math.max(1, Math.min(5, Number(npc.modifier) || (npc.isVIP === true ? 2 : 1))),
       role: ['resident', 'engineer', 'scientist', 'medic', 'guard'].includes(npc.role) ? npc.role : 'resident',

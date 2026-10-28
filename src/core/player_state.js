@@ -1,11 +1,19 @@
 export const PRESIDENT_CLASSES = Object.freeze([
-  Object.freeze({ id: 'worker', name: 'O Operário', buff: 'Construções e melhorias custam 15% menos sucata.',
+  Object.freeze({ id: 'worker', name: 'O Operário', leader: 'Joaquim "Quim" Barreto',
+    bio: 'Soldador da usina estatal, sindicalista, virou presidente por eliminação. Assinou a privatização da usina onde trabalhou a vida inteira.',
+    quote: 'Eu não sei governar. Mas sei consertar.', buff: 'Construções e melhorias custam 15% menos sucata.',
     flaw: 'Produz 15% menos Ciência.', spriteSheet: 'npc_walk_sheet', spriteRole: 'resident', spriteRow: 0, spriteRows: 4 }),
-  Object.freeze({ id: 'commander', name: 'O Comandante', buff: 'Soldados têm o dobro da eficácia de Supressão.',
+  Object.freeze({ id: 'commander', name: 'O Comandante', leader: 'Coronel Augusto Ferraz',
+    bio: 'Comandou a defesa da capital e assumiu o gabinete "provisoriamente". Nunca contou que sacrificou a própria tropa numa retirada impossível.',
+    quote: 'Um Vault é um quartel com crianças.', buff: 'Soldados têm o dobro da eficácia de Supressão.',
     flaw: 'Consumo global de comida aumenta 10%.', spriteSheet: 'npc_walk_sheet', spriteRole: 'guard', spriteRow: 3, spriteRows: 4 }),
-  Object.freeze({ id: 'doctor', name: 'O Doutor', buff: 'Imunidade a doenças e à radiação passiva.',
+  Object.freeze({ id: 'doctor', name: 'O Doutor', leader: 'Dra. Beatriz Okafor',
+    bio: 'Infectologista que chefiou o comitê da última epidemia. Escondeu os números reais para evitar pânico, e milhares morreram tranquilos.',
+    quote: 'Eu já escolhi quem vive uma vez. Não fica mais fácil.', buff: 'Imunidade a doenças e à radiação passiva.',
     flaw: 'Causa 20% menos dano em combate manual.', spriteSheet: 'npc_walk_sheet', spriteRole: 'medic', spriteRow: 2, spriteRows: 4 }),
-  Object.freeze({ id: 'survivor', name: 'O Sobrevivente', buff: 'Sem bônus: adaptável a qualquer situação.',
+  Object.freeze({ id: 'survivor', name: 'O Sobrevivente', leader: 'Daniel Sá',
+    bio: 'Ex-repórter de guerra, ex-preso político, ex-tudo. Já viveu outro fim do mundo e deixou alguém para trás. Ouve essa voz em sonhos.',
+    quote: 'Sobreviver é fácil. O difícil é o dia seguinte.', buff: 'Sem bônus: adaptável a qualquer situação.',
     flaw: 'Sem penalidades.', spriteSheet: 'character_sheet', spriteRole: 'president', spriteRow: 0, spriteRows: 2 }),
 ]);
 
@@ -138,7 +146,7 @@ export function startGame(state, classId) {
     ...state,
     presidentClass: classId,
     president_selection_pending: false,
-    notice: `${getPresidentClass(classId).name} assumiu o comando do Vault.`,
+    notice: `${getPresidentClass(classId).leader}, ${getPresidentClass(classId).name}, assumiu o comando do Vault.`,
   };
 }
 

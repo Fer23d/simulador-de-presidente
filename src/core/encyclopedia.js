@@ -35,10 +35,10 @@ export const ENCYCLOPEDIA_ENTRIES = Object.freeze([
   entry('room-life_support', 'room', '🌀', 'Suporte de Vida', 'Ventiladores que nunca param. Cada respiração no Vault passa por estas hélices.'),
   entry('room-presidential_suite', 'room', '👑', 'Suíte Presidencial', 'O último luxo do fim do mundo, com guarda-roupa e tudo.'),
 
-  entry('vip-dr-isaac', 'vip', '⭐', 'Dr. Isaac', 'Físico teórico resgatado do Ermo. Dobra a produção de qualquer laboratório que pisar.'),
-  entry('vip-dra-amara', 'vip', '⭐', 'Dra. Amara', 'Bióloga que manteve uma estufa viva durante a guerra. Fala com as plantas, e elas obedecem.'),
-  entry('vip-coronel-silva', 'vip', '⭐', 'Coronel Silva', 'Veterano de três guerras e uma rendição. Leal a quem lhe dá ordens claras.'),
-  entry('vip-coronela-costa', 'vip', '⭐', 'Coronela Costa', 'Comandou a última defesa da capital. Não perdoa traidores, nem esquece favores.'),
+  entry('vip-dr-isaac', 'vip', '⭐', 'Dr. Isaac Lindqvist', 'Físico do antigo programa nuclear. Sabe quem assinou o lançamento e carrega essa culpa. Dobra a produção de qualquer laboratório.'),
+  entry('vip-dra-amara', 'vip', '⭐', 'Dra. Amara Nkemelu', 'Bióloga que manteve uma estufa viva durante toda a guerra. Guarda sementes que podem reverdecer a superfície.'),
+  entry('vip-coronel-silva', 'vip', '⭐', 'Coronel Rui Silva', 'Lutou em três guerras e perdeu todas. Leal a quem dá ordens claras, e o primeiro a pedir "medidas firmes".'),
+  entry('vip-coronela-costa', 'vip', '⭐', 'Coronela Teresa Costa', 'Comandou a última defesa da capital. Rival de Silva, mais política e mais perigosa: numa revolta, escolhe um lado.'),
 
   entry('event-ration-emergency', 'event', '🍞', 'Emergência de Rações', 'Quando a comida acaba, alguém precisa decidir quem come primeiro.'),
   entry('event-generator-bearings', 'event', '🔩', 'Rolamentos do Gerador', 'Um rangido metálico que fica mais alto a cada noite.'),
@@ -67,6 +67,7 @@ export const ENCYCLOPEDIA_ENTRIES = Object.freeze([
 const ENTRY_IDS = new Set(ENCYCLOPEDIA_ENTRIES.map((item) => item.id));
 const VIP_ENTRY_IDS = Object.freeze({
   'Dr. Isaac': 'vip-dr-isaac', 'Dra. Amara': 'vip-dra-amara', 'Coronel Silva': 'vip-coronel-silva', 'Coronela Costa': 'vip-coronela-costa',
+  'Dr. Isaac Lindqvist': 'vip-dr-isaac', 'Dra. Amara Nkemelu': 'vip-dra-amara', 'Coronel Rui Silva': 'vip-coronel-silva', 'Coronela Teresa Costa': 'vip-coronela-costa',
 });
 
 export function createEncyclopedia(value = {}) {
@@ -98,7 +99,7 @@ export function detectDiscoveries(state) {
   const inhabitants = state.inhabitants ?? [];
   const vips = new Set(inhabitants.filter((npc) => npc.isVIP && VIP_ENTRY_IDS[npc.name]).map((npc) => VIP_ENTRY_IDS[npc.name]));
   vips.forEach((id) => found.add(id));
-  if (vips.size === Object.keys(VIP_ENTRY_IDS).length) found.add('rare-full-council');
+  if (vips.size === new Set(Object.values(VIP_ENTRY_IDS)).size) found.add('rare-full-council');
   if (state.pendingBunkerEvent?.id) found.add(`event-${state.pendingBunkerEvent.id}`);
   if (state.lootbox_revealed) {
     for (const item of state.currentLoot ?? []) {

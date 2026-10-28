@@ -86,7 +86,10 @@ export function drawPresidentSelection(ctx, { width = ctx.canvas?.width ?? 960,
     ctx.textAlign = 'left';
     ctx.fillStyle = '#39ff14';
     ctx.font = 'bold 18px "Share Tech Mono", monospace';
-    ctx.fillText(profile.name.toUpperCase(), textX, y + 34);
+    ctx.fillText(profile.name.toUpperCase(), textX, y + 26);
+    ctx.fillStyle = '#e6bf58';
+    ctx.font = '12px "Share Tech Mono", monospace';
+    ctx.fillText(profile.leader, textX, y + 44);
     ctx.fillStyle = '#d8e4db';
     ctx.font = '13px "Share Tech Mono", monospace';
     drawWrappedText(ctx, `BÔNUS: ${profile.buff}`, textX, y + 65, 43, 17);

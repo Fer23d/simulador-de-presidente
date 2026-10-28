@@ -1,4 +1,5 @@
 import { normalizeNeeds } from './needs.js';
+import { RESIDENT_TRAITS } from './names.js';
 
 export const DIALOGUES = Object.freeze({
   doctor: Object.freeze([
@@ -32,7 +33,8 @@ const ROLE_DIALOGUE = Object.freeze({
 
 export function chooseDialogueLine(npc, random = Math.random) {
   const key = ROLE_DIALOGUE[npc?.role] ?? 'worker';
-  const lines = DIALOGUES[key];
+  const traitLine = RESIDENT_TRAITS[npc?.trait]?.line;
+  const lines = traitLine ? [...DIALOGUES[key], traitLine] : DIALOGUES[key];
   const value = Number(random());
   const index = Math.min(lines.length - 1, Math.max(0, Math.floor((Number.isFinite(value) ? value : 0) * lines.length)));
   return lines[index];

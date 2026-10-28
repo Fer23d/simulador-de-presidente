@@ -1,6 +1,7 @@
 import { getDepthAdjustedScrapCost, getRoomUpgradeCosts, ROOM_MAX_LEVEL } from './bunker_economy.js';
 import { getPresidentClassModifiers } from './player_state.js';
 import { normalizeNeeds } from './needs.js';
+import { generateResidentIdentity } from './names.js';
 
 export const SLOT_WIDTH = 264;
 export const ROOM_HEIGHT = 146;
@@ -144,7 +145,7 @@ export function buildShelterRoom(state, type, floor, column) {
       role: roles[type] ?? 'resident', pose: ['generator', 'greenhouse', 'laboratory', 'medical', 'radio'].includes(type) ? 'working' : 'idle', facing: column % 2 ? 1 : -1,
       currentState: 'idle', targetOffsetX: null, waitSeconds: 1, loyalty: 100,
       revoltChance: 20, lastTalkedDay: 0,
-      name: 'Habitante Genérico', isVIP: false, modifier: 1,
+      ...generateResidentIdentity(workerId), isVIP: false, modifier: 1,
       is_on_expedition: false, expedition_timer: 0, is_prisoner: false, needs: normalizeNeeds() }]
     : state.inhabitants;
   if (hasWorker && productiveRoom) {

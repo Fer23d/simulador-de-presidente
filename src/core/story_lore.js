@@ -4,27 +4,27 @@ export const LORE_CHAPTERS = Object.freeze({
   cap_1_origem: Object.freeze({
     id: 'cap_1_origem',
     title: 'CAPÍTULO I: A Herança das Cinzas',
-    text: 'Quando o antigo governo fugiu como cobardes, deixaram-me um país em chamas e cofres vazios. A comunidade internacional riu de nós. Eles chamam-me de Presidente interino. Tolos. Eu sou a tempestade que eles próprios criaram. A partir deste ecrã, reescreverei o mapa do mundo.',
+    text: 'O governo eleito fugiu de madrugada, levando o que restava do tesouro. Sobrou o meu nome na linha de sucessão. Helena Vargas, chefe de gabinete há trinta e cinco anos, entregou-me o dossiê do país e, por último, uma chave de latão sem etiqueta. "O seu antecessor nunca a usou. Espero que o senhor também não precise." No canto do gabinete, um rádio velho chiou sozinho. Ninguém mais pareceu ouvir.',
   }),
   cap_2_corrupcao: Object.freeze({
     id: 'cap_2_corrupcao',
     title: 'CAPÍTULO II: O Preço do Poder',
-    text: 'A moralidade é uma corrente que prende os fracos. Hoje, desviei os primeiros fundos para a escuridão. O povo aplaude as estradas que construo, sem saber que cada bloco de asfalto é cimentado com o dinheiro que lhes roubo. O Estado Profundo nasceu.',
+    text: 'Otávio Brandt chegou perfumado e saiu com a minha assinatura. Uma conta numa ilha distante, um número sem nome. "Todo presidente tem uma saída, Excelência. Os espertos constroem a deles cedo." O povo aplaude as estradas que inauguro. Não sabe que cada bloco de asfalto foi pago com o que lhe tiro. À noite, o rádio repetiu uma palavra: "ladrão". Desliguei a tomada. Ele continuou.',
   }),
   cap_3_guerra: Object.freeze({
     id: 'cap_3_guerra',
     title: 'CAPÍTULO III: O Gosto do Sangue',
-    text: 'Ordenei o avanço das tropas. A História não é escrita pelos pacíficos, é escrita pelos sobreviventes. Quando a primeira capital inimiga cair, o mundo deixará de rir de nós e começará a temer-nos.',
+    text: 'O General Hélio Rocha pediu a ordem com a voz de quem já a tinha dado. Assinei. Quando a primeira capital caiu, o mundo parou de rir. Na manhã seguinte, encontrei sobre a mesa uma carta de Helena: "Sirvo ao cargo, não a isto." Guardei a carta na gaveta, ao lado da chave de latão.',
   }),
   cap_4_imperio: Object.freeze({
     id: 'cap_4_imperio',
     title: 'CAPÍTULO IV: A Coroa de Ferro',
-    text: 'A República era uma ilusão patética. Hoje, dissolvi o Congresso. O título de Presidente era demasiado pequeno para o meu destino. Ajoelhem-se perante o Novo Império. A era da diplomacia acabou; começou a era da obediência.',
+    text: 'Dissolvi o Congresso numa terça-feira, entre o almoço e o café. O título de Presidente ficou pequeno. Na mesma noite, os engenheiros desceram duzentos metros sob o Palácio e reabriram o Último Gabinete, "por precaução". Pela primeira vez, a Voz do rádio falou com clareza: "Também tenho um bunker. Também fui presidente. Vamos ver quem sai primeiro."',
   }),
   cap_5_wasteland: Object.freeze({
     id: 'cap_5_wasteland',
     title: 'CAPÍTULO V: O Deus das Cinzas',
-    text: 'Os céus arderam. A ONU, as superpotências, as leis... tudo virou pó radioativo. Da segurança deste Bunker, ouço os gritos do velho mundo a morrer. Eles destruíram o planeta, mas eu sobrevivi. Serei o Arquiteto do que sobrar.',
+    text: 'O céu ficou branco e depois não ficou nada. A ONU, as fronteiras, as leis viraram pó radioativo. Os elevadores desceram com quem consegui salvar. A porta do Vault fechou com um som que nunca vou esquecer. Lá em cima, o mundo que governei acabou. Aqui embaixo, um menino chamado Tomé me olhou e perguntou: "Foi você que apertou o botão?" O contador marca ANO ZERO.',
   }),
 });
 

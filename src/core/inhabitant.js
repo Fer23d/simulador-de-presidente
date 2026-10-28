@@ -1,5 +1,6 @@
 import { SLOT_WIDTH } from './shelter_engine.js';
 import { getNeedsSpeedMultiplier, normalizeNeeds } from './needs.js';
+import { resolveResidentIdentity } from './names.js';
 
 const EDGE_MARGIN = 24;
 const MAX_OFFSET = SLOT_WIDTH / 2 - EDGE_MARGIN;
@@ -15,7 +16,9 @@ export class Inhabitant {
     this.previousRoomId = typeof data.previousRoomId === 'string' ? data.previousRoomId : null;
     this.state = data.state === 'imprisoned' ? 'imprisoned' : data.state === 'working' ? 'working' : 'idle';
     this.role = data.role ?? 'resident';
-    this.name = typeof data.name === 'string' && data.name.trim() ? data.name.slice(0, 60) : 'Habitante Genérico';
+    const identity = resolveResidentIdentity(data);
+    this.name = identity.name;
+    this.trait = identity.trait;
     this.isVIP = data.isVIP === true;
     this.modifier = Math.max(1, Math.min(5, Number(data.modifier) || (this.isVIP ? 2 : 1)));
     this.pose = data.pose ?? 'idle';
@@ -85,6 +88,6 @@ export class Inhabitant {
       is_on_expedition: this.is_on_expedition, expedition_timer: this.expedition_timer,
       ...(this.expedition_destination ? { expedition_destination: this.expedition_destination } : {}),
       ...(this.expedition_sector ? { expedition_sector: this.expedition_sector } : {}),
-      is_prisoner: this.is_prisoner, needs: { ...this.needs } };
+      is_prisoner: this.is_prisoner, needs: { ...this.needs }, ...(this.trait ? { trait: this.trait } : {}) };
   }
 }

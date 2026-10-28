@@ -76,10 +76,10 @@ const SCOUT_EXPEDITION_SUCCESS_CHANCE = 0.65;
 const GREENHOUSE_CURE_SUCCESS_CHANCE = 0.6;
 const SUPPRESSION_PER_SOLDIER = 0.1;
 const VIP_PROFILES = Object.freeze([
-  Object.freeze({ name: 'Dr. Isaac', role: 'scientist' }),
-  Object.freeze({ name: 'Dra. Amara', role: 'scientist' }),
-  Object.freeze({ name: 'Coronel Silva', role: 'guard' }),
-  Object.freeze({ name: 'Coronela Costa', role: 'guard' }),
+  Object.freeze({ name: 'Dr. Isaac Lindqvist', role: 'scientist' }),
+  Object.freeze({ name: 'Dra. Amara Nkemelu', role: 'scientist' }),
+  Object.freeze({ name: 'Coronel Rui Silva', role: 'guard' }),
+  Object.freeze({ name: 'Coronela Teresa Costa', role: 'guard' }),
 ]);
 
 export const WASTELAND_EVENTS = Object.freeze([
