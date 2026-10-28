@@ -1,4 +1,6 @@
-# Simulador de Presidente
+# LAST OFFICE
+
+*Após a guerra, tudo muda.* (antigo "Simulador de Presidente")
 
 MVP web de um jogo de estrategia politica e economica. O jogador escolhe uma
 nacao, ajusta Imposto de Renda e IVA, negocia apoio parlamentar e decide o
