@@ -1,4 +1,6 @@
-# Kit de divulgação — Steam
+# Kit de divulgação — Steam · LAST OFFICE
+
+Nome do jogo na Steam: **LAST OFFICE** — frase: *Após a guerra, tudo muda*.
 
 Imagens geradas a partir do próprio jogo (motor de renderização e interface reais). Nada no código do jogo foi alterado.
 
@@ -29,10 +31,11 @@ Pendente: **Library Hero 3840×1240** (`preset=hero`), não gerado.
 Com o jogo servido em `http://localhost:4173` (`npx --yes serve . -l 4173`):
 
 ```bash
-node marketing/steam/tools/capture.mjs <saida.png> "http://localhost:4173/marketing/steam/tools/capsule?preset=header&w=920&h=430" 920 430 1
+node marketing/steam/tools/capture.mjs <saida.png> "http://localhost:4173/marketing/steam/tools/capsule_classic?preset=header&w=920&h=430" 920 430 1
 node marketing/steam/tools/capture.mjs <saida.png> "http://localhost:4173/marketing/steam/tools/scene?scale=1&cx=980&cy=600&skin=golden" 1920 1080 1
 node marketing/steam/tools/capture.mjs <saida.png> "http://localhost:4173/marketing/steam/tools/ui?shot=wardrobe" 1600 900 1.2
 ```
 
 Use as URLs sem `.html` (o `serve` descarta a query ao redirecionar). Para o logo transparente, defina `TRANSPARENT=1`.
+Banners oficiais: `tools/capsule_classic.html` (LAST OFFICE, sem personagens). `tools/capsule.html` guarda a versão alternativa com silhueta e cogumelo.
 Presets de capsule: `header`, `small`, `main`, `vertical`, `library`, `hero`, `background`, `logo`, `keyart`, `twitter`, `square`.
