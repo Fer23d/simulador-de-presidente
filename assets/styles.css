@@ -66,6 +66,14 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 .wasteland-command-button { border: 3px solid #ff9d00; padding: 14px 18px; background: #ff9d00; color: #1a0f00; font-family: "Press Start 2P", monospace; font-size: 11px; line-height: 1.6; box-shadow: 6px 6px 0 #080400; }
 .wasteland-command-button:hover { background: #1a0f00; color: #ff9d00; }
 .wasteland-command-button:active { transform: translate(6px, 6px); box-shadow: none; }
+.intro-scene .wasteland-cinematic-text { white-space: pre-wrap; }
+.intro-progress { display: flex; justify-content: center; gap: 8px; margin: -12px 0 22px; }
+.intro-dot { width: 10px; height: 10px; border: 2px solid #ff9d00; background: transparent; }
+.intro-dot.is-done { background: rgba(255, 157, 0, .45); }
+.intro-dot.is-active { background: #ff9d00; box-shadow: 0 0 8px #ff9d00; }
+.intro-actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 16px; }
+.intro-skip { border: 0; background: none; color: #c98a4a; font: 13px "Share Tech Mono", monospace; letter-spacing: .08em; text-decoration: underline; cursor: pointer; }
+.intro-skip:hover { color: #ffb347; }
 @keyframes wasteland-card-arrival { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
 @keyframes radiation-pulse { 50% { opacity: .42; transform: scale(.96); } }
 @keyframes fallout-typewriter { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
@@ -561,6 +569,7 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .president-choice { min-width: 0; display: grid; gap: 7px; padding: 12px 9px; border: 2px solid var(--cor-primaria); background: #101a14; color: #d8e4db; text-align: left; cursor: pointer; }
 .president-choice strong { color: var(--cor-primaria); font: 16px "Share Tech Mono", monospace; }
 .president-choice span { font: 13px "Share Tech Mono", monospace; line-height: 1.4; }
+.president-bio { display: block; margin: 4px 0 6px; color: #e6bf58; font: italic 12px "Share Tech Mono", monospace; line-height: 1.4; }
 .president-choice:hover, .president-choice:focus-visible { outline: 2px solid #e6bf58; background: #1a2b20; }
 .wardrobe-dialog { width: min(820px, calc(100vw - 28px)); max-height: calc(100vh - 40px); overflow-y: auto; }
 .wardrobe-balance { color: var(--cor-primaria); font: 16px "Share Tech Mono", monospace; }

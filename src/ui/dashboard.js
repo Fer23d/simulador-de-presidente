@@ -24,6 +24,7 @@ import { createPresidentSelectionMenu } from '../core/menu.js';
 import { getWeather } from '../core/weather.js';
 import { applyOfflineProgress, dismissOfflineReport } from '../core/offline.js';
 import { arriveAtMission, getMissionReward, getMissionStory, isMissionPending } from '../core/missions.js';
+import { getIntroScenes } from '../core/intro_story.js';
 import { createSurfaceSectors, getExplorationPercent, getSectorExpedition, getSurfaceMap, SECTOR_TYPES } from '../core/surface_map.js';
 import { createEncyclopedia, detectDiscoveries, ENCYCLOPEDIA_CATEGORIES, ENCYCLOPEDIA_ENTRIES, getEncyclopediaProgress, recordDiscoveries } from '../core/encyclopedia.js';
 import { applyDialoguePacification } from '../core/dialogues.js';
@@ -421,7 +422,7 @@ export function projectsView(state) {
 
 export function bunkerView(state) {
   if (state.president_selection_pending) {
-    return `<section class="president-selection-screen"><p class="eyebrow">/// PREPARAÇÃO DO VAULT ///</p><h2>Seleção de Presidente</h2><p>Escolha uma profissão e os seus sprites originais para assumir o comando.</p><canvas id="presidentSelectCanvas" class="president-select-canvas" width="960" height="600" tabindex="0" aria-label="Seleção de Presidente: escolha Operário, Comandante, Doutor ou Sobrevivente."></canvas><div class="president-choice-buttons">${PRESIDENT_CLASSES.map((profile) => `<button type="button" class="president-choice" data-action="select-president" data-class="${profile.id}"><strong>${escapeHtml(profile.name)}</strong><span><b>Bônus:</b> ${escapeHtml(profile.buff)} <b>Penalidade:</b> ${escapeHtml(profile.flaw)}</span></button>`).join('')}</div></section>`;
+    return `<section class="president-selection-screen"><p class="eyebrow">/// PREPARAÇÃO DO VAULT ///</p><h2>Seleção de Presidente</h2><p>Escolha uma profissão e os seus sprites originais para assumir o comando.</p><canvas id="presidentSelectCanvas" class="president-select-canvas" width="960" height="600" tabindex="0" aria-label="Seleção de Presidente: escolha Operário, Comandante, Doutor ou Sobrevivente."></canvas><div class="president-choice-buttons">${PRESIDENT_CLASSES.map((profile) => `<button type="button" class="president-choice" data-action="select-president" data-class="${profile.id}"><strong>${escapeHtml(profile.leader)} · ${escapeHtml(profile.name)}</strong><em class="president-bio">${escapeHtml(profile.bio)} “${escapeHtml(profile.quote)}”</em><span><b>Bônus:</b> ${escapeHtml(profile.buff)} <b>Penalidade:</b> ${escapeHtml(profile.flaw)}</span></button>`).join('')}</div></section>`;
   }
   const grid = state.shelter_grid ?? INITIAL_SHELTER_GRID;
   const modules = Object.entries(SHELTER_TYPES).filter(([id]) => id !== 'vault');
@@ -808,16 +809,22 @@ export function resolveStoryCardAction(state, action, optionId = null) {
   return state;
 }
 
-export function renderWastelandCinematic(state) {
+// Historia de abertura em cenas; sem indice, mostra a ultima (o alerta de comando).
+export function renderWastelandCinematic(state, { scene } = {}) {
   if (!state.is_wasteland || !state.wasteland_cinematic_ready) return '';
-  return `<section class="wasteland-cinematic-card" role="dialog" aria-modal="true" aria-labelledby="wasteland-cinematic-title">
-    <div class="radiation-symbol" aria-hidden="true">☢️</div>
-    <p id="wasteland-cinematic-title" class="wasteland-cinematic-label">/// TRANSIÇÃO DE SOBREVIVÊNCIA ///</p>
-    <pre class="wasteland-cinematic-text">[ ALERTA DE SISTEMA: SENSORES EXTERNOS DESTRUÍDOS ]
-&gt; Nível de radiação exterior letal.
-&gt; As superpotências não existem mais. A ONU não existe mais. O sol foi tapado pelas cinzas.
-&gt; Bem-vindo à Nova Era, Líder. Os portões do Bunker foram selados. Sobreviva.</pre>
-    <button type="button" class="wasteland-command-button" data-action="dismiss-wasteland-cinematic">[ ASSUMIR COMANDO DO VAULT ]</button>
+  const scenes = getIntroScenes(state);
+  const index = Math.max(0, Math.min(scenes.length - 1, Number.isInteger(scene) ? scene : scenes.length - 1));
+  const current = scenes[index];
+  const progress = scenes.map((_, dot) => `<span class="intro-dot${dot === index ? ' is-active' : dot < index ? ' is-done' : ''}"></span>`).join('');
+  const actions = current.final
+    ? '<button type="button" class="wasteland-command-button" data-action="dismiss-wasteland-cinematic">[ ASSUMIR COMANDO DO VAULT ]</button>'
+    : `<button type="button" class="wasteland-command-button" data-action="intro-next" autofocus>[ CONTINUAR &gt; ]</button><button type="button" class="intro-skip" data-action="intro-skip">[ PULAR HISTÓRIA ]</button>`;
+  return `<section class="wasteland-cinematic-card intro-scene" role="dialog" aria-modal="true" aria-labelledby="wasteland-cinematic-title" data-intro-scene="${index}">
+    <div class="radiation-symbol" aria-hidden="true">${current.icon}</div>
+    <p id="wasteland-cinematic-title" class="wasteland-cinematic-label">${current.final ? escapeHtml(current.title) : `/// CAPÍTULO ${index + 1} DE ${scenes.length - 1} · ${escapeHtml(current.title)} ///`}</p>
+    <pre class="wasteland-cinematic-text">${escapeHtml(current.text)}</pre>
+    <div class="intro-progress" aria-label="Cena ${index + 1} de ${scenes.length}">${progress}</div>
+    <div class="intro-actions">${actions}</div>
   </section>`;
 }
 
@@ -886,6 +893,7 @@ export function mountDashboard(root) {
   let locationRequestPending = false;
   let activeShelterRoom = null;
   let presidentSelectionMenu = null;
+  let introScene = 0;
   let dialogueTimer = null;
   let dialogueTextComplete = false;
   let dialogueFullText = '';
@@ -1213,7 +1221,7 @@ export function mountDashboard(root) {
     if (hostileAlertModal) { const markup = renderHostileAlert(state); hostileAlertModal.hidden = !markup; hostileAlertModal.innerHTML = markup; }
     if (governmentModal) { const markup = renderGovernmentModal(state); governmentModal.hidden = !markup; governmentModal.innerHTML = markup; }
     if (wastelandCinematicModal) {
-      const markup = renderWastelandCinematic(state);
+      const markup = renderWastelandCinematic(state, { scene: introScene });
       wastelandCinematicModal.hidden = !markup;
       wastelandCinematicModal.innerHTML = markup;
     }
@@ -1432,7 +1440,20 @@ export function mountDashboard(root) {
   });
 
   wastelandCinematicModal?.addEventListener('click', (event) => {
+    if (event.target.closest('[data-action="intro-next"]')) {
+      introScene += 1;
+      render();
+      wastelandCinematicModal.querySelector('.wasteland-command-button')?.focus();
+      return;
+    }
+    if (event.target.closest('[data-action="intro-skip"]')) {
+      introScene = getIntroScenes(state).length - 1;
+      render();
+      wastelandCinematicModal.querySelector('.wasteland-command-button')?.focus();
+      return;
+    }
     if (!event.target.closest('[data-action="dismiss-wasteland-cinematic"]')) return;
+    introScene = 0;
     falloutCinematicStarted = false;
     commit({ ...state, wasteland_cinematic_pending: false, wasteland_cinematic_ready: false, notice: 'Comando do Vault assumido. A superficie aguarda.' });
   });
