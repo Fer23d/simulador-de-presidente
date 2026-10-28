@@ -25,6 +25,8 @@ import { getWeather } from '../core/weather.js';
 import { applyOfflineProgress, dismissOfflineReport } from '../core/offline.js';
 import { arriveAtMission, getMissionReward, getMissionStory, isMissionPending } from '../core/missions.js';
 import { getIntroScenes } from '../core/intro_story.js';
+import { createAudioEngine, getMusicMood, isStormWeather, normalizeAudioSettings } from '../core/audio.js';
+import { chooseEnding, createTrophies, ENDINGS, getEndingOptions, getEndingStory, getForcedEnding, isDoorOpen, recordTrophy } from '../core/endings.js';
 import { createSurfaceSectors, getExplorationPercent, getSectorExpedition, getSurfaceMap, SECTOR_TYPES } from '../core/surface_map.js';
 import { createEncyclopedia, detectDiscoveries, ENCYCLOPEDIA_CATEGORIES, ENCYCLOPEDIA_ENTRIES, getEncyclopediaProgress, recordDiscoveries } from '../core/encyclopedia.js';
 import { applyDialoguePacification } from '../core/dialogues.js';
@@ -106,6 +108,14 @@ const STORAGE_KEY = 'simulador-presidente-state-v1';
 const ENCYCLOPEDIA_KEY = 'simulador-presidente-enciclopedia-v1';
 // Direitos de uso da Loja do Vault (skins premium); tambem ficam fora do save da partida.
 const STORE_KEY = 'simulador-presidente-loja-v1';
+// Finais ja vistos (trofeus), guardados na conta para sobreviver a Nova Partida.
+const TROPHIES_KEY = 'simulador-presidente-trofeus-v1';
+const AUDIO_KEY = 'simulador-presidente-audio-v1';
+
+export function soundControlView(settings) {
+  const { muted, volume } = normalizeAudioSettings(settings);
+  return `<button type="button" class="sound-toggle" data-sound-toggle aria-pressed="${muted}" aria-label="${muted ? 'Ligar som' : 'Desligar som'}">${muted ? '🔇' : '🔊'}</button><input type="range" class="sound-volume" data-sound-volume min="0" max="100" value="${Math.round(volume * 100)}" aria-label="Volume">`;
+}
 const MONTHS = ['Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 const formatNumber = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
@@ -809,6 +819,29 @@ export function resolveStoryCardAction(state, action, optionId = null) {
   return state;
 }
 
+// Capitulo X: a Porta (escolha do final) e o epilogo com a galeria de finais descobertos.
+export function doorView(state, trophies = createTrophies()) {
+  if (state.ending) return epilogueView(state, trophies);
+  if (!isDoorOpen(state)) return '';
+  const forced = getForcedEnding(state);
+  const leader = PRESIDENT_CLASSES.find((profile) => profile.id === state.presidentClass)?.leader ?? 'Presidente';
+  const intro = forced
+    ? `Os sensores confirmam: o ar lá fora voltou a ser respirável. Mas, antes que ${leader} desse qualquer ordem, a assembleia dos moradores já tinha se reunido no refeitório. Lia Moraes pediu silêncio e olhou para você.`
+    : `Trinta e seis meses depois da bomba, os sensores da superfície acendem em verde: o ar voltou a ser respirável. A colônia inteira se reúne diante da porta do Vault. Helena guarda a chave de latão. Tomé segura a sua mão. Todos esperam a última ordem de ${leader}.`;
+  const choices = forced
+    ? `<button type="button" class="door-choice is-forced" data-action="choose-ending" data-ending="${forced.id}"><span class="door-choice-icon">${forced.icon}</span><strong>[ OUVIR A ASSEMBLEIA ]</strong><small>A lealdade da colônia caiu demais. Ela decide por você.</small></button>`
+    : getEndingOptions(state).map((option) => `<button type="button" class="door-choice${option.secret ? ' is-secret' : ''}" data-action="choose-ending" data-ending="${option.id}" ${option.available ? '' : 'disabled'}><span class="door-choice-icon">${option.icon}</span><strong>${escapeHtml(option.choice)}</strong><small>${option.available ? (option.secret ? 'Um caminho que só existe para quem nunca sujou as mãos.' : escapeHtml(option.title)) : `🔒 ${escapeHtml(option.requirement)}`}</small></button>`).join('');
+  return `<section class="door-dialog" role="dialog" aria-modal="true" aria-labelledby="door-title"><p class="story-classification">/// CAPÍTULO X · ANO ${Math.floor((Number(state.wasteland_turn) || 0) / 12)} PÓS-BOMBA ///</p><h2 id="door-title">A PORTA</h2><p class="door-intro">${escapeHtml(intro)}</p><div class="door-choices">${choices}</div></section>`;
+}
+
+function epilogueView(state, trophies) {
+  const ending = ENDINGS[state.ending.id];
+  const found = new Set(createTrophies(trophies).endings);
+  const gallery = Object.values(ENDINGS).map((item) => `<span class="ending-trophy${found.has(item.id) ? ' is-found' : ''}" title="${found.has(item.id) ? escapeHtml(item.title) : '???'}">${found.has(item.id) ? item.icon : '?'}</span>`).join('');
+  const population = (state.inhabitants ?? []).length;
+  return `<section class="door-dialog epilogue" role="dialog" aria-modal="true" aria-labelledby="ending-title"><p class="story-classification">/// FIM · ${Math.floor((Number(state.ending.month) || 0) / 12)} ANOS NO VAULT · ${population} SOBREVIVENTES ///</p><div class="ending-icon" aria-hidden="true">${ending.icon}</div><h2 id="ending-title">${escapeHtml(ending.title.toUpperCase())}</h2><p class="story-typewriter ending-story">${escapeHtml(getEndingStory(state, ending.id))}</p><blockquote class="ending-epigraph">“${escapeHtml(ending.epigraph)}”</blockquote><p class="ending-gallery-label">FINAIS DESCOBERTOS · ${found.size}/${Object.keys(ENDINGS).length}</p><div class="ending-gallery">${gallery}</div><div class="action-row"><button type="button" class="wasteland-command-button" data-action="ending-new-game">[ NOVA PARTIDA ]</button></div></section>`;
+}
+
 // Historia de abertura em cenas; sem indice, mostra a ultima (o alerta de comando).
 export function renderWastelandCinematic(state, { scene } = {}) {
   if (!state.is_wasteland || !state.wasteland_cinematic_ready) return '';
@@ -877,6 +910,37 @@ export function mountDashboard(root) {
   const expeditionReportModal = document.getElementById('modal-expedition-report');
   const offlineReportModal = document.getElementById('modal-offline-report');
   const encyclopediaModal = document.getElementById('modal-enciclopedia');
+  const doorModal = document.getElementById('modal-porta');
+  const audio = createAudioEngine({ settings: (() => { try { return JSON.parse(localStorage.getItem(AUDIO_KEY) ?? '{}'); } catch { return {}; } })() });
+  const soundControl = document.createElement('div');
+  soundControl.className = 'sound-control';
+  soundControl.innerHTML = soundControlView(audio.settings);
+  document.body.append(soundControl);
+  const saveAudio = (settings) => { try { localStorage.setItem(AUDIO_KEY, JSON.stringify(settings)); } catch { /* so nesta sessao */ } };
+  soundControl.addEventListener('click', (event) => {
+    if (!event.target.closest('[data-sound-toggle]')) return;
+    const settings = audio.setSettings({ muted: !audio.settings.muted });
+    saveAudio(settings);
+    soundControl.innerHTML = soundControlView(settings);
+  });
+  soundControl.addEventListener('input', (event) => {
+    if (!event.target.matches('[data-sound-volume]')) return;
+    saveAudio(audio.setSettings({ volume: Number(event.target.value) / 100, muted: false }));
+    const toggle = soundControl.querySelector('[data-sound-toggle]');
+    if (toggle) { toggle.textContent = '🔊'; toggle.setAttribute('aria-pressed', 'false'); }
+  });
+  // Navegadores so liberam audio apos um gesto; cada clique de botao tambem faz o "tique" da interface.
+  document.addEventListener('pointerdown', () => audio.unlock(), { capture: true });
+  document.addEventListener('keydown', () => audio.unlock(), { capture: true });
+  document.addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (button && !button.disabled && !button.closest('.sound-control')) audio.play('click');
+  }, { capture: true });
+  function syncAudioMood() {
+    audio.setMood(getMusicMood(state));
+    audio.setStorm(isStormWeather(state));
+  }
+  let trophies = (() => { try { return createTrophies(JSON.parse(localStorage.getItem(TROPHIES_KEY) ?? '{}')); } catch { return createTrophies(); } })();
   const codexToastStack = document.querySelector('.codex-toast-stack');
   let encyclopedia = loadEncyclopedia();
   const entitlements = loadEntitlements();
@@ -1084,6 +1148,8 @@ export function mountDashboard(root) {
               ...(environment.weather ? { weather: environment.weather } : {}) };
             const hud = root.querySelector('[data-environment-hud]');
             if (hud) hud.outerHTML = bunkerEnvironmentHudView(environment, environment.isNight, state.inhabitants, state.shelter_guards, state.presidentClass, state.weather);
+            syncAudioMood();
+            if (weatherChanged && state.weather?.type === 'radstorm') audio.play('thunder');
             if (weatherChanged && activeShelterRoom?.type === 'vault' && !bunkerGeneratorModal.hidden) {
               openShelterRoom(activeShelterRoom, { requestLocation: false });
             }
@@ -1095,6 +1161,7 @@ export function mountDashboard(root) {
             storageNotice = saveState(state);
           },
           onDialogue: (npc, text) => {
+            audio.play('talk');
             if (dialogueTimer !== null) window.clearInterval(dialogueTimer);
             dialogueTextComplete = false;
             dialogueFullText = String(text ?? '');
@@ -1220,6 +1287,12 @@ export function mountDashboard(root) {
     if (allianceModal) { const markup = renderAllianceInvocation(state); allianceModal.hidden = !markup; allianceModal.innerHTML = markup; }
     if (hostileAlertModal) { const markup = renderHostileAlert(state); hostileAlertModal.hidden = !markup; hostileAlertModal.innerHTML = markup; }
     if (governmentModal) { const markup = renderGovernmentModal(state); governmentModal.hidden = !markup; governmentModal.innerHTML = markup; }
+    if (doorModal) {
+      const doorMarkup = state.is_wasteland && !state.wasteland_cinematic_ready ? doorView(state, trophies) : '';
+      doorModal.innerHTML = doorMarkup;
+      doorModal.hidden = !doorMarkup;
+      if (doorMarkup) bunkerController?.pause();
+    }
     if (wastelandCinematicModal) {
       const markup = renderWastelandCinematic(state, { scene: introScene });
       wastelandCinematicModal.hidden = !markup;
@@ -1235,6 +1308,7 @@ export function mountDashboard(root) {
   function startFalloutCinematicIfNeeded() {
     if (!state.wasteland_cinematic_pending || falloutCinematicStarted) return;
     falloutCinematicStarted = true;
+    audio.play('boom');
     triggerNuclearFallout({
       onComplete: () => commit({ ...state, wasteland_cinematic_pending: false, wasteland_cinematic_ready: true, notice: 'Os portoes do Vault estao selados. Assuma o comando.' }),
     });
@@ -1247,13 +1321,25 @@ export function mountDashboard(root) {
     encyclopedia = next;
     saveEncyclopedia(encyclopedia);
     for (const item of added) showCodexToast(codexToastStack, item);
+    audio.play('chime');
     if (encyclopediaModal && !encyclopediaModal.hidden) encyclopediaModal.innerHTML = encyclopediaView(encyclopedia);
   }
 
+  function playStateSounds(previous, next) {
+    const rooms = (grid) => (grid ?? []).flat().filter(Boolean).length;
+    if (!isMissionPending(previous.pendingBunkerEvent) && isMissionPending(next.pendingBunkerEvent)) audio.play('alarm');
+    else if (next.ending && !previous.ending) audio.play('door');
+    else if (/^Missão concluída/.test(next.notice ?? '') && next.notice !== previous.notice) audio.play('reward');
+    else if (rooms(next.shelter_grid) > rooms(previous.shelter_grid)) audio.play('build');
+  }
+
   function commit(nextState) {
+    const previous = state;
     state = nextState;
     storageNotice = saveState(state);
     render();
+    syncAudioMood();
+    playStateSounds(previous, state);
     startFalloutCinematicIfNeeded();
     syncDiscoveries();
   }
@@ -1437,6 +1523,23 @@ export function mountDashboard(root) {
   governmentModal?.addEventListener('click', (event) => {
     const government = event.target.closest('[data-action="government-select"]')?.dataset.government;
     if (government) commit(resolverAutoGolpe(state, government));
+  });
+
+  doorModal?.addEventListener('click', (event) => {
+    const choice = event.target.closest('[data-action="choose-ending"]');
+    if (choice) {
+      const next = chooseEnding(state, choice.dataset.ending);
+      if (next.ending) {
+        trophies = recordTrophy(trophies, next.ending.id);
+        try { localStorage.setItem(TROPHIES_KEY, JSON.stringify(trophies)); } catch { /* sem armazenamento: trofeu so nesta sessao */ }
+      }
+      commit(next);
+      return;
+    }
+    if (event.target.closest('[data-action="ending-new-game"]')) {
+      activeTab = 'overview';
+      commit(createGameState(state.country.id.replace(/-wasteland$/, '')));
+    }
   });
 
   wastelandCinematicModal?.addEventListener('click', (event) => {
@@ -1682,6 +1785,7 @@ export function mountDashboard(root) {
   });
 
   render();
+  syncAudioMood();
   startFalloutCinematicIfNeeded();
   syncDiscoveries();
 }

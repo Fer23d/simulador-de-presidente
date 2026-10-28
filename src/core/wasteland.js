@@ -8,6 +8,7 @@ import { countActiveGenerators, createEnvironmentState, hasReliableNightPower } 
 import { advanceInhabitantNeeds, countDormitoryBeds } from './needs.js';
 import { getWeather } from './weather.js';
 import { createMissionLocation } from './missions.js';
+import { ENDINGS, isDoorOpen } from './endings.js';
 import { nextRandom } from './geopolitics.js';
 import { getPresidentClassModifiers } from './player_state.js';
 
@@ -59,6 +60,8 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
   return {
     ...state,
     is_wasteland: true,
+    wasteland_reason: typeof reason === 'string' ? reason.slice(0, 40) : 'colapso-nuclear',
+    ending: null,
     presidentClass: null,
     president_selection_pending: true,
     unlockedSkins: ['default'],
@@ -123,6 +126,8 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
 }
 
 export function advanceWastelandMonth(state) {
+  if (state.ending) return { ...state, notice: `A história do Vault terminou: ${ENDINGS[state.ending.id]?.title ?? 'fim'}.` };
+  if (isDoorOpen(state)) return { ...state, notice: 'A superfície voltou a ser habitável. Decida o destino do Vault diante da Porta.' };
   if (state.pendingBunkerEvent || state.pendingLoot || state.pendingExpeditionReports?.length) {
     return { ...state, notice: state.pendingBunkerEvent
       ? 'Resolva o dilema do Vault antes de avancar o mes.'

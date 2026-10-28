@@ -42,6 +42,7 @@ import { createWeatherState } from './weather.js';
 import { normalizeOfflineReport } from './offline.js';
 import { normalizeSurfaceMap } from './surface_map.js';
 import { normalizeMission } from './missions.js';
+import { ENDINGS } from './endings.js';
 import { createExpeditionLocation } from './expeditions.js';
 import { normalizePlayerCosmetics } from './player_state.js';
 
@@ -1277,6 +1278,8 @@ export function hydrateGameState(serialized) {
       wasteland_turn: Math.max(0, Math.floor(Number(parsed.wasteland_turn ?? parsed.wastelandMonthCounter) || 0)),
       wastelandMonthCounter: Math.max(0, Math.floor(Number(parsed.wasteland_turn ?? parsed.wastelandMonthCounter) || 0)),
       wastelandEventCursor: ((Math.floor(Number(parsed.wastelandEventCursor) || 0) % WASTELAND_EVENTS.length) + WASTELAND_EVENTS.length) % WASTELAND_EVENTS.length,
+      wasteland_reason: typeof parsed.wasteland_reason === 'string' ? parsed.wasteland_reason.slice(0, 40) : undefined,
+      ending: ENDINGS[parsed.ending?.id] ? { id: parsed.ending.id, month: Math.max(0, Math.floor(Number(parsed.ending.month) || 0)) } : null,
       pendingBunkerEvent: getWastelandEvent(parsed.pendingBunkerEvent?.id)
         ? { id: parsed.pendingBunkerEvent.id, ...normalizeMission(parsed.pendingBunkerEvent, shelterGrid) }
         : null,
