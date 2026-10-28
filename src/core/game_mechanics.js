@@ -5,6 +5,7 @@ import { countActiveGenerators, getNighttimeRiskChance } from './environment.js'
 import { createExpeditionLoot, createExpeditionNodes } from './expeditions.js';
 import { normalizeNeeds } from './needs.js';
 import { getWeather } from './weather.js';
+import { getMissionReward, isMissionPending } from './missions.js';
 import { getSector, getSectorExpedition, getSurfaceMap, isSectorSelectable, revealSector } from './surface_map.js';
 
 const EXPEDITION_MONTHS = 3;
@@ -366,6 +367,9 @@ export function resolveWastelandEvent(state, optionId) {
   if (!state.is_wasteland || !event || !option) return { ...state, notice: 'Dilema do Vault indisponível.' };
 
   const cost = option.cost ?? {};
+  if (isMissionPending(state.pendingBunkerEvent)) {
+    return { ...state, notice: 'Vá até o local do problema antes de decidir.' };
+  }
   if (!canResolveWastelandEvent(state, event.id, optionId)) {
     return { ...state, notice: 'Recursos insuficientes para esta decisão.' };
   }
@@ -411,6 +415,8 @@ export function resolveWastelandEvent(state, optionId) {
     loyalty: Math.max(0, Math.min(100, (Number(inhabitant.loyalty) || 0) + eventLoyaltyChange)),
     ...(Number(inhabitant.loyalty) + eventLoyaltyChange > 0 ? { rebellionCheckDone: false } : {}),
   })) : state.inhabitants;
+  const missionReward = getMissionReward(state.pendingBunkerEvent);
+  scrap += missionReward;
   return {
     ...state,
     scrap,
@@ -419,7 +425,7 @@ export function resolveWastelandEvent(state, optionId) {
     ...(shelterGrid ? { shelter_grid: shelterGrid } : {}),
     ...(inhabitants ? { inhabitants } : {}),
     pendingBunkerEvent: null,
-    notice: `Dilema resolvido: ${event.title}.`,
+    notice: missionReward ? `Missão concluída: ${event.title}. +${missionReward} sucatas.` : `Dilema resolvido: ${event.title}.`,
   };
 }
 

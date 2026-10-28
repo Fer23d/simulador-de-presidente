@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createGameState, hydrateGameState } from '../src/core/game-state.js';
 import { advanceWastelandMonth, transicionarParaWasteland } from '../src/core/wasteland.js';
 import { canResolveWastelandEvent, getWastelandEvent, resolveWastelandEvent } from '../src/core/game_mechanics.js';
+import { arriveAtMission } from '../src/core/missions.js';
 import { buildShelterRoom, repairShelterGenerator } from '../src/core/shelter_engine.js';
 import { bunkerView, renderStoryCard } from '../src/ui/dashboard.js';
 
@@ -98,7 +99,8 @@ test('every third Wasteland month blocks further advancement until the dilemma i
   assert.equal(blocked.monthCounter, state.monthCounter);
   assert.deepEqual(blocked.shelter_supplies, state.shelter_supplies);
   assert.match(bunkerView({ ...state, president_selection_pending: false, presidentClass: 'worker' }), /data-action="advance" disabled/);
-  assert.match(renderStoryCard(state), /A Ração de Emergência/);
+  assert.equal(renderStoryCard(state), '');
+  assert.match(renderStoryCard(arriveAtMission(state)), /A Ração de Emergência/);
 });
 
 test('greenhouse quarantine suppresses three complete production calculations and resumes on the fourth', () => {
@@ -114,7 +116,7 @@ test('greenhouse quarantine suppresses three complete production calculations an
   state = advanceWastelandMonth(state);
   assert.equal(state.shelter_supplies.food, 88);
   state = advanceWastelandMonth(state);
-  state = resolveWastelandEvent(state, 'refuse-ration-cuts');
+  state = resolveWastelandEvent(arriveAtMission(state), 'refuse-ration-cuts');
   assert.equal(state.shelter_supplies.food, 82);
   assert.equal(state.shelter_grid.flat().find((room) => room?.type === 'greenhouse').disabledMonthsRemaining, 0);
 
@@ -186,7 +188,7 @@ test('radio scouts fail rolls at or above the 65 percent success threshold', () 
     pendingBunkerEvent: { id: 'radio-signal-unknown' },
   };
 
-  const result = resolveWastelandEvent(state, 'send-scouts');
+  const result = resolveWastelandEvent(arriveAtMission(state), 'send-scouts');
   assert.equal(result.scrap, state.scrap);
   assert.equal(result.shelter_supplies.food, 50);
 });
@@ -200,7 +202,7 @@ test('radio scouts succeed on a roll between the cure and scout thresholds', () 
   };
 
   assert.ok(0.6 < (Math.imul(state.randomSeed, 1664525) + 1013904223 >>> 0) / 4294967296);
-  const result = resolveWastelandEvent(state, 'send-scouts');
+  const result = resolveWastelandEvent(arriveAtMission(state), 'send-scouts');
   assert.equal(result.scrap, state.scrap + 100);
   assert.equal(result.shelter_supplies.food, 50);
 });
@@ -211,7 +213,7 @@ test('radio event uses the approved narrative title', () => {
 
 test('ignoring the radio signal has no costs or loot', () => {
   const state = { ...makeWastelandState(), pendingBunkerEvent: { id: 'radio-signal-unknown' } };
-  const result = resolveWastelandEvent(state, 'ignore-signal');
+  const result = resolveWastelandEvent(arriveAtMission(state), 'ignore-signal');
   assert.deepEqual(result.shelter_supplies, state.shelter_supplies);
   assert.equal(result.scrap, state.scrap);
   assert.equal(result.randomSeed, state.randomSeed);
@@ -222,14 +224,14 @@ test('quarantining fungal growth disables the first greenhouse for three months'
   const state = { ...addProductionRooms(makeWastelandState()), pendingBunkerEvent: { id: 'greenhouse-fungus' } };
   const event = getWastelandEvent('greenhouse-fungus');
   assert.deepEqual(event.prerequisites, { roomType: 'greenhouse' });
-  const result = resolveWastelandEvent(state, 'quarantine-greenhouse');
+  const result = resolveWastelandEvent(arriveAtMission(state), 'quarantine-greenhouse');
   const room = result.shelter_grid.flat().find((candidate) => candidate?.type === 'greenhouse');
   assert.equal(room.disabledMonthsRemaining, 3);
 });
 
 test('a successful fungal cure spends 80 energy and keeps the greenhouse active', () => {
   const state = { ...addProductionRooms(makeWastelandState()), pendingBunkerEvent: { id: 'greenhouse-fungus' } };
-  const result = resolveWastelandEvent(state, 'attempt-cure');
+  const result = resolveWastelandEvent(arriveAtMission(state), 'attempt-cure');
   const room = result.shelter_grid.flat().find((candidate) => candidate?.type === 'greenhouse');
   assert.equal(getWastelandEvent('greenhouse-fungus').options[1].cost.energy, 80);
   assert.equal(result.shelter_supplies.energy, state.shelter_supplies.energy - 80);
@@ -243,7 +245,7 @@ test('fungal cure fails rolls at or above the 60 percent success threshold', () 
     pendingBunkerEvent: { id: 'greenhouse-fungus' },
   };
 
-  const result = resolveWastelandEvent(state, 'attempt-cure');
+  const result = resolveWastelandEvent(arriveAtMission(state), 'attempt-cure');
   const greenhouse = result.shelter_grid.flat().find((room) => room?.type === 'greenhouse');
   assert.equal(result.shelter_supplies.energy, state.shelter_supplies.energy - 80);
   assert.equal(greenhouse.disabledMonthsRemaining, 3);
@@ -252,7 +254,7 @@ test('fungal cure fails rolls at or above the 60 percent success threshold', () 
 test('an unaffordable fungal cure preserves supplies, seed, and pending event', () => {
   const state = { ...addProductionRooms(makeWastelandState()), randomSeed: 31,
     shelter_supplies: { food: 10, energy: 79 }, pendingBunkerEvent: { id: 'greenhouse-fungus' } };
-  const result = resolveWastelandEvent(state, 'attempt-cure');
+  const result = resolveWastelandEvent(arriveAtMission(state), 'attempt-cure');
   assert.equal(result.shelter_supplies.energy, 79);
   assert.ok(result.shelter_supplies.energy >= 0);
   assert.equal(result.randomSeed, 31);

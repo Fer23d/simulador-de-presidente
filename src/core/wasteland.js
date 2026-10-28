@@ -7,6 +7,7 @@ import { advanceMonthlyGameMechanics, getRoomProductivityMultiplier, getWastelan
 import { countActiveGenerators, createEnvironmentState, hasReliableNightPower } from './environment.js';
 import { advanceInhabitantNeeds, countDormitoryBeds } from './needs.js';
 import { getWeather } from './weather.js';
+import { createMissionLocation } from './missions.js';
 import { nextRandom } from './geopolitics.js';
 import { getPresidentClassModifiers } from './player_state.js';
 
@@ -245,11 +246,15 @@ export function advanceWastelandMonth(state) {
   if (selectedIndex < 0) return processed;
   const urgentNotice = /SINAL DO EXPLORADOR|ALERTA CRÍTICO|ASFIXIA|oxigênio insuficiente/i.test(processed.notice ?? '')
     ? `${processed.notice} ` : '';
+  const eventId = WASTELAND_EVENTS[selectedIndex].id;
+  const location = createMissionLocation(processed.shelter_grid, eventId, (Number(processed.randomSeed) || 1) + wastelandMonthCounter);
   return {
     ...processed,
-    pendingBunkerEvent: { id: WASTELAND_EVENTS[selectedIndex].id },
+    pendingBunkerEvent: { id: eventId, ...(location ?? {}) },
     wastelandEventCursor: (selectedIndex + 1) % WASTELAND_EVENTS.length,
-    notice: `${urgentNotice}Uma decisao urgente aguarda o comando do Vault.`,
+    notice: location
+      ? `${urgentNotice}MISSÃO: ${WASTELAND_EVENTS[selectedIndex].title} no andar ${location.floor + 1}, setor ${location.column}. Vá até lá para resolver.`
+      : `${urgentNotice}Uma decisao urgente aguarda o comando do Vault.`,
   };
 }
 

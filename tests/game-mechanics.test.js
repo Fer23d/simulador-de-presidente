@@ -4,6 +4,7 @@ import { createGameState } from '../src/core/game-state.js';
 import { advanceWastelandMonth, transicionarParaWasteland } from '../src/core/wasteland.js';
 import { buildShelterRoom } from '../src/core/shelter_engine.js';
 import { advanceMonthlyGameMechanics, arrestNPC, calculateSuppression, calculateSuppressedChance, detainRebel, dismissExpeditionReport, getWastelandEvent, releaseNPC, resolveWastelandEvent, startExpedition } from '../src/core/game_mechanics.js';
+import { arriveAtMission } from '../src/core/missions.js';
 import { hydrateGameState } from '../src/core/game-state.js';
 import { bunkerView, expeditionLogisticsView, expeditionReportView } from '../src/ui/dashboard.js';
 import { advanceLootboxClick, collectExpeditionLoot, openExpeditionLootbox } from '../src/core/expeditions.js';
@@ -47,7 +48,7 @@ test('a successful expedition returns after three turns and pauses for loot coll
   assert.equal(state.currentLoot.length, 3);
   assert.equal(state.pendingExpeditionReports[0].success, true);
   assert.equal(advanceWastelandMonth(state).monthCounter, state.monthCounter);
-  const eventResolved = resolveWastelandEvent(state, 'refuse-ration-cuts');
+  const eventResolved = resolveWastelandEvent(arriveAtMission(state), 'refuse-ration-cuts');
   let opened = openExpeditionLootbox(eventResolved);
   opened = advanceLootboxClick(opened, 1);
   opened = advanceLootboxClick(opened, 2);
@@ -76,7 +77,7 @@ test('event cadence skips greenhouse dilemmas until eligible and continues in ca
     const eventId = state.pendingBunkerEvent?.id;
     assert.ok(eventId);
     const optionId = getWastelandEvent(eventId).options[1].id;
-    state = resolveWastelandEvent(state, optionId);
+    state = resolveWastelandEvent(arriveAtMission(state), optionId);
     return eventId;
   };
 
@@ -111,7 +112,7 @@ test('a failed expedition report and scheduled dilemma remain pending independen
   const reportDismissed = dismissExpeditionReport(state);
   assert.equal(reportDismissed.pendingBunkerEvent?.id, 'ration-emergency');
   assert.equal(advanceWastelandMonth(reportDismissed).monthCounter, state.monthCounter);
-  const dilemmaResolved = resolveWastelandEvent(reportDismissed, 'refuse-ration-cuts');
+  const dilemmaResolved = resolveWastelandEvent(arriveAtMission(reportDismissed), 'refuse-ration-cuts');
   assert.equal(dilemmaResolved.pendingExpeditionReports.length, 0);
   assert.equal(advanceWastelandMonth(dilemmaResolved).monthCounter, state.monthCounter + 1);
 });
@@ -355,7 +356,7 @@ test('a failed fungal cure quarantines the greenhouse and lowers loyalty without
     inhabitants: state.inhabitants.map((npc, index) => ({ ...npc, loyalty: index === 0 ? 5 : 40 })),
   };
 
-  const result = resolveWastelandEvent(state, 'attempt-cure');
+  const result = resolveWastelandEvent(arriveAtMission(state), 'attempt-cure');
   const greenhouse = result.shelter_grid.flat().find((room) => room?.type === 'greenhouse');
   assert.equal(result.shelter_supplies.energy, 20);
   assert.equal(greenhouse.disabledMonthsRemaining, 3);

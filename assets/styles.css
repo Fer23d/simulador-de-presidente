@@ -88,6 +88,15 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 .environment-progress > span { display: block; height: 100%; background: var(--amber); box-shadow: 0 0 7px var(--amber); }
 .environment-security { grid-column: 1 / -1; border-top: 1px solid currentColor; padding-top: 5px; color: var(--amber); font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
 .bunker-environment-hud.is-night { border-color: #8fa8dc; color: #c5d7ff; }
+.mission-objective { position: absolute; z-index: 1; top: 24px; left: 24px; display: flex; gap: 10px; align-items: center; max-width: min(380px, calc(100% - 48px)); padding: 8px 12px; border: 2px solid #ff3b30; background: rgba(20, 4, 2, .9); color: #ffd6c8; font: 13px/1.3 "Share Tech Mono", monospace; pointer-events: none; box-shadow: 0 0 14px rgba(255, 59, 48, .45); animation: mission-pulse 1.4s ease-in-out infinite; }
+.mission-objective strong { display: block; color: #ff8a70; letter-spacing: .04em; }
+.mission-objective span, .mission-objective small { display: block; }
+.mission-objective small { color: #ffd88a; }
+.mission-objective-icon { display: grid; place-items: center; flex: none; width: 28px; height: 28px; background: #ff3b30; color: #fff; font: 700 18px monospace; clip-path: polygon(50% 0, 100% 100%, 0 100%); padding-top: 6px; }
+@keyframes mission-pulse { 50% { box-shadow: 0 0 4px rgba(255, 59, 48, .2); } }
+.mission-story { color: #ffe9c2; font-style: italic; border-left: 3px solid #ff8a2a; padding-left: 12px; }
+.mission-reward { color: #ffd88a; font: 700 14px "Share Tech Mono", monospace; letter-spacing: .05em; }
+@media (prefers-reduced-motion: reduce) { .mission-objective { animation: none; } }
 .environment-weather { grid-column: 1 / -1; padding: 2px 0; font-weight: 700; letter-spacing: .02em; white-space: nowrap; animation: weather-hud-pulse 1.6s ease-in-out infinite; }
 .environment-weather[data-weather="dust"] { color: #e8a25c; }
 .environment-weather[data-weather="acid_rain"] { color: #a8ff7a; }

@@ -264,7 +264,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   inhabitants = [], cabinFloor: savedCabinFloor, onBuild, onRoom, onPlayerChanged, onInhabitantsChanged, onHint,
   onDetain, onAssetsReady, onEnvironmentChanged, environment = {}, isNight = environment?.isNight ?? false, weather: savedWeather = {},
   oxygenDeprived = false, assetUrls = {}, lootbox = {}, onLootboxClick,
-  presidentClass = null, equippedSkin = 'default', currentDay = 1, onDayPassed,
+  presidentClass = null, equippedSkin = 'default', currentDay = 1, onDayPassed, mission = null, onMission,
   onDialogue, onDialogueAdvance, onDialogueClose } = {}) {
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
@@ -350,8 +350,10 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     if (pacificationFeedback && time - pacificationFeedback.startedAt < 1_600) {
       drawPacificationFeedback(ctx, pacificationFeedback.npc, camera, time - pacificationFeedback.startedAt);
     } else pacificationFeedback = null;
-    const hint = paused || buildMode ? '' : rebel?.label || nearbyInhabitant?.label
-      || getElevatorPrompt(player, grid) || findNearbyTrigger(player, grid)?.label || '';
+    const roomTrigger = findNearbyTrigger(player, grid);
+    const missionHere = mission && roomTrigger && roomTrigger.room.floor === mission.floor && roomTrigger.room.column === mission.column;
+    const hint = paused || buildMode ? '' : rebel?.label || (missionHere ? `[ E ] RESOLVER: ${mission.title ?? 'PROBLEMA'}` : '')
+      || nearbyInhabitant?.label || getElevatorPrompt(player, grid) || roomTrigger?.label || '';
     if (hint !== lastHint) { lastHint = hint; onHint?.(hint); }
     frameId = requestAnimationFrame(frame);
   }
@@ -402,6 +404,14 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
         }
         return;
       }
+      // A missao tem prioridade sobre conversar com quem estiver por perto na mesma sala.
+      const missionTrigger = findNearbyTrigger(player, grid);
+      if (missionTrigger && mission && missionTrigger.room.floor === mission.floor && missionTrigger.room.column === mission.column) {
+        paused = true;
+        keys.clear();
+        onMission?.(missionTrigger.room);
+        return;
+      }
       const nearby = trackNearbyInhabitant(player, grid, actors, lastTime, true);
       if (nearby) {
         dialogueNpc = nearby.npc;
@@ -411,7 +421,9 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
         return;
       }
       const trigger = findNearbyTrigger(player, grid);
-      if (trigger) { paused = true; keys.clear(); onRoom?.(trigger.room); }
+      if (trigger && mission && trigger.room.floor === mission.floor && trigger.room.column === mission.column) {
+        paused = true; keys.clear(); onMission?.(trigger.room);
+      } else if (trigger) { paused = true; keys.clear(); onRoom?.(trigger.room); }
     } else keys.add(key);
   }
   function keyup(event) { keys.delete(event.key.toLowerCase()); }
