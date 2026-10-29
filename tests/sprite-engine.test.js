@@ -68,13 +68,18 @@ test('laboratory never falls back to the radio room sprite when its dedicated ar
   const drawn = [];
   const emptyBase = { id: 'empty-room-base', width: 480, height: 240 };
   const atlas = { id: 'room-atlas', width: 1200, height: 900 };
-  const ctx = { save() {}, restore() {}, drawImage(...args) { drawn.push(args); } };
+  const gradient = { addColorStop() {} };
+  const ctx = new Proxy({ drawImage(...args) { drawn.push(args); } }, {
+    get(target, key) { return key in target ? target[key] : (key.startsWith?.('create') ? () => gradient : () => {}); },
+    set(target, key, value) { target[key] = value; return true; },
+  });
   const assets = { getImage: (key) => key === 'room_base_empty' ? emptyBase : key === 'room_atlas' ? atlas : null };
 
   renderRoom(ctx, { type: 'laboratory', floor: 0, column: 0 }, assets);
 
   assert.equal(drawn.length, 1);
   assert.equal(drawn[0][0], emptyBase);
+  assert.equal(drawn.some(([image]) => image === atlas), false);
 });
 
 test('night surface-only darkness follows the camera while blackout still covers the whole view', () => {

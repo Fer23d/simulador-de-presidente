@@ -286,6 +286,8 @@ export function renderRoom(ctx, room, assets, time = 0) {
     const laboratory = assets.getImage('room_laboratory');
     const emptyBase = assets.getImage('room_base_empty');
     drawOrMissing(ctx, laboratory ?? emptyBase, x, y, SLOT_WIDTH, ROOM_HEIGHT);
+    // Sem arte dedicada, o laboratorio e montado por cima da sala base.
+    if (!laboratory) renderLaboratoryInterior(ctx, x, y, time);
     renderRoomAmbientLight(ctx, room, x, y);
     return;
   }
@@ -316,6 +318,247 @@ export function renderRoom(ctx, room, assets, time = 0) {
       atlas ? [column * cellWidth, row * cellHeight, cellWidth, cellHeight] : null);
   }
   renderRoomAmbientLight(ctx, room, x, y);
+}
+
+// Laboratorio desenhado sobre a sala base: azulejos clinicos, tanque de especime, terminal, bancada com vidraria,
+// quadro de formulas e servidor. Tudo animado pelo tempo (bolhas, dados correndo, LEDs, vapor).
+function renderLaboratoryInterior(ctx, x, y, time = 0) {
+  const floorY = y + ROOM_HEIGHT - 14;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x + 4, y + 4, SLOT_WIDTH - 8, ROOM_HEIGHT - 8);
+  ctx.clip();
+
+  // Parede de azulejos claros, com luz fria de laboratorio.
+  ctx.fillStyle = 'rgba(196, 226, 230, .32)';
+  ctx.fillRect(x + 4, y + 14, SLOT_WIDTH - 8, floorY - y - 14);
+  ctx.strokeStyle = 'rgba(60, 90, 96, .35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let tileY = y + 22; tileY < floorY - 30; tileY += 10) { ctx.moveTo(x + 4, tileY); ctx.lineTo(x + SLOT_WIDTH - 4, tileY); }
+  for (let tileX = x + 12; tileX < x + SLOT_WIDTH - 4; tileX += 12) { ctx.moveTo(tileX, y + 14); ctx.lineTo(tileX, floorY - 34); }
+  ctx.stroke();
+  ctx.fillStyle = '#2f4a4e';
+  ctx.fillRect(x + 4, floorY - 34, SLOT_WIDTH - 8, 3);
+
+  // Calha de luz fluorescente no teto.
+  ctx.fillStyle = '#2a3133';
+  ctx.fillRect(x + 72, y + 13, 120, 6);
+  ctx.fillStyle = '#eafcff';
+  ctx.fillRect(x + 76, y + 18, 112, 3);
+  const glow = ctx.createLinearGradient(0, y + 20, 0, y + 70);
+  glow.addColorStop(0, 'rgba(210, 250, 255, .32)');
+  glow.addColorStop(1, 'rgba(210, 250, 255, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x + 50, y + 20, 164, 50);
+
+  // Tanque de especime: cilindro de vidro com liquido verde, organismo e bolhas subindo.
+  const tankX = x + 14;
+  const tankTop = y + 30;
+  const tankBottom = floorY - 6;
+  const liquid = ctx.createLinearGradient(tankX, 0, tankX + 34, 0);
+  liquid.addColorStop(0, 'rgba(40, 160, 90, .85)');
+  liquid.addColorStop(.5, 'rgba(110, 255, 150, .9)');
+  liquid.addColorStop(1, 'rgba(30, 130, 80, .85)');
+  ctx.fillStyle = liquid;
+  ctx.fillRect(tankX + 2, tankTop + 6, 30, tankBottom - tankTop - 12);
+  ctx.fillStyle = 'rgba(20, 60, 40, .75)';
+  ctx.beginPath();
+  ctx.ellipse(tankX + 17, tankTop + 52 + Math.sin(time / 900) * 3, 7, 14, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(tankX + 15, tankTop + 64 + Math.sin(time / 900) * 3, 4, 18);
+  ctx.fillStyle = 'rgba(220, 255, 230, .8)';
+  for (let bubble = 0; bubble < 6; bubble++) {
+    const phase = (time / (1_400 + bubble * 170) + bubble * .37) % 1;
+    const bubbleY = tankBottom - 10 - phase * (tankBottom - tankTop - 22);
+    const bubbleX = tankX + 8 + (bubble * 7) % 20 + Math.sin(time / 300 + bubble) * 2;
+    ctx.beginPath();
+    ctx.arc(bubbleX, bubbleY, 1.2 + (bubble % 3) * .6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(255, 255, 255, .28)';
+  ctx.fillRect(tankX + 5, tankTop + 8, 3, tankBottom - tankTop - 16);
+  ctx.fillStyle = '#5c6669';
+  ctx.fillRect(tankX - 2, tankTop, 38, 7);
+  ctx.fillRect(tankX - 2, tankBottom - 6, 38, 7);
+  ctx.fillStyle = '#8b979a';
+  ctx.fillRect(tankX - 2, tankTop, 38, 2);
+  ctx.strokeStyle = '#3a4447';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(tankX + 17, tankTop);
+  ctx.lineTo(tankX + 17, y + 14);
+  ctx.stroke();
+  const tankGlow = ctx.createRadialGradient(tankX + 17, tankTop + 50, 4, tankX + 17, tankTop + 50, 48);
+  tankGlow.addColorStop(0, 'rgba(110, 255, 150, .3)');
+  tankGlow.addColorStop(1, 'rgba(110, 255, 150, 0)');
+  ctx.fillStyle = tankGlow;
+  ctx.fillRect(tankX - 32, tankTop, 100, tankBottom - tankTop);
+
+  // Terminal na parede com dados correndo e um grafico de onda.
+  const screenX = x + 62;
+  const screenY = y + 32;
+  ctx.fillStyle = '#1c2224';
+  ctx.fillRect(screenX - 3, screenY - 3, 58, 42);
+  ctx.fillStyle = '#04150c';
+  ctx.fillRect(screenX, screenY, 52, 36);
+  ctx.fillStyle = 'rgba(80, 255, 140, .85)';
+  const scroll = Math.floor(time / 180);
+  for (let line = 0; line < 4; line++) {
+    const length = 8 + ((scroll + line * 7) * 13) % 30;
+    ctx.fillRect(screenX + 3, screenY + 4 + line * 4, length, 1.5);
+  }
+  ctx.strokeStyle = 'rgba(120, 220, 255, .9)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  for (let px = 0; px <= 46; px += 2) {
+    const wave = Math.sin(px / 4 + time / 220) * 4 + Math.sin(px / 1.7 + time / 90) * 1.5;
+    if (px === 0) ctx.moveTo(screenX + 3 + px, screenY + 27 + wave); else ctx.lineTo(screenX + 3 + px, screenY + 27 + wave);
+  }
+  ctx.stroke();
+
+  // Quadro com formulas e uma helice de DNA.
+  const boardX = x + 130;
+  const boardY = y + 30;
+  ctx.fillStyle = '#e8eee9';
+  ctx.fillRect(boardX, boardY, 62, 38);
+  ctx.strokeStyle = '#7b8582';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(boardX, boardY, 62, 38);
+  ctx.fillStyle = '#1d4fa8';
+  ctx.font = 'bold 8px monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText?.('E=mc²', boardX + 4, boardY + 4);
+  ctx.fillStyle = '#b3261e';
+  ctx.fillText?.('Rad↓0.3', boardX + 4, boardY + 15);
+  ctx.fillStyle = '#37474f';
+  ctx.fillText?.('∑ n²', boardX + 4, boardY + 26);
+  ctx.strokeStyle = '#2e7d32';
+  ctx.lineWidth = 1.2;
+  for (const offset of [0, Math.PI]) {
+    ctx.beginPath();
+    for (let step = 0; step <= 30; step++) {
+      const px = boardX + 52 + Math.sin(step / 5 + offset) * 5;
+      const py = boardY + 4 + step;
+      if (step === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(46, 125, 50, .6)';
+  ctx.beginPath();
+  for (let rung = 2; rung < 30; rung += 5) {
+    ctx.moveTo(boardX + 52 + Math.sin(rung / 5) * 5, boardY + 4 + rung);
+    ctx.lineTo(boardX + 52 + Math.sin(rung / 5 + Math.PI) * 5, boardY + 4 + rung);
+  }
+  ctx.stroke();
+
+  // Simbolo de risco biologico.
+  ctx.fillStyle = '#f2c230';
+  ctx.beginPath();
+  ctx.moveTo(boardX + 72, boardY + 4);
+  ctx.lineTo(boardX + 86, boardY + 28);
+  ctx.lineTo(boardX + 58 + 0, boardY + 28);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#1a1a1a';
+  ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText?.('☣', boardX + 72, boardY + 13);
+
+  // Bancada de trabalho com armarios.
+  const benchY = floorY - 32;
+  ctx.fillStyle = '#d9e2e3';
+  ctx.fillRect(x + 56, benchY, 150, 6);
+  ctx.fillStyle = '#6f7d80';
+  ctx.fillRect(x + 56, benchY + 6, 150, 2);
+  ctx.fillStyle = '#4d5a5d';
+  ctx.fillRect(x + 60, benchY + 8, 142, floorY - benchY - 8);
+  ctx.strokeStyle = '#2c3537';
+  ctx.lineWidth = 1;
+  for (const doorX of [x + 60, x + 96, x + 132, x + 168]) ctx.strokeRect(doorX + 2, benchY + 11, 32, floorY - benchY - 14);
+  ctx.fillStyle = '#b8c4c6';
+  for (const doorX of [x + 60, x + 96, x + 132, x + 168]) ctx.fillRect(doorX + 15, benchY + 14, 6, 2);
+
+  // Vidraria: frascos Erlenmeyer coloridos, um borbulhando com vapor, e uma estante de tubos.
+  const flasks = [[x + 70, '#4fc3f7'], [x + 86, '#e040fb'], [x + 150, '#ffb300']];
+  flasks.forEach(([fx, color], index) => {
+    ctx.fillStyle = 'rgba(230, 245, 250, .55)';
+    ctx.beginPath();
+    ctx.moveTo(fx - 1, benchY - 22);
+    ctx.lineTo(fx + 3, benchY - 22);
+    ctx.lineTo(fx + 3, benchY - 14);
+    ctx.lineTo(fx + 9, benchY);
+    ctx.lineTo(fx - 7, benchY);
+    ctx.lineTo(fx - 1, benchY - 14);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(fx - 4, benchY - 7);
+    ctx.lineTo(fx + 6, benchY - 7);
+    ctx.lineTo(fx + 9, benchY);
+    ctx.lineTo(fx - 7, benchY);
+    ctx.closePath();
+    ctx.fill();
+    if (index === 1) {
+      ctx.fillStyle = 'rgba(255, 255, 255, .7)';
+      for (let bubble = 0; bubble < 3; bubble++) {
+        const phase = (time / 500 + bubble / 3) % 1;
+        ctx.beginPath();
+        ctx.arc(fx + 1 + (bubble - 1) * 2, benchY - 2 - phase * 6, .9, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      for (let puff = 0; puff < 3; puff++) {
+        const phase = (time / 1_300 + puff / 3) % 1;
+        ctx.fillStyle = `rgba(230, 160, 255, ${.35 * (1 - phase)})`;
+        ctx.beginPath();
+        ctx.arc(fx + 1 + Math.sin(time / 400 + puff) * 3, benchY - 24 - phase * 18, 2 + phase * 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  });
+  ctx.fillStyle = '#7a8689';
+  ctx.fillRect(x + 104, benchY - 4, 26, 4);
+  ['#ff5252', '#69f0ae', '#40c4ff', '#ffd740'].forEach((color, index) => {
+    const tubeX = x + 107 + index * 6;
+    ctx.fillStyle = 'rgba(230, 245, 250, .6)';
+    ctx.fillRect(tubeX, benchY - 16, 3, 12);
+    ctx.fillStyle = color;
+    ctx.fillRect(tubeX, benchY - 9, 3, 5);
+  });
+
+  // Microscopio.
+  const microX = x + 176;
+  ctx.fillStyle = '#2b3335';
+  ctx.fillRect(microX - 7, benchY - 3, 16, 3);
+  ctx.fillRect(microX + 4, benchY - 18, 3, 15);
+  ctx.fillStyle = '#e0e6e7';
+  ctx.save();
+  ctx.translate(microX + 3, benchY - 20);
+  ctx.rotate(-.5);
+  ctx.fillRect(-2, -10, 5, 14);
+  ctx.restore();
+  ctx.fillStyle = '#2b3335';
+  ctx.fillRect(microX - 3, benchY - 9, 9, 2);
+
+  // Servidor com LEDs piscando.
+  const rackX = x + 214;
+  ctx.fillStyle = '#20272a';
+  ctx.fillRect(rackX, y + 34, 38, floorY - y - 34);
+  ctx.strokeStyle = '#3c474a';
+  ctx.strokeRect(rackX + 1, y + 35, 36, floorY - y - 36);
+  for (let slot = 0; slot < 8; slot++) {
+    const slotY = y + 40 + slot * 10;
+    ctx.fillStyle = '#2d363a';
+    ctx.fillRect(rackX + 4, slotY, 30, 7);
+    for (let led = 0; led < 3; led++) {
+      const on = Math.sin(time / (160 + led * 70) + slot * 1.7 + led) > .1;
+      ctx.fillStyle = on ? (led === 2 ? '#ff5252' : '#69f0ae') : '#1b2224';
+      ctx.fillRect(rackX + 7 + led * 5, slotY + 2, 3, 3);
+    }
+  }
+  ctx.restore();
 }
 
 function renderLifeSupportDetails(ctx, x, y, time = 0) {
