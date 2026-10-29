@@ -25,6 +25,7 @@ import { getWeather } from '../core/weather.js';
 import { applyOfflineProgress, dismissOfflineReport } from '../core/offline.js';
 import { arriveAtMission, getMissionReward, getMissionStory, isMissionPending } from '../core/missions.js';
 import { getIntroScenes } from '../core/intro_story.js';
+import { completeTutorialStep, createTutorial, getContextTip, getTutorialStep, markTipSeen, restartTutorial, setTutorialEnabled, syncTutorial } from '../core/tutorial.js';
 import { createAudioEngine, getMusicMood, isStormWeather, normalizeAudioSettings } from '../core/audio.js';
 import { chooseEnding, createTrophies, ENDINGS, getEndingOptions, getEndingStory, getForcedEnding, isDoorOpen, recordTrophy } from '../core/endings.js';
 import { createSurfaceSectors, getExplorationPercent, getSectorExpedition, getSurfaceMap, SECTOR_TYPES } from '../core/surface_map.js';
@@ -111,6 +112,29 @@ const STORE_KEY = 'simulador-presidente-loja-v1';
 // Finais ja vistos (trofeus), guardados na conta para sobreviver a Nova Partida.
 const TROPHIES_KEY = 'simulador-presidente-trofeus-v1';
 const AUDIO_KEY = 'simulador-presidente-audio-v1';
+// O progresso do tutorial fica fora do save: quem ja aprendeu nao repete a cada Nova Partida.
+const TUTORIAL_KEY = 'simulador-presidente-tutorial-v1';
+
+export function titleScreenView({ view = 'main', hasSave = false, audio = {}, tutorialEnabled = true } = {}) {
+  const { muted, volume } = normalizeAudioSettings(audio);
+  const panels = {
+    main: `<nav class="title-menu" aria-label="Menu principal">${hasSave ? '<button type="button" class="title-button is-primary" data-title-action="continue" autofocus>CONTINUAR</button>' : ''}<button type="button" class="title-button${hasSave ? '' : ' is-primary'}" data-title-action="${hasSave ? 'confirm-new' : 'new-game'}" ${hasSave ? '' : 'autofocus'}>NOVO JOGO</button><button type="button" class="title-button" data-title-action="options">OPÇÕES</button><button type="button" class="title-button" data-title-action="credits">CRÉDITOS</button></nav>`,
+    'confirm-new': `<div class="title-panel" role="alertdialog" aria-labelledby="title-confirm"><h2 id="title-confirm">COMEÇAR DE NOVO?</h2><p>A partida salva será apagada. Finais descobertos, enciclopédia e skins continuam com você.</p><div class="title-menu"><button type="button" class="title-button is-danger" data-title-action="new-game" autofocus>SIM, NOVO JOGO</button><button type="button" class="title-button" data-title-action="main">VOLTAR</button></div></div>`,
+    options: `<div class="title-panel"><h2>OPÇÕES</h2><label class="title-option"><span>VOLUME</span><input type="range" min="0" max="100" value="${Math.round(volume * 100)}" data-title-volume aria-label="Volume"></label><label class="title-option"><span>SOM MUDO</span><input type="checkbox" data-title-mute ${muted ? 'checked' : ''}></label><label class="title-option"><span>TUTORIAL E DICAS</span><input type="checkbox" data-title-tutorial ${tutorialEnabled ? 'checked' : ''}></label><div class="title-menu"><button type="button" class="title-button" data-title-action="restart-tutorial">REINICIAR TUTORIAL</button><button type="button" class="title-button" data-title-action="fullscreen">TELA CHEIA</button><button type="button" class="title-button" data-title-action="main" autofocus>VOLTAR</button></div><p class="title-status" data-title-status role="status"></p></div>`,
+    credits: `<div class="title-panel title-credits"><h2>CRÉDITOS</h2><dl><dt>CRIAÇÃO E DIREÇÃO</dt><dd>Fer23d</dd><dt>ARTE E TRILHA</dt><dd>Gerados em código, quadro a quadro e nota a nota</dd><dt>FONTES</dt><dd>Press Start 2P · Share Tech Mono (SIL Open Font License)</dd></dl><p class="title-dedication">Para quem ficou do lado de fora da porta.</p><div class="title-menu"><button type="button" class="title-button" data-title-action="main" autofocus>VOLTAR</button></div></div>`,
+  };
+  return `<section class="title-screen" role="dialog" aria-modal="true" aria-labelledby="title-logo" data-title-view="${view}"><canvas class="title-ash" aria-hidden="true"></canvas><div class="title-content"><p class="title-kicker">/// TERMINAL DO ÚLTIMO GABINETE ///</p><h1 id="title-logo" class="title-logo">LAST OFFICE</h1><p class="title-tagline">APÓS A GUERRA, TUDO MUDA</p>${panels[view] ?? panels.main}</div><p class="title-footer">PRESSIONE ENTER · ESC VOLTA</p></section>`;
+}
+
+export function tutorialCoachView(step, tip = null) {
+  if (step) {
+    return `<p class="tutorial-kicker">TUTORIAL${step.total > 1 ? ` ${step.number}/${step.total}` : ''}</p><h3>${escapeHtml(step.title)}</h3><p>${escapeHtml(step.text)}</p><div class="tutorial-actions">${step.ack ? `<button type="button" class="primary-action" data-tutorial-ack="${step.id}">[ ENTENDI ]</button>` : '<span class="tutorial-waiting">AGUARDANDO SUA AÇÃO…</span>'}<button type="button" class="tutorial-skip" data-tutorial-skip>Pular tutorial</button></div>`;
+  }
+  if (tip) {
+    return `<p class="tutorial-kicker">DICA</p><h3>${escapeHtml(tip.title)}</h3><p>${escapeHtml(tip.text)}</p><div class="tutorial-actions"><button type="button" class="primary-action" data-tutorial-tip="${tip.id}">[ OK ]</button><button type="button" class="tutorial-skip" data-tutorial-skip>Desligar dicas</button></div>`;
+  }
+  return '';
+}
 
 export function soundControlView(settings) {
   const { muted, volume } = normalizeAudioSettings(settings);
@@ -936,7 +960,157 @@ export function mountDashboard(root) {
     const button = event.target.closest('button');
     if (button && !button.disabled && !button.closest('.sound-control')) audio.play('click');
   }, { capture: true });
+  const hadSave = (() => { try { return localStorage.getItem(STORAGE_KEY) !== null; } catch { return false; } })();
+  let tutorial = (() => { try { return createTutorial(JSON.parse(localStorage.getItem(TUTORIAL_KEY) ?? '{}')); } catch { return createTutorial(); } })();
+  const saveTutorial = () => { try { localStorage.setItem(TUTORIAL_KEY, JSON.stringify(tutorial)); } catch { /* so nesta sessao */ } };
+  const tutorialCoach = document.createElement('aside');
+  tutorialCoach.className = 'tutorial-coach';
+  tutorialCoach.setAttribute('aria-live', 'polite');
+  tutorialCoach.hidden = true;
+  document.body.append(tutorialCoach);
+  let titleOpen = true;
+  let titleView = 'main';
+  let titleAshFrame = null;
+  const titleScreen = document.createElement('div');
+  titleScreen.className = 'title-screen-host';
+  document.body.append(titleScreen);
+
+  function updateTutorial() {
+    const synced = syncTutorial(tutorial, state);
+    if (synced.done.length !== tutorial.done.length) { tutorial = synced; saveTutorial(); }
+    const step = getTutorialStep(tutorial, state);
+    const tip = step ? null : getContextTip(tutorial, state);
+    const markup = tutorialCoachView(step, tip);
+    const key = step ? `step:${step.id}` : tip ? `tip:${tip.id}` : '';
+    if (tutorialCoach.dataset.key !== key) {
+      tutorialCoach.dataset.key = key;
+      tutorialCoach.innerHTML = markup;
+      if (key) audio.play('chime');
+    }
+    tutorialCoach.hidden = titleOpen || !markup;
+  }
+
+  tutorialCoach.addEventListener('click', (event) => {
+    const ack = event.target.closest('[data-tutorial-ack]');
+    const tip = event.target.closest('[data-tutorial-tip]');
+    if (ack) tutorial = completeTutorialStep(tutorial, ack.dataset.tutorialAck);
+    else if (tip) tutorial = markTipSeen(tutorial, tip.dataset.tutorialTip);
+    else if (event.target.closest('[data-tutorial-skip]')) tutorial = setTutorialEnabled(tutorial, false);
+    else return;
+    saveTutorial();
+    updateTutorial();
+  });
+
+  // Cinzas caindo atras do logo; o laco para quando a tela de titulo fecha.
+  function animateTitleAsh() {
+    const canvas = titleScreen.querySelector('.title-ash');
+    if (!canvas || typeof requestAnimationFrame !== 'function') return;
+    if (titleAshFrame !== null) cancelAnimationFrame(titleAshFrame);
+    const ctx = canvas.getContext('2d');
+    const flakes = Array.from({ length: 90 }, () => ({ x: Math.random(), y: Math.random(), size: 1 + Math.random() * 2.5, speed: .02 + Math.random() * .05, drift: Math.random() * Math.PI * 2 }));
+    let last = null;
+    const frame = (time) => {
+      if (!titleOpen || !canvas.isConnected) { titleAshFrame = null; return; }
+      const step = last === null ? 0 : Math.min(.05, (time - last) / 1000);
+      last = time;
+      canvas.width = canvas.clientWidth;
+      canvas.height = canvas.clientHeight;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (const flake of flakes) {
+        flake.y += flake.speed * step;
+        flake.x += Math.sin(time / 1700 + flake.drift) * .004 * step;
+        if (flake.y > 1.02) { flake.y = -.02; flake.x = Math.random(); }
+        ctx.fillStyle = `rgba(255, ${170 + Math.round(flake.size * 20)}, 90, ${.25 + flake.size * .15})`;
+        ctx.fillRect(flake.x * canvas.width, flake.y * canvas.height, flake.size, flake.size);
+      }
+      titleAshFrame = requestAnimationFrame(frame);
+    };
+    titleAshFrame = requestAnimationFrame(frame);
+  }
+
+  function renderTitle() {
+    titleScreen.hidden = !titleOpen;
+    tutorialCoach.hidden = true;
+    if (!titleOpen) { titleScreen.innerHTML = ''; return; }
+    const viewChanged = titleScreen.dataset.view !== titleView;
+    titleScreen.dataset.view = titleView;
+    titleScreen.innerHTML = titleScreenView({ view: titleView, hasSave: hadSave, audio: audio.settings, tutorialEnabled: tutorial.enabled });
+    titleScreen.querySelector('[autofocus]')?.focus();
+    if (viewChanged || titleAshFrame === null) animateTitleAsh();
+    audio.setMood('vault_night');
+  }
+
+  function closeTitle() {
+    titleOpen = false;
+    renderTitle();
+    syncAudioMood();
+    updateTutorial();
+    root.querySelector('button, canvas')?.focus();
+  }
+
+  titleScreen.addEventListener('click', (event) => {
+    const action = event.target.closest('[data-title-action]')?.dataset.titleAction;
+    if (!action) return;
+    if (action === 'continue') { closeTitle(); return; }
+    if (action === 'new-game') {
+      tutorial = { ...restartTutorial(), enabled: tutorial.enabled };
+      saveTutorial();
+      activeTab = 'overview';
+      falloutCinematicStarted = false;
+      introScene = 0;
+      commit(createGameState());
+      closeTitle();
+      return;
+    }
+    if (action === 'restart-tutorial') {
+      tutorial = restartTutorial();
+      saveTutorial();
+      renderTitle();
+      const status = titleScreen.querySelector('[data-title-status]');
+      if (status) status.textContent = '> Tutorial reiniciado. Ele volta na próxima vez que você jogar.';
+      return;
+    }
+    if (action === 'fullscreen') {
+      const page = document.documentElement;
+      if (document.fullscreenElement) void document.exitFullscreen?.();
+      else void page.requestFullscreen?.().catch(() => {});
+      return;
+    }
+    titleView = action;
+    renderTitle();
+  });
+
+  titleScreen.addEventListener('input', (event) => {
+    if (event.target.matches('[data-title-volume]')) {
+      const settings = audio.setSettings({ volume: Number(event.target.value) / 100, muted: false });
+      saveAudio(settings);
+      soundControl.innerHTML = soundControlView(settings);
+      const mute = titleScreen.querySelector('[data-title-mute]');
+      if (mute) mute.checked = false;
+    }
+  });
+
+  titleScreen.addEventListener('change', (event) => {
+    if (event.target.matches('[data-title-mute]')) {
+      const settings = audio.setSettings({ muted: event.target.checked });
+      saveAudio(settings);
+      soundControl.innerHTML = soundControlView(settings);
+    }
+    if (event.target.matches('[data-title-tutorial]')) {
+      tutorial = setTutorialEnabled(tutorial, event.target.checked);
+      saveTutorial();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (titleOpen && event.key === 'Escape' && titleView !== 'main') {
+      titleView = 'main';
+      renderTitle();
+    }
+  });
+
   function syncAudioMood() {
+    if (titleOpen) return;
     audio.setMood(getMusicMood(state));
     audio.setStorm(isStormWeather(state));
   }
@@ -1155,6 +1329,7 @@ export function mountDashboard(root) {
             }
             if (persist) storageNotice = saveState(state);
             if (weatherChanged || persist) syncDiscoveries();
+            updateTutorial();
           },
           onDayPassed: (days) => {
             state = { ...state, currentDay: Math.max(1, (Number(state.currentDay) || 1) + days) };
@@ -1342,6 +1517,7 @@ export function mountDashboard(root) {
     playStateSounds(previous, state);
     startFalloutCinematicIfNeeded();
     syncDiscoveries();
+    updateTutorial();
   }
 
   window.logHistoryEvent = (type, text) => commit(registrarEventoHistorico(state, type, text));
@@ -1785,6 +1961,7 @@ export function mountDashboard(root) {
   });
 
   render();
+  renderTitle();
   syncAudioMood();
   startFalloutCinematicIfNeeded();
   syncDiscoveries();
