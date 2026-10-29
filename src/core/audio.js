@@ -2,12 +2,12 @@
 // Sem AudioContext (testes, navegador antigo) tudo vira operacao vazia.
 export const AUDIO_DEFAULTS = Object.freeze({ muted: false, volume: .6 });
 
-// Cada clima musical: nota base do drone, escala do arpejo, ritmo e brilho do filtro.
+// Cada clima musical: nota base do drone grave, timbre e brilho do filtro.
 export const MUSIC_MOODS = Object.freeze({
-  presidency: Object.freeze({ root: 55, scale: [0, 3, 7, 10, 12, 15], step: .42, brightness: 1400, pad: 'sawtooth', arpWave: 'square', arpLevel: .05 }),
-  vault: Object.freeze({ root: 49, scale: [0, 5, 7, 12, 14, 19], step: .65, brightness: 900, pad: 'triangle', arpWave: 'triangle', arpLevel: .07 }),
-  vault_night: Object.freeze({ root: 41.2, scale: [0, 3, 7, 10, 15], step: .9, brightness: 520, pad: 'triangle', arpWave: 'sine', arpLevel: .06 }),
-  ending: Object.freeze({ root: 65.4, scale: [0, 4, 7, 11, 12, 16], step: 1.1, brightness: 1100, pad: 'sine', arpWave: 'sine', arpLevel: .08 }),
+  presidency: Object.freeze({ root: 55, brightness: 1400, pad: 'sawtooth' }),
+  vault: Object.freeze({ root: 49, brightness: 900, pad: 'triangle' }),
+  vault_night: Object.freeze({ root: 41.2, brightness: 520, pad: 'triangle' }),
+  ending: Object.freeze({ root: 65.4, brightness: 1100, pad: 'sine' }),
 });
 
 export function getMusicMood(state) {
@@ -25,8 +25,6 @@ export function normalizeAudioSettings(value = {}) {
   return { muted: value?.muted === true, volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : AUDIO_DEFAULTS.volume };
 }
 
-const midi = (base, semitones) => base * 2 ** (semitones / 12);
-
 export function createAudioEngine({ AudioContextClass = globalThis.AudioContext ?? globalThis.webkitAudioContext, settings = AUDIO_DEFAULTS } = {}) {
   let current = normalizeAudioSettings(settings);
   let context = null;
@@ -37,9 +35,6 @@ export function createAudioEngine({ AudioContextClass = globalThis.AudioContext 
   let voice = null;
   let wind = null;
   let windWanted = false;
-  let scheduler = null;
-  let nextNoteAt = 0;
-  let noteIndex = 0;
 
   function applyVolume() {
     if (!master) return;
@@ -75,7 +70,7 @@ export function createAudioEngine({ AudioContextClass = globalThis.AudioContext 
     return buffer;
   }
 
-  // Drone continuo (dois osciladores desafinados num filtro que respira) + arpejo esparso agendado.
+  // Drone grave continuo: osciladores desafinados num filtro que respira lentamente.
   function startMood(name) {
     const spec = MUSIC_MOODS[name];
     if (!spec || !context) return;
@@ -114,32 +109,6 @@ export function createAudioEngine({ AudioContextClass = globalThis.AudioContext 
     gain.connect(musicBus);
     nodes.forEach((node) => node.start(now));
     voice = { gain, nodes, spec };
-    nextNoteAt = now + .5;
-    noteIndex = 0;
-  }
-
-  function scheduleNotes() {
-    if (!context || !voice || current.muted) return;
-    const spec = voice.spec;
-    while (nextNoteAt < context.currentTime + .4) {
-      const roll = Math.abs(Math.sin(noteIndex * 12.9898) * 43758.5453) % 1;
-      if (roll > .35) {
-        const degree = spec.scale[Math.floor(roll * 97) % spec.scale.length];
-        const oscillator = context.createOscillator();
-        const env = context.createGain();
-        oscillator.type = spec.arpWave;
-        oscillator.frequency.value = midi(spec.root * 4, degree);
-        env.gain.setValueAtTime(.0001, nextNoteAt);
-        env.gain.exponentialRampToValueAtTime(spec.arpLevel, nextNoteAt + .03);
-        env.gain.exponentialRampToValueAtTime(.0001, nextNoteAt + spec.step * 1.8);
-        oscillator.connect(env);
-        env.connect(musicBus);
-        oscillator.start(nextNoteAt);
-        oscillator.stop(nextNoteAt + spec.step * 2);
-      }
-      nextNoteAt += spec.step;
-      noteIndex++;
-    }
   }
 
   // Vento das tempestades: ruido em filtro passa-banda com rajadas lentas.
@@ -231,10 +200,6 @@ export function createAudioEngine({ AudioContextClass = globalThis.AudioContext 
     unlock() {
       if (!ensureContext()) return false;
       if (context.state === 'suspended') void context.resume();
-      if (!scheduler) {
-        scheduler = setInterval(scheduleNotes, 120);
-        scheduler.unref?.();
-      }
       if (mood && !voice) startMood(mood);
       if (windWanted && !wind) setWind(true);
       return true;
