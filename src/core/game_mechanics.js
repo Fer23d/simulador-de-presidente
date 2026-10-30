@@ -7,6 +7,7 @@ import { normalizeNeeds } from './needs.js';
 import { getWeather } from './weather.js';
 import { getMissionReward, isMissionPending } from './missions.js';
 import { getSector, getSectorExpedition, getSurfaceMap, isSectorSelectable, revealSector } from './surface_map.js';
+import { getCouncilEvent, getCouncilModifiers, resolveCouncilChoice } from './vault_council.js';
 
 const EXPEDITION_MONTHS = 3;
 const EXPEDITION_SUCCESS_CHANCE = 0.7;
@@ -140,7 +141,8 @@ export function calculateSuppression(state = {}) {
   const arsenalGuards = Math.max(0, Math.floor(Number(state.shelter_guards) || 0));
   const totalSoldiers = inhabitantSoldiers + arsenalGuards;
   const suppressionMultiplier = getPresidentClassModifiers(state.presidentClass).suppressionMultiplier;
-  const suppressionFactor = Math.min(1, totalSoldiers * SUPPRESSION_PER_SOLDIER * suppressionMultiplier);
+  const { suppressionBonus } = getCouncilModifiers(state.vaultCouncil);
+  const suppressionFactor = Math.min(1, totalSoldiers * SUPPRESSION_PER_SOLDIER * suppressionMultiplier + suppressionBonus);
   return { totalSoldiers, suppressionFactor, percent: Math.round(suppressionFactor * 100) };
 }
 
@@ -151,7 +153,7 @@ export function calculateSuppressedChance(baseChance, suppressionFactor) {
 }
 
 export function getWastelandEvent(eventId) {
-  return WASTELAND_EVENTS.find((event) => event.id === eventId) ?? null;
+  return getCouncilEvent(eventId) ?? WASTELAND_EVENTS.find((event) => event.id === eventId) ?? null;
 }
 
 export function canResolveWastelandEvent(state, eventId, optionId) {
@@ -165,7 +167,8 @@ export function canResolveWastelandEvent(state, eventId, optionId) {
 
 export function getRoomProductivityMultiplier(state, room) {
   if (!room || !['greenhouse', 'generator', 'laboratory'].includes(room.type) || (room.type === 'generator' && !room.operational)) return 0;
-  return getRoomWorkforce(state, room).effective;
+  const base = getRoomWorkforce(state, room).effective;
+  return room.type === 'generator' ? base * getCouncilModifiers(state.vaultCouncil).generatorMultiplier : base;
 }
 
 export function startExpedition(state, inhabitantId, destination = null) {
@@ -417,6 +420,9 @@ export function resolveWastelandEvent(state, optionId) {
   })) : state.inhabitants;
   const missionReward = getMissionReward(state.pendingBunkerEvent);
   scrap += missionReward;
+  const vaultCouncil = event.kind === 'council'
+    ? resolveCouncilChoice(state.vaultCouncil, event, option)
+    : state.vaultCouncil;
   return {
     ...state,
     scrap,
@@ -424,8 +430,11 @@ export function resolveWastelandEvent(state, optionId) {
     ...(randomSeed !== state.randomSeed ? { randomSeed } : {}),
     ...(shelterGrid ? { shelter_grid: shelterGrid } : {}),
     ...(inhabitants ? { inhabitants } : {}),
+    ...(vaultCouncil ? { vaultCouncil } : {}),
     pendingBunkerEvent: null,
-    notice: missionReward ? `Missão concluída: ${event.title}. +${missionReward} sucatas.` : `Dilema resolvido: ${event.title}.`,
+    notice: event.kind === 'council'
+      ? `Conselho encerrado: ${event.title}. O Vault lembra da sua escolha.`
+      : missionReward ? `Missão concluída: ${event.title}. +${missionReward} sucatas.` : `Dilema resolvido: ${event.title}.`,
   };
 }
 

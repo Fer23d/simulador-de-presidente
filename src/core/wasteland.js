@@ -14,6 +14,7 @@ import { getGeneratorFuelPlan } from './oil_economy.js';
 import { ENDINGS, isDoorOpen } from './endings.js';
 import { nextRandom } from './geopolitics.js';
 import { getPresidentClassModifiers } from './player_state.js';
+import { createVaultCouncil, getNextCouncilEvent, getCouncilModifiers, isCouncilTurn } from './vault_council.js';
 
 const VAULT_CASH_COST = 500_000_000_000;
 const VAULT_STEEL_COST = 50_000;
@@ -97,6 +98,7 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
     environment: createEnvironmentState(),
     isNight: false,
     pendingBunkerEvent: null,
+    vaultCouncil: createVaultCouncil(state.vaultCouncil),
     wasteland_turn: 0,
     wastelandMonthCounter: 0,
     wastelandEventCursor: 0,
@@ -162,8 +164,9 @@ function advanceVaultMonth(state) {
   const activeGreenhouses = rooms.filter((room) => room.type === 'greenhouse' && !(room.disabledMonthsRemaining > 0));
   const laboratories = rooms.filter((room) => room.type === 'laboratory');
   const generators = rooms.filter((room) => room.type === 'generator' && room.operational);
+  const councilModifiers = getCouncilModifiers(state.vaultCouncil);
   const energyProduction = Math.round(generators.reduce((total, room) =>
-    total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0) * getGeneratorFuelPlan(state).multiplier);
+    total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0) * getGeneratorFuelPlan(state).multiplier * councilModifiers.generatorMultiplier);
   const foodProduction = activeGreenhouses.reduce((total, room) =>
     total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0);
   const oxygenProduction = getLifeSupportOxygenProduction(grid);
@@ -219,7 +222,7 @@ function advanceVaultMonth(state) {
     shelter_supplies: supplies,
     oxygen_shortage_turns: oxygenShortageTurns,
     oxygen_deprived: oxygenDeficit,
-    shelter_radiation: Math.max(0, Math.min(100, (Number(state.shelter_radiation) || 0) + radiationGain - medical)),
+    shelter_radiation: Math.max(0, Math.min(100, (Number(state.shelter_radiation) || 0) + radiationGain - medical - councilModifiers.radiationReduction)),
     country: { ...state.country, populacao: population, populacao_base: population },
     notice: 'O Vault sobrevive mais um mês. Os módulos operacionais sustentam a população.',
   };
@@ -258,7 +261,18 @@ function advanceVaultMonth(state) {
         .filter(Boolean).join(' '),
     };
   }
-  if (wastelandMonthCounter % 3 !== 0 || processed.pendingBunkerEvent) return processed;
+  if (processed.pendingBunkerEvent) return processed;
+  if (isCouncilTurn(wastelandMonthCounter)) {
+    const event = getNextCouncilEvent(processed.vaultCouncil);
+    const urgentNotice = /SINAL DO EXPLORADOR|ALERTA CRÍTICO|ASFIXIA|oxigênio insuficiente/i.test(processed.notice ?? '')
+      ? `${processed.notice} ` : '';
+    return {
+      ...processed,
+      pendingBunkerEvent: { id: event.id },
+      notice: `${urgentNotice}CONSELHO DO VAULT: ${event.title}. Os líderes aguardam sua decisão.`,
+    };
+  }
+  if (wastelandMonthCounter % 3 !== 0) return processed;
   const cursor = advanced.wastelandEventCursor;
   let selectedIndex = -1;
   for (let offset = 0; offset < WASTELAND_EVENTS.length; offset++) {

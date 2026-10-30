@@ -12,6 +12,7 @@ import { getFactionSupport } from '../core/factions.js';
 import { canPromulgarConstituicao } from '../core/constitution.js';
 import { RESOLUTIONS } from '../core/un_assembly.js';
 import { getStoryEvent } from '../core/story_engine.js';
+import { COUNCIL_LEADERS } from '../core/vault_council.js';
 import { LORE_CHAPTERS, STORY_NOTICE } from '../core/story_lore.js';
 import { INTERNAL_PROJECTS } from '../core/infrastructure.js';
 import { broadcastShelterSignal, buildShelterRoom, calculateShelterCapacity, equipShelterGuard, findBuildSlots, getRoom, getShelterBuildCost, INITIAL_SHELTER_GRID, repairShelterGenerator, SHELTER_TYPES, upgradeShelterRoom, useShelterMedkit } from '../core/shelter_engine.js';
@@ -933,9 +934,12 @@ export function renderStoryCard(state) {
   if (!event || isMissionPending(state.pendingBunkerEvent)) return '';
   const reward = getMissionReward(state.pendingBunkerEvent);
   const missionStory = getMissionStory(state.pendingBunkerEvent);
+  const council = event.kind === 'council';
+  const councilTrust = council ? `<p class="story-classification council-trust">CONFIANÇA — ${Object.entries(COUNCIL_LEADERS).map(([id, leader]) => `${escapeHtml(leader.role.toUpperCase())}: ${Math.max(0, Math.min(100, Number(state.vaultCouncil?.relationships?.[id] ?? 50)))}%`).join(' · ')}</p>` : '';
   return `<section class="story-dialog" role="dialog" aria-modal="true" aria-labelledby="story-title">
-      <p class="story-classification">/// DILEMA DO VAULT · MÊS ${Number(state.wastelandMonthCounter) || 0} ///</p>
+      <p class="story-classification">${council ? '/// CONSELHO DO VAULT · DECISÃO DE LIDERANÇA ///' : `/// DILEMA DO VAULT · MÊS ${Number(state.wastelandMonthCounter) || 0} ///`}</p>
       <h2 id="story-title">${escapeHtml(event.title)}</h2>
+      ${council ? `<p class="story-classification">${escapeHtml(COUNCIL_LEADERS[event.speaker]?.name ?? 'Conselho do Vault')}</p>${councilTrust}` : ''}
       ${missionStory ? `<p class="story-classification mission-location">/// ANDAR ${state.pendingBunkerEvent.floor + 1} · SETOR ${state.pendingBunkerEvent.column} ///</p><p class="story-typewriter mission-story">${escapeHtml(missionStory)}</p>` : ''}
       <p class="story-typewriter">${escapeHtml(event.description)}</p>
       ${reward ? `<p class="mission-reward">RECOMPENSA DA MISSÃO: +${reward} SUCATAS</p>` : ''}

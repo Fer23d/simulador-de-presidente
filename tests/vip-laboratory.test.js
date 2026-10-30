@@ -147,7 +147,7 @@ test('a rogue VIP has a thirty percent chance to assassinate a normal inhabitant
   assert.equal(killed.inhabitants.some((npc) => npc.id === 'worker-target'), false);
   assert.equal(killed.inhabitants.some((npc) => npc.id === 'worker-far'), true);
   assert.match(killed.notice, /ALERTA CRÍTICO.*assassinou.*Técnico Raul/i);
-  assert.equal(killed.pendingBunkerEvent?.id, 'ration-emergency');
+  assert.equal(killed.pendingBunkerEvent?.id, 'council-gate-protocol');
 
   const failedSeed = seedForRolls((roll) => roll >= 0.3);
   const survived = advanceWastelandMonth({ ...state, randomSeed: failedSeed, inhabitants: [vip, victim] });

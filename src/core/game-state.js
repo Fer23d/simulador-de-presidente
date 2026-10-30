@@ -47,6 +47,7 @@ import { normalizeMission } from './missions.js';
 import { ENDINGS } from './endings.js';
 import { createExpeditionLocation } from './expeditions.js';
 import { normalizePlayerCosmetics } from './player_state.js';
+import { createVaultCouncil } from './vault_council.js';
 
 const STATE_VERSION = 22;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
@@ -247,6 +248,7 @@ export function createGameState(countryId = 'bra') {
     wastelandMonthCounter: 0,
     wastelandEventCursor: 0,
     pendingBunkerEvent: null,
+    vaultCouncil: createVaultCouncil(),
     shelter_guards: 0,
     shelter_radiation: 0,
     wastelandBuildings: { waterPurifiers: 0, geothermalGenerators: 0 },
@@ -1311,6 +1313,7 @@ export function hydrateGameState(serialized) {
       pendingBunkerEvent: getWastelandEvent(parsed.pendingBunkerEvent?.id)
         ? { id: parsed.pendingBunkerEvent.id, ...normalizeMission(parsed.pendingBunkerEvent, shelterGrid) }
         : null,
+      vaultCouncil: createVaultCouncil(parsed.vaultCouncil),
       shelter_guards: Math.max(0, Math.floor(Number(parsed.shelter_guards) || 0)),
       shelter_radiation: Math.max(0, Math.min(100, Number(parsed.shelter_radiation) || 0)),
       wastelandBuildings: {

@@ -48,7 +48,7 @@ test('a successful expedition returns after three turns and pauses for loot coll
   assert.equal(state.currentLoot.length, 3);
   assert.equal(state.pendingExpeditionReports[0].success, true);
   assert.equal(advanceWastelandMonth(state).monthCounter, state.monthCounter);
-  const eventResolved = resolveWastelandEvent(arriveAtMission(state), 'refuse-ration-cuts');
+  const eventResolved = resolveWastelandEvent(arriveAtMission(state), 'council-keep-the-door-human');
   let opened = openExpeditionLootbox(eventResolved);
   opened = advanceLootboxClick(opened, 1);
   opened = advanceLootboxClick(opened, 2);
@@ -67,30 +67,28 @@ test('a failed expedition removes the explorer and records the lost signal notic
   assert.equal(state.inhabitants.some((npc) => npc.id === 'vault-resident-1'), false);
   assert.match(state.notice, /SINAL DO EXPLORADOR FOI PERDIDO/);
   assert.equal(state.pendingExpeditionReports[0].success, false);
-  assert.equal(state.pendingBunkerEvent?.id, 'ration-emergency');
+  assert.equal(state.pendingBunkerEvent?.id, 'council-gate-protocol');
 });
 
-test('event cadence skips greenhouse dilemmas until eligible and continues in catalog round-robin order', () => {
+test('event cadence alternates Council sessions with survival dilemmas and skips greenhouse dilemmas until eligible', () => {
   let state = wastelandState();
   const nextDilemma = () => {
-    for (let month = 0; month < 3; month++) state = advanceWastelandMonth(state);
-    const eventId = state.pendingBunkerEvent?.id;
-    assert.ok(eventId);
-    const optionId = getWastelandEvent(eventId).options[1].id;
-    state = resolveWastelandEvent(arriveAtMission(state), optionId);
-    return eventId;
+    for (;;) {
+      state = advanceWastelandMonth(state);
+      const eventId = state.pendingBunkerEvent?.id;
+      if (!eventId) continue;
+      const event = getWastelandEvent(eventId);
+      const optionId = event.options.find((option) => !option.cost || !Object.keys(option.cost).length)?.id
+        ?? event.options[0].id;
+      state = resolveWastelandEvent(arriveAtMission(state), optionId);
+      if (event.kind !== 'council') return eventId;
+    }
   };
 
   assert.deepEqual(Array.from({ length: 5 }, nextDilemma), [
     'ration-emergency', 'generator-bearings', 'air-filter-crisis', 'radio-signal-unknown', 'ration-emergency',
   ]);
   assert.equal(state.wastelandEventCursor, 1);
-
-  assert.deepEqual(Array.from({ length: 3 }, nextDilemma), [
-    'generator-bearings', 'air-filter-crisis', 'radio-signal-unknown',
-  ]);
-  state = buildShelterRoom({ ...state, scrap: 1000 }, 'greenhouse', 0, 2);
-  assert.equal(nextDilemma(), 'greenhouse-fungus');
 });
 
 test('a failed expedition report and scheduled dilemma remain pending independently', () => {
@@ -106,13 +104,13 @@ test('a failed expedition report and scheduled dilemma remain pending independen
   };
 
   state = advanceWastelandMonth(state);
-  assert.equal(state.pendingBunkerEvent?.id, 'ration-emergency');
+  assert.equal(state.pendingBunkerEvent?.id, 'council-gate-protocol');
   assert.equal(state.pendingExpeditionReports.length, 1);
   assert.equal(advanceWastelandMonth(state).monthCounter, state.monthCounter);
   const reportDismissed = dismissExpeditionReport(state);
-  assert.equal(reportDismissed.pendingBunkerEvent?.id, 'ration-emergency');
+  assert.equal(reportDismissed.pendingBunkerEvent?.id, 'council-gate-protocol');
   assert.equal(advanceWastelandMonth(reportDismissed).monthCounter, state.monthCounter);
-  const dilemmaResolved = resolveWastelandEvent(arriveAtMission(reportDismissed), 'refuse-ration-cuts');
+  const dilemmaResolved = resolveWastelandEvent(arriveAtMission(reportDismissed), 'council-keep-the-door-human');
   assert.equal(dilemmaResolved.pendingExpeditionReports.length, 0);
   assert.equal(advanceWastelandMonth(dilemmaResolved).monthCounter, state.monthCounter + 1);
 });

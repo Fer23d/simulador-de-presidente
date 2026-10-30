@@ -34,8 +34,8 @@ test('missions happen in a matching room on any floor, never in the elevator', (
 });
 
 test('the scheduled dilemma becomes a located mission that hides the card until arrival', () => {
-  let state = vaultWithRooms();
-  for (let month = 0; month < 3; month++) state = advanceWastelandMonth(state);
+  let state = { ...vaultWithRooms(), wasteland_turn: 5, wastelandMonthCounter: 5 };
+  state = advanceWastelandMonth(state);
   const mission = state.pendingBunkerEvent;
   assert.ok(isMissionPending(mission));
   assert.match(state.notice, /MISSÃO: .* andar \d+, setor \d+/);

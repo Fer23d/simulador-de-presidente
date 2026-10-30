@@ -94,13 +94,12 @@ test('every third Wasteland month blocks further advancement until the dilemma i
 
   assert.equal(state.wastelandMonthCounter, 3);
   assert.equal(state.wasteland_turn, 3);
-  assert.equal(state.pendingBunkerEvent?.id, 'ration-emergency');
+  assert.equal(state.pendingBunkerEvent?.id, 'council-gate-protocol');
   const blocked = advanceWastelandMonth(state);
   assert.equal(blocked.monthCounter, state.monthCounter);
   assert.deepEqual(blocked.shelter_supplies, state.shelter_supplies);
   assert.match(bunkerView({ ...state, president_selection_pending: false, presidentClass: 'worker' }), /data-action="advance" disabled/);
-  assert.equal(renderStoryCard(state), '');
-  assert.match(renderStoryCard(arriveAtMission(state)), /A Ração de Emergência/);
+  assert.match(renderStoryCard(state), /O Preço da Porta Fechada/);
 });
 
 test('greenhouse quarantine suppresses three complete production calculations and resumes on the fourth', () => {
@@ -116,7 +115,7 @@ test('greenhouse quarantine suppresses three complete production calculations an
   state = advanceWastelandMonth(state);
   assert.equal(state.shelter_supplies.food, 88);
   state = advanceWastelandMonth(state);
-  state = resolveWastelandEvent(arriveAtMission(state), 'refuse-ration-cuts');
+  state = resolveWastelandEvent(arriveAtMission(state), 'council-keep-the-door-human');
   assert.equal(state.shelter_supplies.food, 82);
   assert.equal(state.shelter_grid.flat().find((room) => room?.type === 'greenhouse').disabledMonthsRemaining, 0);
 
