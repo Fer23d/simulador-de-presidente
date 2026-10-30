@@ -10,6 +10,7 @@ import { getWeather } from './weather.js';
 import { createMissionLocation } from './missions.js';
 import { normalizeOilField } from './oil.js';
 import { rollSurfaceRaid } from './defense.js';
+import { getGeneratorFuelPlan } from './oil_economy.js';
 import { ENDINGS, isDoorOpen } from './endings.js';
 import { nextRandom } from './geopolitics.js';
 import { getPresidentClassModifiers } from './player_state.js';
@@ -75,6 +76,7 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
     oil: 0,
     oil_derricks: normalizeOilField(),
     surface_fort: null,
+    generator_fuel: false,
     pendingRaid: null,
     raid_log: [],
     science: Math.max(0, Math.floor(Number(state.science) || 0)),
@@ -135,7 +137,12 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
 // Depois do mes do Vault, os saqueadores do Ermo podem atacar o campo de petroleo.
 export function advanceWastelandMonth(state, now = Date.now()) {
   const next = advanceVaultMonth(state);
-  return next !== state && (Number(next.wasteland_turn) || 0) > (Number(state.wasteland_turn) || 0) ? rollSurfaceRaid(next, now) : next;
+  if (next === state || (Number(next.wasteland_turn) || 0) <= (Number(state.wasteland_turn) || 0)) return next;
+  // Combustivel queimado no mes: o mesmo plano que aumentou a energia produzida em advanceVaultMonth.
+  const fuel = getGeneratorFuelPlan(state);
+  const burned = fuel.active ? { ...next, oil: Math.max(0, (Number(next.oil) || 0) - fuel.cost) } : next;
+  const note = fuel.enabled && !fuel.funded && fuel.cost > 0 ? { ...burned, notice: [burned.notice, '> Sem petróleo para os geradores: voltaram ao normal.'].filter(Boolean).join(' ') } : burned;
+  return rollSurfaceRaid(note, now);
 }
 
 function advanceVaultMonth(state) {
@@ -154,8 +161,8 @@ function advanceVaultMonth(state) {
   const activeGreenhouses = rooms.filter((room) => room.type === 'greenhouse' && !(room.disabledMonthsRemaining > 0));
   const laboratories = rooms.filter((room) => room.type === 'laboratory');
   const generators = rooms.filter((room) => room.type === 'generator' && room.operational);
-  const energyProduction = generators.reduce((total, room) =>
-    total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0);
+  const energyProduction = Math.round(generators.reduce((total, room) =>
+    total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0) * getGeneratorFuelPlan(state).multiplier);
   const foodProduction = activeGreenhouses.reduce((total, room) =>
     total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0);
   const oxygenProduction = getLifeSupportOxygenProduction(grid);

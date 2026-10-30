@@ -108,6 +108,13 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 .sound-volume { width: 90px; accent-color: #ff9d00; }
 .title-screen-host[hidden] { display: none; }
 .oil-resource { color: #e8d7ff; }
+.oil-use { display: grid; gap: 8px; margin: 12px 0; padding: 10px; border: 1px dashed #8a5a1c; }
+.oil-use-title { margin: 0; color: #e8d7ff; }
+.oil-use-title strong { color: #a07a48; }
+.oil-use-title strong.is-on { color: #8fe39a; }
+.oil-use-text { margin: 0; color: #c9a77a; font-size: 13px; }
+.oil-trade-row { display: grid; gap: 3px; text-align: left; }
+.oil-trade-row small { font-size: 12px; opacity: .85; }
 .modal-raid { z-index: 57; }
 .raid-dialog { width: min(620px, 100%); text-align: center; }
 .raid-dialog h2 { margin: 6px 0 10px; font: 16px 'Press Start 2P', monospace; color: #ffb000; }

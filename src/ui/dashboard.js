@@ -24,6 +24,7 @@ import { createPresidentSelectionMenu } from '../core/menu.js';
 import { getWeather } from '../core/weather.js';
 import { applyOfflineProgress, dismissOfflineReport } from '../core/offline.js';
 import { arriveAtMission, getMissionReward, getMissionStory, isMissionPending } from '../core/missions.js';
+import { getGeneratorFuelPlan, getOilSaleOffer, sellOil, toggleGeneratorFuel } from '../core/oil_economy.js';
 import { buildOilDerrick, collectOil, formatDuration, getDerrickBuildCost, getDerrickStatus, normalizeOilField, OIL_LEVELS, OIL_MAX_LEVEL, upgradeOilDerrick } from '../core/oil.js';
 import { drawOilDerrickPreview } from '../core/oil_renderer.js';
 import { assignGarrison, buildFort, dismissRaid, FORT_LEVELS, FORT_MAX_LEVEL, getArmySoldiers, getFortStatus, getThreatEstimate, RECRUIT_BATCH, RECRUIT_COST, recruitSoldiers, upgradeFort } from '../core/defense.js';
@@ -191,6 +192,23 @@ export function raidReportView(report) {
     ? [`${report.raidersDown} saqueadores abatidos`, `${report.soldiersLost} soldados perdidos`, `+${report.loot} sucatas recolhidas dos corpos`]
     : [`${report.oilLost} barris roubados da reserva`, 'Tanques dos poços esvaziados', `${report.soldiersLost} soldados perdidos`];
   return `<section class="modal-nuke-dialog raid-dialog" role="dialog" aria-modal="true" aria-labelledby="raid-title"><p class="modal-arcade-header">/!\\ ATAQUE NA SUPERFÍCIE /!\\</p><h2 id="raid-title">${escapeHtml(report.faction.toUpperCase())}</h2><canvas class="raid-battle" width="560" height="220" data-raid-battle aria-hidden="true"></canvas><div class="raid-report ${report.won ? 'is-won' : 'is-lost'}" style="animation-delay:${RAID_ANIMATION_MS}ms"><p class="raid-score">ATAQUE ${report.attack} × DEFESA ${report.defense}</p><ul>${lines.map((line) => `<li>&gt; ${escapeHtml(line)}</li>`).join('')}</ul>${report.won ? '' : '<p class="raid-advice">Melhore o Forte e reforce a guarnição antes do próximo ataque.</p>'}<button type="button" class="arcade-vote-yes" data-action="raid-dismiss">[ ENTENDIDO ]</button></div></section>`;
+}
+
+// Blocos do painel das salas que usam petroleo: abastecimento do gerador e venda no radio.
+export function generatorFuelView(state) {
+  const plan = getGeneratorFuelPlan(state);
+  const status = !plan.enabled ? 'DESLIGADO' : plan.funded ? 'LIGADO · +50% ENERGIA' : 'LIGADO · SEM PETRÓLEO';
+  return `<div class="oil-use"><p class="oil-use-title">🛢 ABASTECIMENTO COM PETRÓLEO: <strong class="${plan.active ? 'is-on' : ''}">${status}</strong></p><p class="oil-use-text">Queima ${formatNumber.format(plan.cost)} barris por mês nos ${plan.generators} geradores ativos. Você tem ${formatNumber.format(state.oil ?? 0)}.</p><button type="button" class="quiet-action" data-action="generator-fuel-toggle">[ ${plan.enabled ? 'DESLIGAR' : 'LIGAR'} ABASTECIMENTO ]</button></div>`;
+}
+
+export function oilTradeView(state) {
+  const contacts = state.geopolitics?.contacts ?? [];
+  const rows = contacts.map((contact) => {
+    const offer = getOilSaleOffer(contact);
+    const hostile = Number(contact.relation) < 20;
+    return `<button type="button" class="quiet-action oil-trade-row" data-action="oil-sell" data-contact="${escapeHtml(contact.id)}" ${(state.oil ?? 0) >= offer.batch ? '' : 'disabled'}>[ VENDER ${offer.batch} BARRIS · ${escapeHtml(contact.name)} ]<small>+${offer.scrap} sucatas · relação ${formatRelation(contact.relation)} (+${offer.relationGain} com a venda)${hostile ? ' · HOSTIL: vender acalma os ataques' : ''}</small></button>`;
+  }).join('');
+  return `<div class="oil-use"><p class="oil-use-title">📻 COMÉRCIO DE PETRÓLEO · ${formatNumber.format(state.oil ?? 0)} BARRIS</p>${rows}</div>`;
 }
 
 export function oilDerrickView(state, slot, now = Date.now()) {
@@ -1244,7 +1262,7 @@ export function mountDashboard(root) {
       presidential_suite: 'Alojamento do comandante. O guarda-roupa permite adquirir e equipar vestimentas cosméticas.',
     }[room.type];
     bunkerGeneratorModal.innerHTML = `<section class="bunker-dialog" role="dialog" aria-modal="true" aria-labelledby="bunker-room-title"><p class="eyebrow">/// GESTÃO DO VAULT ///</p>${renderRoomManagement(state, room)}<pre>&gt; ANDAR ${room.floor + 1} / SETOR ${room.column}
-&gt; ${description}</pre>${room.type === 'vault' ? expeditionLogisticsView(state) : ''}<div class="action-row">${room.type === 'presidential_suite' ? '<button type="button" class="primary-action" data-action="open-wardrobe">[ ABRIR GUARDA-ROUPA ]</button>' : ''}${isGenerator && !room.operational ? `<button type="button" class="primary-action" data-action="repair-generator" data-floor="${room.floor}" data-column="${room.column}" ${state.scrap >= 25 ? '' : 'disabled'}>[ REPARAR: 25 SUCATAS ]</button>` : ''}${room.type === 'arsenal' ? `<button type="button" class="primary-action" data-action="equip-guard" ${state.shelter_supplies?.weapons > 0 ? '' : 'disabled'}>[ EQUIPAR GUARDA: 1 ARMA ]</button>` : ''}${room.type === 'medical' ? `<button type="button" class="primary-action" data-action="treat-radiation" ${state.shelter_supplies?.medkits > 0 ? '' : 'disabled'}>[ TRATAR RADIAÇÃO: 1 CURATIVO ]</button>` : ''}${room.type === 'radio' ? `<button type="button" class="primary-action" data-action="broadcast-radio" ${state.scrap >= 10 ? '' : 'disabled'}>[ TRANSMITIR SINAL: 10 SUCATAS ]</button>` : ''}${room.type === 'office' ? (state.geopolitics?.contacts ?? []).map((contact) => `<button type="button" class="quiet-action" data-action="vault-scout" data-contact="${escapeHtml(contact.id)}" ${state.scrap >= 25 ? '' : 'disabled'}>[ BATEDORES: ${escapeHtml(contact.name)} ]</button>`).join('') : ''}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div></section>`;
+&gt; ${description}</pre>${room.type === 'vault' ? expeditionLogisticsView(state) : ''}${isGenerator ? generatorFuelView(state) : ''}${room.type === 'radio' ? oilTradeView(state) : ''}<div class="action-row">${room.type === 'presidential_suite' ? '<button type="button" class="primary-action" data-action="open-wardrobe">[ ABRIR GUARDA-ROUPA ]</button>' : ''}${isGenerator && !room.operational ? `<button type="button" class="primary-action" data-action="repair-generator" data-floor="${room.floor}" data-column="${room.column}" ${state.scrap >= 25 ? '' : 'disabled'}>[ REPARAR: 25 SUCATAS ]</button>` : ''}${room.type === 'arsenal' ? `<button type="button" class="primary-action" data-action="equip-guard" ${state.shelter_supplies?.weapons > 0 ? '' : 'disabled'}>[ EQUIPAR GUARDA: 1 ARMA ]</button>` : ''}${room.type === 'medical' ? `<button type="button" class="primary-action" data-action="treat-radiation" ${state.shelter_supplies?.medkits > 0 ? '' : 'disabled'}>[ TRATAR RADIAÇÃO: 1 CURATIVO ]</button>` : ''}${room.type === 'radio' ? `<button type="button" class="primary-action" data-action="broadcast-radio" ${state.scrap >= 10 ? '' : 'disabled'}>[ TRANSMITIR SINAL: 10 SUCATAS ]</button>` : ''}${room.type === 'office' ? (state.geopolitics?.contacts ?? []).map((contact) => `<button type="button" class="quiet-action" data-action="vault-scout" data-contact="${escapeHtml(contact.id)}" ${state.scrap >= 25 ? '' : 'disabled'}>[ BATEDORES: ${escapeHtml(contact.name)} ]</button>`).join('') : ''}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div></section>`;
     bunkerGeneratorModal.hidden = false;
     bunkerController?.pause();
     if (requestLocation && room.type === 'vault' && !state.expeditionLocation && !locationRequestPending) {
@@ -1998,6 +2016,12 @@ export function mountDashboard(root) {
         : equipSkin(state, button.dataset.skin, { entitled: entitlements.skins });
       if (next !== state) commit(next);
       openWardrobe();
+      return;
+    }
+    if (action === 'generator-fuel-toggle' || action === 'oil-sell') {
+      audio.play(action === 'oil-sell' ? 'reward' : 'click');
+      commit(action === 'oil-sell' ? sellOil(state, button.dataset.contact) : toggleGeneratorFuel(state));
+      if (activeShelterRoom) openShelterRoom(activeShelterRoom, { requestLocation: false });
       return;
     }
     if (action === 'upgrade-shelter-room') {
