@@ -169,6 +169,8 @@ export function fortLiveView(state, now = Date.now()) {
   const threatLine = threat ? `<p class="fort-threat ${status.defense >= threat.power ? 'is-safe' : 'is-danger'}">&gt; AMEAÇA: ${escapeHtml(threat.faction)} · força estimada ${threat.power} · sua defesa ${status.defense}</p>` : '<p class="fort-threat is-safe">&gt; Nenhuma facção hostil no Ermo por enquanto.</p>';
   const last = state.raid_log?.[0];
   const lastLine = last ? `<p class="fort-last">Último ataque (mês ${last.turn}): ${last.won ? 'VITÓRIA' : 'DERROTA'} contra ${escapeHtml(last.faction)}.</p>` : '';
+  const quietMonths = Math.max(0, (Number(state.raidCooldownUntilTurn) || 0) - (Number(state.wasteland_turn) || 0));
+  const cooldownLine = quietMonths ? `<p class="fort-last">&gt; BATEDORES EM REORGANIZAÇÃO: sem nova incursão por ${quietMonths} ${quietMonths === 1 ? 'mês' : 'meses'}.</p>` : '';
   const work = status.upgrading
     ? `<p class="oil-status is-working">&gt; ${status.building ? 'ERGUENDO O FORTE' : `OBRA PARA O NÍVEL ${status.level}`} · FALTAM ${formatDuration(status.upgradeRemainingMs)}</p><span class="oil-progress"><span style="width:${Math.round(status.upgradeProgress * 100)}%"></span></span>`
     : '';
@@ -176,7 +178,7 @@ export function fortLiveView(state, now = Date.now()) {
   const upgrade = next
     ? `<button type="button" class="primary-action oil-upgrade" data-action="fort-upgrade" ${state.scrap >= next.scrap && (state.oil ?? 0) >= next.oil ? '' : 'disabled'}>[ MELHORAR P/ NÍVEL ${next.level} ]<small>${formatNumber.format(next.scrap)} sucatas · ${formatNumber.format(next.oil)} barris · ⏱ ${formatDuration(next.buildMs)}</small></button>`
     : status.upgrading ? '' : '<span class="oil-max">★ NÍVEL MÁXIMO ★</span>';
-  return `${stats}${threatLine}${lastLine}${work}${garrison}<div class="action-row oil-actions">${upgrade}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div>`;
+  return `${stats}${threatLine}${lastLine}${cooldownLine}${work}${garrison}<div class="action-row oil-actions">${upgrade}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div>`;
 }
 
 export function fortView(state, now = Date.now()) {

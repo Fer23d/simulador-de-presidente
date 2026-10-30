@@ -20,6 +20,11 @@ export const RECRUIT_COST = 30;
 export const RAID_GRACE_TURNS = 2;
 // Faccoes com relacao abaixo disso consideram o petroleo do Vault um alvo legitimo.
 export const RAID_HOSTILITY = 20;
+// Um campo visivel atrai problemas, mas nao deve ser atacado em todos os turnos.
+// Depois de uma incursao, os batedores precisam de meses para se reagrupar.
+export const RAID_COOLDOWN_TURNS = 4;
+export const RAID_BASE_CHANCE = .08;
+export const RAID_MAX_CHANCE = .25;
 
 export function normalizeFort(value) {
   const level = Math.floor(Number(value?.level));
@@ -139,8 +144,9 @@ export function getThreatEstimate(state) {
 export function getRaidChance(state) {
   const field = normalizeOilField(state?.oil_derricks);
   if (!state?.is_wasteland || !field.some(Boolean) || (Number(state.wasteland_turn) || 0) < RAID_GRACE_TURNS || !hostileFactions(state).length) return 0;
+  if ((Number(state.wasteland_turn) || 0) < (Number(state.raidCooldownUntilTurn) || 0)) return 0;
   // Barris parados no tanque chamam atencao: quanto mais petroleo, mais cobica.
-  return Math.min(.6, .25 + (Number(state.oil) || 0) / 2_000);
+  return Math.min(RAID_MAX_CHANCE, RAID_BASE_CHANCE + (Number(state.oil) || 0) / 4_000);
 }
 
 // Rolado ao virar o mes: decide se ha ataque e ja resolve a batalha, guardando o relatorio para o jogador ver.
@@ -177,6 +183,8 @@ export function rollSurfaceRaid(state, now = Date.now()) {
     oil_derricks: won ? field : field.map((derrick) => (derrick ? { ...derrick, collectedAt: Math.max(derrick.collectedAt, now) } : derrick)),
     surface_fort: fort ? { ...fort, garrison: garrison - soldiersLost } : fort,
     pendingRaid: report,
+    // Quatro viradas inteiras sem ataques: evita a sequencia frustrante de ataques consecutivos.
+    raidCooldownUntilTurn: (Number(state.wasteland_turn) || 0) + RAID_COOLDOWN_TURNS + 1,
     raid_log: [report, ...(state.raid_log ?? [])].slice(0, 5),
     notice: won ? `ATAQUE REPELIDO: ${faction.name} recuou do campo de petróleo.` : `ATAQUE NA SUPERFÍCIE: ${faction.name} saqueou o campo de petróleo.`,
   };

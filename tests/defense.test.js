@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assignGarrison, buildFort, dismissRaid, FORT_LEVELS, getFortStatus, getRaidChance, getRaiderPower, getThreatEstimate,
-  normalizeFort, recruitSoldiers, rollSurfaceRaid, upgradeFort } from '../src/core/defense.js';
+  normalizeFort, RAID_COOLDOWN_TURNS, recruitSoldiers, rollSurfaceRaid, upgradeFort } from '../src/core/defense.js';
 import { FORT_GARRISON_SKIN } from '../src/core/defense_renderer.js';
 import { getSkin } from '../src/core/player_state.js';
 import { advanceWastelandMonth } from '../src/core/wasteland.js';
@@ -59,8 +59,8 @@ test('raids only come for an oil field after the grace months, from hostile fact
   assert.equal(getRaidChance(vault({ oil_derricks: [null, null, null] })), 0);
   assert.equal(getRaidChance(vault({ wasteland_turn: 1 })), 0);
   assert.equal(getRaidChance(vault({ geopolitics: { contacts: [friends] } })), 0);
-  assert.equal(getRaidChance(vault({ oil: 0 })), .25);
-  assert.equal(getRaidChance(vault({ oil: 99_999 })), .6, 'oil attracts raiders, up to a cap');
+  assert.equal(getRaidChance(vault({ oil: 0 })), .08);
+  assert.equal(getRaidChance(vault({ oil: 99_999 })), .25, 'oil attracts raiders, up to a calmer cap');
   assert.equal(getRaiderPower(horde, 0), 46);
   assert.equal(getRaiderPower(horde, 24), 92);
   assert.deepEqual(getThreatEstimate(vault()), { faction: 'Horda Mutante do Norte', power: 52 });
@@ -82,6 +82,9 @@ test('an undefended field loses oil and the tanks; a strong fort repels and loot
   assert.equal(lost.oil, 600);
   assert.equal(lost.oil_derricks[0].collectedAt, 10 * MINUTE, 'the tanks were emptied');
   assert.equal(lost.raid_log.length, 1);
+  assert.equal(lost.raidCooldownUntilTurn, lost.wasteland_turn + RAID_COOLDOWN_TURNS + 1);
+  assert.equal(getRaidChance({ ...lost, pendingRaid: null, wasteland_turn: lost.wasteland_turn + 1 }), 0,
+    'raiders need time to regroup after an incursion');
   const fort = ready({ level: 3, garrison: 200 });
   const held = forceRaid(vault({ surface_fort: fort }));
   assert.equal(held.pendingRaid.won, true);

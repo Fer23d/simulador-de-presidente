@@ -78,6 +78,7 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
     surface_fort: null,
     generator_fuel: false,
     pendingRaid: null,
+    raidCooldownUntilTurn: 0,
     raid_log: [],
     science: Math.max(0, Math.floor(Number(state.science) || 0)),
     shelter_grid: normalizeShelterGrid(INITIAL_SHELTER_GRID),

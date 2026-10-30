@@ -433,6 +433,7 @@ function drawFront(ctx, level, seed) {
 }
 
 const structureCache = new Map();
+const movingLayerCache = new Map();
 function getLayer(level, layer) {
   const key = `${level}:${layer}`;
   if (structureCache.has(key)) return structureCache.get(key);
@@ -589,6 +590,33 @@ function drawMoving(ctx, level, time, pumping, flicker) {
   ctx.restore();
 }
 
+// O cavalo-de-pau tem muitos gradientes, arcos e detalhes. Ele e atualizado a 12,5 FPS em um buffer;
+// para quem joga continua fluido, mas deixa de redesenhar centenas de primitivas a cada frame.
+function drawCachedMoving(ctx, slot, level, time, pumping, flicker) {
+  if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+    drawMoving(ctx, level, time, pumping, flicker);
+    return;
+  }
+  const frame = Math.floor(time / 80);
+  let cached = movingLayerCache.get(slot);
+  if (!cached || cached.frame !== frame || cached.level !== level || cached.pumping !== pumping) {
+    const canvas = cached?.canvas ?? document.createElement('canvas');
+    if (canvas.width !== CACHE_W) canvas.width = CACHE_W;
+    if (canvas.height !== CACHE_H) canvas.height = CACHE_H;
+    const buffer = canvas.getContext?.('2d');
+    if (!buffer) {
+      drawMoving(ctx, level, time, pumping, flicker);
+      return;
+    }
+    buffer.clearRect(0, 0, CACHE_W, CACHE_H);
+    buffer.translate(CACHE_ORIGIN_X, CACHE_GROUND_Y);
+    drawMoving(buffer, level, frame * 80, pumping, flicker);
+    cached = { canvas, frame, level, pumping };
+    movingLayerCache.set(slot, cached);
+  }
+  ctx.drawImage(cached.canvas, -CACHE_ORIGIN_X, -CACHE_GROUND_Y);
+}
+
 function plainSteel(ctx, x, y, w, h) {
   ctx.fillStyle = linear(ctx, 0, y, 0, y + h, [[0, '#d2d5d8'], [.5, '#8d9296'], [1, '#34383b']]);
   ctx.fillRect(x, y, w, h);
@@ -685,7 +713,9 @@ export function renderOilField(ctx, derricks = [], { time = 0, now = Date.now() 
       const back = getLayer(level, 'back');
       const front = getLayer(level, 'front');
       if (back) ctx.drawImage(back, -CACHE_ORIGIN_X, -CACHE_GROUND_Y);
-      drawMoving(ctx, level, time + slot * 420, !status.upgrading && !status.full, Math.sin(time / 53 + slot) * .5 + .5);
+      const motionTime = time + slot * 420;
+      drawCachedMoving(ctx, slot, level, motionTime, !status.upgrading && !status.full,
+        Math.sin(motionTime / 53) * .5 + .5);
       if (front) ctx.drawImage(front, -CACHE_ORIGIN_X, -CACHE_GROUND_Y);
       if (status.upgrading) drawScaffold(ctx, time);
     }

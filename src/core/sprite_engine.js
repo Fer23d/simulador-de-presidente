@@ -19,6 +19,8 @@ const ROOM_AMBIENT_LIGHTS = Object.freeze({
 });
 const NPC_ROWS = Object.freeze({ resident: 0, engineer: 0, scientist: 1, medic: 2, guard: 3 });
 const frameBoundsCache = new WeakMap();
+const dirtPatternCache = new WeakMap();
+const proceduralRoomFrameCache = new Map();
 const ROOM_CEILING_THICKNESS = 12;
 const ELEVATOR_CABIN_HEIGHT = 129;
 const ELEVATOR_ART_FLOOR_INSET = 19;
@@ -262,12 +264,54 @@ function renderDirt(ctx, camera, assets) {
   const top = Math.max(0, SURFACE_Y + camera.offset_y);
   if (top >= ctx.canvas.height) return;
   const image = assets.getImage('dirt_texture');
-  const pattern = image && ctx.createPattern(image, 'repeat');
+  // Criar um CanvasPattern em toda frame e caro em mapas grandes. O padrao so muda quando a textura muda.
+  let cached = dirtPatternCache.get(ctx);
+  if (!cached || cached.image !== image) {
+    cached = { image, pattern: image && ctx.createPattern?.(image, 'repeat') };
+    dirtPatternCache.set(ctx, cached);
+  }
+  const pattern = cached.pattern;
   if (pattern?.setTransform && typeof DOMMatrix !== 'undefined') {
     pattern.setTransform(new DOMMatrix().translate(camera.offset_x, camera.offset_y));
   }
   ctx.fillStyle = pattern || '#ff00ff';
   ctx.fillRect(0, top, ctx.canvas.width, ctx.canvas.height - top);
+}
+
+function isWorldAreaVisible(ctx, camera, x, y, width, height, padding = 72) {
+  const canvas = ctx.canvas;
+  if (!canvas) return true;
+  const left = -camera.offset_x - padding;
+  const top = -camera.offset_y - padding;
+  const right = left + canvas.width + padding * 2;
+  const bottom = top + canvas.height + padding * 2;
+  return x + width >= left && x <= right && y + height >= top && y <= bottom;
+}
+
+// As salas montadas em Canvas (quando a arte final ainda nao existe) sao caras. Atualiza as animacoes
+// a 10 FPS e reaproveita o quadro entre frames; o movimento geral continua a 60 FPS.
+function renderCachedProceduralInterior(ctx, key, x, y, time, draw) {
+  if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+    draw(ctx, x, y, time);
+    return;
+  }
+  const frame = Math.floor(time / 100);
+  let cached = proceduralRoomFrameCache.get(key);
+  if (!cached || cached.frame !== frame) {
+    const canvas = cached?.canvas ?? document.createElement('canvas');
+    if (canvas.width !== SLOT_WIDTH) canvas.width = SLOT_WIDTH;
+    if (canvas.height !== ROOM_HEIGHT) canvas.height = ROOM_HEIGHT;
+    const buffer = canvas.getContext?.('2d');
+    if (!buffer) {
+      draw(ctx, x, y, time);
+      return;
+    }
+    buffer.clearRect(0, 0, SLOT_WIDTH, ROOM_HEIGHT);
+    draw(buffer, 0, 0, frame * 100);
+    cached = { canvas, frame };
+    proceduralRoomFrameCache.set(key, cached);
+  }
+  ctx.drawImage(cached.canvas, x, y, SLOT_WIDTH, ROOM_HEIGHT);
 }
 
 export function renderRoom(ctx, room, assets, time = 0) {
@@ -291,7 +335,7 @@ export function renderRoom(ctx, room, assets, time = 0) {
     const emptyBase = assets.getImage('room_base_empty');
     drawOrMissing(ctx, laboratory ?? emptyBase, x, y, SLOT_WIDTH, ROOM_HEIGHT);
     // Sem arte dedicada, o laboratorio e montado por cima da sala base.
-    if (!laboratory) renderLaboratoryInterior(ctx, x, y, time);
+    if (!laboratory) renderCachedProceduralInterior(ctx, 'laboratory', x, y, time, renderLaboratoryInterior);
     renderRoomAmbientLight(ctx, room, x, y);
     return;
   }
@@ -306,7 +350,7 @@ export function renderRoom(ctx, room, assets, time = 0) {
       drawOrMissing(ctx, atlas, x, y, SLOT_WIDTH, ROOM_HEIGHT,
         atlas ? [0, cellHeight * 2, cellWidth, cellHeight] : null);
     }
-    renderLifeSupportDetails(ctx, x, y, time);
+    renderCachedProceduralInterior(ctx, 'life_support', x, y, time, renderLifeSupportDetails);
     renderRoomAmbientLight(ctx, room, x, y);
     return;
   }
@@ -1553,7 +1597,8 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
   renderDirt(ctx, camera, assets);
   ctx.save();
   ctx.translate(camera.offset_x, camera.offset_y);
-  if (oilDerricks) {
+  const surfaceVisible = isWorldAreaVisible(ctx, camera, 0, SURFACE_Y - 320, 1_250, 360, 96);
+  if (oilDerricks && surfaceVisible) {
     renderFort(ctx, surfaceFort ?? null, { time, now: oilNow, night: isNight,
       soldierImage: assets.getImage('npc_walk_sheet'), fortImage: assets.getImage('surface_fort') });
     renderOilField(ctx, oilDerricks, { time, now: oilNow });
@@ -1563,6 +1608,9 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
     for (let column = 0; column < grid[floor].length; column++) {
       const room = grid[floor][column];
       if (!room) continue;
+      const roomX = WORLD_LEFT + column * SLOT_WIDTH;
+      const roomY = WORLD_TOP + floor * FLOOR_SPACING;
+      if (!isWorldAreaVisible(ctx, camera, roomX, roomY, SLOT_WIDTH, FLOOR_SPACING, 32)) continue;
       renderRoom(ctx, room, assets, time);
       if (room.type === 'elevator' && atlas && grid[floor + 1]?.[column]?.type === 'elevator') {
         const cellWidth = atlas.width / 3;
@@ -1583,6 +1631,7 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
     if (!room) continue;
     const x = WORLD_LEFT + npc.column * SLOT_WIDTH + SLOT_WIDTH / 2 + npc.offsetX;
     const placement = getActorPlacement(room);
+    if (!isWorldAreaVisible(ctx, camera, x - 34, placement.floorY - placement.height - 16, 68, placement.height + 32, 32)) continue;
     const animationPhase = [...npc.id].reduce((sum, letter) => sum + letter.charCodeAt(0), 0) % 4 * 67;
     drawActorSprite(ctx, { ...npc, x, y: placement.floorY }, npcSheet, time + animationPhase, placement);
     if (npc.isVIP) {
@@ -1626,14 +1675,20 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
   const playerY = placement.floorY;
   drawPresident(ctx, { ...player, y: playerY, role: 'president' }, assets,
     { presidentClass, equippedSkin, time, placement });
-  for (const room of grid.flat()) if (room?.type === 'detention') renderDetentionBars(ctx, room, time);
-  for (const room of grid.flat()) if (room?.type === 'greenhouse') renderGreenhouseGlow(ctx, room);
+  for (const room of grid.flat()) {
+    if (!room) continue;
+    const x = WORLD_LEFT + room.column * SLOT_WIDTH;
+    const y = WORLD_TOP + room.floor * FLOOR_SPACING;
+    if (!isWorldAreaVisible(ctx, camera, x, y, SLOT_WIDTH, ROOM_HEIGHT, 24)) continue;
+    if (room.type === 'detention') renderDetentionBars(ctx, room, time);
+    if (room.type === 'greenhouse') renderGreenhouseGlow(ctx, room);
+  }
   ctx.restore();
   if (isNight && ctx.canvas) {
     const surfaceHeight = Math.max(0, Math.min(ctx.canvas.height, SURFACE_Y + camera.offset_y));
     applyNightOverlay(ctx, ctx.canvas.width, ctx.canvas.height, true, { activeGenerators, surfaceHeight });
   }
-  if (oilDerricks) {
+  if (oilDerricks && surfaceVisible) {
     ctx.save();
     ctx.translate(camera.offset_x, camera.offset_y);
     renderOilFieldOverlay(ctx, oilDerricks, { time, now: oilNow, feedback: oilFeedback, perfNow: time });
