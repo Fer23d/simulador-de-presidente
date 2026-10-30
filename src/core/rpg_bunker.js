@@ -18,6 +18,9 @@ const WALK_SPEED = 170;
 const LIFT_SPEED = 280;
 const PLAYER_RADIUS = 14;
 const TRIGGER_RADIUS = 70;
+// No andar da superfície a câmera deixa uma faixa de céu acima do personagem.
+// Assim as lanternas e a cobertura completa do Forte não encostam no HUD.
+const SURFACE_CAMERA_HEADROOM = 46;
 const LABELS = Object.freeze({
   vault: 'ACEDER AO COMANDO', generator: 'ACEDER AO TERMINAL DO GERADOR',
   greenhouse: 'INSPECIONAR A ESTUFA', dormitory: 'GERIR DORMITÓRIO',
@@ -335,7 +338,8 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
       }
     }
     const targetX = canvas.width / 2 - player.x;
-    const targetY = canvas.height / 2 - player.y;
+    const targetY = canvas.height / 2 - player.y
+      + (player.floor === 0 ? Math.min(SURFACE_CAMERA_HEADROOM, canvas.height * .08) : 0);
     camera.offset_x += (targetX - camera.offset_x) * Math.min(1, dt * 8);
     camera.offset_y += (targetY - camera.offset_y) * Math.min(1, dt * 8);
     renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants: actors, cabinFloor, time,

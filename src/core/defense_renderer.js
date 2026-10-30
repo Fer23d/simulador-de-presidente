@@ -2,15 +2,23 @@ import { WORLD_TOP } from './shelter_engine.js';
 import { formatDuration } from './oil.js';
 import { getFortStatus } from './defense.js';
 import { drawActorSprite } from './sprite_engine.js';
+import { getSkin } from './player_state.js';
 import { gradeStructure, hash, linear, paintBackdrop } from './art.js';
 
 // O Forte fica a esquerda do campo de petroleo, guardando a entrada do Vault.
 export const FORT_X = 150;
 const GROUND_Y = WORLD_TOP - 30;
-// Mesma altura dos personagens dentro do Vault, para os soldados da superficie terem a mesma escala.
-const SOLDIER_HEIGHT = 74;
+// A guarnição usa o traje antirradição já existente no guarda-roupa. Isso mantém
+// os soldados legíveis sobre a poeira laranja sem criar uma segunda família de sprites.
+export const FORT_GARRISON_SKIN = 'hazmat';
+const HAZMAT_GARRISON = getSkin(FORT_GARRISON_SKIN);
+// A guarnição é menor que os moradores do Vault. Isso deixa a arquitetura do
+// forte legível e impede que uma única silhueta esconda uma torre inteira.
+const WALL_GUARD_HEIGHT = 48;
+const TOWER_GUARD_HEIGHT = 40;
 const HALF_WIDTH = 132;
 const STRUCTURE_HEIGHT = 214;
+const FORT_ART_HEIGHTS = Object.freeze([0, 132, 146, 164, 184, 202]);
 
 export function getFortRect() {
   return { x: FORT_X - HALF_WIDTH, y: GROUND_Y - 192, width: HALF_WIDTH * 2, height: 200, centerX: FORT_X, groundY: GROUND_Y };
@@ -334,6 +342,71 @@ function drawStructureLayer(ctx, centerX, groundY, level, layer) {
   if (canvas) ctx.drawImage(canvas, centerX - canvas.width / 2, groundY - STRUCTURE_HEIGHT + 6);
 }
 
+// A arte final e uma peça única e transparente. Os niveis variam em escala e
+// em reforços externos; a silhueta continua reconhecível em todos eles e a
+// montagem não precisa redesenhar o cenário inteiro a cada quadro.
+function drawFortAsset(ctx, image, centerX, groundY, level) {
+  if (!image?.width || !image?.height) return null;
+  const height = FORT_ART_HEIGHTS[Math.max(1, Math.min(5, level))] ?? FORT_ART_HEIGHTS[1];
+  const width = height * image.width / image.height;
+  const x = centerX - width / 2;
+  const y = groundY - height + 4;
+  ctx.save();
+  ctx.shadowColor = 'rgba(30, 10, 2, .6)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 5;
+  ctx.drawImage(image, x, y, width, height);
+  ctx.restore();
+  // Pontos de ancoragem tirados da própria composição: os corpos ficam atrás das
+  // sacas, com as botas no piso — e não deslocados por uma compensação genérica
+  // do sprite. Isto mantém o resultado estável em cada nível de escala do forte.
+  const point = (relativeX, relativeY) => ({ x: x + width * relativeX, y: y + height * relativeY });
+  return {
+    x, y, width, height,
+    wallY: point(.5, .64).y,
+    wallCoverY: point(.5, .59).y,
+    towers: [
+      { ...point(.145, .42), coverY: point(.145, .34).y },
+      { ...point(.855, .42), coverY: point(.855, .34).y },
+    ],
+  };
+}
+
+// Uma fileira curta de sacos em primeiro plano esconde as pernas da guarnição.
+// O efeito de o corpo surgir de trás da defesa é mais convincente que desenhar
+// os soldados inteiros sobre a muralha, mesmo usando uma única imagem de base.
+function garrisonParapet(ctx, centerX, groundY, metrics, level) {
+  if (!metrics) return;
+  const count = level >= 4 ? 7 : 5;
+  const width = level >= 4 ? 28 : 25;
+  const height = level >= 4 ? 14 : 12;
+  const start = centerX - (count * (width - 4)) / 2;
+  const y = metrics.wallCoverY;
+  ctx.save();
+  ctx.globalAlpha = .94;
+  for (let index = 0; index < count; index++) {
+    sandbag(ctx, start + index * (width - 4), y + (index % 2 ? 1 : 0), width, height, 91 + index * 7 + level * 11);
+  }
+  ctx.restore();
+}
+
+// A arte tem as sacas das torres no mesmo PNG. Recriamos só a fileira frontal
+// para ocultar as botas do vigia e dar profundidade sem tapar a guarita.
+function garrisonTowerParapets(ctx, metrics, level) {
+  if (!metrics?.towers) return;
+  const bagWidth = level >= 4 ? 17 : 15;
+  const bagHeight = level >= 4 ? 10 : 8;
+  ctx.save();
+  ctx.globalAlpha = .93;
+  metrics.towers.forEach((tower, towerIndex) => {
+    for (let bag = -1; bag <= 1; bag++) {
+      sandbag(ctx, tower.x + bag * (bagWidth - 3) - bagWidth / 2, tower.coverY,
+        bagWidth, bagHeight, 173 + towerIndex * 17 + bag * 3 + level);
+    }
+  });
+  ctx.restore();
+}
+
 function flag(ctx, x, groundY, height, color, time) {
   timber(ctx, x, groundY, x, groundY - height, 2.5, 99);
   ctx.save();
@@ -365,46 +438,69 @@ function searchlight(ctx, x, y, time) {
   ctx.restore();
 }
 
-// Soldados do Vault (mesmo sprite de guarda dos andares) postados atras da muralha e nas torres.
-function garrisonSoldiers(ctx, centerX, groundY, level, garrison, time, soldierImage) {
+// Soldados do Vault postados atrás da muralha e nas torres. Todos recebem o
+// mesmo acabamento hazmat do Presidente, com capuz, visor e respirador.
+function garrisonSoldiers(ctx, centerX, groundY, level, garrison, time, soldierImage, metrics = null) {
   if (!soldierImage || garrison <= 0) return;
-  const wall = wallHeight(level);
-  const onWall = Math.min(4, Math.ceil(garrison / 40));
+  const wall = metrics?.wallY ?? groundY - wallHeight(level) * .45;
+  // Três sentinelas no centro mantêm o portão e os reparos visíveis.
+  const onWall = Math.min(3, Math.max(1, Math.ceil(garrison / 40)));
   for (let index = 0; index < onWall; index++) {
-    const x = centerX - 46 + index * 38;
-    // Em pe num degrau atras do muro: so o tronco aparece por cima dos sacos.
-    drawActorSprite(ctx, { role: 'guard', x, y: groundY - wall * .45, facing: index % 2 ? -1 : 1, currentState: 'idle' },
-      soldierImage, time + index * 300, { height: SOLDIER_HEIGHT });
+    const x = centerX - (onWall - 1) * 24 + index * 48;
+    drawActorSprite(ctx, { role: 'guard', x, y: wall, facing: index % 2 ? -1 : 1, currentState: 'idle' },
+      soldierImage, time + index * 300, { height: WALL_GUARD_HEIGHT }, 'none', HAZMAT_GARRISON);
   }
   // Vigias nas plataformas das torres.
   TOWER_X.slice(0, towerCount(level)).forEach((offset, index) => {
     if (garrison < 10 * (index + 1)) return;
-    drawActorSprite(ctx, { role: 'guard', x: centerX + offset, y: groundY - 104 - index * 6 - 2, facing: index ? -1 : 1, currentState: 'idle' },
-      soldierImage, time, { height: SOLDIER_HEIGHT * .7 });
+    const tower = metrics?.towers?.[index];
+    const x = tower?.x ?? centerX + offset;
+    const y = tower?.y ?? groundY - 104;
+    drawActorSprite(ctx, { role: 'guard', x, y, facing: index ? -1 : 1, currentState: 'idle' },
+      soldierImage, time + index * 430, { height: TOWER_GUARD_HEIGHT }, 'none', HAZMAT_GARRISON);
   });
 }
 
-// Desenha o Forte no nivel ativo, com os soldados da guarnicao entre a estrutura de tras e a muralha.
-export function drawFort(ctx, centerX, groundY, { level = 1, turrets = 1, garrison = 0, time = 0, night = false, firing = false, soldierImage = null } = {}) {
+// Desenha o Forte no nível ativo, com os soldados da guarnição entre a estrutura
+// de trás e a cobertura frontal. Se a arte de alta qualidade falhar, a versão
+// procedural continua disponível como fallback funcional.
+export function drawFort(ctx, centerX, groundY, { level = 1, turrets = 1, garrison = 0, time = 0, night = false, firing = false,
+  soldierImage = null, fortImage = null } = {}) {
   ctx.save();
-  drawStructureLayer(ctx, centerX, groundY, level, 'back');
-  if (level >= 3 && night) TOWER_X.slice(0, towerCount(level)).forEach((offset, index) => searchlight(ctx, centerX + offset + 6, groundY - 150 - index * 6, time + index * 900));
-  garrisonSoldiers(ctx, centerX, groundY, level, garrison, time, soldierImage);
-  drawStructureLayer(ctx, centerX, groundY, level, 'front');
-  const wall = wallHeight(level);
+  const metrics = drawFortAsset(ctx, fortImage, centerX, groundY, level);
+  if (!metrics) drawStructureLayer(ctx, centerX, groundY, level, 'back');
+  if (level >= 3 && night) {
+    const towerOffsets = metrics
+      ? [-metrics.width * .35, metrics.width * .35].slice(0, towerCount(level))
+      : TOWER_X.slice(0, towerCount(level));
+    towerOffsets.forEach((offset, index) => {
+      const tower = metrics?.towers?.[index];
+      searchlight(ctx, tower?.x ?? centerX + offset + 6,
+        (tower?.y ?? groundY - 150) - 34, time + index * 900);
+    });
+  }
+  garrisonSoldiers(ctx, centerX, groundY, level, garrison, time, soldierImage, metrics);
+  if (metrics) {
+    garrisonParapet(ctx, centerX, groundY, metrics, level);
+    garrisonTowerParapets(ctx, metrics, level);
+  }
+  else drawStructureLayer(ctx, centerX, groundY, level, 'front');
+  const wallY = metrics?.wallY ?? groundY - wallHeight(level);
   const shown = Math.min(6, turrets);
   for (let index = 0; index < shown; index++) {
-    const x = centerX - 62 + index * (shown > 1 ? 124 / (shown - 1) : 0) + (shown === 1 ? 40 : 0);
-    machineGun(ctx, x, groundY - wall + 2);
+    const spread = metrics ? Math.min(metrics.width * .34, 92) : 62;
+    const x = centerX - spread + index * (shown > 1 ? spread * 2 / (shown - 1) : 0) + (shown === 1 ? spread * .55 : 0);
+    machineGun(ctx, x, wallY + 2);
     if (firing && Math.sin(time / 45 + index * 2.3) > .55) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = 'rgba(255, 220, 120, .9)';
-      ctx.beginPath(); ctx.arc(x + 28, groundY - wall - 9, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x + 28, wallY - 9, 4, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
   }
-  flag(ctx, centerX - 66, groundY - wall + 4, 50, level >= 5 ? '#e0a020' : '#9c3a26', time);
+  const flagOffset = metrics ? Math.min(66, metrics.width * .2) : 66;
+  flag(ctx, centerX - flagOffset, wallY + 4, 50, level >= 5 ? '#e0a020' : '#9c3a26', time);
   ctx.fillStyle = 'rgba(10, 8, 6, .85)';
   ctx.fillRect(centerX - HALF_WIDTH + 2, groundY - 4, 24, 15);
   ctx.fillStyle = '#ffcf7a';
@@ -451,12 +547,12 @@ function drawFortScaffold(ctx, centerX, groundY, time) {
   ctx.restore();
 }
 
-export function renderFort(ctx, fort, { time = 0, now = Date.now(), night = false, soldierImage = null } = {}) {
+export function renderFort(ctx, fort, { time = 0, now = Date.now(), night = false, soldierImage = null, fortImage = null } = {}) {
   const { centerX, groundY } = getFortRect();
   const status = getFortStatus(fort, now);
   if (!status) { drawEmptyFortPlot(ctx, centerX, groundY, time); return; }
   if (status.activeLevel >= 1) {
-    drawFort(ctx, centerX, groundY, { level: status.activeLevel, turrets: status.turrets, garrison: status.garrison, time, night, soldierImage });
+    drawFort(ctx, centerX, groundY, { level: status.activeLevel, turrets: status.turrets, garrison: status.garrison, time, night, soldierImage, fortImage });
   } else sandbagWall(ctx, centerX - 60, centerX + 20, groundY, 1, 3);
   if (status.upgrading) drawFortScaffold(ctx, centerX, groundY, time);
 }
@@ -480,14 +576,14 @@ export function renderFortOverlay(ctx, fort, { now = Date.now() } = {}) {
   ctx.restore();
 }
 
-export function drawFortPreview(ctx, { level = 1, garrison = 0, time = 0, width = 220, height = 150, soldierImage = null, scenery = null } = {}) {
+export function drawFortPreview(ctx, { level = 1, garrison = 0, time = 0, width = 220, height = 150, soldierImage = null, fortImage = null, scenery = null } = {}) {
   const groundY = height - 18;
   paintBackdrop(ctx, width, height, groundY, scenery);
   ctx.save();
   const scale = Math.min(.8, width / 300);
   ctx.translate(width / 2, groundY);
   ctx.scale(scale, scale);
-  if (level >= 1) drawFort(ctx, 0, 0, { level, turrets: [0, 1, 2, 3, 4, 6][level], garrison, time, soldierImage });
+  if (level >= 1) drawFort(ctx, 0, 0, { level, turrets: [0, 1, 2, 3, 4, 6][level], garrison, time, soldierImage, fortImage });
   else drawEmptyFortPlot(ctx, 0, 0, time);
   ctx.restore();
 }
@@ -501,7 +597,7 @@ const FACTION_FILTERS = Object.freeze({
   'Irmandade de Sucateiros': 'sepia(.9) hue-rotate(-20deg) saturate(1.4) brightness(.8)',
 });
 
-export function drawRaidBattle(ctx, report, { fort = null, elapsed = 0, time = 0, width = 560, height = 220, soldierImage = null, scenery = null } = {}) {
+export function drawRaidBattle(ctx, report, { fort = null, elapsed = 0, time = 0, width = 560, height = 220, soldierImage = null, fortImage = null, scenery = null } = {}) {
   const groundY = height - 34;
   paintBackdrop(ctx, width, height, groundY, scenery);
   const status = getFortStatus(fort, Date.now());
@@ -510,7 +606,7 @@ export function drawRaidBattle(ctx, report, { fort = null, elapsed = 0, time = 0
   ctx.translate(fortX, groundY);
   ctx.scale(.62, .62);
   if (status?.activeLevel >= 1) {
-    drawFort(ctx, 0, 0, { level: status.activeLevel, turrets: status.turrets, garrison: status.garrison, time, firing: elapsed < RAID_ANIMATION_MS, soldierImage });
+    drawFort(ctx, 0, 0, { level: status.activeLevel, turrets: status.turrets, garrison: status.garrison, time, firing: elapsed < RAID_ANIMATION_MS, soldierImage, fortImage });
   } else drawEmptyFortPlot(ctx, 0, 0, time);
   ctx.restore();
   const filter = FACTION_FILTERS[report.faction] ?? 'brightness(.7)';

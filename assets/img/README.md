@@ -16,6 +16,9 @@ URL manifest; image objects are deliberately not serialized into `game-state`.
   use the engineer row until they have dedicated art.
 - `room_base_empty.png`, `plant_prop_1.png`, `uv_light_prop.png`: composited
   greenhouse scene. UV glow is added after actors, so it lights them too.
+- `surface_fort.png`: transparent, hand-painted exterior fortification. It is
+  layered beneath the animated hazmat garrison, so the same art is reused by
+  the surface, the fort preview, and raid reports without baking in soldiers.
 
 To replace one room independently, add a PNG and pass an asset URL under
 `room_<type>` (for example `room_greenhouse`) to `createRpgBunkerEngine`.

@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assignGarrison, buildFort, dismissRaid, FORT_LEVELS, getFortStatus, getRaidChance, getRaiderPower, getThreatEstimate,
   normalizeFort, recruitSoldiers, rollSurfaceRaid, upgradeFort } from '../src/core/defense.js';
+import { FORT_GARRISON_SKIN } from '../src/core/defense_renderer.js';
+import { getSkin } from '../src/core/player_state.js';
 import { advanceWastelandMonth } from '../src/core/wasteland.js';
 import { createGameState, hydrateGameState } from '../src/core/game-state.js';
 
@@ -12,6 +14,11 @@ const vault = (extra = {}) => ({ is_wasteland: true, scrap: 5_000, oil: 1_000, w
   military: { exercito: { soldados: 350, blindados: 0 } }, geopolitics: { contacts: [horde, friends] },
   oil_derricks: [{ level: 2, collectedAt: 0, upgradeUntil: 0 }, null, null], surface_fort: null, ...extra });
 const ready = (fort) => ({ ...fort, upgradeUntil: 0 });
+
+test('surface garrison reuses the existing anti-radiation uniform', () => {
+  assert.equal(FORT_GARRISON_SKIN, 'hazmat');
+  assert.equal(getSkin(FORT_GARRISON_SKIN)?.accessory, 'hazmat_hood');
+});
 
 test('the fort is built with scrap and oil, then levels up on a timer', () => {
   let state = buildFort(vault(), 0);

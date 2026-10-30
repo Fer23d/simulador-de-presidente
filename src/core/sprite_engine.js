@@ -41,6 +41,8 @@ export const DEFAULT_ASSETS = Object.freeze({
   room_base_empty: './assets/img/room_base_empty.png',
   plant_prop_1: './assets/img/plant_prop_1.png',
   uv_light_prop: './assets/img/uv_light_prop.png',
+  // Forte externo em alta fidelidade; a guarnição continua renderizada por cima.
+  surface_fort: './assets/img/surface_fort.png',
   loot_crate: './assets/img/loot_crate.svg',
 });
 
@@ -1552,7 +1554,8 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
   ctx.save();
   ctx.translate(camera.offset_x, camera.offset_y);
   if (oilDerricks) {
-    renderFort(ctx, surfaceFort ?? null, { time, now: oilNow, night: isNight, soldierImage: assets.getImage('npc_walk_sheet') });
+    renderFort(ctx, surfaceFort ?? null, { time, now: oilNow, night: isNight,
+      soldierImage: assets.getImage('npc_walk_sheet'), fortImage: assets.getImage('surface_fort') });
     renderOilField(ctx, oilDerricks, { time, now: oilNow });
   }
   const atlas = assets.getImage('room_atlas');

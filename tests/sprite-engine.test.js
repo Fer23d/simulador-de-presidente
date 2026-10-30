@@ -117,6 +117,7 @@ test('asset manager preloads every image and records failed URLs', async () => {
   assert.equal(assets.getImage('absent'), null);
   assert.deepEqual(assets.failedKeys, ['absent']);
   assert.match(DEFAULT_ASSETS.room_atlas, /assets\/img\/room_atlas\.png$/);
+  assert.match(DEFAULT_ASSETS.surface_fort, /assets\/img\/surface_fort\.png$/);
 });
 
 test('sprite scene draws images, repeats dirt, and never draws procedural geometry', () => {

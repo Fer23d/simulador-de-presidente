@@ -1296,9 +1296,12 @@ export function mountDashboard(root) {
   }
 
   let fortPanelOpen = false;
-  // Sprite dos guardas do Vault, usado no painel do Forte e na batalha do relatorio.
+  // Arte do forte e sprite dos guardas: o mesmo conjunto aparece na superfície,
+  // na prévia de gestão e no relatório de batalha.
   const soldierSheet = typeof Image === 'function' ? Object.assign(new Image(), { src: DEFAULT_ASSETS.npc_walk_sheet }) : null;
   const soldierImage = () => (soldierSheet?.complete && soldierSheet.naturalWidth ? soldierSheet : null);
+  const fortSheet = typeof Image === 'function' ? Object.assign(new Image(), { src: DEFAULT_ASSETS.surface_fort }) : null;
+  const fortImage = () => (fortSheet?.complete && fortSheet.naturalWidth ? fortSheet : null);
   const sceneryImages = {};
   if (typeof Image === 'function') {
     for (const [key, src] of Object.entries({ sky: DEFAULT_ASSETS.bg_sky, mountains: DEFAULT_ASSETS.bg_mountains, ground: DEFAULT_ASSETS.fg_wasteland })) {
@@ -1313,7 +1316,8 @@ export function mountDashboard(root) {
     const frame = (time) => {
       const canvas = !fortPanelOpen || bunkerGeneratorModal.hidden ? null : bunkerGeneratorModal.querySelector('[data-fort-preview]');
       if (!canvas) return;
-      drawFortPreview(canvas.getContext('2d'), { level: Number(canvas.dataset.fortPreview), garrison: Number(canvas.dataset.garrison), time, width: canvas.width, height: canvas.height, soldierImage: soldierImage(), scenery: scenery() });
+      drawFortPreview(canvas.getContext('2d'), { level: Number(canvas.dataset.fortPreview), garrison: Number(canvas.dataset.garrison), time, width: canvas.width, height: canvas.height,
+        soldierImage: soldierImage(), fortImage: fortImage(), scenery: scenery() });
       requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
@@ -1361,7 +1365,8 @@ export function mountDashboard(root) {
     const frame = (time) => {
       if (raidAnimation !== run || !canvas.isConnected) return;
       run.start ??= time;
-      drawRaidBattle(canvas.getContext('2d'), report, { fort, elapsed: time - run.start, time, width: canvas.width, height: canvas.height, soldierImage: soldierImage(), scenery: scenery() });
+      drawRaidBattle(canvas.getContext('2d'), report, { fort, elapsed: time - run.start, time, width: canvas.width, height: canvas.height,
+        soldierImage: soldierImage(), fortImage: fortImage(), scenery: scenery() });
       requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
