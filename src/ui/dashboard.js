@@ -24,6 +24,8 @@ import { createPresidentSelectionMenu } from '../core/menu.js';
 import { getWeather } from '../core/weather.js';
 import { applyOfflineProgress, dismissOfflineReport } from '../core/offline.js';
 import { arriveAtMission, getMissionReward, getMissionStory, isMissionPending } from '../core/missions.js';
+import { buildOilDerrick, collectOil, formatDuration, getDerrickBuildCost, getDerrickStatus, normalizeOilField, OIL_LEVELS, OIL_MAX_LEVEL, upgradeOilDerrick } from '../core/oil.js';
+import { drawOilDerrickPreview } from '../core/oil_renderer.js';
 import { getIntroScenes } from '../core/intro_story.js';
 import { completeTutorialStep, createTutorial, getContextTip, getTutorialStep, markTipSeen, restartTutorial, setTutorialEnabled, syncTutorial } from '../core/tutorial.js';
 import { createAudioEngine, getMusicMood, isStormWeather, normalizeAudioSettings } from '../core/audio.js';
@@ -114,6 +116,43 @@ const TROPHIES_KEY = 'simulador-presidente-trofeus-v1';
 const AUDIO_KEY = 'simulador-presidente-audio-v1';
 // O progresso do tutorial fica fora do save: quem ja aprendeu nao repete a cada Nova Partida.
 const TUTORIAL_KEY = 'simulador-presidente-tutorial-v1';
+
+function oilStatRow(label, value, max, nextValue = null, unit = '') {
+  const percent = max > 0 ? Math.round(Math.min(1, value / max) * 100) : 0;
+  const gain = nextValue !== null && nextValue > max ? `<span class="oil-stat-gain">→ ${formatNumber.format(nextValue)}${unit} (+${formatNumber.format(nextValue - max)})</span>` : '';
+  return `<div class="oil-stat"><span class="oil-stat-label">${label}</span><span class="oil-stat-bar"><span style="width:${percent}%"></span></span><span class="oil-stat-value">${formatNumber.format(value)}${unit}${max !== value ? ` / ${formatNumber.format(max)}${unit}` : ''}</span>${gain}</div>`;
+}
+
+// Parte do painel que muda com o tempo (tanque enchendo, obra correndo); o dashboard a redesenha a cada segundo.
+export function oilDerrickLiveView(state, slot, now = Date.now()) {
+  const field = normalizeOilField(state.oil_derricks);
+  const status = getDerrickStatus(field[slot], now);
+  if (!status) {
+    const cost = getDerrickBuildCost(state);
+    const first = OIL_LEVELS[1];
+    return `<div class="oil-stats">${oilStatRow('PRODUÇÃO', first.ratePerMinute, first.ratePerMinute, null, '/min')}${oilStatRow('TANQUE', first.capacity, first.capacity)}</div><p class="oil-status">&gt; Montagem: ${formatDuration(first.buildMs)}. Depois disso a sonda bombeia sozinha, mesmo com você longe.</p><div class="action-row oil-actions"><button type="button" class="primary-action" data-action="oil-build" data-slot="${slot}" ${cost !== null && state.scrap >= cost ? '' : 'disabled'}>[ PERFURAR: ${cost === null ? '—' : formatNumber.format(cost)} SUCATAS ]</button><button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div>`;
+  }
+  const next = status.next;
+  const stats = `<div class="oil-stats">${oilStatRow('PRODUÇÃO', status.ratePerMinute, status.ratePerMinute, next?.ratePerMinute ?? null, '/min')}${oilStatRow('TANQUE', status.stored, status.capacity, next?.capacity ?? null)}</div>`;
+  const line = status.upgrading
+    ? `<p class="oil-status is-working">&gt; ${status.building ? 'MONTANDO A SONDA' : `OBRA PARA O NÍVEL ${status.level}`} · FALTAM ${formatDuration(status.upgradeRemainingMs)}</p><span class="oil-progress"><span style="width:${Math.round(status.upgradeProgress * 100)}%"></span></span>`
+    : status.full ? '<p class="oil-status is-full">&gt; TANQUE CHEIO. A sonda parou: recolha o petróleo.</p>'
+      : `<p class="oil-status">&gt; Bombeando ${status.ratePerMinute} barris por minuto.</p>`;
+  const oilAvailable = (Number(state.oil) || 0) + status.stored;
+  const upgrade = next
+    ? `<button type="button" class="primary-action oil-upgrade" data-action="oil-upgrade" data-slot="${slot}" ${state.scrap >= next.scrap && oilAvailable >= next.oil ? '' : 'disabled'}>[ MELHORAR P/ NÍVEL ${next.level} ]<small>${formatNumber.format(next.scrap)} sucatas${next.oil ? ` · ${formatNumber.format(next.oil)} barris` : ''} · ⏱ ${formatDuration(next.buildMs)}</small></button>`
+    : status.upgrading ? '' : '<span class="oil-max">★ NÍVEL MÁXIMO ★</span>';
+  const collect = status.stored > 0 ? `<button type="button" class="primary-action" data-action="oil-collect" data-slot="${slot}">[ RECOLHER ${formatNumber.format(status.stored)} BARRIS ]</button>` : '';
+  return `${stats}${line}<div class="action-row oil-actions">${collect}${upgrade}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div>`;
+}
+
+export function oilDerrickView(state, slot, now = Date.now()) {
+  const status = getDerrickStatus(normalizeOilField(state.oil_derricks)[slot], now);
+  const level = status?.level ?? 0;
+  const stars = Array.from({ length: OIL_MAX_LEVEL }, (_, index) => `<span class="${index < level ? 'is-on' : ''}">★</span>`).join('');
+  const title = status ? `POÇO DE PETRÓLEO ${slot + 1}` : `PONTO DE PERFURAÇÃO ${slot + 1}`;
+  return `<section class="bunker-dialog oil-dialog" role="dialog" aria-modal="true" aria-labelledby="oil-title" data-oil-panel="${slot}"><p class="eyebrow">/// SUPERFÍCIE · CAMPO DE PETRÓLEO ///</p><div class="oil-header"><canvas class="oil-preview" width="220" height="150" data-oil-preview="${Math.max(1, level)}" aria-hidden="true"></canvas><div><h2 id="oil-title">${title}</h2><p class="oil-level">${status ? `NÍVEL ${level}` : 'TERRENO LIVRE'} <span class="oil-stars" aria-label="Nível ${level} de ${OIL_MAX_LEVEL}">${stars}</span></p><p class="oil-reserve">🛢 RESERVA DO VAULT: ${formatNumber.format(state.oil ?? 0)} BARRIS</p></div></div><div data-oil-live>${oilDerrickLiveView(state, slot, now)}</div></section>`;
+}
 
 export function titleScreenView({ view = 'main', hasSave = false, audio = {}, tutorialEnabled = true } = {}) {
   const { muted, volume } = normalizeAudioSettings(audio);
@@ -470,7 +509,7 @@ export function bunkerView(state) {
     : '';
   return `<section class="bunker-chamber">
     <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2></div><div class="bunker-header-actions">${lootNotice}<button type="button" class="primary-action" data-action="advance" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR MÊS ]</button><button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button><button type="button" class="quiet-action" data-action="open-encyclopedia">[ 📖 ENCICLOPÉDIA ]</button></div></div>
-    <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'scrap'))}</span><span>CIÊNCIA ${formatNumber.format(state.science ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'science'))}</span><span>COMIDA ${formatNumber.format(state.shelter_supplies?.food ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'food'))}</span><span>ENERGIA ${formatNumber.format(state.shelter_supplies?.energy ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'energy'))}</span><span class="oxygen-resource ${state.oxygen_deprived ? 'oxygen-deprived' : ''}" aria-label="Oxigênio ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} de ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ', produção insuficiente' : ''}">💨 O₂ ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ' · ALERTA' : ''}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'weapons'))}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'medkits'))}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
+    <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'scrap'))}</span><span class="oil-resource">🛢 PETRÓLEO ${formatNumber.format(state.oil ?? 0)}</span><span>CIÊNCIA ${formatNumber.format(state.science ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'science'))}</span><span>COMIDA ${formatNumber.format(state.shelter_supplies?.food ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'food'))}</span><span>ENERGIA ${formatNumber.format(state.shelter_supplies?.energy ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'energy'))}</span><span class="oxygen-resource ${state.oxygen_deprived ? 'oxygen-deprived' : ''}" aria-label="Oxigênio ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} de ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ', produção insuficiente' : ''}">💨 O₂ ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ' · ALERTA' : ''}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'weapons'))}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'medkits'))}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
     <div class="bunker-build-controls" hidden aria-label="Módulos de construção">${modules.map(([id, module]) => { const cost = getShelterBuildCost(id, 0, state.presidentClass); return `<button type="button" class="bunker-module-button" data-action="shelter-module" data-module="${id}" aria-pressed="${id === 'dormitory'}" ${state.scrap < cost ? 'disabled' : ''}>${module.name}<small>${formatNumber.format(cost)} sucatas${buildCostMultiplier < 1 ? ' · DESCONTO DO OPERÁRIO' : ''}</small></button>`; }).join('')}<div class="bunker-slot-controls"><label for="shelter-build-slot">Setor livre</label><select id="shelter-build-slot" class="bunker-build-slot"></select><button type="button" class="primary-action" data-action="shelter-place">[ CONSTRUIR ]</button></div></div>
     <div class="bunker-stage"><canvas id="shelterCanvas" class="bunker-canvas" width="960" height="600" tabindex="0" aria-label="Bunker lateral. A e D movem o Presidente, W e S operam o elevador, E interage. Na construção, clique num setor livre."></canvas>${bunkerEnvironmentHudView(state.environment, state.isNight, state.inhabitants, state.shelter_guards, state.presidentClass, state.weather)}${missionObjectiveView(state)}<div class="bunker-tooltip" data-bunker-tooltip role="status" hidden></div>${renderDialogueView(null)}</div>
     <div class="bunker-foot"><div><p class="bunker-status" data-shelter-status role="status">PRESIDENTE EM PATRULHA</p><p class="bunker-notice ${/SINAL DO EXPLORADOR|ALERTA CRÍTICO|ASFIXIA|oxigênio insuficiente/i.test(state.notice ?? '') ? 'danger' : ''}" role="status">${escapeHtml(state.notice ?? '')}</p></div><div class="shelter-room-controls"><label for="shelter-room-select">Setor</label><select id="shelter-room-select" class="bunker-build-slot">${rooms.map((room) => `<option value="${room.floor}:${room.column}">${SHELTER_TYPES[room.type].name} · A${room.floor + 1} S${room.column}</option>`).join('')}</select><button type="button" class="quiet-action" data-action="shelter-open-room">[ GERIR SALA ]</button></div></div>
@@ -1172,6 +1211,63 @@ export function mountDashboard(root) {
     }
   }
 
+  let oilFeedback = null;
+  let oilPanelSlot = null;
+  let oilPanelTimer = null;
+  let oilPreviewFrame = null;
+
+  function animateOilPreview() {
+    if (typeof requestAnimationFrame !== 'function' || oilPreviewFrame !== null) return;
+    const frame = (time) => {
+      const canvas = bunkerGeneratorModal.hidden ? null : bunkerGeneratorModal.querySelector('[data-oil-preview]');
+      if (!canvas) { oilPreviewFrame = null; return; }
+      const status = getDerrickStatus(normalizeOilField(state.oil_derricks)[oilPanelSlot]);
+      drawOilDerrickPreview(canvas.getContext('2d'), { level: Number(canvas.dataset.oilPreview), time, width: canvas.width, height: canvas.height,
+        pumping: Boolean(status && !status.upgrading && !status.full) });
+      oilPreviewFrame = requestAnimationFrame(frame);
+    };
+    oilPreviewFrame = requestAnimationFrame(frame);
+  }
+
+  function closeOilPanel() {
+    oilPanelSlot = null;
+    if (oilPanelTimer !== null) { window.clearInterval(oilPanelTimer); oilPanelTimer = null; }
+  }
+
+  function openOilPanel(slot) {
+    if (!bunkerGeneratorModal) return;
+    activeShelterRoom = null;
+    oilPanelSlot = slot;
+    bunkerGeneratorModal.innerHTML = oilDerrickView(state, slot);
+    bunkerGeneratorModal.hidden = false;
+    bunkerController?.pause();
+    animateOilPreview();
+    if (oilPanelTimer === null) {
+      oilPanelTimer = window.setInterval(() => {
+        const live = bunkerGeneratorModal.hidden ? null : bunkerGeneratorModal.querySelector('[data-oil-live]');
+        if (!live || oilPanelSlot === null) { closeOilPanel(); return; }
+        const markup = oilDerrickLiveView(state, oilPanelSlot);
+        if (live.innerHTML !== markup) live.innerHTML = markup;
+        // Quando a obra termina, a miniatura passa a mostrar o nivel novo.
+        const preview = bunkerGeneratorModal.querySelector('[data-oil-preview]');
+        const status = getDerrickStatus(normalizeOilField(state.oil_derricks)[oilPanelSlot]);
+        if (preview && status) preview.dataset.oilPreview = String(Math.max(1, status.activeLevel));
+      }, 1_000);
+    }
+  }
+
+  // Toque no poco: com petroleo pronto ele e recolhido na hora; senao abre o painel de gestao.
+  function handleOilDerrick(slot) {
+    const status = getDerrickStatus(normalizeOilField(state.oil_derricks)[slot]);
+    if (status?.ready) {
+      oilFeedback = { slot, amount: status.stored, at: performance.now() };
+      audio.play('oil');
+      commit(collectOil(state, slot));
+      return;
+    }
+    openOilPanel(slot);
+  }
+
   let wardrobeAssets = null;
   let wardrobeAssetsReady = null;
   let wardrobeFrame = null;
@@ -1309,6 +1405,9 @@ export function mountDashboard(root) {
             }
           },
           onBuild: (type, floor, column) => commit(buildShelterRoom(state, type, floor, column)),
+          oilDerricks: state.oil_derricks,
+          oilFeedback,
+          onOilDerrick: handleOilDerrick,
           onPlayerChanged: (player) => {
             state = { ...state, rpg_player: player };
             storageNotice = saveState(state);
@@ -1778,9 +1877,22 @@ export function mountDashboard(root) {
       openShelterRoom(getRoom(state.shelter_grid, floor, column));
       return;
     }
+    if (action === 'oil-build' || action === 'oil-collect' || action === 'oil-upgrade') {
+      const slot = Number(button.dataset.slot);
+      if (action === 'oil-collect') {
+        const status = getDerrickStatus(normalizeOilField(state.oil_derricks)[slot]);
+        if (status?.stored) oilFeedback = { slot, amount: status.stored, at: performance.now() };
+        audio.play('oil');
+      } else audio.play('build');
+      const update = { 'oil-build': buildOilDerrick, 'oil-collect': collectOil, 'oil-upgrade': upgradeOilDerrick }[action];
+      commit(update(state, slot));
+      openOilPanel(slot);
+      return;
+    }
     if (action === 'close-bunker-modal') {
       bunkerGeneratorModal.hidden = true;
       activeShelterRoom = null;
+      closeOilPanel();
       bunkerController?.resume();
     }
     if (action === 'start-expedition') {

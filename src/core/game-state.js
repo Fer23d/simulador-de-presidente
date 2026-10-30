@@ -36,6 +36,7 @@ import { advanceGovernment, applyGovernmentEconomy, openAutoCoup, resolveAutoCou
 import { advanceWastelandMonth, buildMegaVault, buildWastelandProject, enviarBatedores, transicionarParaWasteland as transitionToWasteland } from './wasteland.js';
 import { getWastelandEvent, WASTELAND_EVENTS } from './game_mechanics.js';
 import { createRpgPlayer, normalizeInhabitants, normalizeRpgPlayer } from './rpg_bunker.js';
+import { normalizeOilField } from './oil.js';
 import { INITIAL_SHELTER_GRID, migrateLegacyPlayer, migrateLegacyRooms, normalizeShelterGrid, normalizeShelterInhabitants } from './shelter_engine.js';
 import { createEnvironmentState } from './environment.js';
 import { createWeatherState } from './weather.js';
@@ -212,6 +213,8 @@ export function createGameState(countryId = 'bra') {
     unlockedSkins: ['default'],
     equippedSkin: 'default',
     scrap: 0,
+    oil: 0,
+    oil_derricks: normalizeOilField(),
     science: 0,
     shelter_grid: normalizeShelterGrid(INITIAL_SHELTER_GRID),
     shelter_inhabitants: [],
@@ -1238,6 +1241,8 @@ export function hydrateGameState(serialized) {
       wasteland_cinematic_ready: Boolean(parsed.wasteland_cinematic_ready),
       vault_built: Boolean(parsed.vault_built || parsed.megaprojects?.megaVault?.completed),
       scrap: Math.max(0, Number(parsed.scrap) || 0),
+      oil: Math.max(0, Math.floor(Number(parsed.oil) || 0)),
+      oil_derricks: normalizeOilField(parsed.oil_derricks),
       science: Math.max(0, Math.floor(Number(parsed.science) || 0)),
       shelter_grid: shelterGrid,
       shelter_inhabitants: normalizeShelterInhabitants(parsed.shelter_inhabitants ?? migrateLegacyPlayer(parsed.bunker_player, parsed.bunker_rooms, shelterGrid), shelterGrid),

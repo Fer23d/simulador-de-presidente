@@ -1,5 +1,6 @@
 import { cellCenter, FLOOR_SPACING, ROOM_HEIGHT, SLOT_WIDTH, WORLD_LEFT, WORLD_TOP } from './shelter_engine.js';
 import { renderLootboxOverlay } from './lootbox_renderer.js';
+import { renderOilField, renderOilFieldOverlay } from './oil_renderer.js';
 import { getPresidentClass, getSkin } from './player_state.js';
 import { hasReliableNightPower } from './environment.js';
 import { getCriticalNeeds, NEED_CRITICAL_THRESHOLD, NEED_ICONS, NEED_KEYS, NEED_LABELS, normalizeNeeds } from './needs.js';
@@ -1544,11 +1545,12 @@ export function applyOxygenDeprivationOverlay(ctx, width, height, oxygenDeprived
 
 export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants = [], cabinFloor = player.floor,
   time = 0, isNight = false, activeGenerators = 0, oxygenDeprived = false, lootbox = {},
-  presidentClass = null, equippedSkin = 'default', weather = 'clear' }) {
+  presidentClass = null, equippedSkin = 'default', weather = 'clear', oilDerricks = null, oilNow = Date.now(), oilFeedback = null }) {
   renderSurface(ctx, camera, assets, { isNight, time, weather });
   renderDirt(ctx, camera, assets);
   ctx.save();
   ctx.translate(camera.offset_x, camera.offset_y);
+  if (oilDerricks) renderOilField(ctx, oilDerricks, { time, now: oilNow });
   const atlas = assets.getImage('room_atlas');
   for (let floor = 0; floor < grid.length; floor++) {
     for (let column = 0; column < grid[floor].length; column++) {
@@ -1623,6 +1625,12 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
   if (isNight && ctx.canvas) {
     const surfaceHeight = Math.max(0, Math.min(ctx.canvas.height, SURFACE_Y + camera.offset_y));
     applyNightOverlay(ctx, ctx.canvas.width, ctx.canvas.height, true, { activeGenerators, surfaceHeight });
+  }
+  if (oilDerricks) {
+    ctx.save();
+    ctx.translate(camera.offset_x, camera.offset_y);
+    renderOilFieldOverlay(ctx, oilDerricks, { time, now: oilNow, feedback: oilFeedback, perfNow: time });
+    ctx.restore();
   }
   if (ctx.canvas) applyOxygenDeprivationOverlay(ctx, ctx.canvas.width, ctx.canvas.height, oxygenDeprived, time);
   renderLootboxOverlay(ctx, { ...lootbox, time, crateImage: assets.getImage('loot_crate') });

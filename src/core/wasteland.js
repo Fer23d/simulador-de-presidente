@@ -8,6 +8,7 @@ import { countActiveGenerators, createEnvironmentState, hasReliableNightPower } 
 import { advanceInhabitantNeeds, countDormitoryBeds } from './needs.js';
 import { getWeather } from './weather.js';
 import { createMissionLocation } from './missions.js';
+import { normalizeOilField } from './oil.js';
 import { ENDINGS, isDoorOpen } from './endings.js';
 import { nextRandom } from './geopolitics.js';
 import { getPresidentClassModifiers } from './player_state.js';
@@ -70,6 +71,8 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
     wasteland_cinematic_ready: false,
     unlocked_chapters: [...new Set([...(state.unlocked_chapters ?? []), 'cap_5_wasteland'])],
     scrap: Math.max(250, Number(state.scrap) || 0),
+    oil: 0,
+    oil_derricks: normalizeOilField(),
     science: Math.max(0, Math.floor(Number(state.science) || 0)),
     shelter_grid: normalizeShelterGrid(INITIAL_SHELTER_GRID),
     shelter_inhabitants: [],

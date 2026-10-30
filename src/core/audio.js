@@ -191,6 +191,7 @@ export function createAudioEngine({ AudioContextClass = globalThis.AudioContext 
     door: () => { tone(55, { duration: 2.2, type: 'sawtooth', level: .18, slideTo: 38 }); noiseBurst({ duration: 1.6, level: .2, from: 600, to: 60 }); },
     boom: () => { noiseBurst({ duration: 3.5, level: .9, from: 2000, to: 30 }); tone(42, { duration: 3, type: 'sine', level: .5, slideTo: 25 }); },
     thunder: () => noiseBurst({ duration: 2.4, level: .45, from: 900, to: 40 }),
+    oil: () => [196, 147, 110].forEach((frequency, index) => tone(frequency, { at: index * .08, duration: .16, type: 'sine', level: .16, slideTo: frequency * .55 })),
     error: () => tone(140, { duration: .2, type: 'square', level: .08, slideTo: 90 }),
   };
 

@@ -107,6 +107,31 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 .sound-toggle { border: 0; background: none; font-size: 18px; cursor: pointer; line-height: 1; }
 .sound-volume { width: 90px; accent-color: #ff9d00; }
 .title-screen-host[hidden] { display: none; }
+.oil-resource { color: #e8d7ff; }
+.oil-dialog { width: min(640px, 100%); }
+.oil-header { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; }
+.oil-header h2 { margin: 0 0 6px; }
+.oil-preview { width: 220px; max-width: 42vw; height: auto; border: 2px solid #8a5a1c; image-rendering: pixelated; background: #120a04; }
+.oil-level { margin: 0; color: #ffcf7a; font: 12px 'Press Start 2P', monospace; }
+.oil-stars { margin-left: 6px; letter-spacing: 2px; color: #4a3a22; }
+.oil-stars .is-on { color: #ffb000; text-shadow: 0 0 6px rgba(255, 176, 0, .8); }
+.oil-reserve { margin: 8px 0 0; color: #e8d7ff; }
+.oil-stats { display: grid; gap: 8px; margin: 14px 0 8px; }
+.oil-stat { display: grid; grid-template-columns: 92px 1fr auto; align-items: center; gap: 4px 10px; }
+.oil-stat-label { color: #c98a3a; font-size: 13px; }
+.oil-stat-bar { height: 12px; border: 1px solid #8a5a1c; background: #1a1006; }
+.oil-stat-bar span { display: block; height: 100%; background: linear-gradient(#ffcf5a, #c47a12); }
+.oil-stat-value { font-variant-numeric: tabular-nums; }
+.oil-stat-gain { grid-column: 2 / -1; color: #8fe39a; font-size: 13px; }
+.oil-status { margin: 6px 0; }
+.oil-status.is-full { color: #ff8a7a; }
+.oil-status.is-working { color: #ffd34d; }
+.oil-progress { display: block; height: 10px; margin-bottom: 8px; border: 1px solid #8a5a1c; background: #1a1006; }
+.oil-progress span { display: block; height: 100%; background: repeating-linear-gradient(45deg, #ffb000 0 8px, #c47a12 8px 16px); transition: width 1s linear; }
+.oil-upgrade { display: grid; gap: 4px; text-align: left; }
+.oil-upgrade small { font-size: 12px; opacity: .85; }
+.oil-max { align-self: center; color: #ffb000; font: 11px 'Press Start 2P', monospace; }
+@media (max-width: 560px) { .oil-header { grid-template-columns: 1fr; justify-items: center; text-align: center; } }
 .title-screen { position: fixed; z-index: 10050; inset: 0; display: grid; place-items: center; padding: 24px 16px; overflow: auto; background: radial-gradient(ellipse at 50% 38%, rgba(255, 128, 0, .2), transparent 58%), linear-gradient(#0d0703, #030201 70%); color: #ffcf7a; font-family: 'Share Tech Mono', monospace; }
 .title-screen::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(transparent 0 3px, rgba(0, 0, 0, .28) 3px 4px); }
 .title-ash { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }

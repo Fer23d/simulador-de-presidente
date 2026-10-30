@@ -3,6 +3,7 @@ import {
   MAX_COLUMNS, MAX_FLOORS, ROOM_HEIGHT, SHELTER_TYPES, SLOT_WIDTH,
   FLOOR_SPACING, WORLD_LEFT, WORLD_TOP,
 } from './shelter_engine.js';
+import { findOilDerrickAt } from './oil_renderer.js';
 import { AssetManager, DEFAULT_ASSETS, drawNeedsPanel, getActorPlacement, renderSpriteScene } from './sprite_engine.js';
 import { isLootboxCrateClick } from './lootbox_renderer.js';
 import { Inhabitant } from './inhabitant.js';
@@ -266,7 +267,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   onDetain, onAssetsReady, onEnvironmentChanged, environment = {}, isNight = environment?.isNight ?? false, weather: savedWeather = {},
   oxygenDeprived = false, assetUrls = {}, lootbox = {}, onLootboxClick,
   presidentClass = null, equippedSkin = 'default', currentDay = 1, onDayPassed, mission = null, onMission,
-  onDialogue, onDialogueAdvance, onDialogueClose } = {}) {
+  onDialogue, onDialogueAdvance, onDialogueClose, oilDerricks = null, oilFeedback = null, onOilDerrick } = {}) {
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
   const assets = new AssetManager({ ...DEFAULT_ASSETS, ...assetUrls });
@@ -338,7 +339,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     camera.offset_y += (targetY - camera.offset_y) * Math.min(1, dt * 8);
     renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants: actors, cabinFloor, time,
       isNight: dayNight.isNight, activeGenerators, oxygenDeprived, lootbox, presidentClass, equippedSkin,
-      weather: weather.type });
+      weather: weather.type, oilDerricks, oilFeedback });
     const rebel = paused || buildMode ? null : findNearbyRebel(player, grid, actors);
     const nearbyInhabitant = paused || buildMode ? null : trackNearbyInhabitant(player, grid, actors, time);
     const nearbyRoom = nearbyInhabitant && getRoom(grid, nearbyInhabitant.npc.floor, nearbyInhabitant.npc.column);
@@ -438,7 +439,14 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
       if (isLootboxCrateClick(point, canvas.width, canvas.height)) onLootboxClick?.();
       return;
     }
-    if (!buildMode) return;
+    if (!buildMode) {
+      if (!oilDerricks || paused || dialogueNpc) return;
+      const rect = canvas.getBoundingClientRect();
+      const slot = findOilDerrickAt((event.clientX - rect.left) * canvas.width / rect.width - camera.offset_x,
+        (event.clientY - rect.top) * canvas.height / rect.height - camera.offset_y);
+      if (slot !== null) onOilDerrick?.(slot);
+      return;
+    }
     const rect = canvas.getBoundingClientRect();
     const point = getCellAtPoint((event.clientX - rect.left) * canvas.width / rect.width,
       (event.clientY - rect.top) * canvas.height / rect.height, camera);
@@ -449,6 +457,15 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   window.addEventListener('keydown', keydown);
   window.addEventListener('keyup', keyup);
   canvas.addEventListener('click', click);
+  // Mao de clique ao passar sobre um poco, como em qualquer construcao clicavel.
+  function hover(event) {
+    if (!oilDerricks) return;
+    const rect = canvas.getBoundingClientRect();
+    const slot = buildMode || paused ? null : findOilDerrickAt((event.clientX - rect.left) * canvas.width / rect.width - camera.offset_x,
+      (event.clientY - rect.top) * canvas.height / rect.height - camera.offset_y);
+    canvas.style.cursor = slot === null ? '' : 'pointer';
+  }
+  canvas.addEventListener('mousemove', hover);
   const ready = assets.preload().then(() => {
     if (!destroyed) { onAssetsReady?.(assets.failedKeys); frameId = requestAnimationFrame(frame); }
   });
@@ -472,6 +489,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
       window.removeEventListener('keydown', keydown);
       window.removeEventListener('keyup', keyup);
       canvas.removeEventListener('click', click);
+      canvas.removeEventListener('mousemove', hover);
     },
   };
 }
