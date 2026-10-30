@@ -26,6 +26,8 @@ import { applyOfflineProgress, dismissOfflineReport } from '../core/offline.js';
 import { arriveAtMission, getMissionReward, getMissionStory, isMissionPending } from '../core/missions.js';
 import { buildOilDerrick, collectOil, formatDuration, getDerrickBuildCost, getDerrickStatus, normalizeOilField, OIL_LEVELS, OIL_MAX_LEVEL, upgradeOilDerrick } from '../core/oil.js';
 import { drawOilDerrickPreview } from '../core/oil_renderer.js';
+import { assignGarrison, buildFort, dismissRaid, FORT_LEVELS, FORT_MAX_LEVEL, getArmySoldiers, getFortStatus, getThreatEstimate, RECRUIT_BATCH, RECRUIT_COST, recruitSoldiers, upgradeFort } from '../core/defense.js';
+import { drawFortPreview, drawRaidBattle, RAID_ANIMATION_MS } from '../core/defense_renderer.js';
 import { getIntroScenes } from '../core/intro_story.js';
 import { completeTutorialStep, createTutorial, getContextTip, getTutorialStep, markTipSeen, restartTutorial, setTutorialEnabled, syncTutorial } from '../core/tutorial.js';
 import { createAudioEngine, getMusicMood, isStormWeather, normalizeAudioSettings } from '../core/audio.js';
@@ -144,6 +146,51 @@ export function oilDerrickLiveView(state, slot, now = Date.now()) {
     : status.upgrading ? '' : '<span class="oil-max">★ NÍVEL MÁXIMO ★</span>';
   const collect = status.stored > 0 ? `<button type="button" class="primary-action" data-action="oil-collect" data-slot="${slot}">[ RECOLHER ${formatNumber.format(status.stored)} BARRIS ]</button>` : '';
   return `${stats}${line}<div class="action-row oil-actions">${collect}${upgrade}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div>`;
+}
+
+function fortStatRow(label, value, nextValue = null, max = null) {
+  return oilStatRow(label, value, max ?? value, nextValue);
+}
+
+// Parte viva do painel do Forte: obra, guarnicao e ameaca mudam enquanto ele esta aberto.
+export function fortLiveView(state, now = Date.now()) {
+  const status = getFortStatus(state.surface_fort, now);
+  const army = getArmySoldiers(state);
+  const threat = getThreatEstimate(state);
+  const recruit = `<button type="button" class="quiet-action" data-action="fort-recruit" ${state.scrap >= RECRUIT_COST ? '' : 'disabled'}>[ RECRUTAR ${RECRUIT_BATCH}: ${RECRUIT_COST} SUCATAS ]</button>`;
+  if (!status) {
+    const first = FORT_LEVELS[1];
+    const canBuild = state.scrap >= first.scrap && (state.oil ?? 0) >= first.oil;
+    return `<div class="oil-stats">${fortStatRow('MURALHA', first.wall)}${fortStatRow('TORRES', first.turrets)}${fortStatRow('GUARNIÇÃO', first.capacity)}</div>${threat ? `<p class="fort-threat is-danger">&gt; AMEAÇA: ${escapeHtml(threat.faction)} · força estimada ${threat.power}. Sem Forte, a defesa é 0.</p>` : ''}<p class="oil-status">&gt; Os saqueadores do Ermo cobiçam o seu petróleo. Erga o Forte e ponha soldados do exército nele.</p><div class="action-row oil-actions"><button type="button" class="primary-action" data-action="fort-build" ${canBuild ? '' : 'disabled'}>[ ERGUER FORTE ]<small>${first.scrap} sucatas · ${first.oil} barris · ⏱ ${formatDuration(first.buildMs)}</small></button><button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div>`;
+  }
+  const next = status.next;
+  const stats = `<div class="oil-stats">${fortStatRow('DEFESA', status.defense, next?.defense ?? null)}${oilStatRow('GUARNIÇÃO', status.garrison, status.capacity, next?.capacity ?? null)}${fortStatRow('MURALHA', status.wall, next?.wall ?? null)}${fortStatRow('TORRES', status.turrets, next?.turrets ?? null)}</div>`;
+  const threatLine = threat ? `<p class="fort-threat ${status.defense >= threat.power ? 'is-safe' : 'is-danger'}">&gt; AMEAÇA: ${escapeHtml(threat.faction)} · força estimada ${threat.power} · sua defesa ${status.defense}</p>` : '<p class="fort-threat is-safe">&gt; Nenhuma facção hostil no Ermo por enquanto.</p>';
+  const last = state.raid_log?.[0];
+  const lastLine = last ? `<p class="fort-last">Último ataque (mês ${last.turn}): ${last.won ? 'VITÓRIA' : 'DERROTA'} contra ${escapeHtml(last.faction)}.</p>` : '';
+  const work = status.upgrading
+    ? `<p class="oil-status is-working">&gt; ${status.building ? 'ERGUENDO O FORTE' : `OBRA PARA O NÍVEL ${status.level}`} · FALTAM ${formatDuration(status.upgradeRemainingMs)}</p><span class="oil-progress"><span style="width:${Math.round(status.upgradeProgress * 100)}%"></span></span>`
+    : '';
+  const garrison = `<div class="fort-garrison"><span>🪖 EXÉRCITO NO VAULT: ${formatNumber.format(army)}</span><div class="fort-garrison-buttons"><button type="button" class="quiet-action" data-action="fort-garrison" data-amount="10" ${army && status.garrison < status.capacity ? '' : 'disabled'}>[ +10 ]</button><button type="button" class="quiet-action" data-action="fort-garrison" data-amount="50" ${army && status.garrison < status.capacity ? '' : 'disabled'}>[ +50 ]</button><button type="button" class="quiet-action" data-action="fort-garrison" data-amount="${status.capacity}" ${army && status.garrison < status.capacity ? '' : 'disabled'}>[ LOTAR ]</button><button type="button" class="quiet-action" data-action="fort-garrison" data-amount="-10" ${status.garrison ? '' : 'disabled'}>[ −10 ]</button>${recruit}</div></div>`;
+  const upgrade = next
+    ? `<button type="button" class="primary-action oil-upgrade" data-action="fort-upgrade" ${state.scrap >= next.scrap && (state.oil ?? 0) >= next.oil ? '' : 'disabled'}>[ MELHORAR P/ NÍVEL ${next.level} ]<small>${formatNumber.format(next.scrap)} sucatas · ${formatNumber.format(next.oil)} barris · ⏱ ${formatDuration(next.buildMs)}</small></button>`
+    : status.upgrading ? '' : '<span class="oil-max">★ NÍVEL MÁXIMO ★</span>';
+  return `${stats}${threatLine}${lastLine}${work}${garrison}<div class="action-row oil-actions">${upgrade}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div>`;
+}
+
+export function fortView(state, now = Date.now()) {
+  const status = getFortStatus(state.surface_fort, now);
+  const level = status?.level ?? 0;
+  const stars = Array.from({ length: FORT_MAX_LEVEL }, (_, index) => `<span class="${index < level ? 'is-on' : ''}">★</span>`).join('');
+  return `<section class="bunker-dialog oil-dialog fort-dialog" role="dialog" aria-modal="true" aria-labelledby="fort-title" data-fort-panel><p class="eyebrow">/// SUPERFÍCIE · DEFESA DO CAMPO ///</p><div class="oil-header"><canvas class="oil-preview" width="220" height="150" data-fort-preview="${status?.activeLevel ?? 0}" data-garrison="${status?.garrison ?? 0}" aria-hidden="true"></canvas><div><h2 id="fort-title">${status ? 'FORTE DA SUPERFÍCIE' : 'TERRENO DO FORTE'}</h2><p class="oil-level">${status ? `NÍVEL ${level}` : 'SEM DEFESA'} <span class="oil-stars" aria-label="Nível ${level} de ${FORT_MAX_LEVEL}">${stars}</span></p><p class="oil-reserve">🛢 ${formatNumber.format(state.oil ?? 0)} BARRIS A PROTEGER</p></div></div><div data-fort-live>${fortLiveView(state, now)}</div></section>`;
+}
+
+export function raidReportView(report) {
+  if (!report) return '';
+  const lines = report.won
+    ? [`${report.raidersDown} saqueadores abatidos`, `${report.soldiersLost} soldados perdidos`, `+${report.loot} sucatas recolhidas dos corpos`]
+    : [`${report.oilLost} barris roubados da reserva`, 'Tanques dos poços esvaziados', `${report.soldiersLost} soldados perdidos`];
+  return `<section class="modal-nuke-dialog raid-dialog" role="dialog" aria-modal="true" aria-labelledby="raid-title"><p class="modal-arcade-header">/!\\ ATAQUE NA SUPERFÍCIE /!\\</p><h2 id="raid-title">${escapeHtml(report.faction.toUpperCase())}</h2><canvas class="raid-battle" width="560" height="220" data-raid-battle aria-hidden="true"></canvas><div class="raid-report ${report.won ? 'is-won' : 'is-lost'}" style="animation-delay:${RAID_ANIMATION_MS}ms"><p class="raid-score">ATAQUE ${report.attack} × DEFESA ${report.defense}</p><ul>${lines.map((line) => `<li>&gt; ${escapeHtml(line)}</li>`).join('')}</ul>${report.won ? '' : '<p class="raid-advice">Melhore o Forte e reforce a guarnição antes do próximo ataque.</p>'}<button type="button" class="arcade-vote-yes" data-action="raid-dismiss">[ ENTENDIDO ]</button></div></section>`;
 }
 
 export function oilDerrickView(state, slot, now = Date.now()) {
@@ -509,7 +556,7 @@ export function bunkerView(state) {
     : '';
   return `<section class="bunker-chamber">
     <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2></div><div class="bunker-header-actions">${lootNotice}<button type="button" class="primary-action" data-action="advance" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR MÊS ]</button><button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button><button type="button" class="quiet-action" data-action="open-encyclopedia">[ 📖 ENCICLOPÉDIA ]</button></div></div>
-    <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'scrap'))}</span><span class="oil-resource">🛢 PETRÓLEO ${formatNumber.format(state.oil ?? 0)}</span><span>CIÊNCIA ${formatNumber.format(state.science ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'science'))}</span><span>COMIDA ${formatNumber.format(state.shelter_supplies?.food ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'food'))}</span><span>ENERGIA ${formatNumber.format(state.shelter_supplies?.energy ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'energy'))}</span><span class="oxygen-resource ${state.oxygen_deprived ? 'oxygen-deprived' : ''}" aria-label="Oxigênio ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} de ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ', produção insuficiente' : ''}">💨 O₂ ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ' · ALERTA' : ''}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'weapons'))}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'medkits'))}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
+    <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'scrap'))}</span><span class="oil-resource">🛢 PETRÓLEO ${formatNumber.format(state.oil ?? 0)}</span><span>🪖 SOLDADOS ${formatNumber.format(getArmySoldiers(state))}</span><span>🛡 DEFESA ${formatNumber.format(getFortStatus(state.surface_fort)?.defense ?? 0)}</span><span>CIÊNCIA ${formatNumber.format(state.science ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'science'))}</span><span>COMIDA ${formatNumber.format(state.shelter_supplies?.food ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'food'))}</span><span>ENERGIA ${formatNumber.format(state.shelter_supplies?.energy ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'energy'))}</span><span class="oxygen-resource ${state.oxygen_deprived ? 'oxygen-deprived' : ''}" aria-label="Oxigênio ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} de ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ', produção insuficiente' : ''}">💨 O₂ ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ' · ALERTA' : ''}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'weapons'))}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'medkits'))}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
     <div class="bunker-build-controls" hidden aria-label="Módulos de construção">${modules.map(([id, module]) => { const cost = getShelterBuildCost(id, 0, state.presidentClass); return `<button type="button" class="bunker-module-button" data-action="shelter-module" data-module="${id}" aria-pressed="${id === 'dormitory'}" ${state.scrap < cost ? 'disabled' : ''}>${module.name}<small>${formatNumber.format(cost)} sucatas${buildCostMultiplier < 1 ? ' · DESCONTO DO OPERÁRIO' : ''}</small></button>`; }).join('')}<div class="bunker-slot-controls"><label for="shelter-build-slot">Setor livre</label><select id="shelter-build-slot" class="bunker-build-slot"></select><button type="button" class="primary-action" data-action="shelter-place">[ CONSTRUIR ]</button></div></div>
     <div class="bunker-stage"><canvas id="shelterCanvas" class="bunker-canvas" width="960" height="600" tabindex="0" aria-label="Bunker lateral. A e D movem o Presidente, W e S operam o elevador, E interage. Na construção, clique num setor livre."></canvas>${bunkerEnvironmentHudView(state.environment, state.isNight, state.inhabitants, state.shelter_guards, state.presidentClass, state.weather)}${missionObjectiveView(state)}<div class="bunker-tooltip" data-bunker-tooltip role="status" hidden></div>${renderDialogueView(null)}</div>
     <div class="bunker-foot"><div><p class="bunker-status" data-shelter-status role="status">PRESIDENTE EM PATRULHA</p><p class="bunker-notice ${/SINAL DO EXPLORADOR|ALERTA CRÍTICO|ASFIXIA|oxigênio insuficiente/i.test(state.notice ?? '') ? 'danger' : ''}" role="status">${escapeHtml(state.notice ?? '')}</p></div><div class="shelter-room-controls"><label for="shelter-room-select">Setor</label><select id="shelter-room-select" class="bunker-build-slot">${rooms.map((room) => `<option value="${room.floor}:${room.column}">${SHELTER_TYPES[room.type].name} · A${room.floor + 1} S${room.column}</option>`).join('')}</select><button type="button" class="quiet-action" data-action="shelter-open-room">[ GERIR SALA ]</button></div></div>
@@ -974,6 +1021,7 @@ export function mountDashboard(root) {
   const offlineReportModal = document.getElementById('modal-offline-report');
   const encyclopediaModal = document.getElementById('modal-enciclopedia');
   const doorModal = document.getElementById('modal-porta');
+  const raidModal = document.getElementById('modal-ataque');
   const audio = createAudioEngine({ settings: (() => { try { return JSON.parse(localStorage.getItem(AUDIO_KEY) ?? '{}'); } catch { return {}; } })() });
   const soundControl = document.createElement('div');
   soundControl.className = 'sound-control';
@@ -1223,13 +1271,91 @@ export function mountDashboard(root) {
       if (!canvas) { oilPreviewFrame = null; return; }
       const status = getDerrickStatus(normalizeOilField(state.oil_derricks)[oilPanelSlot]);
       drawOilDerrickPreview(canvas.getContext('2d'), { level: Number(canvas.dataset.oilPreview), time, width: canvas.width, height: canvas.height,
-        pumping: Boolean(status && !status.upgrading && !status.full) });
+        pumping: Boolean(status && !status.upgrading && !status.full), scenery: scenery() });
       oilPreviewFrame = requestAnimationFrame(frame);
     };
     oilPreviewFrame = requestAnimationFrame(frame);
   }
 
+  let fortPanelOpen = false;
+  // Sprite dos guardas do Vault, usado no painel do Forte e na batalha do relatorio.
+  const soldierSheet = typeof Image === 'function' ? Object.assign(new Image(), { src: DEFAULT_ASSETS.npc_walk_sheet }) : null;
+  const soldierImage = () => (soldierSheet?.complete && soldierSheet.naturalWidth ? soldierSheet : null);
+  const sceneryImages = {};
+  if (typeof Image === 'function') {
+    for (const [key, src] of Object.entries({ sky: DEFAULT_ASSETS.bg_sky, mountains: DEFAULT_ASSETS.bg_mountains, ground: DEFAULT_ASSETS.fg_wasteland })) {
+      sceneryImages[key] = Object.assign(new Image(), { src });
+    }
+  }
+  const scenery = () => (Object.keys(sceneryImages).length && Object.values(sceneryImages).every((image) => image.complete && image.naturalWidth) ? sceneryImages : null);
+  let raidAnimation = null;
+
+  function animateFortPreview() {
+    if (typeof requestAnimationFrame !== 'function') return;
+    const frame = (time) => {
+      const canvas = !fortPanelOpen || bunkerGeneratorModal.hidden ? null : bunkerGeneratorModal.querySelector('[data-fort-preview]');
+      if (!canvas) return;
+      drawFortPreview(canvas.getContext('2d'), { level: Number(canvas.dataset.fortPreview), garrison: Number(canvas.dataset.garrison), time, width: canvas.width, height: canvas.height, soldierImage: soldierImage(), scenery: scenery() });
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }
+
+  function openFortPanel() {
+    if (!bunkerGeneratorModal) return;
+    const wasOpen = fortPanelOpen && !bunkerGeneratorModal.hidden;
+    closeOilPanel();
+    activeShelterRoom = null;
+    fortPanelOpen = true;
+    bunkerGeneratorModal.innerHTML = fortView(state);
+    bunkerGeneratorModal.hidden = false;
+    bunkerController?.pause();
+    if (!wasOpen) animateFortPreview();
+    if (oilPanelTimer === null) {
+      oilPanelTimer = window.setInterval(() => {
+        const live = bunkerGeneratorModal.hidden ? null : bunkerGeneratorModal.querySelector('[data-fort-live]');
+        if (!live || !fortPanelOpen) { closeOilPanel(); return; }
+        const markup = fortLiveView(state);
+        if (live.innerHTML !== markup) live.innerHTML = markup;
+        const preview = bunkerGeneratorModal.querySelector('[data-fort-preview]');
+        const status = getFortStatus(state.surface_fort);
+        if (preview && status) preview.dataset.fortPreview = String(status.activeLevel);
+      }, 1_000);
+    }
+  }
+
+  // O relatorio do ataque toca a batalha uma vez; re-renderizar o Vault nao a reinicia.
+  function syncRaidModal() {
+    if (!raidModal) return;
+    const report = state.pendingRaid;
+    const key = report ? `${report.turn}:${report.faction}:${report.attack}` : '';
+    if (raidModal.dataset.key === key) return;
+    raidModal.dataset.key = key;
+    raidModal.innerHTML = raidReportView(report);
+    raidModal.hidden = !report;
+    if (!report) { raidAnimation = null; return; }
+    bunkerController?.pause();
+    const canvas = raidModal.querySelector('[data-raid-battle]');
+    if (!canvas || typeof requestAnimationFrame !== 'function') return;
+    const run = { start: null };
+    raidAnimation = run;
+    const fort = state.surface_fort;
+    const frame = (time) => {
+      if (raidAnimation !== run || !canvas.isConnected) return;
+      run.start ??= time;
+      drawRaidBattle(canvas.getContext('2d'), report, { fort, elapsed: time - run.start, time, width: canvas.width, height: canvas.height, soldierImage: soldierImage(), scenery: scenery() });
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }
+
+  raidModal?.addEventListener('click', (event) => {
+    if (!event.target.closest('[data-action="raid-dismiss"]')) return;
+    commit(dismissRaid(state));
+  });
+
   function closeOilPanel() {
+    fortPanelOpen = false;
     oilPanelSlot = null;
     if (oilPanelTimer !== null) { window.clearInterval(oilPanelTimer); oilPanelTimer = null; }
   }
@@ -1408,6 +1534,8 @@ export function mountDashboard(root) {
           oilDerricks: state.oil_derricks,
           oilFeedback,
           onOilDerrick: handleOilDerrick,
+          surfaceFort: state.surface_fort,
+          onFort: openFortPanel,
           onPlayerChanged: (player) => {
             state = { ...state, rpg_player: player };
             storageNotice = saveState(state);
@@ -1561,6 +1689,7 @@ export function mountDashboard(root) {
     if (allianceModal) { const markup = renderAllianceInvocation(state); allianceModal.hidden = !markup; allianceModal.innerHTML = markup; }
     if (hostileAlertModal) { const markup = renderHostileAlert(state); hostileAlertModal.hidden = !markup; hostileAlertModal.innerHTML = markup; }
     if (governmentModal) { const markup = renderGovernmentModal(state); governmentModal.hidden = !markup; governmentModal.innerHTML = markup; }
+    syncRaidModal();
     if (doorModal) {
       const doorMarkup = state.is_wasteland && !state.wasteland_cinematic_ready ? doorView(state, trophies) : '';
       doorModal.innerHTML = doorMarkup;
@@ -1601,7 +1730,8 @@ export function mountDashboard(root) {
 
   function playStateSounds(previous, next) {
     const rooms = (grid) => (grid ?? []).flat().filter(Boolean).length;
-    if (!isMissionPending(previous.pendingBunkerEvent) && isMissionPending(next.pendingBunkerEvent)) audio.play('alarm');
+    if (!previous.pendingRaid && next.pendingRaid) audio.play('alarm');
+    else if (!isMissionPending(previous.pendingBunkerEvent) && isMissionPending(next.pendingBunkerEvent)) audio.play('alarm');
     else if (next.ending && !previous.ending) audio.play('door');
     else if (/^Missão concluída/.test(next.notice ?? '') && next.notice !== previous.notice) audio.play('reward');
     else if (rooms(next.shelter_grid) > rooms(previous.shelter_grid)) audio.play('build');
@@ -1875,6 +2005,18 @@ export function mountDashboard(root) {
       const column = Number(button.dataset.column);
       commit(upgradeShelterRoom(state, floor, column));
       openShelterRoom(getRoom(state.shelter_grid, floor, column));
+      return;
+    }
+    if (action === 'fort-build' || action === 'fort-upgrade' || action === 'fort-garrison' || action === 'fort-recruit') {
+      const update = {
+        'fort-build': () => buildFort(state),
+        'fort-upgrade': () => upgradeFort(state),
+        'fort-garrison': () => assignGarrison(state, Number(button.dataset.amount)),
+        'fort-recruit': () => recruitSoldiers(state),
+      }[action];
+      audio.play(action === 'fort-garrison' || action === 'fort-recruit' ? 'click' : 'build');
+      commit(update());
+      openFortPanel();
       return;
     }
     if (action === 'oil-build' || action === 'oil-collect' || action === 'oil-upgrade') {

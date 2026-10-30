@@ -108,6 +108,23 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 .sound-volume { width: 90px; accent-color: #ff9d00; }
 .title-screen-host[hidden] { display: none; }
 .oil-resource { color: #e8d7ff; }
+.modal-raid { z-index: 57; }
+.raid-dialog { width: min(620px, 100%); text-align: center; }
+.raid-dialog h2 { margin: 6px 0 10px; font: 16px 'Press Start 2P', monospace; color: #ffb000; }
+.raid-battle { width: 100%; height: auto; border: 2px solid #8a2a1c; background: #140804; image-rendering: pixelated; }
+.raid-report { opacity: 0; animation: raid-report-in .5s ease-out forwards; margin-top: 12px; }
+.raid-report ul { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 4px; font-family: 'Share Tech Mono', monospace; }
+.raid-report.is-won .raid-score { color: #8fe39a; }
+.raid-report.is-lost .raid-score { color: #ff6b5c; }
+.raid-score { margin: 0; font: 13px 'Press Start 2P', monospace; }
+.raid-advice { color: #ffcf7a; }
+@keyframes raid-report-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.fort-threat { margin: 6px 0; }
+.fort-threat.is-danger { color: #ff8a7a; }
+.fort-threat.is-safe { color: #8fe39a; }
+.fort-last { margin: 4px 0; color: #c9a77a; font-size: 13px; }
+.fort-garrison { display: grid; gap: 8px; margin: 10px 0; padding: 10px; border: 1px dashed #8a5a1c; }
+.fort-garrison-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
 .oil-dialog { width: min(640px, 100%); }
 .oil-header { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; }
 .oil-header h2 { margin: 0 0 6px; }

@@ -9,6 +9,7 @@ import { advanceInhabitantNeeds, countDormitoryBeds } from './needs.js';
 import { getWeather } from './weather.js';
 import { createMissionLocation } from './missions.js';
 import { normalizeOilField } from './oil.js';
+import { rollSurfaceRaid } from './defense.js';
 import { ENDINGS, isDoorOpen } from './endings.js';
 import { nextRandom } from './geopolitics.js';
 import { getPresidentClassModifiers } from './player_state.js';
@@ -73,6 +74,9 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
     scrap: Math.max(250, Number(state.scrap) || 0),
     oil: 0,
     oil_derricks: normalizeOilField(),
+    surface_fort: null,
+    pendingRaid: null,
+    raid_log: [],
     science: Math.max(0, Math.floor(Number(state.science) || 0)),
     shelter_grid: normalizeShelterGrid(INITIAL_SHELTER_GRID),
     shelter_inhabitants: [],
@@ -128,9 +132,16 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
   };
 }
 
-export function advanceWastelandMonth(state) {
+// Depois do mes do Vault, os saqueadores do Ermo podem atacar o campo de petroleo.
+export function advanceWastelandMonth(state, now = Date.now()) {
+  const next = advanceVaultMonth(state);
+  return next !== state && (Number(next.wasteland_turn) || 0) > (Number(state.wasteland_turn) || 0) ? rollSurfaceRaid(next, now) : next;
+}
+
+function advanceVaultMonth(state) {
   if (state.ending) return { ...state, notice: `A história do Vault terminou: ${ENDINGS[state.ending.id]?.title ?? 'fim'}.` };
   if (isDoorOpen(state)) return { ...state, notice: 'A superfície voltou a ser habitável. Decida o destino do Vault diante da Porta.' };
+  if (state.pendingRaid) return { ...state, notice: 'Veja o relatório do ataque na superfície antes de avançar o mês.' };
   if (state.pendingBunkerEvent || state.pendingLoot || state.pendingExpeditionReports?.length) {
     return { ...state, notice: state.pendingBunkerEvent
       ? 'Resolva o dilema do Vault antes de avancar o mes.'

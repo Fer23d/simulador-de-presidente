@@ -33,10 +33,11 @@ import { escolherInterrogatorio as chooseInterrogation, reivindicarInterrogatori
 import { checkStoryEvents, dismissStory as dismissNarrativeStory, gerarEntradaDiario, getStoryEvent } from './story_engine.js';
 import { checkStoryChapters, getLoreChapter } from './story_lore.js';
 import { advanceGovernment, applyGovernmentEconomy, openAutoCoup, resolveAutoCoup, resolveCorporateDefault } from './politics.js';
-import { advanceWastelandMonth, buildMegaVault, buildWastelandProject, enviarBatedores, transicionarParaWasteland as transitionToWasteland } from './wasteland.js';
+import { advanceWastelandMonth, buildMegaVault, buildWastelandProject, createWastelandFactions, enviarBatedores, transicionarParaWasteland as transitionToWasteland } from './wasteland.js';
 import { getWastelandEvent, WASTELAND_EVENTS } from './game_mechanics.js';
 import { createRpgPlayer, normalizeInhabitants, normalizeRpgPlayer } from './rpg_bunker.js';
 import { normalizeOilField } from './oil.js';
+import { normalizeFort, normalizeRaidReport } from './defense.js';
 import { INITIAL_SHELTER_GRID, migrateLegacyPlayer, migrateLegacyRooms, normalizeShelterGrid, normalizeShelterInhabitants } from './shelter_engine.js';
 import { createEnvironmentState } from './environment.js';
 import { createWeatherState } from './weather.js';
@@ -215,6 +216,9 @@ export function createGameState(countryId = 'bra') {
     scrap: 0,
     oil: 0,
     oil_derricks: normalizeOilField(),
+    surface_fort: null,
+    pendingRaid: null,
+    raid_log: [],
     science: 0,
     shelter_grid: normalizeShelterGrid(INITIAL_SHELTER_GRID),
     shelter_inhabitants: [],
@@ -1059,6 +1063,17 @@ export function advanceMonth(state) {
   }, `Alerta: ${eventRoll.event.title}.`)));
 }
 
+function hydrateWastelandContacts(saved) {
+  return createWastelandFactions().map((faction) => {
+    const match = saved.find((contact) => contact?.id === faction.id && contact.wastelandFaction);
+    if (!match) return faction;
+    const relation = Number(match.relation);
+    const power = Number(match.militaryPower);
+    return { ...faction, ...match, relation: Number.isFinite(relation) ? Math.max(-100, Math.min(100, relation)) : faction.relation,
+      militaryPower: Number.isFinite(power) ? Math.max(0, power) : faction.militaryPower, wastelandFaction: true };
+  });
+}
+
 export function hydrateGameState(serialized) {
   try {
     const parsed = JSON.parse(serialized);
@@ -1144,7 +1159,8 @@ export function hydrateGameState(serialized) {
       geopolitics: parsed.version >= 2 && Array.isArray(parsed.geopolitics?.contacts) ? {
         ...base.geopolitics,
         ...parsed.geopolitics,
-        contacts: base.geopolitics.contacts.map((baseContact) => ({
+        // No Vault os contatos sao as faccoes do Ermo, nao os paises; saves antigos que as perderam recebem as originais.
+        contacts: parsed.is_wasteland ? hydrateWastelandContacts(parsed.geopolitics.contacts) : base.geopolitics.contacts.map((baseContact) => ({
           ...baseContact,
           ...(parsed.geopolitics.contacts.find((savedContact) => savedContact?.id === baseContact.id) ?? {}),
           has_nukes: baseContact.has_nukes,
@@ -1243,6 +1259,9 @@ export function hydrateGameState(serialized) {
       scrap: Math.max(0, Number(parsed.scrap) || 0),
       oil: Math.max(0, Math.floor(Number(parsed.oil) || 0)),
       oil_derricks: normalizeOilField(parsed.oil_derricks),
+      surface_fort: normalizeFort(parsed.surface_fort),
+      pendingRaid: normalizeRaidReport(parsed.pendingRaid),
+      raid_log: (Array.isArray(parsed.raid_log) ? parsed.raid_log : []).map(normalizeRaidReport).filter(Boolean).slice(0, 5),
       science: Math.max(0, Math.floor(Number(parsed.science) || 0)),
       shelter_grid: shelterGrid,
       shelter_inhabitants: normalizeShelterInhabitants(parsed.shelter_inhabitants ?? migrateLegacyPlayer(parsed.bunker_player, parsed.bunker_rooms, shelterGrid), shelterGrid),

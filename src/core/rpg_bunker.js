@@ -4,6 +4,7 @@ import {
   FLOOR_SPACING, WORLD_LEFT, WORLD_TOP,
 } from './shelter_engine.js';
 import { findOilDerrickAt } from './oil_renderer.js';
+import { isFortAt } from './defense_renderer.js';
 import { AssetManager, DEFAULT_ASSETS, drawNeedsPanel, getActorPlacement, renderSpriteScene } from './sprite_engine.js';
 import { isLootboxCrateClick } from './lootbox_renderer.js';
 import { Inhabitant } from './inhabitant.js';
@@ -267,7 +268,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   onDetain, onAssetsReady, onEnvironmentChanged, environment = {}, isNight = environment?.isNight ?? false, weather: savedWeather = {},
   oxygenDeprived = false, assetUrls = {}, lootbox = {}, onLootboxClick,
   presidentClass = null, equippedSkin = 'default', currentDay = 1, onDayPassed, mission = null, onMission,
-  onDialogue, onDialogueAdvance, onDialogueClose, oilDerricks = null, oilFeedback = null, onOilDerrick } = {}) {
+  onDialogue, onDialogueAdvance, onDialogueClose, oilDerricks = null, oilFeedback = null, onOilDerrick, surfaceFort = null, onFort } = {}) {
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
   const assets = new AssetManager({ ...DEFAULT_ASSETS, ...assetUrls });
@@ -339,7 +340,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     camera.offset_y += (targetY - camera.offset_y) * Math.min(1, dt * 8);
     renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants: actors, cabinFloor, time,
       isNight: dayNight.isNight, activeGenerators, oxygenDeprived, lootbox, presidentClass, equippedSkin,
-      weather: weather.type, oilDerricks, oilFeedback });
+      weather: weather.type, oilDerricks, oilFeedback, surfaceFort });
     const rebel = paused || buildMode ? null : findNearbyRebel(player, grid, actors);
     const nearbyInhabitant = paused || buildMode ? null : trackNearbyInhabitant(player, grid, actors, time);
     const nearbyRoom = nearbyInhabitant && getRoom(grid, nearbyInhabitant.npc.floor, nearbyInhabitant.npc.column);
@@ -445,6 +446,8 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
       const slot = findOilDerrickAt((event.clientX - rect.left) * canvas.width / rect.width - camera.offset_x,
         (event.clientY - rect.top) * canvas.height / rect.height - camera.offset_y);
       if (slot !== null) onOilDerrick?.(slot);
+      else if (isFortAt((event.clientX - rect.left) * canvas.width / rect.width - camera.offset_x,
+        (event.clientY - rect.top) * canvas.height / rect.height - camera.offset_y)) onFort?.();
       return;
     }
     const rect = canvas.getBoundingClientRect();
@@ -461,9 +464,10 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   function hover(event) {
     if (!oilDerricks) return;
     const rect = canvas.getBoundingClientRect();
-    const slot = buildMode || paused ? null : findOilDerrickAt((event.clientX - rect.left) * canvas.width / rect.width - camera.offset_x,
-      (event.clientY - rect.top) * canvas.height / rect.height - camera.offset_y);
-    canvas.style.cursor = slot === null ? '' : 'pointer';
+    const worldX = (event.clientX - rect.left) * canvas.width / rect.width - camera.offset_x;
+    const worldY = (event.clientY - rect.top) * canvas.height / rect.height - camera.offset_y;
+    const clickable = !buildMode && !paused && (findOilDerrickAt(worldX, worldY) !== null || isFortAt(worldX, worldY));
+    canvas.style.cursor = clickable ? 'pointer' : '';
   }
   canvas.addEventListener('mousemove', hover);
   const ready = assets.preload().then(() => {
