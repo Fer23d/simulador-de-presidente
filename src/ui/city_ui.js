@@ -31,14 +31,17 @@ export function cityView(state) {
     <div class="city-hud" data-city-hud role="status"></div>
     <div class="city-main">
       <div class="city-stage">
+        <div class="city-stage-bar"><span>/// MAPA DE OPERAÇÕES ///</span><span data-city-readout>SELECIONE UM SETOR</span></div>
         <canvas id="cityCanvas" class="city-canvas" width="${CITY_CANVAS_WIDTH}" height="${CITY_CANVAS_HEIGHT}" tabindex="0" aria-label="Mapa da cidade. Escolha uma construção e clique num terreno livre."></canvas>
+        <div class="city-map-legend" aria-label="Legenda do mapa"><span><i class="legend-dot legend-road"></i>REDE VIÁRIA</span><span><i class="legend-dot legend-contaminated"></i>CONTAMINADO</span><span><i class="legend-dot legend-service"></i>SERVIÇO ATIVO</span></div>
         <div class="city-tooltip" data-city-tip hidden></div>
       </div>
       <aside class="city-side">
-        <p class="city-side-title">CONSTRUIR <small>(sucatas)</small></p>
+        <div class="city-side-heading"><div><p class="city-side-title">CONSTRUIR</p><small>REDE DE SOBREVIVÊNCIA · SUCATAS</small></div><span class="city-live-dot" title="Sistema online"></span></div>
+        <div class="city-objective"><span class="city-objective-kicker">ORDEM ATUAL</span><strong>Reconstruir o corredor do Vault</strong><p>Ligue serviços à porta, mantenha energia e dê abrigo à próxima geração.</p></div>
         <div class="city-palette">${PALETTE.map(paletteButton).join('')}<button type="button" class="city-tool is-danger" data-city-tool="demolish" aria-pressed="false" title="Demolir e recuperar metade do custo"><span class="city-tool-icon" aria-hidden="true">🧨</span><span class="city-tool-name">Demolir</span><span class="city-tool-cost">50%</span></button></div>
         <div class="city-info" data-city-info></div>
-        <p class="city-side-title">DIÁRIO</p>
+        <div class="city-side-heading city-side-heading--log"><p class="city-side-title">DIÁRIO DE CAMPO</p><small>ÚLTIMOS REGISTOS</small></div>
         <ol class="city-log" data-city-log></ol>
       </aside>
     </div>
@@ -104,6 +107,7 @@ export function createCityController(root, { getState, onChange, onSound = () =>
   const info = root.querySelector('[data-city-info]');
   const logList = root.querySelector('[data-city-log]');
   const tip = root.querySelector('[data-city-tip]');
+  const readout = root.querySelector('[data-city-readout]');
   const clock = root.querySelector('[data-city-clock]');
   let tool = null;
   let hover = null;
@@ -172,10 +176,11 @@ export function createCityController(root, { getState, onChange, onSound = () =>
     hover = tileAt(event);
     const current = city();
     const building = hover ? getBuildingAt(current, hover.x, hover.y) : null;
-    if (!hover) { tip.hidden = true; return; }
+    if (!hover) { tip.hidden = true; if (readout) readout.textContent = 'SELECIONE UM SETOR'; return; }
     const ground = current.ground[hover.y * CITY_WIDTH + hover.x];
     const text = building ? CITY_BUILDINGS[building.type].name : hover.x === CITY_GATE.x && hover.y === CITY_GATE.y ? 'Porta do Vault'
       : ground === 'x' ? 'Terreno contaminado' : ground === 'r' ? 'Entulho (+8 para construir)' : '';
+    if (readout) readout.textContent = `SETOR ${String.fromCharCode(65 + hover.x)}-${String(hover.y + 1).padStart(2, '0')}${text ? ` · ${text.toUpperCase()}` : ''}`;
     tip.hidden = !text;
     tip.textContent = text;
     const rect = canvas.getBoundingClientRect();
