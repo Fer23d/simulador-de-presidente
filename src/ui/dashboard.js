@@ -27,6 +27,7 @@ import { applyOfflineProgress, dismissOfflineReport } from '../core/offline.js';
 import { arriveAtMission, getMissionReward, getMissionStory, isMissionPending } from '../core/missions.js';
 import { DAYS_PER_MONTH, getVaultDay, getVaultDayOfMonth } from '../core/vault_time.js';
 import { startCity, CITY_ORIGINS } from '../core/city.js';
+import { transicionarParaWasteland } from '../core/wasteland.js';
 import { cityEpilogueView, cityView, createCityController } from './city_ui.js';
 import { DOOR_OPENS_AT_MONTH } from '../core/endings.js';
 import { getGeneratorFuelPlan, getOilSaleOffer, sellOil, toggleGeneratorFuel } from '../core/oil_economy.js';
@@ -1024,7 +1025,27 @@ export function mountDashboard(root) {
   if (!root) {
     throw new Error('Elemento raiz do dashboard nao encontrado.');
   }
-  let state = loadState();
+  const localCityPreview = typeof window !== 'undefined'
+    && ['localhost', '127.0.0.1'].includes(window.location.hostname)
+    && new URLSearchParams(window.location.search).get('preview') === 'city';
+  const createLocalCityPreview = () => {
+    const wastelandState = transicionarParaWasteland({
+      ...createGameState(),
+      scrap: 8_000,
+      oil: 300,
+    }, 'city-preview');
+    const cityState = startCity({
+      ...wastelandState,
+      presidentClass: 'worker',
+      ending: { id: 'republic', month: 36 },
+      president_selection_pending: false,
+      wasteland_cinematic_pending: false,
+      wasteland_cinematic_ready: false,
+    });
+    return { ...cityState, city: { ...cityState.city, speed: 1 } };
+  };
+  let state = localCityPreview ? createLocalCityPreview() : loadState();
+  const persistState = (nextState) => localCityPreview ? '' : saveState(nextState);
   let activeTab = 'overview';
   let storageNotice = '';
   let diplomacyQuery = '';
@@ -1086,7 +1107,7 @@ export function mountDashboard(root) {
   tutorialCoach.setAttribute('aria-live', 'polite');
   tutorialCoach.hidden = true;
   document.body.append(tutorialCoach);
-  let titleOpen = true;
+  let titleOpen = !localCityPreview;
   let titleView = 'main';
   let titleAshFrame = null;
   const titleScreen = document.createElement('div');
@@ -1283,7 +1304,7 @@ export function mountDashboard(root) {
       locationRequestPending = true;
       void resolveExpeditionLocation().then((location) => {
         state = { ...state, expeditionLocation: location };
-        storageNotice = saveState(state);
+        storageNotice = persistState(state);
         if (activeShelterRoom?.type === 'vault' && !bunkerGeneratorModal.hidden) {
           openShelterRoom(activeShelterRoom, { requestLocation: false });
         }
@@ -1524,7 +1545,7 @@ export function mountDashboard(root) {
       : `<label class="country-picker"><span>Pais</span><select data-action="select-country" aria-label="Selecionar pais">${COUNTRIES.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((country) => `<option value="${country.id}" ${country.id === state.country.id ? 'selected' : ''}>${country.nome}</option>`).join('')}</select></label><button type="button" class="quiet-action" data-action="reset">Reiniciar</button>`;
     root.innerHTML = `<div class="app-shell">
       <aside class="sidebar"><div class="brand"><span class="brand-mark">LO</span><div><strong>LAST OFFICE</strong><small>Após a guerra, tudo muda</small></div></div><nav class="tab-list" aria-label="Navegacao principal">${tabs.map(([id, label]) => `<button type="button" class="tab-button ${activeTab === id ? 'active' : ''}" data-action="tab" data-tab="${id}">${label}</button>`).join('')}</nav><div class="sidebar-footer"><span>Mandato em curso</span><strong>${state.calendar.year}</strong></div></aside>
-      <section class="workspace"><header class="topbar"><div><p class="eyebrow">${state.title ?? 'Presidente'}</p><h1>${state.is_wasteland ? 'ANO ZERO PÓS-BOMBA' : `${MONTHS[state.calendar.month - 1]} de ${state.calendar.year}`}</h1></div><div class="topbar-actions">${topbarActions}</div></header>
+      <section class="workspace"><header class="topbar"><div><p class="eyebrow">${state.city ? 'RECONSTRUÇÃO PÓS-BOMBA' : (state.title ?? 'Presidente')}</p><h1>${state.city ? 'MODO CIDADE' : state.is_wasteland ? 'ANO ZERO PÓS-BOMBA' : `${MONTHS[state.calendar.month - 1]} de ${state.calendar.year}`}</h1></div><div class="topbar-actions">${topbarActions}</div></header>
       <section class="metrics">${metric('PIB', formatMoney(state.economy.gdp))}${metric('Inflacao', formatPercent(state.economy.inflation), state.economy.inflation > 0.1 ? 'negative' : '')}${metric('Desemprego', formatPercent(state.economy.unemployment))}${metric('Apoio interno', `${getFactionSupport(state.factions).toFixed(0)}%`, getFactionSupport(state.factions) >= 55 ? 'positive' : '')}${metric('Caixa nacional', formatMoney(state.economy.cash))}${metric('DEFCON', `DEFCON: ${state.global_defcon}`, `defcon-${state.global_defcon}`)}${metric('Saldo projetado', formatMoney(projection.monthlyBalance), projection.monthlyBalance >= 0 ? 'positive' : 'negative')}</section>
       ${storageNotice ? `<p class="storage-notice">${storageNotice}</p>` : ''}
       ${state.notice === STORY_NOTICE ? `<p class="storage-notice story-notification" role="status">${STORY_NOTICE}</p>` : ''}
@@ -1535,7 +1556,7 @@ export function mountDashboard(root) {
         getState: () => state,
         onChange: (next, { persist, rerender }) => {
           state = next;
-          if (persist) storageNotice = saveState(state);
+          if (persist) storageNotice = persistState(state);
           if (rerender) render();
         },
         onSound: (name) => audio.play(name),
@@ -1587,11 +1608,11 @@ export function mountDashboard(root) {
           onFort: openFortPanel,
           onPlayerChanged: (player) => {
             state = { ...state, rpg_player: player };
-            storageNotice = saveState(state);
+            storageNotice = persistState(state);
           },
           onInhabitantsChanged: (inhabitants) => {
             state = { ...state, inhabitants };
-            storageNotice = saveState(state);
+            storageNotice = persistState(state);
           },
           onEnvironmentChanged: (environment, { persist, weatherChanged }) => {
             state = { ...state, environment: { elapsedMs: environment.elapsedMs }, isNight: environment.isNight,
@@ -1603,13 +1624,13 @@ export function mountDashboard(root) {
             if (weatherChanged && activeShelterRoom?.type === 'vault' && !bunkerGeneratorModal.hidden) {
               openShelterRoom(activeShelterRoom, { requestLocation: false });
             }
-            if (persist) storageNotice = saveState(state);
+            if (persist) storageNotice = persistState(state);
             if (weatherChanged || persist) syncDiscoveries();
             updateTutorial();
           },
           onDayPassed: (days) => {
             state = { ...state, currentDay: Math.max(1, (Number(state.currentDay) || 1) + days) };
-            storageNotice = saveState(state);
+            storageNotice = persistState(state);
           },
           onDialogue: (npc, text) => {
             audio.play('talk');
@@ -1657,7 +1678,7 @@ export function mountDashboard(root) {
             const result = applyDialoguePacification(state, npc.id);
             if (result.pacified) {
               state = result.state;
-              storageNotice = saveState(state);
+              storageNotice = persistState(state);
             }
             return result.pacified ? {
               loyalty: result.npc.loyalty,
@@ -1789,7 +1810,7 @@ export function mountDashboard(root) {
   function commit(nextState) {
     const previous = state;
     state = nextState;
-    storageNotice = saveState(state);
+    storageNotice = persistState(state);
     render();
     syncAudioMood();
     playStateSounds(previous, state);
