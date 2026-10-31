@@ -11,6 +11,8 @@ const center = (tile) => tile * CITY_TILE + CITY_TILE / 2;
 // material procedural continua a desenhar o mapa e a cidade não fica vazia.
 let cityGroundImage = null;
 let cityGroundImageRequested = false;
+let cityRoadImage = null;
+let cityRoadImageRequested = false;
 function getCityGroundImage() {
   if (typeof document === 'undefined') return null;
   if (cityGroundImageRequested) return cityGroundImage;
@@ -20,6 +22,18 @@ function getCityGroundImage() {
   image.alt = '';
   image.src = 'assets/img/city_wasteland_ground.png';
   image.addEventListener('load', () => { cityGroundImage = image; groundCache = null; });
+  return null;
+}
+
+function getCityRoadImage() {
+  if (typeof document === 'undefined') return null;
+  if (cityRoadImageRequested) return cityRoadImage;
+  cityRoadImageRequested = true;
+  const image = document.createElement('img');
+  image.decoding = 'async';
+  image.alt = '';
+  image.src = 'assets/img/city_road_surface.png';
+  image.addEventListener('load', () => { cityRoadImage = image; });
   return null;
 }
 
@@ -109,11 +123,20 @@ function getGroundCanvas(ground) {
 function drawRoad(ctx, x, y, roadSet, connected) {
   const px = x * CITY_TILE;
   const py = y * CITY_TILE;
+  const roadMaterial = getCityRoadImage();
   ctx.fillStyle = 'rgba(0, 0, 0, .32)';
   ctx.fillRect(px + 1, py + 5, CITY_TILE - 2, CITY_TILE - 2);
-  ctx.fillStyle = linear(ctx, px, py, px, py + CITY_TILE, connected
-    ? [[0, '#404448'], [.55, '#252a2e'], [1, '#171a1c']]
-    : [[0, '#5e5b57'], [.55, '#3a3837'], [1, '#252525']]);
+  if (roadMaterial?.complete && roadMaterial.naturalWidth) {
+    const source = ((x * 47 + y * 73) % Math.max(1, roadMaterial.naturalWidth - 48));
+    ctx.globalAlpha = connected ? .92 : .62;
+    ctx.drawImage(roadMaterial, source, source % Math.max(1, roadMaterial.naturalHeight - 48), CITY_TILE, CITY_TILE, px + 2, py + 2, CITY_TILE - 4, CITY_TILE - 4);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = connected ? 'rgba(38, 50, 46, .22)' : 'rgba(40, 34, 28, .34)';
+  } else {
+    ctx.fillStyle = linear(ctx, px, py, px, py + CITY_TILE, connected
+      ? [[0, '#404448'], [.55, '#252a2e'], [1, '#171a1c']]
+      : [[0, '#5e5b57'], [.55, '#3a3837'], [1, '#252525']]);
+  }
   ctx.fillRect(px + 2, py + 2, CITY_TILE - 4, CITY_TILE - 4);
   const link = (dx, dy) => roadSet.has(`${x + dx},${y + dy}`) || (x + dx === CITY_GATE.x && y + dy === CITY_GATE.y);
   ctx.fillStyle = connected ? '#3b3b3e' : '#5a5650';
@@ -163,6 +186,34 @@ function drawGate(ctx, time) {
   ctx.fillText('VAULT', px + CITY_TILE / 2, py + 33);
 }
 
+function drawStreetFurniture(ctx, city, analysis, time) {
+  const roads = city.buildings.filter((building) => building.type === 'road');
+  for (const road of roads) {
+    const px = road.x * CITY_TILE;
+    const py = road.y * CITY_TILE;
+    const index = road.y * CITY_WIDTH + road.x;
+    const hasCross = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => analysis.roads.has((road.y + dy) * CITY_WIDTH + road.x + dx)).length >= 3;
+    if (hasCross) {
+      ctx.strokeStyle = 'rgba(235, 205, 133, .42)'; ctx.lineWidth = 1;
+      for (let stripe = 0; stripe < 3; stripe++) {
+        ctx.beginPath(); ctx.moveTo(px + 8 + stripe * 7, py + 5); ctx.lineTo(px + 8 + stripe * 7, py + 12); ctx.stroke();
+      }
+    }
+    if (hash(road.x, road.y, 61) > .72) {
+      ctx.strokeStyle = '#242927'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(px + 31, py + 8); ctx.lineTo(px + 31, py - 3); ctx.stroke();
+      ctx.fillStyle = `rgba(255, 220, 117, ${.45 + (Math.sin(time / 700 + index) + 1) * .18})`;
+      ctx.beginPath(); ctx.arc(px + 31, py - 4, 2.3, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 1;
+    }
+    if (hash(road.x, road.y, 84) > .84) {
+      ctx.fillStyle = 'rgba(165, 143, 98, .6)';
+      ctx.fillRect(px + 5, py + 29, 4, 3);
+      ctx.fillStyle = 'rgba(20, 20, 17, .5)'; ctx.fillRect(px + 7, py + 28, 1, 1);
+    }
+  }
+}
+
 // ---------- Predios ----------
 
 function shadow(ctx, px, py) {
@@ -180,6 +231,39 @@ function buildingBase(ctx, px, py, type, connected) {
   ctx.strokeRect(px + 2.5, py + 1.5, CITY_TILE - 5, CITY_TILE - 6);
   ctx.fillStyle = `${accent}66`;
   ctx.fillRect(px + 4, py + 3, CITY_TILE - 8, 2);
+}
+
+const BUILDING_PALETTES = Object.freeze({
+  house: ['#8e9795', '#4f5a5d', '#b98554'], farm: ['#789b87', '#294b42', '#79d2ad'],
+  well: ['#b7c8c5', '#536f79', '#77d8e1'], generator: ['#d28b3e', '#52331d', '#ffba4d'],
+  solar: ['#4f7394', '#16243b', '#83d6ff'], derrick: ['#9a6347', '#3b2920', '#e8a658'],
+  workshop: ['#9b9e9a', '#4a4d4d', '#e1a357'], market: ['#c17859', '#542b25', '#ffd47d'],
+  clinic: ['#e5e9df', '#7b8990', '#8fe4df'], guard: ['#89905f', '#333a2a', '#e5bd67'],
+  plaza: ['#9d9a85', '#4b3927', '#b2e68b'], purifier: ['#c2d0d0', '#39474d', '#79ffd1'],
+});
+
+function drawBuildingVolume(ctx, px, py, type, status, time) {
+  const [roof, wall, light] = BUILDING_PALETTES[type] ?? ['#8e806b', '#38332d', '#e0b86d'];
+  const operational = status.connected && status.efficiency > 0;
+  const lift = type === 'house' || type === 'clinic' || type === 'market' ? 4 : 2;
+  ctx.save();
+  ctx.translate(0, -lift);
+  // Face frontal com uma pequena extrusão para o sul: é o que dá altura aos
+  // edifícios sem mudar as coordenadas de colisão da simulação.
+  ctx.fillStyle = 'rgba(4, 4, 4, .35)';
+  ctx.beginPath(); ctx.moveTo(px + 4, py + 13); ctx.lineTo(px + 36, py + 13); ctx.lineTo(px + 36, py + 35); ctx.lineTo(px + 31, py + 38); ctx.lineTo(px + 4, py + 35); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = wall; ctx.fillRect(px + 4, py + 8, 32, 25);
+  ctx.fillStyle = roof;
+  ctx.beginPath(); ctx.moveTo(px + 3, py + 9); ctx.lineTo(px + 20, py + 3); ctx.lineTo(px + 37, py + 9); ctx.lineTo(px + 34, py + 12); ctx.lineTo(px + 6, py + 12); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 238, 197, .26)'; ctx.stroke();
+  ctx.fillStyle = operational ? light : 'rgba(75, 76, 64, .7)';
+  ctx.fillRect(px + 9, py + 16, 6, 5); ctx.fillRect(px + 25, py + 16, 6, 5);
+  ctx.fillStyle = '#29251e'; ctx.fillRect(px + 17, py + 23, 6, 10);
+  if (operational) {
+    ctx.fillStyle = `rgba(255, 218, 130, ${.18 + (Math.sin(time / 450 + px) + 1) * .08})`;
+    ctx.fillRect(px + 7, py + 14, 26, 1.5);
+  }
+  ctx.restore();
 }
 
 function smoke(ctx, x, y, time, seed) {
@@ -201,15 +285,22 @@ const DRAWERS = {
     ctx.fillStyle = s.efficiency > .5 ? `rgba(255, 214, 120, ${.8 + Math.sin(time / 700 + px) * .1})` : '#23262a';
     ctx.fillRect(px + 9, py + 18, 7, 6); ctx.fillRect(px + 24, py + 18, 7, 6);
     ctx.fillStyle = '#2a2420'; ctx.fillRect(px + 17, py + 24, 6, 10);
+    ctx.fillStyle = '#d7c090'; ctx.fillRect(px + 18, py + 28, 1.5, 1.5);
+    ctx.strokeStyle = 'rgba(238, 220, 168, .45)'; ctx.beginPath(); ctx.moveTo(px + 7, py + 12); ctx.lineTo(px + 20, py + 5); ctx.lineTo(px + 33, py + 12); ctx.stroke();
+    ctx.fillStyle = '#26282a'; ctx.fillRect(px + 7, py + 27, 6, 3); ctx.fillRect(px + 27, py + 27, 6, 3);
   },
   farm(ctx, px, py, s, time) {
     ctx.fillStyle = '#2c2218'; ctx.fillRect(px + 3, py + 5, 34, 30);
+    ctx.strokeStyle = 'rgba(194, 234, 223, .5)'; ctx.lineWidth = 1;
+    ctx.strokeRect(px + 4, py + 6, 32, 28);
+    ctx.beginPath(); ctx.moveTo(px + 12, py + 6); ctx.lineTo(px + 12, py + 34); ctx.moveTo(px + 28, py + 6); ctx.lineTo(px + 28, py + 34); ctx.stroke();
     for (let row = 0; row < 4; row++) {
       ctx.fillStyle = s.efficiency > .3 ? `rgb(${70 + row * 8},${150 + Math.sin(time / 900 + row) * 10},${78})` : '#4f5a3d';
       ctx.fillRect(px + 6, py + 8 + row * 7, 28, 4);
     }
     ctx.fillStyle = 'rgba(210, 240, 255, .18)'; ctx.fillRect(px + 3, py + 5, 34, 14);
     ctx.fillStyle = s.efficiency > .3 ? '#d6a8ff' : '#444'; ctx.fillRect(px + 17, py + 3, 6, 3);
+    ctx.fillStyle = '#b7e7d0'; ctx.fillRect(px + 6, py + 6, 28, 1);
   },
   well(ctx, px, py, s, time) {
     const gradient = ctx.createRadialGradient(px + 17, py + 17, 2, px + 20, py + 20, 17);
@@ -227,6 +318,9 @@ const DRAWERS = {
     ctx.fillStyle = '#2a2c2e'; ctx.fillRect(px + 28, py + 4, 5, 12);
     if (s.efficiency > 0) smoke(ctx, px + 30, py + 4, time, px / 97);
     ctx.fillStyle = s.efficiency > 0 ? '#7cf29a' : '#f26c5c'; ctx.fillRect(px + 27, py + 28, 5, 3);
+    ctx.strokeStyle = '#d6a147'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px + 5, py + 14); ctx.lineTo(px + 35, py + 14); ctx.stroke(); ctx.lineWidth = 1;
+    ctx.fillStyle = '#17191a'; ctx.fillRect(px + 23, py + 18, 9, 5);
+    ctx.fillStyle = s.efficiency > 0 ? '#ffcf65' : '#803e32'; ctx.fillRect(px + 25, py + 19, 2, 2); ctx.fillRect(px + 29, py + 19, 2, 2);
   },
   solar(ctx, px, py, s, time) {
     ctx.fillStyle = '#1d2b44'; ctx.fillRect(px + 3, py + 8, 34, 24);
@@ -255,17 +349,24 @@ const DRAWERS = {
     if (s.efficiency > 0) smoke(ctx, px + 32, py + 2, time, px / 53);
     ctx.fillStyle = '#23262a'; ctx.fillRect(px + 8, py + 22, 12, 13);
     ctx.fillStyle = s.efficiency > .3 ? '#ffb347' : '#555'; ctx.fillRect(px + 25, py + 20, 8, 5);
+    ctx.strokeStyle = '#c9c1a8'; ctx.beginPath(); ctx.moveTo(px + 6, py + 19); ctx.lineTo(px + 19, py + 19); ctx.stroke();
+    ctx.fillStyle = '#b4b0a0'; ctx.fillRect(px + 23, py + 27, 10, 2);
+    ctx.fillStyle = '#de8e42'; ctx.beginPath(); ctx.arc(px + 28, py + 12, 3, 0, Math.PI * 2); ctx.fill();
   },
   market(ctx, px, py) {
     ctx.fillStyle = '#5a4630'; ctx.fillRect(px + 4, py + 18, 32, 17);
     for (let stripe = 0; stripe < 6; stripe++) { ctx.fillStyle = stripe % 2 ? '#e8e0cf' : '#b8352a'; ctx.fillRect(px + 3 + stripe * 5.7, py + 8, 5.7, 12); }
     ctx.fillStyle = '#3a2c1c'; ctx.fillRect(px + 8, py + 24, 8, 8); ctx.fillStyle = '#c9a050'; ctx.fillRect(px + 22, py + 25, 9, 7);
+    ctx.fillStyle = '#f2c763'; ctx.fillRect(px + 10, py + 12, 2, 5); ctx.fillRect(px + 28, py + 12, 2, 5);
+    ctx.fillStyle = '#1d1a16'; ctx.fillRect(px + 12, py + 27, 3, 3); ctx.fillRect(px + 25, py + 27, 3, 3);
   },
   clinic(ctx, px, py, s, time) {
     ctx.fillStyle = linear(ctx, px, py + 8, px, py + 36, [[0, '#f0f1ee'], [1, '#a9aca8']]);
     ctx.fillRect(px + 4, py + 8, 32, 27);
     ctx.fillStyle = '#c4281c'; ctx.fillRect(px + 17, py + 12, 6, 18); ctx.fillRect(px + 11, py + 18, 18, 6);
     ctx.fillStyle = s.efficiency > .3 ? `rgba(120, 255, 190, ${.6 + Math.sin(time / 600) * .3})` : '#555'; ctx.fillRect(px + 17, py + 4, 6, 3);
+    ctx.fillStyle = '#3d4b50'; ctx.fillRect(px + 7, py + 27, 7, 4); ctx.fillRect(px + 26, py + 27, 7, 4);
+    ctx.strokeStyle = '#79c7c8'; ctx.beginPath(); ctx.moveTo(px + 8, py + 28); ctx.lineTo(px + 13, py + 28); ctx.moveTo(px + 27, py + 28); ctx.lineTo(px + 32, py + 28); ctx.stroke();
   },
   guard(ctx, px, py, s, time) {
     ctx.fillStyle = '#7d6a48';
@@ -301,6 +402,7 @@ function drawBuilding(ctx, building, status, time) {
   const py = building.y * CITY_TILE;
   shadow(ctx, px, py);
   buildingBase(ctx, px, py, building.type, status.connected);
+  if (['house', 'clinic', 'market', 'farm'].includes(building.type)) drawBuildingVolume(ctx, px, py, building.type, status, time);
   ctx.save();
   if (!status.connected) ctx.globalAlpha = .55;
   DRAWERS[building.type]?.(ctx, px, py, status, time);
@@ -429,6 +531,7 @@ export function renderCity(ctx, city, analysis, { time = 0, hover = null, tool =
   }
   const roadSet = new Set(city.buildings.filter((building) => building.type === 'road').map((building) => `${building.x},${building.y}`));
   for (const building of city.buildings) if (building.type === 'road') drawRoad(ctx, building.x, building.y, roadSet, analysis.roads.has(building.y * CITY_WIDTH + building.x));
+  drawStreetFurniture(ctx, city, analysis, time);
   drawGate(ctx, time);
   for (const building of [...city.buildings].filter((candidate) => candidate.type !== 'road').sort((a, b) => a.y - b.y)) {
     drawBuilding(ctx, building, analysis.status.get(building.id) ?? { connected: false, efficiency: 0 }, time);
