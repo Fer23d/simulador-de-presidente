@@ -741,3 +741,51 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .codex-toast--rare { border-color: #6dff9a; color: #6dff9a; box-shadow: 4px 4px 0 #021006, 0 0 18px rgba(109, 255, 154, .45); }
 @keyframes codex-toast-in { 0% { opacity: 0; transform: translateY(12px); } 8%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-6px); } }
 @media (prefers-reduced-motion: reduce) { .codex-toast { animation: none; } .environment-weather { animation: none; } }
+
+/* ---- Modo Cidade ---- */
+.city-panel { display: grid; gap: 10px; }
+.city-topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 18px; }
+.city-topbar h2 { margin: 0; }
+.city-clock { color: #ffcf7a; font: 12px/1.3 'Press Start 2P', monospace; letter-spacing: .04em; }
+.city-speeds { display: flex; gap: 4px; }
+.city-speed { min-width: 46px; padding: 8px 10px; border: 2px solid #8a5a1c; background: rgba(20, 10, 2, .85); color: #ffcf7a; font: 12px 'Press Start 2P', monospace; cursor: pointer; }
+.city-speed:hover, .city-speed:focus-visible { border-color: #ffb000; outline: none; }
+.city-speed[aria-pressed="true"] { background: #ffb000; color: #1a0f00; border-color: #ffb000; }
+.city-hud { display: flex; flex-wrap: wrap; gap: 6px; }
+.city-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border: 1px solid #6a4a1c; background: rgba(12, 7, 2, .9); color: #ffe2a8; font: 13px 'Share Tech Mono', monospace; }
+.city-chip.is-ok { border-color: #4a8a4a; color: #b8f0b8; }
+.city-chip.is-warn { border-color: #b8801c; color: #ffd27a; }
+.city-chip.is-bad { border-color: #b8402c; color: #ff9a8a; }
+.city-meter { display: inline-block; width: 46px; height: 7px; border: 1px solid #6a4a1c; background: #1a1006; }
+.city-meter span { display: block; height: 100%; background: linear-gradient(#ffcf5a, #c47a12); }
+.city-main { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 12px; align-items: start; }
+.city-stage { position: relative; border: 3px double var(--amber, #ffb000); background: #1a0f06; line-height: 0; }
+.city-canvas { display: block; width: 100%; height: auto; image-rendering: auto; cursor: crosshair; }
+.city-tooltip { position: absolute; z-index: 3; padding: 4px 8px; border: 1px solid #ffb000; background: rgba(12, 7, 2, .95); color: #ffe2a8; font: 12px 'Share Tech Mono', monospace; line-height: 1.3; white-space: nowrap; pointer-events: none; }
+.city-side { display: grid; gap: 8px; }
+.city-side-title { margin: 6px 0 0; color: #c98a3a; font: 11px 'Press Start 2P', monospace; letter-spacing: .06em; }
+.city-side-title small { font: 11px 'Share Tech Mono', monospace; opacity: .8; }
+.city-palette { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.city-tool { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 6px; padding: 6px 7px; border: 2px solid #6a4a1c; background: rgba(20, 10, 2, .88); color: #ffe2a8; font: 12px 'Share Tech Mono', monospace; text-align: left; cursor: pointer; }
+.city-tool:hover:not(:disabled), .city-tool:focus-visible { border-color: #ffb000; outline: none; }
+.city-tool[aria-pressed="true"] { border-color: #9bffb0; background: rgba(30, 70, 40, .85); box-shadow: 0 0 10px rgba(120, 255, 160, .35); }
+.city-tool.is-danger[aria-pressed="true"] { border-color: #ff6a58; background: rgba(80, 24, 16, .85); box-shadow: 0 0 10px rgba(255, 110, 90, .35); }
+.city-tool:disabled { opacity: .45; cursor: not-allowed; }
+.city-tool-icon { font-size: 16px; }
+.city-tool-name { line-height: 1.1; }
+.city-tool-cost { color: #ffb000; font-weight: bold; }
+.city-info { min-height: 108px; padding: 9px 10px; border: 1px dashed #8a5a1c; color: #e8cfa0; font: 13px/1.4 'Share Tech Mono', monospace; }
+.city-info h3 { margin: 0 0 5px; color: #ffb000; font: 12px 'Press Start 2P', monospace; }
+.city-info p, .city-info ul { margin: 4px 0; padding: 0; list-style: none; }
+.city-info-cost { color: #ffcf7a; }
+.city-message { padding: 3px 6px; border-left: 3px solid #ffb000; background: rgba(255, 176, 0, .1); color: #ffe2a8; }
+.city-log { margin: 0; padding: 0; list-style: none; max-height: 150px; overflow-y: auto; display: grid; gap: 4px; font: 12px/1.35 'Share Tech Mono', monospace; color: #c9a77a; }
+.city-log li { padding: 4px 6px; border-left: 2px solid #6a4a1c; background: rgba(10, 6, 2, .6); }
+.city-log small { color: #8a6a3c; margin-right: 4px; }
+.city-score { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0; text-align: left; }
+.city-score div { padding: 8px 10px; border: 1px solid #6a4a1c; background: rgba(10, 6, 2, .7); }
+.city-score span { display: block; color: #c98a3a; font-size: 12px; }
+.city-score strong { color: #ffe2a8; font: 14px 'Press Start 2P', monospace; }
+.city-score-main { grid-column: 1 / -1; text-align: center !important; }
+.city-score-main strong { font-size: 28px; color: #ffb000; }
+@media (max-width: 900px) { .city-main { grid-template-columns: 1fr; } .city-palette { grid-template-columns: repeat(3, 1fr); } }

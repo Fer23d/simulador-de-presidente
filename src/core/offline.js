@@ -16,7 +16,7 @@ const SUPPLY_RESOURCES = Object.freeze([
 const NEED_REPORT_LABELS = Object.freeze({ satiety: 'faminto(s)', rest: 'exausto(s)', morale: 'desmotivado(s)' });
 
 export function canRunOfflineProgress(state) {
-  return Boolean(state?.is_wasteland && !state.president_selection_pending
+  return Boolean(state?.is_wasteland && !state.city && !state.president_selection_pending
     && !state.wasteland_cinematic_pending && !state.wasteland_cinematic_ready && !state.regime?.gameOver);
 }
 

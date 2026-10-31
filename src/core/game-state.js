@@ -37,6 +37,7 @@ import { advanceWastelandDays, advanceWastelandMonth, buildMegaVault, buildWaste
 import { getWastelandEvent, WASTELAND_EVENTS } from './game_mechanics.js';
 import { createRpgPlayer, normalizeInhabitants, normalizeRpgPlayer } from './rpg_bunker.js';
 import { normalizeOilField } from './oil.js';
+import { normalizeCity } from './city.js';
 import { normalizeFort, normalizeRaidReport } from './defense.js';
 import { INITIAL_SHELTER_GRID, migrateLegacyPlayer, migrateLegacyRooms, normalizeShelterGrid, normalizeShelterInhabitants } from './shelter_engine.js';
 import { createEnvironmentState } from './environment.js';
@@ -218,6 +219,7 @@ export function createGameState(countryId = 'bra') {
     oil: 0,
     oil_derricks: normalizeOilField(),
     surface_fort: null,
+    city: null,
     wasteland_day: 0,
     generator_fuel: false,
     pendingRaid: null,
@@ -1274,6 +1276,7 @@ export function hydrateGameState(serialized) {
       oil_derricks: normalizeOilField(parsed.oil_derricks),
       surface_fort: normalizeFort(parsed.surface_fort),
       generator_fuel: parsed.generator_fuel === true,
+      city: normalizeCity(parsed.city),
       wasteland_day: Math.max(0, Math.min(29, Math.floor(Number(parsed.wasteland_day) || 0))),
       pendingRaid: normalizeRaidReport(parsed.pendingRaid),
       raidCooldownUntilTurn: Math.max(0, Math.floor(Number(parsed.raidCooldownUntilTurn) || 0)),

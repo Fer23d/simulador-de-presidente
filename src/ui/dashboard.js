@@ -26,6 +26,8 @@ import { getWeather } from '../core/weather.js';
 import { applyOfflineProgress, dismissOfflineReport } from '../core/offline.js';
 import { arriveAtMission, getMissionReward, getMissionStory, isMissionPending } from '../core/missions.js';
 import { DAYS_PER_MONTH, getVaultDay, getVaultDayOfMonth } from '../core/vault_time.js';
+import { startCity, CITY_ORIGINS } from '../core/city.js';
+import { cityEpilogueView, cityView, createCityController } from './city_ui.js';
 import { DOOR_OPENS_AT_MONTH } from '../core/endings.js';
 import { getGeneratorFuelPlan, getOilSaleOffer, sellOil, toggleGeneratorFuel } from '../core/oil_economy.js';
 import { buildOilDerrick, collectOil, formatDuration, getDerrickBuildCost, getDerrickStatus, normalizeOilField, OIL_LEVELS, OIL_MAX_LEVEL, upgradeOilDerrick } from '../core/oil.js';
@@ -958,6 +960,8 @@ export function resolveStoryCardAction(state, action, optionId = null) {
 
 // Capitulo X: a Porta (escolha do final) e o epilogo com a galeria de finais descobertos.
 export function doorView(state, trophies = createTrophies()) {
+  // Com a cidade em andamento a porta ja foi cruzada: so o resultado final volta a cobrir a tela.
+  if (state.city) return state.city.result ? cityEpilogueView(state) : '';
   if (state.ending) return epilogueView(state, trophies);
   if (!isDoorOpen(state)) return '';
   const forced = getForcedEnding(state);
@@ -976,7 +980,7 @@ function epilogueView(state, trophies) {
   const found = new Set(createTrophies(trophies).endings);
   const gallery = Object.values(ENDINGS).map((item) => `<span class="ending-trophy${found.has(item.id) ? ' is-found' : ''}" title="${found.has(item.id) ? escapeHtml(item.title) : '???'}">${found.has(item.id) ? item.icon : '?'}</span>`).join('');
   const population = (state.inhabitants ?? []).length;
-  return `<section class="door-dialog epilogue" role="dialog" aria-modal="true" aria-labelledby="ending-title"><p class="story-classification">/// FIM · ${Math.floor((Number(state.ending.month) || 0) / 12)} ANOS NO VAULT · ${population} SOBREVIVENTES ///</p><div class="ending-icon" aria-hidden="true">${ending.icon}</div><h2 id="ending-title">${escapeHtml(ending.title.toUpperCase())}</h2><p class="story-typewriter ending-story">${escapeHtml(getEndingStory(state, ending.id))}</p><blockquote class="ending-epigraph">“${escapeHtml(ending.epigraph)}”</blockquote><p class="ending-gallery-label">FINAIS DESCOBERTOS · ${found.size}/${Object.keys(ENDINGS).length}</p><div class="ending-gallery">${gallery}</div><div class="action-row"><button type="button" class="wasteland-command-button" data-action="ending-new-game">[ NOVA PARTIDA ]</button></div></section>`;
+  return `<section class="door-dialog epilogue" role="dialog" aria-modal="true" aria-labelledby="ending-title"><p class="story-classification">/// FIM · ${Math.floor((Number(state.ending.month) || 0) / 12)} ANOS NO VAULT · ${population} SOBREVIVENTES ///</p><div class="ending-icon" aria-hidden="true">${ending.icon}</div><h2 id="ending-title">${escapeHtml(ending.title.toUpperCase())}</h2><p class="story-typewriter ending-story">${escapeHtml(getEndingStory(state, ending.id))}</p><blockquote class="ending-epigraph">“${escapeHtml(ending.epigraph)}”</blockquote><p class="ending-gallery-label">FINAIS DESCOBERTOS · ${found.size}/${Object.keys(ENDINGS).length}</p><div class="ending-gallery">${gallery}</div><div class="action-row">${CITY_ORIGINS[ending.id] ? '<button type="button" class="wasteland-command-button" data-action="start-city">[ RECONSTRUIR O MUNDO ]</button>' : ''}<button type="button" class="${CITY_ORIGINS[ending.id] ? 'quiet-action' : 'wasteland-command-button'}" data-action="ending-new-game">[ NOVA PARTIDA ]</button></div></section>`;
 }
 
 // Historia de abertura em cenas; sem indice, mostra a ultima (o alerta de comando).
@@ -1240,6 +1244,7 @@ export function mountDashboard(root) {
   let pendingNukeTargetId = null;
   let falloutCinematicStarted = false;
   let bunkerController = null;
+  let cityController = null;
   let bunkerBuildMode = false;
   let bunkerBuildType = 'dormitory';
   let locationRequestPending = false;
@@ -1481,6 +1486,8 @@ export function mountDashboard(root) {
     const bunkerSnapshot = bunkerController?.getSnapshot();
     bunkerController?.destroy();
     bunkerController = null;
+    cityController?.destroy();
+    cityController = null;
     presidentSelectionMenu?.destroy();
     presidentSelectionMenu = null;
     if (typeof document !== 'undefined' && document.body) {
@@ -1501,7 +1508,7 @@ export function mountDashboard(root) {
       ['history', '> MODO HISTÓRIA'],
       ['countries', 'Paises'],
     ];
-    const content = state.is_wasteland ? bunkerView(state)
+    const content = state.city ? cityView(state) : state.is_wasteland ? bunkerView(state)
       : activeTab === 'budget' ? budgetView(state, projection)
       : activeTab === 'diplomacy' ? diplomacyView(state, diplomacyQuery)
         : activeTab === 'military' ? militaryView(state)
@@ -1523,7 +1530,17 @@ export function mountDashboard(root) {
       ${state.notice === STORY_NOTICE ? `<p class="storage-notice story-notification" role="status">${STORY_NOTICE}</p>` : ''}
       <section class="content-area">${content}</section>${renderNews(state)}
     </section></div>`;
-    if (state.is_wasteland) {
+    if (state.city) {
+      cityController = createCityController(root, {
+        getState: () => state,
+        onChange: (next, { persist, rerender }) => {
+          state = next;
+          if (persist) storageNotice = saveState(state);
+          if (rerender) render();
+        },
+        onSound: (name) => audio.play(name),
+      });
+    } else if (state.is_wasteland) {
       if (state.president_selection_pending) {
         presidentSelectionMenu = createPresidentSelectionMenu(root.querySelector('#presidentSelectCanvas'), (classId) => {
           const next = startGame(state, classId);
@@ -1971,6 +1988,10 @@ export function mountDashboard(root) {
         try { localStorage.setItem(TROPHIES_KEY, JSON.stringify(trophies)); } catch { /* sem armazenamento: trofeu so nesta sessao */ }
       }
       commit(next);
+      return;
+    }
+    if (event.target.closest('[data-action="start-city"]')) {
+      commit(startCity(state));
       return;
     }
     if (event.target.closest('[data-action="ending-new-game"]')) {
