@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assignGarrison, buildFort, dismissRaid, FORT_LEVELS, getFortStatus, getRaidChance, getRaiderPower, getThreatEstimate,
   normalizeFort, RAID_COOLDOWN_TURNS, recruitSoldiers, rollSurfaceRaid, upgradeFort } from '../src/core/defense.js';
-import { FORT_GARRISON_SKIN } from '../src/core/defense_renderer.js';
+import { FORT_GARRISON_SKIN, getFortArtPlacement } from '../src/core/defense_renderer.js';
 import { getSkin } from '../src/core/player_state.js';
 import { advanceWastelandMonth } from '../src/core/wasteland.js';
 import { createGameState, hydrateGameState } from '../src/core/game-state.js';
@@ -138,4 +138,16 @@ test('loading a Vault save keeps the Ermo factions as raiders, not the old count
   const broken = hydrateGameState(JSON.stringify({ ...vaultState, geopolitics: { ...vaultState.geopolitics, contacts: createGameState().geopolitics.contacts } }));
   assert.equal(broken.geopolitics.contacts.length, 3, 'saves that lost the factions get them back');
   assert.equal(getThreatEstimate({ ...loaded, wasteland_turn: 0 }).faction, 'Remanescentes Militares');
+});
+
+test('the fort art rests on the ground instead of floating on its transparent margin', () => {
+  const image = { width: 1774, height: 887 };
+  for (const level of [1, 2, 3, 4, 5]) {
+    const { y, height } = getFortArtPlacement(image, 150, 146, level);
+    const visibleBottom = y + height * (1 - .09);
+    assert.ok(Math.abs(visibleBottom - 148) < 0.001, 'level ' + level + ' base sits on the ground line');
+    assert.ok(y + height > 146, 'the transparent margin hangs below the ground, not the content');
+  }
+  const wide = getFortArtPlacement(image, 150, 146, 3);
+  assert.ok(Math.abs(wide.x + wide.width / 2 - 150) < 0.001, 'the art stays centred on the fort');
 });

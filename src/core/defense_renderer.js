@@ -345,12 +345,52 @@ function drawStructureLayer(ctx, centerX, groundY, level, layer) {
 // A arte final e uma peça única e transparente. Os niveis variam em escala e
 // em reforços externos; a silhueta continua reconhecível em todos eles e a
 // montagem não precisa redesenhar o cenário inteiro a cada quadro.
-function drawFortAsset(ctx, image, centerX, groundY, level) {
-  if (!image?.width || !image?.height) return null;
+// A arte tem uma margem transparente embaixo. Medimos onde o conteudo realmente termina
+// para apoiar o forte no chao; encostar a borda da imagem no solo o deixava flutuando.
+const FORT_ART_BASE_INSET = .09;
+// Quanto a base afunda no solo, para as sacas e o cascalho assentarem na terra.
+const FORT_GROUND_SINK = 2;
+const baselineCache = new WeakMap();
+
+export function getArtBaselineInset(image) {
+  if (!image) return FORT_ART_BASE_INSET;
+  if (baselineCache.has(image)) return baselineCache.get(image);
+  let inset = FORT_ART_BASE_INSET;
+  if (typeof document !== 'undefined' && image.width && image.height) {
+    try {
+      const width = 320;
+      const height = Math.max(1, Math.round(width * image.height / image.width));
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const probe = canvas.getContext('2d', { willReadFrequently: true });
+      probe.drawImage(image, 0, 0, width, height);
+      const data = probe.getImageData(0, 0, width, height).data;
+      const counts = Array.from({ length: height }, (_, y) => {
+        let opaque = 0;
+        for (let x = 0; x < width; x++) if (data[(y * width + x) * 4 + 3] > 40) opaque++;
+        return opaque;
+      });
+      // A base e a ultima linha com pelo menos 40% da largura maxima: ignora respingos soltos do contorno.
+      const widest = Math.max(...counts);
+      let row = height - 1;
+      while (row > 0 && counts[row] < widest * .4) row--;
+      inset = Math.max(0, Math.min(.3, 1 - (row + 1) / height));
+    } catch { /* imagem de origem protegida: usa a margem medida na arte atual */ }
+  }
+  baselineCache.set(image, inset);
+  return inset;
+}
+
+export function getFortArtPlacement(image, centerX, groundY, level) {
   const height = FORT_ART_HEIGHTS[Math.max(1, Math.min(5, level))] ?? FORT_ART_HEIGHTS[1];
   const width = height * image.width / image.height;
-  const x = centerX - width / 2;
-  const y = groundY - height + 4;
+  return { x: centerX - width / 2, y: groundY + FORT_GROUND_SINK - height * (1 - getArtBaselineInset(image)), width, height };
+}
+
+function drawFortAsset(ctx, image, centerX, groundY, level) {
+  if (!image?.width || !image?.height) return null;
+  const { x, y, width, height } = getFortArtPlacement(image, centerX, groundY, level);
   ctx.save();
   ctx.shadowColor = 'rgba(30, 10, 2, .6)';
   ctx.shadowBlur = 12;
