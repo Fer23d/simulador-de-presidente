@@ -33,7 +33,7 @@ import { escolherInterrogatorio as chooseInterrogation, reivindicarInterrogatori
 import { checkStoryEvents, dismissStory as dismissNarrativeStory, gerarEntradaDiario, getStoryEvent } from './story_engine.js';
 import { checkStoryChapters, getLoreChapter } from './story_lore.js';
 import { advanceGovernment, applyGovernmentEconomy, openAutoCoup, resolveAutoCoup, resolveCorporateDefault } from './politics.js';
-import { advanceWastelandMonth, buildMegaVault, buildWastelandProject, createWastelandFactions, enviarBatedores, transicionarParaWasteland as transitionToWasteland } from './wasteland.js';
+import { advanceWastelandDays, advanceWastelandMonth, buildMegaVault, buildWastelandProject, createWastelandFactions, enviarBatedores, transicionarParaWasteland as transitionToWasteland } from './wasteland.js';
 import { getWastelandEvent, WASTELAND_EVENTS } from './game_mechanics.js';
 import { createRpgPlayer, normalizeInhabitants, normalizeRpgPlayer } from './rpg_bunker.js';
 import { normalizeOilField } from './oil.js';
@@ -218,6 +218,7 @@ export function createGameState(countryId = 'bra') {
     oil: 0,
     oil_derricks: normalizeOilField(),
     surface_fort: null,
+    wasteland_day: 0,
     generator_fuel: false,
     pendingRaid: null,
     raidCooldownUntilTurn: 0,
@@ -895,6 +896,14 @@ export function voteLaborLaw(state) {
   return voteLaw(state, LAW_LABOR_REFORM.id);
 }
 
+// No Vault o botao de avancar move so um dia; fora dele continua sendo o mes da presidencia.
+export function advanceDay(state, days = 1) {
+  if (!state.is_wasteland) return advanceMonth(state);
+  if (state.regime?.gameOver) return resolverFinalDeJogo({ ...state, notice: 'A partida foi encerrada.' });
+  if (state.wasteland_cinematic_ready) return { ...state, notice: 'Assuma o comando do Vault antes de avancar o tempo.' };
+  return advanceWastelandDays(state, days);
+}
+
 export function advanceMonth(state) {
   if (state.regime?.gameOver) return resolverFinalDeJogo({ ...state, notice: 'A partida foi encerrada.' });
   if (state.pendingHostileAlert) return { ...state, notice: 'Reconheca o alerta militar antes de avancar o mes.' };
@@ -1265,6 +1274,7 @@ export function hydrateGameState(serialized) {
       oil_derricks: normalizeOilField(parsed.oil_derricks),
       surface_fort: normalizeFort(parsed.surface_fort),
       generator_fuel: parsed.generator_fuel === true,
+      wasteland_day: Math.max(0, Math.min(29, Math.floor(Number(parsed.wasteland_day) || 0))),
       pendingRaid: normalizeRaidReport(parsed.pendingRaid),
       raidCooldownUntilTurn: Math.max(0, Math.floor(Number(parsed.raidCooldownUntilTurn) || 0)),
       raid_log: (Array.isArray(parsed.raid_log) ? parsed.raid_log : []).map(normalizeRaidReport).filter(Boolean).slice(0, 5),

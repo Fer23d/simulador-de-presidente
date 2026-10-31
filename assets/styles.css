@@ -108,6 +108,9 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 .sound-volume { width: 90px; accent-color: #ff9d00; }
 .title-screen-host[hidden] { display: none; }
 .oil-resource { color: #e8d7ff; }
+.vault-clock { margin: 4px 0 0; color: #ffcf7a; font: 12px 'Press Start 2P', monospace; letter-spacing: .04em; }
+.vault-clock-bar { display: block; width: 100%; max-width: 280px; height: 6px; margin-top: 6px; border: 1px solid #8a5a1c; background: #1a1006; }
+.vault-clock-bar span { display: block; height: 100%; background: linear-gradient(#ffcf5a, #c47a12); transition: width .25s; }
 .oil-use { display: grid; gap: 8px; margin: 12px 0; padding: 10px; border: 1px dashed #8a5a1c; }
 .oil-use-title { margin: 0; color: #e8d7ff; }
 .oil-use-title strong { color: #a07a48; }

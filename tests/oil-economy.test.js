@@ -22,7 +22,7 @@ test('generator fuel costs 3 barrels per generator level and needs enough oil', 
   const on = toggleGeneratorFuel(state);
   assert.equal(on.generator_fuel, true);
   assert.equal(getGeneratorFuelPlan(on).multiplier, 1.5);
-  assert.equal(getGeneratorFuelPlan({ ...on, oil: 5 }).active, false, 'not enough oil: back to normal');
+  assert.equal(getGeneratorFuelPlan({ ...on, oil: 0 }).active, false, 'no oil at all: back to normal');
   assert.equal(toggleGeneratorFuel(on).generator_fuel, false);
   assert.equal(toggleGeneratorFuel({ ...state, is_wasteland: false }).generator_fuel, false, 'only works in the Vault');
 });
@@ -34,8 +34,8 @@ test('a fuelled month burns the oil and produces more energy than a normal one',
   assert.ok(fuelled.shelter_supplies.energy > normal.shelter_supplies.energy, 'more energy with fuel');
   assert.equal(fuelled.oil, 500 - 6);
   assert.equal(normal.oil, 500);
-  const dry = advanceWastelandMonth({ ...state, generator_fuel: true, oil: 3 }, 0);
-  assert.equal(dry.oil, 3, 'nothing burned without enough oil');
+  const dry = advanceWastelandMonth({ ...state, generator_fuel: true, oil: 0 }, 0);
+  assert.equal(dry.oil, 0, 'nothing burned without oil');
   assert.equal(dry.shelter_supplies.energy, normal.shelter_supplies.energy);
   assert.match(dry.notice, /Sem petróleo para os geradores/);
 });
@@ -65,7 +65,7 @@ test('the fuel switch survives saving and loading, and the panels show the new o
   const { generatorFuelView, oilTradeView } = await import('../src/ui/dashboard.js');
   const state = vaultState({ generator_fuel: true });
   assert.match(generatorFuelView(state), /LIGADO · \+50% ENERGIA/);
-  assert.match(generatorFuelView({ ...state, oil: 1 }), /SEM PETRÓLEO/);
+  assert.match(generatorFuelView({ ...state, oil: 0 }), /SEM PETRÓLEO/);
   assert.match(generatorFuelView(vaultState()), /DESLIGADO/);
   const trade = oilTradeView({ ...state, geopolitics: { contacts: [{ id: 'mutant-horde', name: 'Horda', relation: -60 }] } });
   assert.match(trade, /data-action="oil-sell" data-contact="mutant-horde"/);

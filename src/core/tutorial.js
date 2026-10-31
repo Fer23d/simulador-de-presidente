@@ -1,4 +1,5 @@
 import { isMissionPending } from './missions.js';
+import { getVaultDay } from './vault_time.js';
 
 // Tutorial guiado da primeira partida e dicas de contexto que aparecem uma unica vez.
 // Passos "ack" esperam o jogador clicar em ENTENDI; os demais concluem sozinhos ao detectar a acao no estado.
@@ -17,8 +18,8 @@ export const TUTORIAL_STEPS = Object.freeze([
     text: 'Construa uma Estufa Hidropônica. Moradores com fome perdem moral e produzem menos.',
     done: (state) => hasRoom(state, 'greenhouse') }),
   Object.freeze({ id: 'advance', phase: 'vault', title: 'O TEMPO PASSA',
-    text: 'Clique em [ AVANÇAR MÊS ]. As salas produzem, os moradores comem e o Ermo responde.',
-    done: (state) => (Number(state.wasteland_turn) || 0) >= 1 }),
+    text: 'Clique em [ AVANÇAR 1 DIA ]. Cada dia as salas produzem um pouco e os moradores consomem; a cada 30 dias o mês fecha e o Ermo responde.',
+    done: (state) => getVaultDay(state) >= 1 }),
   Object.freeze({ id: 'finish', phase: 'vault', ack: true, title: 'VOCÊ ESTÁ NO COMANDO',
     text: 'Mantenha o Vault vivo até a porta abrir no fim do terceiro ano. Alertas de missão mostram andar e setor: vá até lá para ver o que aconteceu.' }),
 ]);
@@ -38,7 +39,7 @@ export const TUTORIAL_TIPS = Object.freeze([
     when: (state) => state.oxygen_deprived === true }),
   Object.freeze({ id: 'oil', title: 'PETRÓLEO NA SUPERFÍCIE',
     text: 'Acima do Vault há 3 pontos de perfuração. Suba ao andar de cima, clique em PERFURE AQUI e monte uma sonda. Toque na gota para recolher e melhore o poço até o nível 5.',
-    when: (state) => (Number(state.wasteland_turn) || 0) >= 1 && !(state.oil_derricks ?? []).some(Boolean) }),
+    when: (state) => getVaultDay(state) >= 10 && !(state.oil_derricks ?? []).some(Boolean) }),
   Object.freeze({ id: 'fort', title: 'SAQUEADORES À VISTA',
     text: 'Facções do Ermo vão tentar roubar o seu petróleo. Clique em ERGUER FORTE, à esquerda dos poços, e coloque soldados do exército na guarnição.',
     when: (state) => (state.oil_derricks ?? []).some(Boolean) && !state.surface_fort }),

@@ -11,6 +11,7 @@ import { createMissionLocation } from './missions.js';
 import { normalizeOilField } from './oil.js';
 import { rollSurfaceRaid } from './defense.js';
 import { getGeneratorFuelPlan } from './oil_economy.js';
+import { DAYS_PER_MONTH, dayShare, getVaultDayOfMonth } from './vault_time.js';
 import { ENDINGS, isDoorOpen } from './endings.js';
 import { nextRandom } from './geopolitics.js';
 import { getPresidentClassModifiers } from './player_state.js';
@@ -77,6 +78,7 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
     oil: 0,
     oil_derricks: normalizeOilField(),
     surface_fort: null,
+    wasteland_day: 0,
     generator_fuel: false,
     pendingRaid: null,
     raidCooldownUntilTurn: 0,
@@ -148,7 +150,37 @@ export function advanceWastelandMonth(state, now = Date.now()) {
   return rollSurfaceRaid(note, now);
 }
 
-function advanceVaultMonth(state) {
+// Avanca UM dia do Vault. Cada dia entrega 1/30 do fluxo mensal (producao, consumo, combustivel); no 30o dia
+// o mes fecha de verdade: eventos, populacao, ataques e a contagem para a Porta.
+export function advanceWastelandDay(state, now = Date.now()) {
+  const dayIndex = getVaultDayOfMonth(state) + 1;
+  const next = advanceVaultMonth(state, dayIndex);
+  const closesMonth = dayIndex >= DAYS_PER_MONTH;
+  const progressed = next !== state && (closesMonth
+    ? (Number(next.wasteland_turn) || 0) > (Number(state.wasteland_turn) || 0)
+    : getVaultDayOfMonth(next) === dayIndex);
+  if (!progressed) return next;
+  const fuel = getGeneratorFuelPlan(state, dayIndex);
+  const burned = fuel.active ? { ...next, oil: Math.max(0, (Number(next.oil) || 0) - fuel.cost) } : next;
+  const dry = fuel.enabled && !fuel.funded && fuel.cost > 0 && closesMonth;
+  const noted = dry ? { ...burned, notice: [burned.notice, '> Sem petróleo para os geradores: voltaram ao normal.'].filter(Boolean).join(' ') } : burned;
+  // Os saqueadores so aparecem quando o mes fecha.
+  return closesMonth ? rollSurfaceRaid(noted, now) : noted;
+}
+
+// Avanca varios dias de uma vez e para assim que algo exige uma decisao do jogador.
+export function advanceWastelandDays(state, days, now = Date.now()) {
+  let current = state;
+  for (let step = 0; step < Math.max(1, Math.floor(days) || 1); step++) {
+    const next = advanceWastelandDay(current, now);
+    if (next === current || (next.wasteland_turn === current.wasteland_turn && next.wasteland_day === current.wasteland_day)) return next;
+    current = next;
+    if (current.pendingRaid || current.pendingBunkerEvent || current.ending || current.pendingLoot || isDoorOpen(current)) break;
+  }
+  return current;
+}
+
+function advanceVaultMonth(state, dayIndex = 0) {
   if (state.ending) return { ...state, notice: `A história do Vault terminou: ${ENDINGS[state.ending.id]?.title ?? 'fim'}.` };
   if (isDoorOpen(state)) return { ...state, notice: 'A superfície voltou a ser habitável. Decida o destino do Vault diante da Porta.' };
   if (state.pendingRaid) return { ...state, notice: 'Veja o relatório do ataque na superfície antes de avançar o mês.' };
@@ -166,7 +198,7 @@ function advanceVaultMonth(state) {
   const generators = rooms.filter((room) => room.type === 'generator' && room.operational);
   const councilModifiers = getCouncilModifiers(state.vaultCouncil);
   const energyProduction = Math.round(generators.reduce((total, room) =>
-    total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0) * getGeneratorFuelPlan(state).multiplier * councilModifiers.generatorMultiplier);
+    total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0) * getGeneratorFuelPlan(state, dayIndex).multiplier * councilModifiers.generatorMultiplier);
   const foodProduction = activeGreenhouses.reduce((total, room) =>
     total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0);
   const oxygenProduction = getLifeSupportOxygenProduction(grid);
@@ -194,13 +226,28 @@ function advanceVaultMonth(state) {
     fed, beds, darkNights: !hasReliableNightPower(countActiveGenerators(grid)), stormPenalty: weather.moralePenalty,
   });
   const presentCount = inhabitantsWithNeeds.filter((inhabitant) => !inhabitant.is_on_expedition).length;
+  // Em dias, cada recurso recebe so a parte do dia (dayShare); sem dayIndex e o mes inteiro, como antes.
   const supplies = {
-    weapons: Math.min(getRoomStorageCapacity(grid, 'weapons'), (Number(state.shelter_supplies?.weapons) || 0) + arsenals),
-    medkits: Math.min(getRoomStorageCapacity(grid, 'medkits'), (Number(state.shelter_supplies?.medkits) || 0) + medical * 2),
-    food: Math.min(getRoomStorageCapacity(grid, 'food'), Math.max(0, (Number(state.shelter_supplies?.food) || 0) + foodProduction - foodConsumption)),
-    energy: Math.min(getRoomStorageCapacity(grid, 'energy'), Math.max(0, (Number(state.shelter_supplies?.energy) || 0) + energyProduction - energyConsumption)),
-    oxygen: Math.min(oxygenCapacity, Math.max(0, (Number(state.shelter_supplies?.oxygen) || 0) + oxygenProduction - oxygenConsumption)),
+    weapons: Math.min(getRoomStorageCapacity(grid, 'weapons'), (Number(state.shelter_supplies?.weapons) || 0) + dayShare(arsenals, dayIndex)),
+    medkits: Math.min(getRoomStorageCapacity(grid, 'medkits'), (Number(state.shelter_supplies?.medkits) || 0) + dayShare(medical * 2, dayIndex)),
+    food: Math.min(getRoomStorageCapacity(grid, 'food'), Math.max(0, (Number(state.shelter_supplies?.food) || 0) + dayShare(foodProduction - foodConsumption, dayIndex))),
+    energy: Math.min(getRoomStorageCapacity(grid, 'energy'), Math.max(0, (Number(state.shelter_supplies?.energy) || 0) + dayShare(energyProduction - energyConsumption, dayIndex))),
+    oxygen: Math.min(oxygenCapacity, Math.max(0, (Number(state.shelter_supplies?.oxygen) || 0) + dayShare(oxygenProduction - oxygenConsumption, dayIndex))),
   };
+  const scrapGain = dayShare(25 + generatorWorkUnits * 15 + offices * 5, dayIndex);
+  const scienceGain = dayShare(scienceProduction, dayIndex);
+  // Dia comum: so os recursos e o ar mudam. Necessidades, populacao, clima e eventos esperam o fechamento do mes.
+  if (dayIndex && dayIndex < DAYS_PER_MONTH) {
+    return {
+      ...state,
+      wasteland_day: dayIndex,
+      science: Math.min(getRoomStorageCapacity(grid, 'science'), (Number(state.science) || 0) + scienceGain),
+      scrap: Math.min(getRoomStorageCapacity(grid, 'scrap'), (Number(state.scrap) || 0) + scrapGain),
+      shelter_supplies: supplies,
+      oxygen_deprived: oxygenDeficit,
+      notice: `Dia ${dayIndex} de ${DAYS_PER_MONTH} no Vault.`,
+    };
+  }
   const oxygenShortageTurns = oxygenDeficit
     ? Math.max(0, Math.floor(Number(state.oxygen_shortage_turns) || 0)) + 1
     : 0;
@@ -213,12 +260,13 @@ function advanceVaultMonth(state) {
     calendar: { month: state.calendar.month === 12 ? 1 : state.calendar.month + 1, year: state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year },
     monthCounter: (Number(state.monthCounter) || 0) + 1,
     wasteland_turn: wastelandMonthCounter,
+    wasteland_day: 0,
     wastelandMonthCounter,
     wastelandEventCursor: Math.max(0, Math.floor(Number(state.wastelandEventCursor) || 0)) % WASTELAND_EVENTS.length,
     shelter_grid: nextGrid,
     ...(Array.isArray(state.inhabitants) ? { inhabitants: inhabitantsWithNeeds } : {}),
-    science: Math.min(getRoomStorageCapacity(grid, 'science'), (Number(state.science) || 0) + scienceProduction),
-    scrap: Math.min(getRoomStorageCapacity(grid, 'scrap'), (Number(state.scrap) || 0) + 25 + generatorWorkUnits * 15 + offices * 5),
+    science: Math.min(getRoomStorageCapacity(grid, 'science'), (Number(state.science) || 0) + scienceGain),
+    scrap: Math.min(getRoomStorageCapacity(grid, 'scrap'), (Number(state.scrap) || 0) + scrapGain),
     shelter_supplies: supplies,
     oxygen_shortage_turns: oxygenShortageTurns,
     oxygen_deprived: oxygenDeficit,

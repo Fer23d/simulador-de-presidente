@@ -1,4 +1,6 @@
 // Usos do petroleo no Vault: combustivel dos geradores e venda no radio para as faccoes do Ermo.
+import { DAYS_PER_MONTH, dayShare } from './vault_time.js';
+
 export const GENERATOR_FUEL_BOOST = 1.5;
 export const FUEL_BARRELS_PER_GENERATOR_LEVEL = 3;
 export const OIL_SALE_BATCH = 50;
@@ -9,12 +11,15 @@ function activeGenerators(state) {
   return (state?.shelter_grid ?? []).flat().filter((room) => room?.type === 'generator' && room.operational);
 }
 
-// Quanto o abastecimento custa neste mes e se o estoque aguenta; sem petroleo suficiente os geradores voltam ao normal.
-export function getGeneratorFuelPlan(state) {
+// Quanto o abastecimento custa e se o estoque aguenta; sem petroleo suficiente os geradores voltam ao normal.
+// Sem dayIndex o custo e o do mes inteiro; com ele, so a parte daquele dia.
+export function getGeneratorFuelPlan(state, dayIndex = 0) {
   const generators = activeGenerators(state);
-  const cost = generators.reduce((total, room) => total + Math.max(1, Number(room.level) || 1) * FUEL_BARRELS_PER_GENERATOR_LEVEL, 0);
+  const monthly = generators.reduce((total, room) => total + Math.max(1, Number(room.level) || 1) * FUEL_BARRELS_PER_GENERATOR_LEVEL, 0);
+  const cost = dayShare(monthly, dayIndex);
   const enabled = state?.generator_fuel === true;
-  const funded = cost > 0 && (Number(state?.oil) || 0) >= cost;
+  // O estoque so precisa cobrir o gasto do dia (ou ao menos 1 barril), nao o mes todo.
+  const funded = monthly > 0 && (Number(state?.oil) || 0) >= Math.max(1, dayIndex ? cost : Math.ceil(monthly / DAYS_PER_MONTH));
   return { enabled, cost, generators: generators.length, funded, active: enabled && funded, multiplier: enabled && funded ? GENERATOR_FUEL_BOOST : 1 };
 }
 
