@@ -32,11 +32,11 @@ test('invalid timer values are normalized instead of leaking NaN into the HUD', 
   assert.equal(result.remainingMs, 300_000);
 });
 
-test('night saves thirty percent of energy and slows NPC movement by twenty percent', () => {
+test('night saves thirty percent of energy and never slows NPC movement', () => {
   assert.equal(getEnergyConsumptionForPhase(100, true), 70);
   assert.equal(getEnergyConsumptionForPhase(100, false), 100);
-  assert.equal(getNpcMovementDelta(10, true), 8);
-  assert.equal(getNpcMovementDelta(10, true, 2), 8);
+  assert.equal(getNpcMovementDelta(10, true), 10);
+  assert.equal(getNpcMovementDelta(10, true, 2), 10);
   assert.equal(getNpcMovementDelta(10, true, 3), 10);
   assert.equal(getNpcMovementDelta(10, false), 10);
   assert.equal(countActiveGenerators([

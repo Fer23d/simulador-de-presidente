@@ -1925,8 +1925,8 @@ export function applyNightOverlay(ctx, width, height, isNight, { activeGenerator
   const top = Math.max(0, Math.min(height, Number(surfaceHeight) || 0));
   if (top >= height) return;
   ctx.save();
+  // Preto a 40% por cima equivale ao multiply antigo, mas e bem mais barato de compor.
   ctx.globalAlpha = 0.4;
-  ctx.globalCompositeOperation = 'multiply';
   ctx.fillStyle = '#000';
   ctx.fillRect(0, top, width, height - top);
   ctx.restore();

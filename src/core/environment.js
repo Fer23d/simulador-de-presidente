@@ -43,7 +43,8 @@ export function getEnergyConsumptionForPhase(amount, isNight) {
 export function getNpcMovementDelta(deltaSeconds, isNight, activeGenerators = 0) {
   const rawDelta = Number(deltaSeconds);
   const delta = Number.isFinite(rawDelta) ? Math.max(0, rawDelta) : 0;
-  return isNight && !hasReliableNightPower(activeGenerators) ? delta * 0.8 : delta;
+  // A noite escurece o Vault, mas nao deixa ninguem mais lento: o jogo precisa seguir fluido.
+  return delta;
 }
 
 export function getNighttimeRiskChance(baseChance, isNight, activeGenerators = 0) {
