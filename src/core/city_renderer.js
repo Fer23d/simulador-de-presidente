@@ -35,6 +35,18 @@ const REALISTIC_BUILDING_ASSETS = Object.freeze({
   guard: 'assets/img/city_building_guard_realistic.png',
 });
 const buildingImages = new Map();
+const CITIZEN_SPRITE_SHEET = 'assets/img/npc_walk_sheet.png';
+const CITIZEN_FRAME_SIZE = 352;
+let citizenSpriteSheet = null;
+
+function getCitizenSpriteSheet() {
+  if (typeof Image === 'undefined') return null;
+  if (!citizenSpriteSheet) {
+    citizenSpriteSheet = new Image();
+    citizenSpriteSheet.src = CITIZEN_SPRITE_SHEET;
+  }
+  return citizenSpriteSheet;
+}
 function getCityGroundImage() {
   if (typeof document === 'undefined') return null;
   if (cityGroundImageRequested) return cityGroundImage;
@@ -254,9 +266,24 @@ function drawStreetFurniture(ctx, city, analysis, time) {
 
 // ---------- Predios ----------
 
-function shadow(ctx, px, py) {
-  ctx.fillStyle = 'rgba(0, 0, 0, .38)';
-  ctx.beginPath(); ctx.ellipse(px + 20, py + 36, 18, 5, 0, 0, Math.PI * 2); ctx.fill();
+function buildingFoundation(ctx, px, py, type) {
+  // A fundação fica abaixo do sprite e cria o contato entre a construção e a
+  // célula do terreno. A sombra anterior ficava solta, parecendo que o prédio
+  // estava suspenso sobre o mapa.
+  const foundationColor = type === 'farm' ? '#3d5148' : type === 'generator' ? '#3d3830' : '#4b4035';
+  ctx.save();
+  ctx.fillStyle = 'rgba(0, 0, 0, .45)';
+  ctx.beginPath(); ctx.ellipse(px + 20, py + 36, 18, 3.6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = foundationColor;
+  ctx.beginPath();
+  ctx.moveTo(px + 5, py + 32); ctx.lineTo(px + 35, py + 32);
+  ctx.lineTo(px + 32, py + 37); ctx.lineTo(px + 8, py + 37); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(214, 181, 125, .42)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(px + 7, py + 34.5); ctx.lineTo(px + 33, py + 34.5); ctx.stroke();
+  ctx.fillStyle = 'rgba(18, 18, 15, .55)';
+  ctx.fillRect(px + 11, py + 35, 5, 1); ctx.fillRect(px + 24, py + 35, 5, 1);
+  ctx.restore();
 }
 
 function buildingBase(ctx, px, py, type, connected) {
@@ -536,7 +563,9 @@ function drawRealisticBuilding(ctx, px, py, type, status) {
   const width = CITY_TILE * scale;
   const height = CITY_TILE * scale;
   const x = px + (CITY_TILE - width) / 2;
-  const y = py + CITY_TILE - height - 2;
+  // O rodapé do asset pode ter pixels transparentes; baixar a arte alguns
+  // pixels faz a soleira coincidir com a fundação e elimina o efeito flutuante.
+  const y = py + CITY_TILE - height + 4;
   ctx.save();
   ctx.globalAlpha = status.connected ? 1 : .52;
   ctx.shadowColor = 'rgba(0, 0, 0, .7)';
@@ -558,7 +587,7 @@ function drawRealisticBuilding(ctx, px, py, type, status) {
 function drawBuilding(ctx, building, status, time) {
   const px = building.x * CITY_TILE;
   const py = building.y * CITY_TILE;
-  shadow(ctx, px, py);
+  buildingFoundation(ctx, px, py, building.type);
   const realistic = drawRealisticBuilding(ctx, px, py, building.type, status);
   if (!realistic) {
     buildingBase(ctx, px, py, building.type, status.connected);
@@ -600,6 +629,7 @@ function drawCitizens(ctx, city, analysis, time) {
   gateLinks.forEach(([x, y]) => pairs.push([{ x, y }, { x: CITY_GATE.x, y: CITY_GATE.y }]));
   if (!pairs.length) return;
   const walkers = Math.min(46, Math.floor(city.population / 3));
+  const spriteSheet = getCitizenSpriteSheet();
   for (let index = 0; index < walkers; index++) {
     const [a, b] = pairs[(index * 13 + 5) % pairs.length];
     const t = (Math.sin(time / (900 + hash(index, 1, 9) * 600) + index * 1.7) + 1) / 2;
@@ -607,18 +637,33 @@ function drawCitizens(ctx, city, analysis, time) {
     const horizontal = a.y === b.y;
     const x = center(a.x) + (center(b.x) - center(a.x)) * t + (horizontal ? 0 : lane);
     const y = center(a.y) + (center(b.y) - center(a.y)) * t + (horizontal ? lane : 0);
-    const walking = Math.sin(time / (240 + hash(index, 2, 7) * 180) + index) * 1.4;
-    ctx.fillStyle = 'rgba(0,0,0,.38)'; ctx.beginPath(); ctx.ellipse(x, y + 3, 4.5, 1.5, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = ['#d8c27a', '#9ac0d8', '#d88a6a', '#a0d89a'][index % 4];
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(x, y - 2); ctx.lineTo(x - 2.1, y + 2 + walking); ctx.moveTo(x, y - 2); ctx.lineTo(x + 2.1, y + 2 - walking); ctx.stroke();
-    ctx.lineWidth = 1;
-    ctx.fillStyle = ['#64747f', '#75634a', '#7d4e3d', '#4c6b52'][index % 4];
-    ctx.beginPath(); ctx.ellipse(x, y - 3.5, 2.2, 3.1, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#e6c9a0'; ctx.beginPath(); ctx.arc(x, y - 7, 1.8, 0, Math.PI * 2); ctx.fill();
-    if (index % 5 === 0) {
-      ctx.fillStyle = 'rgba(236, 192, 90, .75)';
-      ctx.fillRect(x + 3, y - 5, 2, 2);
+    const walkFrame = Math.floor(time / (170 + hash(index, 2, 7) * 60)) % 4;
+    const roleRow = index % 4; // operário, cientista, médico e segurança.
+    const spriteWidth = 15;
+    const spriteHeight = 23;
+    const groundY = y + 4;
+    ctx.fillStyle = 'rgba(0, 0, 0, .48)';
+    ctx.beginPath(); ctx.ellipse(x, groundY, 5.5, 1.7, 0, 0, Math.PI * 2); ctx.fill();
+
+    if (spriteSheet?.complete && spriteSheet.naturalWidth) {
+      // Os habitantes usam o mesmo spritesheet detalhado do bunker. O pé é
+      // ancorado na rua, e não no centro da célula, para não parecerem voando.
+      ctx.save();
+      ctx.globalAlpha = .96;
+      ctx.drawImage(spriteSheet, walkFrame * CITIZEN_FRAME_SIZE, roleRow * CITIZEN_FRAME_SIZE,
+        CITIZEN_FRAME_SIZE, CITIZEN_FRAME_SIZE, x - spriteWidth / 2, groundY - spriteHeight,
+        spriteWidth, spriteHeight);
+      ctx.restore();
+    } else {
+      // Fallback pequeno e orgânico para ambientes de teste sem Image.
+      const walking = Math.sin(time / (240 + hash(index, 2, 7) * 180) + index) * 1.4;
+      ctx.strokeStyle = ['#d8c27a', '#9ac0d8', '#d88a6a', '#a0d89a'][index % 4];
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x, y - 2); ctx.lineTo(x - 2.1, y + 2 + walking); ctx.moveTo(x, y - 2); ctx.lineTo(x + 2.1, y + 2 - walking); ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.fillStyle = ['#64747f', '#75634a', '#7d4e3d', '#4c6b52'][index % 4];
+      ctx.beginPath(); ctx.ellipse(x, y - 3.5, 2.2, 3.1, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#e6c9a0'; ctx.beginPath(); ctx.arc(x, y - 7, 1.8, 0, Math.PI * 2); ctx.fill();
     }
   }
 }
