@@ -1,7 +1,7 @@
 import { advanceCityDay, analyzeCity, canPlaceAt, CITY_BUILDINGS, CITY_GATE, CITY_ORIGINS, CITY_SPEED_INTERVAL_MS, CITY_TOTAL_DAYS, CITY_HEIGHT,
   CITY_WIDTH, CITY_YEARS, demolishCityBuilding, FOOD_PER_CITIZEN, getBuildingAt, getCityDate, getCityEpilogue, placeCityBuilding,
   SCAVENGE_PER_CITIZEN, setCitySpeed, UPKEEP_PER_BUILDING, WATER_PER_CITIZEN } from '../core/city.js';
-import { CITY_CANVAS_HEIGHT, CITY_CANVAS_WIDTH, CITY_TILE, renderCity } from '../core/city_renderer.js';
+import { CITY_CANVAS_HEIGHT, CITY_CANVAS_WIDTH, CITY_DEFAULT_ZOOM, CITY_TILE, getCityCamera, renderCity } from '../core/city_renderer.js';
 
 const number = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
 const escapeText = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -118,6 +118,8 @@ export function createCityController(root, { getState, onChange, onSound = () =>
   let destroyed = false;
   let lastSave = 0;
   let lastMessage = '';
+  const zoom = CITY_DEFAULT_ZOOM;
+  const camera = getCityCamera(zoom);
 
   const city = () => getState().city;
 
@@ -167,8 +169,12 @@ export function createCityController(root, { getState, onChange, onSound = () =>
 
   function tileAt(event) {
     const rect = canvas.getBoundingClientRect();
-    const x = Math.floor((event.clientX - rect.left) * canvas.width / rect.width / CITY_TILE);
-    const y = Math.floor((event.clientY - rect.top) * canvas.height / rect.height / CITY_TILE);
+    const screenX = (event.clientX - rect.left) * canvas.width / rect.width;
+    const screenY = (event.clientY - rect.top) * canvas.height / rect.height;
+    const worldX = (screenX - canvas.width / 2) / zoom + camera.x;
+    const worldY = (screenY - canvas.height / 2) / zoom + camera.y;
+    const x = Math.floor(worldX / CITY_TILE);
+    const y = Math.floor(worldY / CITY_TILE);
     return x >= 0 && y >= 0 && x < CITY_WIDTH && y < CITY_HEIGHT ? { x, y } : null;
   }
 
@@ -228,7 +234,7 @@ export function createCityController(root, { getState, onChange, onSound = () =>
     if (destroyed) return;
     const current = city();
     const canPlace = hover && tool && tool !== 'demolish' ? canPlaceAt(current, tool, hover.x, hover.y).ok : true;
-    renderCity(ctx, current, analysis, { time, hover, tool, canPlace });
+    renderCity(ctx, current, analysis, { time, hover, tool, canPlace, zoom, camera });
     frameId = requestAnimationFrame(frame);
   }
 

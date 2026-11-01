@@ -4,6 +4,17 @@ import { CITY_BUILDINGS, CITY_GATE, CITY_HEIGHT, CITY_WIDTH } from './city.js';
 export const CITY_TILE = 40;
 export const CITY_CANVAS_WIDTH = CITY_WIDTH * CITY_TILE;
 export const CITY_CANVAS_HEIGHT = CITY_HEIGHT * CITY_TILE;
+// A cidade nasce em escala tática, mas o assentamento precisa ser legível.
+// O zoom é aplicado como câmera, preservando a grade lógica e o hit-test.
+export const CITY_DEFAULT_ZOOM = 1.42;
+
+export function getCityCamera(zoom = CITY_DEFAULT_ZOOM) {
+  return {
+    x: CITY_GATE.x * CITY_TILE + CITY_TILE / 2,
+    y: (CITY_GATE.y - 3) * CITY_TILE,
+    zoom,
+  };
+}
 
 const center = (tile) => tile * CITY_TILE + CITY_TILE / 2;
 
@@ -266,6 +277,100 @@ function drawBuildingVolume(ctx, px, py, type, status, time) {
   ctx.restore();
 }
 
+function drawBuildingDetails(ctx, px, py, type, status, time) {
+  const operational = status.connected && status.efficiency > 0;
+  const signal = operational ? 1 : .45;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // A camada comum de acabamento: cantos, parafusos, juntas e desgaste.
+  ctx.strokeStyle = `rgba(235, 209, 158, ${.18 * signal})`;
+  ctx.lineWidth = .7;
+  for (let seam = 0; seam < 3; seam++) {
+    ctx.beginPath();
+    ctx.moveTo(px + 6, py + 12 + seam * 6);
+    ctx.lineTo(px + 34, py + 12 + seam * 6);
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(238, 211, 157, .65)';
+  for (const [dx, dy] of [[5, 7], [34, 7], [5, 33], [34, 33]]) {
+    ctx.beginPath(); ctx.arc(px + dx, py + dy, 1, 0, Math.PI * 2); ctx.fill();
+  }
+
+  if (type === 'house') {
+    // Caixilharia, varanda, aparelho de ventilação e caixa postal.
+    ctx.strokeStyle = '#20282b'; ctx.lineWidth = 1;
+    ctx.strokeRect(px + 8, py + 17, 9, 7); ctx.strokeRect(px + 24, py + 17, 9, 7);
+    ctx.fillStyle = operational ? 'rgba(255, 217, 132, .8)' : '#242a2d';
+    ctx.fillRect(px + 10, py + 19, 5, 3); ctx.fillRect(px + 26, py + 19, 5, 3);
+    ctx.strokeStyle = '#8e9a96'; ctx.beginPath(); ctx.moveTo(px + 7, py + 26); ctx.lineTo(px + 33, py + 26); ctx.stroke();
+    ctx.fillStyle = '#333c3d'; ctx.fillRect(px + 26, py + 27, 7, 2);
+    ctx.fillStyle = '#c9a867'; ctx.fillRect(px + 28, py + 28, 2, 2);
+  } else if (type === 'farm') {
+    // Bancadas de cultivo, folhas em vários níveis e condensação nos vidros.
+    ctx.strokeStyle = '#8bd8c0'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px + 7, py + 29); ctx.lineTo(px + 33, py + 29); ctx.moveTo(px + 7, py + 22); ctx.lineTo(px + 33, py + 22); ctx.stroke();
+    for (let plant = 0; plant < 5; plant++) {
+      const x = px + 9 + plant * 5.5;
+      const lift = Math.sin(time / 800 + plant) * 1.2;
+      ctx.strokeStyle = operational ? '#87d18d' : '#586b50'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(x, py + 28); ctx.quadraticCurveTo(x - 2, py + 23 + lift, x - 1, py + 20 + lift); ctx.moveTo(x, py + 27); ctx.quadraticCurveTo(x + 2, py + 24, x + 2, py + 21 + lift); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(214, 247, 255, .28)'; ctx.fillRect(px + 8, py + 8, 24, 2);
+  } else if (type === 'well') {
+    // Reservatório, manômetro e tubulação de saída.
+    ctx.strokeStyle = '#a9d8dc'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px + 31, py + 18); ctx.lineTo(px + 36, py + 18); ctx.lineTo(px + 36, py + 28); ctx.stroke();
+    ctx.fillStyle = operational ? '#80fff0' : '#6a7378'; ctx.beginPath(); ctx.arc(px + 28, py + 15, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#d8e9e7'; ctx.beginPath(); ctx.moveTo(px + 14, py + 8); ctx.lineTo(px + 25, py + 8); ctx.stroke();
+  } else if (type === 'generator') {
+    // Painel de controle, faixas de segurança, cabo e exaustão quente.
+    ctx.fillStyle = '#1a1c1e'; ctx.fillRect(px + 6, py + 27, 28, 6);
+    for (let stripe = 0; stripe < 5; stripe++) {
+      ctx.fillStyle = stripe % 2 ? '#211b11' : '#d29a28';
+      ctx.beginPath(); ctx.moveTo(px + 7 + stripe * 6, py + 32); ctx.lineTo(px + 11 + stripe * 6, py + 27); ctx.lineTo(px + 13 + stripe * 6, py + 27); ctx.lineTo(px + 9 + stripe * 6, py + 32); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = operational ? `rgba(255, 184, 55, ${.55 + Math.sin(time / 260) * .2})` : '#6b3028';
+    ctx.beginPath(); ctx.arc(px + 27, py + 21, 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#2f3436'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px + 8, py + 35); ctx.bezierCurveTo(px + 15, py + 37, px + 22, py + 32, px + 31, py + 35); ctx.stroke();
+  } else if (type === 'solar') {
+    ctx.strokeStyle = '#8ebed1'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px + 8, py + 31); ctx.lineTo(px + 13, py + 35); ctx.moveTo(px + 32, py + 31); ctx.lineTo(px + 27, py + 35); ctx.stroke();
+    ctx.fillStyle = `rgba(205, 246, 255, ${.15 + Math.max(0, Math.sin(time / 1200 + px)) * .2})`; ctx.fillRect(px + 7, py + 10, 12, 3);
+  } else if (type === 'derrick') {
+    // Treliça, escada e contrapeso para o poço de petróleo.
+    ctx.strokeStyle = '#d18c5a'; ctx.lineWidth = 1;
+    for (let rung = 0; rung < 4; rung++) { ctx.beginPath(); ctx.moveTo(px + 14, py + 28 - rung * 4); ctx.lineTo(px + 22, py + 16 - rung * 2); ctx.stroke(); }
+    ctx.fillStyle = operational ? '#e6ad4d' : '#604a3d'; ctx.beginPath(); ctx.arc(px + 30, py + 28, 3, 0, Math.PI * 2); ctx.fill();
+  } else if (type === 'workshop') {
+    ctx.fillStyle = '#25282a'; ctx.fillRect(px + 5, py + 26, 14, 7);
+    ctx.strokeStyle = '#dbad68'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px + 8, py + 28); ctx.lineTo(px + 16, py + 28); ctx.moveTo(px + 11, py + 26); ctx.lineTo(px + 11, py + 32); ctx.stroke();
+    ctx.fillStyle = operational ? `rgba(255, 170, 62, ${.35 + Math.sin(time / 180) * .2})` : '#65442d';
+    ctx.beginPath(); ctx.arc(px + 26, py + 25, 1.5, 0, Math.PI * 2); ctx.fill();
+  } else if (type === 'market') {
+    ctx.fillStyle = '#f7d27c'; ctx.fillRect(px + 7, py + 22, 26, 2);
+    ctx.strokeStyle = '#5a3026'; ctx.lineWidth = 1; ctx.strokeRect(px + 9, py + 24, 8, 8); ctx.strokeRect(px + 22, py + 24, 8, 8);
+    ctx.fillStyle = '#e4a343'; ctx.fillRect(px + 18, py + 27, 3, 5);
+  } else if (type === 'clinic') {
+    ctx.fillStyle = '#34454b'; ctx.fillRect(px + 7, py + 27, 26, 5);
+    ctx.fillStyle = operational ? '#bdf6f0' : '#4a6268'; ctx.fillRect(px + 9, py + 28, 4, 2); ctx.fillRect(px + 16, py + 28, 4, 2); ctx.fillRect(px + 23, py + 28, 4, 2);
+    ctx.strokeStyle = '#b6e9ed'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px + 30, py + 18); ctx.lineTo(px + 34, py + 18); ctx.lineTo(px + 34, py + 14); ctx.stroke();
+  } else if (type === 'guard') {
+    ctx.fillStyle = '#8b6a42'; ctx.fillRect(px + 5, py + 27, 29, 6);
+    ctx.fillStyle = '#c1a06d'; for (const x of [8, 15, 22, 29]) { ctx.beginPath(); ctx.arc(px + x, py + 27, 3, 0, Math.PI * 2); ctx.fill(); }
+    ctx.strokeStyle = '#a9ba8a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px + 27, py + 16); ctx.lineTo(px + 33, py + 12); ctx.stroke();
+  } else if (type === 'plaza') {
+    ctx.fillStyle = '#4d3928'; ctx.fillRect(px + 6, py + 27, 11, 3); ctx.fillRect(px + 23, py + 27, 11, 3);
+    ctx.strokeStyle = '#7b6850'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px + 8, py + 31); ctx.lineTo(px + 8, py + 34); ctx.moveTo(px + 31, py + 31); ctx.lineTo(px + 31, py + 34); ctx.stroke();
+  } else if (type === 'purifier') {
+    ctx.strokeStyle = '#9df8db'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(px + 8, py + 29); ctx.lineTo(px + 3, py + 29); ctx.lineTo(px + 3, py + 20); ctx.stroke();
+    ctx.fillStyle = operational ? `rgba(126, 255, 219, ${.4 + Math.sin(time / 380) * .2})` : '#5f7770';
+    ctx.beginPath(); ctx.arc(px + 3, py + 18, 1.5, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
 function smoke(ctx, x, y, time, seed) {
   for (let puff = 0; puff < 3; puff++) {
     const age = (time / 1_300 + puff / 3 + seed) % 1;
@@ -407,6 +512,7 @@ function drawBuilding(ctx, building, status, time) {
   if (!status.connected) ctx.globalAlpha = .55;
   DRAWERS[building.type]?.(ctx, px, py, status, time);
   ctx.restore();
+  drawBuildingDetails(ctx, px, py, building.type, status, time);
   // Pequenos marcadores arquitetônicos: cobertura, placa e ponto de acesso.
   ctx.fillStyle = status.connected ? 'rgba(229, 184, 91, .8)' : 'rgba(255, 94, 70, .7)';
   ctx.fillRect(px + 6, py + 34, 9, 2);
@@ -461,7 +567,7 @@ function drawCitizens(ctx, city, analysis, time) {
   }
 }
 
-function drawWorldFrame(ctx, time) {
+function drawWorldFrame(ctx, time, zoom = CITY_DEFAULT_ZOOM) {
   const pulse = .55 + Math.sin(time / 1_600) * .12;
   // Moldura de mapa: separa o terreno jogável do terminal e dá uma leitura
   // de "mesa de operações" em vez de uma folha de tiles.
@@ -478,7 +584,7 @@ function drawWorldFrame(ctx, time) {
   ctx.textAlign = 'left';
   ctx.fillText('SETOR DE RECONSTRUÇÃO / MAPA TÁTICO', 22, 31);
   ctx.textAlign = 'right';
-  ctx.fillText('ESCALA 1 : 40', CITY_CANVAS_WIDTH - 22, CITY_CANVAS_HEIGHT - 24);
+  ctx.fillText(`ESCALA 1 : ${Math.round(CITY_TILE / zoom)}`, CITY_CANVAS_WIDTH - 22, CITY_CANVAS_HEIGHT - 24);
   ctx.textAlign = 'left';
   ctx.lineWidth = 1;
 }
@@ -500,8 +606,13 @@ function drawAtmosphere(ctx, time) {
   }
 }
 
-export function renderCity(ctx, city, analysis, { time = 0, hover = null, tool = null, canPlace = true } = {}) {
+export function renderCity(ctx, city, analysis, { time = 0, hover = null, tool = null, canPlace = true, zoom = CITY_DEFAULT_ZOOM, camera = getCityCamera(zoom) } = {}) {
   ctx.clearRect(0, 0, CITY_CANVAS_WIDTH, CITY_CANVAS_HEIGHT);
+  ctx.fillStyle = '#24170d';
+  ctx.fillRect(0, 0, CITY_CANVAS_WIDTH, CITY_CANVAS_HEIGHT);
+  ctx.save();
+  ctx.translate(CITY_CANVAS_WIDTH / 2 - camera.x * zoom, CITY_CANVAS_HEIGHT / 2 - camera.y * zoom);
+  ctx.scale(zoom, zoom);
   const ground = getGroundCanvas(city.ground);
   if (ground) ctx.drawImage(ground, 0, 0);
   // Contaminacao pulsando por cima do chao.
@@ -553,8 +664,9 @@ export function renderCity(ctx, city, analysis, { time = 0, hover = null, tool =
       ctx.globalAlpha = 1;
     }
   }
+  ctx.restore();
   drawAtmosphere(ctx, time);
-  drawWorldFrame(ctx, time);
+  drawWorldFrame(ctx, time, zoom);
   // Escurece o entorno para o jogador sentir o horizonte da cidade.
   const vignette = ctx.createRadialGradient(CITY_CANVAS_WIDTH / 2, CITY_CANVAS_HEIGHT / 2, 260, CITY_CANVAS_WIDTH / 2, CITY_CANVAS_HEIGHT / 2, 640);
   vignette.addColorStop(0, 'rgba(0,0,0,0)'); vignette.addColorStop(1, 'rgba(20, 8, 0, .42)');
