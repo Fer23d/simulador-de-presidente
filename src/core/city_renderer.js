@@ -6,7 +6,9 @@ export const CITY_CANVAS_WIDTH = CITY_WIDTH * CITY_TILE;
 export const CITY_CANVAS_HEIGHT = CITY_HEIGHT * CITY_TILE;
 // A cidade nasce em escala tática, mas o assentamento precisa ser legível.
 // O zoom é aplicado como câmera, preservando a grade lógica e o hit-test.
-export const CITY_DEFAULT_ZOOM = 1.42;
+// Mantemos a câmera próxima o bastante para que os detalhes dos sprites
+// realistas sejam legíveis sem perder a referência da malha de construção.
+export const CITY_DEFAULT_ZOOM = 1.78;
 
 export function getCityCamera(zoom = CITY_DEFAULT_ZOOM) {
   return {
