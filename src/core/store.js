@@ -23,10 +23,11 @@ export function hasPremiumSkin(entitlements, skinId) {
 // Provador: veste uma skin premium por tempo limitado, so na sessao atual, sem tocar no save.
 export function startSkinTrial(skinId, now = Date.now()) {
   const skin = getSkin(skinId);
-  if (!skin?.premium) return null;
+  // Dá para experimentar as premium e as da trilha de níveis, para ver o que a meta rende.
+  if (!skin?.premium && !skin?.levelReward) return null;
   return { skinId, endsAt: now + SKIN_TRIAL_DURATION_MS };
 }
 
 export function getActiveTrial(trial, now = Date.now()) {
-  return trial && Number(trial.endsAt) > now && getSkin(trial.skinId)?.premium ? trial : null;
+  return trial && Number(trial.endsAt) > now && (getSkin(trial.skinId)?.premium || getSkin(trial.skinId)?.levelReward) ? trial : null;
 }

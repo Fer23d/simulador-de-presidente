@@ -864,3 +864,9 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 @keyframes level-zero-glow { from { box-shadow: 0 0 18px rgba(255, 220, 90, .55), inset 0 0 10px rgba(255, 200, 60, .2); } to { box-shadow: 0 0 34px rgba(255, 230, 120, .95), inset 0 0 18px rgba(255, 210, 80, .4); } }
 @media (max-width: 1000px) { .level-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .level-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .level-tab-label { display: none; } }
+
+/* ---- Skins da Trilha de Niveis ---- */
+.wardrobe-section--trail .wardrobe-section-title { color: #ffe27a; }
+.wardrobe-skin--trail { border-color: #e0b43a; box-shadow: 0 0 14px rgba(255, 210, 80, .28); }
+.wardrobe-badge--trail { border-color: #e0b43a; color: #ffe27a; background: rgba(60, 40, 0, .85); }
+.wardrobe-price--trail { color: #ffe27a; }

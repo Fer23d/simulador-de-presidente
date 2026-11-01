@@ -39,8 +39,8 @@ export const LEVEL_TITLES = Object.freeze({
   1: 'Recém-empossado', 10: 'Estadista', 20: 'Sobrevivente Veterano', 30: 'Fundador do Recomeço',
   40: 'Arquiteto da Nova Era', 50: 'Lenda do Último Gabinete', 60: 'O Último Presidente',
 });
-const LEVEL_SKINS = Object.freeze({ 10: 'scrap_armor', 20: 'raider', 40: 'generalissimo', 50: 'ghoul', 60: 'shadow' });
-const CLASS_EPIC_SKIN = Object.freeze({ worker: 'worker_welder', commander: 'commander_nightops', doctor: 'doctor_containment', survivor: 'survivor_wanderer' });
+// Cada nivel terminado em 0 libera uma vestimenta exclusiva da trilha (nao se compra com sucata).
+export const LEVEL_SKINS = Object.freeze({ 10: 'trail_statesman', 20: 'trail_veteran', 30: 'trail_founder', 40: 'trail_architect', 50: 'trail_legend', 60: 'trail_last_president' });
 
 export function getLevelTitle(level) {
   const milestone = Math.max(1, Math.min(MAX_LEVEL, Math.floor(level)));
@@ -48,8 +48,7 @@ export function getLevelTitle(level) {
   return LEVEL_TITLES[reached];
 }
 
-function getRewardSkinId(level, state) {
-  if (level === 30) return CLASS_EPIC_SKIN[state?.presidentClass] ?? 'generalissimo';
+function getRewardSkinId(level) {
   return LEVEL_SKINS[level] ?? null;
 }
 
@@ -117,7 +116,7 @@ export function describeLevelReward(level, mode, state) {
     line('Felicidade', amounts.happiness);
   }
   if (getLevelTier(level) === 'zero') {
-    const skin = getSkin(getRewardSkinId(level, state));
+    const skin = getSkin(getRewardSkinId(level));
     if (skin) lines.push(`Vestimenta exclusiva: ${skin.name}`);
     lines.push(`Título: ${getLevelTitle(level)}`);
   }
@@ -152,7 +151,7 @@ export function applyLevelReward(state, level) {
   const mode = getGameMode(state);
   const lines = describeLevelReward(level, mode, state);
   let next = applyModeReward(state, level, mode);
-  const skinId = getLevelTier(level) === 'zero' ? getRewardSkinId(level, state) : null;
+  const skinId = getLevelTier(level) === 'zero' ? getRewardSkinId(level) : null;
   const skin = skinId ? getSkin(skinId) : null;
   if (skin) next = { ...next, unlockedSkins: [...new Set([...(next.unlockedSkins ?? ['default']), skin.id])] };
   const entry = { level, tier: getLevelTier(level), mode, text: lines.join(' · ') };

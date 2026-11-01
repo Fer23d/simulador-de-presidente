@@ -95,6 +95,31 @@ export const PRESIDENT_SKINS = Object.freeze([
     filter: 'grayscale(.8) brightness(.35) contrast(1.4)', tint: null, pattern: 'scars',
     aura: { color: 'rgba(255, 120, 30, .7)', blur: 12, pulse: true }, accessory: 'eyes', eyeColor: '#ff9a2e', effect: 'embers_fire',
     description: 'Cicatrizes que ainda queimam como brasa. Sobreviveu a tudo e o fogo da bomba vive dentro dele.' }),
+  // Exclusivas da Trilha de Niveis: nao se compram nem entram na loja; cada uma chega sozinha no nivel indicado.
+  skin({ id: 'trail_statesman', name: 'Casaco de Estadista', cost: 0, rarity: 'rare', levelReward: 10, keepFace: true,
+    filter: 'grayscale(.4) brightness(1.1) contrast(1.1)', tint: { blend: 'color', colors: ['#86a3d0', '#35487a'], alpha: .72 },
+    garment: 'statesman_coat', accessory: 'trilby', aura: { color: 'rgba(120, 170, 230, .45)', blur: 7 },
+    description: 'Casaco azul-marinho de abas longas, lapelas com fio de ouro e chapéu de feltro. Quem o veste já assinou tratados de verdade.' }),
+  skin({ id: 'trail_veteran', name: 'Veterano do Ermo', cost: 0, rarity: 'epic', levelReward: 20, keepFace: true,
+    filter: 'sepia(.5) saturate(1.2) contrast(1.15)', tint: { blend: 'multiply', colors: ['#c9a56a', '#6b4f2a'], alpha: .9 },
+    pattern: 'camo', garment: 'veteran_gear', accessory: 'beret', effect: 'dust',
+    description: 'Camuflagem desbotada, bandoleira de latão, dragonas de sargento e um lenço vermelho puído. Já viu o Ermo mudar de cor.' }),
+  skin({ id: 'trail_founder', name: 'Fundador do Recomeço', cost: 0, rarity: 'epic', levelReward: 30, keepFace: true,
+    filter: 'grayscale(.3) brightness(1.25)', tint: { blend: 'overlay', colors: ['#fff6d8', '#d9c38a'], alpha: .6, shimmer: true },
+    aura: { color: 'rgba(255, 224, 140, .75)', blur: 11 }, garment: 'founder_tunic', accessory: 'laurel', effect: 'sparkle',
+    description: 'Túnica de linho com barra de ouro, faixa verde-azulada e um rolo de plantas no cinto. O traje de quem lançou a primeira pedra.' }),
+  skin({ id: 'trail_architect', name: 'Arquiteto da Nova Era', cost: 0, rarity: 'legendary', levelReward: 40, keepFace: true,
+    filter: 'grayscale(.45) brightness(1.1) contrast(1.15)', tint: { blend: 'color', colors: ['#4fa3b5', '#1d4d62'], alpha: .42 },
+    garment: 'architect_vest', accessory: 'hardhat', effect: 'sparks', aura: { color: 'rgba(90, 210, 255, .55)', blur: 9, pulse: true },
+    description: 'Capacete com lanterna, colete refletivo com faixas prateadas e cinto de ferramentas. Cada tijolo da cidade passou por ele.' }),
+  skin({ id: 'trail_legend', name: 'Lenda do Último Gabinete', cost: 0, rarity: 'legendary', levelReward: 50,
+    filter: 'grayscale(.85) brightness(.75) contrast(1.35)', tint: { blend: 'color', colors: ['#70707e', '#1c1c24'], alpha: .65 },
+    aura: { color: 'rgba(255, 210, 90, .85)', blur: 13, pulse: true }, garment: 'legend_coat', accessory: 'halo', effect: 'embers',
+    description: 'Casaco preto de cinzas com bordados de ouro, brasão no peito e um halo de brasa. O povo já conta a sua história como lenda.' }),
+  skin({ id: 'trail_last_president', name: 'O Último Presidente', cost: 0, rarity: 'legendary', levelReward: 60, keepFace: true,
+    filter: 'grayscale(.2) brightness(1.05) contrast(1.1)', tint: { blend: 'overlay', colors: ['#fff0b0', '#8a1f2a'], alpha: .5, shimmer: true },
+    garment: 'president_regalia', accessory: 'circlet', effect: 'sparkle', aura: { color: 'rgba(255, 230, 140, .9)', blur: 14, pulse: true },
+    description: 'Capa carmim com gola de pele, faixa presidencial, medalhas e um diadema. O último a governar e o primeiro a ser lembrado.' }),
 ]);
 
 const CLASS_IDS = new Set(PRESIDENT_CLASSES.map(({ id }) => id));
@@ -160,6 +185,7 @@ export function purchaseSkin(state, skinId, { discovered = [] } = {}) {
   if (!state?.is_wasteland || !skin || skin.id === 'default' || !state.shelter_grid?.flat().some((room) => room?.type === 'presidential_suite')
     || state.unlockedSkins?.includes(skin.id)) return state;
   if (!isSkinAvailableForClass(skin, state.presidentClass)) return { ...state, notice: `${skin.name} é exclusiva de outra classe.` };
+  if (skin.levelReward) return { ...state, notice: `${skin.name} é exclusiva da Trilha de Níveis e chega no nível ${skin.levelReward}.` };
   if (skin.premium) return { ...state, notice: `${skin.name} é PREMIUM e chega pela loja do Vault.` };
   if (!isSkinRequirementMet(skin, discovered)) return { ...state, notice: `${skin.name} exige uma descoberta rara na Enciclopédia do Ermo.` };
   if ((Number(state.scrap) || 0) < skin.cost) return { ...state, notice: 'Sucata insuficiente para adquirir esta vestimenta.' };

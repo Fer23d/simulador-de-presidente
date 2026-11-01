@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyLevelReward, awardXp, computeXpGain, describeLevelGate, describeLevelReward, getRewardAmounts, DOOR_REQUIRED_LEVEL, estimateLegacyXp, getGameMode, getLevel, getLevelForXp,
+import { LEVEL_SKINS, applyLevelReward, awardXp, computeXpGain, describeLevelGate, describeLevelReward, getRewardAmounts, DOOR_REQUIRED_LEVEL, estimateLegacyXp, getGameMode, getLevel, getLevelForXp,
   getLevelProgress, getLevelTier, getLevelTitle, grantXp, MAX_LEVEL, normalizeLevelState, TIER_MULTIPLIER, totalXpForLevel, XP_VALUES } from '../src/core/levels.js';
 import { advanceCityDay, startCity } from '../src/core/city.js';
 import { DOOR_OPENS_AT_MONTH, isDoorOpen } from '../src/core/endings.js';
@@ -68,22 +68,23 @@ test('the reward depends on the mode the player is in', () => {
 test('level 0 rewards add a title, an exclusive outfit and extra soldiers in the Vault', () => {
   const v = vault({ military: { exercito: { soldados: 100 } } });
   const ten = applyLevelReward(atLevel(v, 10), 10);
-  assert.ok(ten.unlockedSkins.includes('scrap_armor'));
-  assert.deepEqual(ten.level.skins, ['scrap_armor']);
+  assert.ok(ten.unlockedSkins.includes('trail_statesman'));
+  assert.deepEqual(ten.level.skins, ['trail_statesman']);
   assert.equal(ten.military.exercito.soldados, 120);
   assert.match(ten.level.recent.at(-1).text, /Título: Estadista/);
   assert.match(ten.level.recent.at(-1).text, /Vestimenta exclusiva/);
-  assert.ok(!applyLevelReward(atLevel(v, 15), 15).unlockedSkins.includes('scrap_armor'), 'a 5 level brings no outfit');
-  assert.ok(applyLevelReward(atLevel(v, 30), 30).unlockedSkins.includes('worker_welder'), 'level 30 gives the epic outfit of your class');
-  assert.ok(applyLevelReward(atLevel({ ...v, presidentClass: 'doctor' }, 30), 30).unlockedSkins.includes('doctor_containment'));
-  assert.ok(applyLevelReward(atLevel(v, 60), 60).unlockedSkins.includes('shadow'));
+  assert.ok(!applyLevelReward(atLevel(v, 15), 15).unlockedSkins.includes('trail_statesman'), 'a 5 level brings no outfit');
+  for (const [level, id] of Object.entries(LEVEL_SKINS)) {
+    assert.ok(applyLevelReward(atLevel(v, Number(level)), Number(level)).unlockedSkins.includes(id), `level ${level} gives ${id}`);
+    assert.ok(applyLevelReward(atLevel({ ...v, presidentClass: 'doctor' }, Number(level)), Number(level)).unlockedSkins.includes(id), `every class gets ${id}`);
+  }
   assert.equal(getLevelTitle(9), 'Recém-empossado');
   assert.equal(getLevelTitle(10), 'Estadista');
   assert.equal(getLevelTitle(29), 'Sobrevivente Veterano');
   assert.equal(getLevelTitle(60), 'O Último Presidente');
   const skinsInPresidency = applyLevelReward(atLevel(presidency(), 10), 10);
-  assert.deepEqual(skinsInPresidency.level.skins, ['scrap_armor']);
-  assert.ok(transicionarParaWasteland(skinsInPresidency).unlockedSkins.includes('scrap_armor'), 'the outfit survives the trip to the Vault');
+  assert.deepEqual(skinsInPresidency.level.skins, ['trail_statesman']);
+  assert.ok(transicionarParaWasteland(skinsInPresidency).unlockedSkins.includes('trail_statesman'), 'the outfit survives the trip to the Vault');
 });
 
 test('gaining several levels at once pays every level and keeps only the latest few', () => {
@@ -179,11 +180,11 @@ test('the level survives saving and loading, and old saves get an estimate inste
   const loaded = hydrateGameState(JSON.stringify({ ...earned, version: createGameState().version }));
   assert.equal(loaded.level.xp, earned.level.xp);
   assert.equal(getLevel(loaded), 11);
-  assert.deepEqual(loaded.level.skins, ['scrap_armor']);
+  assert.deepEqual(loaded.level.skins, ['trail_statesman']);
   assert.equal(loaded.level.recent.length, 6);
   assert.deepEqual(normalizeLevelState(null), { xp: 0, level: 1, recent: [], skins: [] });
-  const messy = normalizeLevelState({ xp: -9, skins: ['scrap_armor', 'bogus', 'scrap_armor', 42], recent: [{ level: 99, tier: 'x', mode: 'y', text: 'z' }, 'junk', { level: 'a' }] });
-  assert.deepEqual(messy.skins, ['scrap_armor']);
+  const messy = normalizeLevelState({ xp: -9, skins: ['trail_statesman', 'bogus', 'trail_statesman', 42], recent: [{ level: 99, tier: 'x', mode: 'y', text: 'z' }, 'junk', { level: 'a' }] });
+  assert.deepEqual(messy.skins, ['trail_statesman']);
   assert.deepEqual(messy.recent, [{ level: 60, tier: 'normal', mode: 'presidency', text: 'z' }]);
   assert.equal(messy.xp, 0);
   const { level, ...legacy } = { ...createGameState(), version: createGameState().version, monthCounter: 40, wasteland_turn: 30, is_wasteland: true };
@@ -228,7 +229,7 @@ test('the track lists all 60 levels with the prize of each, in the chosen mode',
   assert.match(html, /Vault <small>\(atual\)/);
   assert.match(html, /data-action="close-levels"/);
   assert.match(html, /Título: Estadista/);
-  assert.match(html, /Vestimenta exclusiva: Armadura de Sucata/);
+  assert.match(html, /Vestimenta exclusiva: Casaco de Estadista/);
   const presidencyHtml = levelTrackView(atLevel(vault(), 14), 'presidency');
   assert.match(presidencyHtml, /Caixa nacional/);
   assert.doesNotMatch(presidencyHtml, /Sucata \+/);
@@ -251,7 +252,7 @@ test('the track shows exactly the prize that a level pays', async () => {
     }
   }
   assert.deepEqual(describeLevelReward(10, 'vault', vault()), ['Sucata +150', 'Petróleo +50', 'Comida +60', 'Energia +50', 'Curativos +4', 'Soldados +20',
-    'Vestimenta exclusiva: Armadura de Sucata', 'Título: Estadista']);
+    'Vestimenta exclusiva: Casaco de Estadista', 'Título: Estadista']);
   assert.deepEqual(getRewardAmounts(10, 'city', city()), { scrap: 200, food: 125, water: 125, oil: 40, happiness: 6 });
 });
 

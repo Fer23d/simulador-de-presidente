@@ -1004,7 +1004,9 @@ function drawSkinAccessory(ctx, skin, head, time) {
   ctx.save();
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-  if (skin.accessory === 'crown') {
+  if (NEW_ACCESSORIES[skin.accessory]) {
+    NEW_ACCESSORIES[skin.accessory](ctx, head, time);
+  } else if (skin.accessory === 'crown') {
     const base = y - r * .4;
     const half = r * 1.05;
     ctx.fillStyle = metalGradient(ctx, 0, base - r * 1.2, 0, base, '#fff2a0', '#c8900f');
@@ -1396,6 +1398,46 @@ function drawSkinAccessory(ctx, skin, head, time) {
     ctx.fill();
     ctx.fillStyle = '#c4522f';
     ctx.fillRect(x - r * .55, y + r * .9, r * 1.35, r * .55);
+  } else if (skin.accessory === 'laurel') {
+    // Coroa de louros dourados contornando a cabeca, de tras para a frente, com uma fita caindo pela nuca.
+    const leaves = 12;
+    for (let index = 0; index < leaves; index++) {
+      const angle = Math.PI * (1.08 + index / (leaves - 1) * .84);
+      ctx.save();
+      ctx.translate(x + Math.cos(angle) * r * 1.02, y + Math.sin(angle) * r - r * .08);
+      ctx.rotate(angle + Math.PI / 2 + (index % 2 ? .35 : -.35));
+      ctx.fillStyle = metalGradient(ctx, 0, -r * .4, 0, r * .1, '#fff2a0', '#b8860b');
+      ctx.strokeStyle = '#7a4d00';
+      ctx.lineWidth = Math.max(.4, r * .06);
+      ctx.beginPath();
+      ctx.ellipse?.(0, 0, r * .3, r * .13, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.strokeStyle = '#c4283a';
+    ctx.lineWidth = Math.max(.8, r * .14);
+    ctx.beginPath();
+    ctx.moveTo(x - r, y - r * .1);
+    ctx.quadraticCurveTo(x - r * 1.6 + Math.sin(time / 240) * r * .15, y + r * .5, x - r * 1.4, y + r * 1.1);
+    ctx.stroke();
+  } else if (skin.accessory === 'halo') {
+    // Anel de brasa dourada flutuando acima da cabeca.
+    const pulse = .75 + Math.sin(time / 320) * .25;
+    ctx.shadowColor = 'rgba(255, 220, 110, .95)';
+    ctx.shadowBlur = r * 1.2;
+    ctx.strokeStyle = `rgba(255, 232, 140, ${pulse})`;
+    ctx.lineWidth = Math.max(1, r * .18);
+    ctx.beginPath();
+    ctx.ellipse?.(x, y - r * 1.55, r, r * .3, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255, 255, 255, .7)';
+    ctx.lineWidth = Math.max(.5, r * .06);
+    ctx.beginPath();
+    ctx.ellipse?.(x, y - r * 1.55, r, r * .3, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
   }
   ctx.restore();
 }
@@ -1478,11 +1520,306 @@ function drawSkinEffect(ctx, skin, width, height, time) {
   ctx.restore();
 }
 
+// ---------- Roupas das skins da Trilha de Niveis ----------
+// Pecas desenhadas em coordenadas da cabeca: (0, 0) e o centro da cabeca, +x e a frente, e a unidade e o raio da cabeca (r).
+// Ombros em y ~ 1,3, cintura em 4,4, joelhos em 8, pes em 12. "Atras" fica por tras do corpo e muda a silhueta;
+// "frente" fica por cima e so cobre o que uma peca real cobriria (faixas, lapelas, dragonas), para nao esconder o braco.
+const gp = (head, px, py) => [head.x + px * head.r, head.y + py * head.r];
+
+function garmentPath(ctx, head, points) {
+  ctx.beginPath();
+  points.forEach(([px, py], index) => {
+    const [x, y] = gp(head, px, py);
+    if (index) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+  });
+  ctx.closePath();
+}
+
+function paintGarment(ctx, head, points, fill, stroke = null, width = .09) {
+  garmentPath(ctx, head, points);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = Math.max(.5, head.r * width);
+    ctx.stroke();
+  }
+}
+
+const garmentGradient = (ctx, head, from, to, light, dark) => metalGradient(ctx, 0, head.y + from * head.r, 0, head.y + to * head.r, light, dark);
+const garmentSide = (ctx, head, from, to, light, dark) => metalGradient(ctx, head.x + from * head.r, 0, head.x + to * head.r, 0, light, dark);
+
+function garmentDot(ctx, head, px, py, size, fill, stroke = null) {
+  const [x, y] = gp(head, px, py);
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  ctx.arc?.(x, y, Math.max(.6, head.r * size), 0, Math.PI * 2);
+  ctx.fill();
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = Math.max(.4, head.r * .05); ctx.stroke(); }
+}
+
+function garmentLines(ctx, head, lines, color, width = .07) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(.4, head.r * width);
+  ctx.beginPath();
+  for (const [a, b, c, d] of lines) {
+    const [x0, y0] = gp(head, a, b);
+    const [x1, y1] = gp(head, c, d);
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+  }
+  ctx.stroke();
+}
+
+// Dragona de ombro com franja, ancorada no ponto (px, py).
+function epaulette(ctx, head, px, py, base, trim) {
+  paintGarment(ctx, head, [[px - .62, py], [px + .62, py - .08], [px + .6, py + .5], [px - .6, py + .55]], garmentGradient(ctx, head, py, py + .6, base, trim), '#2a1a05', .05);
+  garmentLines(ctx, head, [[px - .4, py + .5, px - .4, py + .95], [px - .1, py + .52, px - .1, py + 1.0], [px + .2, py + .5, px + .2, py + .95], [px + .5, py + .48, px + .5, py + .9]], trim, .06);
+  garmentLines(ctx, head, [[px - .5, py + .22, px + .5, py + .2]], '#fff4c0', .05);
+}
+
+const GARMENT_BACK = {
+  // Cauda de casaco azul-marinho com barra dourada, descendo ate os joelhos.
+  statesman_coat(ctx, head, time) {
+    const w = (index) => Math.sin(time / 260 + index) * .22;
+    paintGarment(ctx, head, [[-.9, 1.7], [-2.4, 4.8], [-3 + w(1), 8.6 + w(0)], [-1, 9 + w(2)], [.9, 8.7 + w(3)], [1, 4.6], [.3, 2]],
+      garmentGradient(ctx, head, 1.5, 9, '#7690c4', '#2a3b66'), '#e6c25a', .12);
+    garmentLines(ctx, head, [[-1.1, 3.6, -1.7 + w(1), 8.7], [-.4, 3.8, -.8 + w(2), 8.9], [.3, 4, .1 + w(3), 8.8]], 'rgba(0, 0, 0, .45)', .09);
+  },
+  // Lenco vermelho puido voando atras do pescoco.
+  veteran_gear(ctx, head, time) {
+    const w = (index) => Math.sin(time / 190 + index * 1.3) * .35;
+    paintGarment(ctx, head, [[-.5, 1.1], [-1.9, 1.5 + w(0)], [-3.4 + w(1), 2.2 + w(2)], [-3.1 + w(1), 3.1 + w(2)], [-1.8, 2.5 + w(0)], [-.2, 1.9]],
+      garmentSide(ctx, head, -3.4, -.3, '#7a1d14', '#d4442e'), '#3a0c07', .06);
+    garmentLines(ctx, head, [[-3.3 + w(1), 2.5 + w(2), -3.5 + w(1), 3.1 + w(2)], [-3.1 + w(1), 2.8 + w(2), -3.2 + w(1), 3.4 + w(2)]], '#7a1d14', .06);
+  },
+  // Tunica de linho creme com barra dourada.
+  founder_tunic(ctx, head, time) {
+    const w = (index) => Math.sin(time / 280 + index) * .2;
+    paintGarment(ctx, head, [[-.9, 2.2], [-2.1, 5], [-2.4 + w(1), 7.6 + w(0)], [-.6, 8 + w(2)], [.9, 7.7 + w(3)], [.95, 4.6], [.3, 2.3]],
+      garmentGradient(ctx, head, 2, 8, '#fff7df', '#cdbb8a'), '#c99a2e', .12);
+    garmentLines(ctx, head, [[-1.2, 4.4, -1.5 + w(1), 7.8], [-.5, 4.5, -.7 + w(2), 8], [.2, 4.6, .1 + w(3), 7.9]], 'rgba(120, 100, 60, .45)', .07);
+  },
+  // Cauda longa de casaco preto com barra bordada a ouro e fios rasgados.
+  legend_coat(ctx, head, time) {
+    const w = (index) => Math.sin(time / 250 + index) * .25;
+    paintGarment(ctx, head, [[-.9, 1.7], [-2.5, 5], [-3.3 + w(1), 9.4 + w(0)], [-2.2, 9 + w(1)], [-1.6, 9.7 + w(2)], [-.4, 9.1 + w(3)], [.5, 9.6 + w(0)], [1, 8.9], [1, 4.6], [.3, 2]],
+      garmentGradient(ctx, head, 1.5, 9.7, '#5a5a68', '#17171d'), '#f0c64a', .13);
+    garmentLines(ctx, head, [[-2.7 + w(1), 8.9 + w(0), -1.5, 8.7 + w(2)], [-1.2, 8.8, .6, 8.7 + w(3)]], '#e0b43a', .08);
+    garmentLines(ctx, head, [[-1.8, 3.4, -2.3 + w(1), 8.2 + w(0)], [-1.2, 3.2, -1.5 + w(2), 8.4]], 'rgba(255, 240, 190, .35)', .1);
+    for (let step = 0; step < 5; step++) {
+      const py = 4.6 + step * .85;
+      const px = -1.5 - step * .22;
+      paintGarment(ctx, head, [[px, py - .22], [px + .22, py], [px, py + .22], [px - .22, py]], 'rgba(240, 198, 74, .85)');
+    }
+  },
+  // Capa carmim com forro escuro, gola de pele branca e barra de ouro.
+  president_regalia(ctx, head, time) {
+    const w = (index) => Math.sin(time / 230 + index * 1.1) * .3;
+    paintGarment(ctx, head, [[-.8, 1.3], [-2.9, 3.4 + w(0)], [-4.1 + w(1), 8.2 + w(2)], [-3.2 + w(1), 11.2 + w(3)], [-1.4, 10.8 + w(2)], [.3, 10 + w(1)], [.8, 4.6], [.3, 1.7]],
+      garmentGradient(ctx, head, 1.3, 11, '#c42a3c', '#4a0814'), '#ffd86a', .14);
+    paintGarment(ctx, head, [[-3.6 + w(1), 8.6 + w(2)], [-3 + w(1), 11 + w(3)], [-2.2, 10.9 + w(2)], [-2.9, 8.4 + w(1)]], 'rgba(20, 0, 8, .5)');
+    garmentLines(ctx, head, [[-1.3, 3.2, -2.1 + w(1), 10.4 + w(2)], [-.6, 3.8, -.7 + w(3), 10.5 + w(1)], [-2.2, 3.6, -3.1 + w(1), 10.7 + w(2)]], 'rgba(40, 0, 10, .45)', .09);
+  },
+};
+
+const GARMENT_FRONT = {
+  statesman_coat(ctx, head) {
+    paintGarment(ctx, head, [[.05, 1.1], [1.05, 1.2], [.72, 2.8]], '#f4f1e8', '#8a8a8a', .05);
+    const cloth = garmentGradient(ctx, head, 1.2, 4, '#7088c0', '#2a3a66');
+    paintGarment(ctx, head, [[-.35, 1.2], [.12, 1.1], [.74, 3.6], [.36, 4], [-.7, 1.9]], cloth, '#d6b04c', .07);
+    paintGarment(ctx, head, [[1, 1.2], [1.35, 1.55], [1.15, 3.9], [.78, 3.6]], cloth, '#d6b04c', .07);
+    for (const y of [4.3, 5.1, 5.9]) garmentDot(ctx, head, .8, y, .15, '#f2c94c', '#6a4a00');
+    paintGarment(ctx, head, [[-.55, 2.8], [-.1, 2.7], [-.15, 3.25], [-.6, 3.2]], '#ffffff', '#b8b8b8', .04);
+    epaulette(ctx, head, -.15, 1.25, '#d6b04c', '#7a5a10');
+  },
+  veteran_gear(ctx, head) {
+    // Bandoleira de couro com cartuchos de latao, do ombro ao quadril.
+    paintGarment(ctx, head, [[.7, 1.3], [1.2, 1.45], [-.5, 5.1], [-1, 4.7]], garmentGradient(ctx, head, 1.3, 5, '#a9733c', '#4a2c14'), '#2a160a', .05);
+    for (let index = 0; index < 5; index++) {
+      const t = .12 + index * .18;
+      const px = .95 - t * 1.6;
+      const py = 1.4 + t * 3.5;
+      paintGarment(ctx, head, [[px - .12, py - .1], [px + .12, py - .1], [px + .12, py + .32], [px - .12, py + .32]], '#d8a640', '#5a3a08', .03);
+    }
+    epaulette(ctx, head, -.2, 1.3, '#6b7a42', '#2f3a1a');
+    garmentLines(ctx, head, [[-.65, 1.65, -.65, 2], [-.4, 1.62, -.4, 1.97]], '#f0e2a0', .09);
+    // Cantil no quadril e remendo no peito.
+    paintGarment(ctx, head, [[-1.1, 4.6], [-.45, 4.6], [-.4, 5.6], [-1.15, 5.6]], '#5a6b3a', '#26301a', .06);
+    garmentDot(ctx, head, -.78, 4.55, .12, '#c8c8c8');
+    garmentDot(ctx, head, .35, 2.4, .26, '#e8d9a0', '#4a3a10');
+    garmentDot(ctx, head, .35, 2.4, .1, '#7a1d14');
+  },
+  founder_tunic(ctx, head) {
+    // Faixa verde-azulada com borda dourada e medalhao, do ombro ao quadril, e cinto com rolo de plantas.
+    paintGarment(ctx, head, [[.6, 1.3], [1.2, 1.4], [-.4, 5], [-1, 4.7]], garmentGradient(ctx, head, 1.3, 5, '#2aa59a', '#0e4a48'), '#e8c14a', .09);
+    garmentDot(ctx, head, -.55, 4.8, .3, '#f2c94c', '#6a4a00');
+    garmentDot(ctx, head, -.55, 4.8, .12, '#2aa59a');
+    paintGarment(ctx, head, [[-1.35, 4.2], [1.2, 4.3], [1.2, 4.7], [-1.35, 4.65]], '#7a5230', '#2a180a', .05);
+    paintGarment(ctx, head, [[.55, 4.2], [.95, 4.2], [.95, 4.7], [.55, 4.7]], '#f2c94c', '#6a4a00', .05);
+    paintGarment(ctx, head, [[-1.3, 3.9], [-.2, 5.7], [.05, 5.45], [-1.05, 3.7]], '#f1ead2', '#8a7a52', .05);
+    garmentLines(ctx, head, [[-1.1, 4.1, -.2, 5.5]], '#6a5a38', .04);
+  },
+  architect_vest(ctx, head, time) {
+    // Colete refletivo de obra: suspensorios laranja com faixas prateadas, cinto de ferramentas e cracha.
+    const orange = garmentGradient(ctx, head, 1.2, 4.6, '#ff9a2e', '#c25a0a');
+    paintGarment(ctx, head, [[-.5, 1.25], [.05, 1.2], [.28, 4.4], [-.35, 4.5]], orange, '#6a2f00', .05);
+    paintGarment(ctx, head, [[.8, 1.25], [1.3, 1.45], [1.15, 4.4], [.7, 4.35]], orange, '#6a2f00', .05);
+    paintGarment(ctx, head, [[-.6, 2.5], [1.25, 2.6], [1.25, 3], [-.6, 2.9]], orange, '#6a2f00', .04);
+    for (const [y, h] of [[1.8, .24], [3.1, .24], [3.75, .2]]) paintGarment(ctx, head, [[-.5, y], [1.25, y + .06], [1.25, y + h], [-.5, y + h - .04]], '#e8eef2', '#8a959b', .03);
+    paintGarment(ctx, head, [[-1.35, 4.35], [1.25, 4.45], [1.25, 4.95], [-1.35, 4.85]], '#5a4630', '#1a1006', .05);
+    paintGarment(ctx, head, [[-.2, 4.9], [.4, 4.95], [.4, 5.9], [-.2, 5.85]], '#4a3a28', '#1a1006', .05);
+    garmentLines(ctx, head, [[-1.05, 4.85, -1.05, 6.3], [.8, 4.9, .8, 6]], '#c9d0d4', .09);
+    garmentDot(ctx, head, -1.05, 6.5, .18, '#c9d0d4', '#3a4044');
+    paintGarment(ctx, head, [[.5, 1.9], [.9, 1.95], [.9, 2.4], [.5, 2.35]], '#ffffff', '#555', .03);
+    const pulse = .55 + Math.sin(time / 320) * .3;
+    garmentDot(ctx, head, 1.0, 1.55, .13, `rgba(110, 230, 255, ${pulse})`);
+  },
+  legend_coat(ctx, head, time) {
+    // Dragonas e gola alta bordadas a ouro, brasao no peito e punhos dourados.
+    paintGarment(ctx, head, [[-.5, .95], [.25, .9], [.2, 1.8], [-.6, 1.8]], garmentGradient(ctx, head, .9, 1.8, '#3a3a44', '#0a0a0e'), '#e0b43a', .08);
+    epaulette(ctx, head, -.2, 1.3, '#e0b43a', '#8a5a08');
+    garmentLines(ctx, head, [[.75, 1.5, .85, 5], [.55, 1.6, .62, 4.8]], '#e0b43a', .09);
+    const [cx, cy] = gp(head, .25, 2.9);
+    ctx.fillStyle = metalGradient(ctx, cx - head.r, cy - head.r, cx + head.r, cy + head.r, '#fff2a0', '#b8860b');
+    ctx.strokeStyle = '#4a2a00';
+    ctx.lineWidth = Math.max(.5, head.r * .08);
+    ctx.beginPath();
+    ctx.arc?.(cx, cy, head.r * .5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#1a1006';
+    ctx.beginPath();
+    for (let point = 0; point < 10; point++) {
+      const angle = -Math.PI / 2 + point * Math.PI / 5;
+      const radius = point % 2 ? head.r * .13 : head.r * .32;
+      ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+    }
+    ctx.closePath();
+    ctx.fill();
+    garmentLines(ctx, head, [[-.2, 4.4, 1.15, 4.5]], '#e0b43a', .1);
+    const glow = .5 + Math.sin(time / 380) * .25;
+    garmentDot(ctx, head, .25, 2.9, .62, `rgba(255, 210, 90, ${glow * .18})`);
+  },
+  president_regalia(ctx, head) {
+    // Gola de pele branca, faixa presidencial dourada com medalhao, dragonas e fileira de medalhas.
+    paintGarment(ctx, head, [[-.85, 1.0], [.75, .95], [1, 1.55], [.3, 1.85], [-.9, 1.6]], garmentGradient(ctx, head, .9, 1.9, '#ffffff', '#cfcfd4'), '#9a9aa2', .05);
+    for (const px of [-.6, -.2, .2, .6]) garmentDot(ctx, head, px, 1.4, .12, '#2a2a30');
+    paintGarment(ctx, head, [[.65, 1.7], [1.2, 1.8], [-.35, 5.1], [-.95, 4.7]], garmentGradient(ctx, head, 1.7, 5, '#fff4c0', '#c8900f'), '#6a4a00', .07);
+    garmentLines(ctx, head, [[.5, 1.95, -.75, 4.7]], '#2a6ac4', .1);
+    garmentDot(ctx, head, -.62, 4.9, .34, '#f2c94c', '#6a4a00');
+    garmentDot(ctx, head, -.62, 4.9, .14, '#c42a3c');
+    epaulette(ctx, head, -.25, 1.3, '#f2c94c', '#8a5a08');
+    [['#c42a3c', 0], ['#2a6ac4', .38], ['#f2c94c', .76]].forEach(([ribbon, offset]) => {
+      paintGarment(ctx, head, [[offset - .5, 2.3], [offset - .26, 2.3], [offset - .26, 2.75], [offset - .5, 2.75]], ribbon);
+      garmentDot(ctx, head, offset - .38, 2.95, .16, '#ffe27a', '#6a4a00');
+    });
+  },
+};
+
+// Chapeus e adornos novos da trilha.
+const NEW_ACCESSORIES = {
+  trilby(ctx, head) {
+    const { x, y, r } = head;
+    ctx.fillStyle = metalGradient(ctx, 0, y - r * 1.6, 0, y - r * .5, '#4a4a56', '#16161c');
+    ctx.beginPath();
+    ctx.moveTo(x - r * .98, y - r * .5);
+    ctx.quadraticCurveTo(x - r * 1.05, y - r * 1.55, x - r * .1, y - r * 1.6);
+    ctx.quadraticCurveTo(x + r * 1.0, y - r * 1.6, x + r * .98, y - r * .5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#c42a3c';
+    ctx.fillRect(x - r * 1.0, y - r * .85, r * 2, r * .26);
+    ctx.fillStyle = '#0e0e12';
+    ctx.beginPath();
+    ctx.ellipse?.(x + r * .1, y - r * .5, r * 1.55, r * .3, -.04, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, .22)';
+    ctx.lineWidth = Math.max(.5, r * .07);
+    ctx.beginPath();
+    ctx.ellipse?.(x + r * .1, y - r * .56, r * 1.5, r * .25, -.04, Math.PI * 1.05, Math.PI * 1.9);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(0, 0, 0, .5)';
+    ctx.beginPath();
+    ctx.moveTo(x - r * .15, y - r * 1.6);
+    ctx.lineTo(x - r * .05, y - r * 1.05);
+    ctx.stroke();
+  },
+  hardhat(ctx, head, time) {
+    const { x, y, r } = head;
+    ctx.fillStyle = metalGradient(ctx, 0, y - r * 1.6, 0, y - r * .35, '#ffe45a', '#d49a00');
+    ctx.strokeStyle = '#6a4a00';
+    ctx.lineWidth = Math.max(.5, r * .1);
+    ctx.beginPath();
+    ctx.moveTo(x - r * 1.12, y - r * .4);
+    ctx.quadraticCurveTo(x - r * 1.2, y - r * 1.75, x, y - r * 1.75);
+    ctx.quadraticCurveTo(x + r * 1.25, y - r * 1.75, x + r * 1.15, y - r * .4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#c98a00';
+    ctx.beginPath();
+    ctx.ellipse?.(x + r * .35, y - r * .38, r * 1.6, r * .2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 255, 255, .45)';
+    ctx.fillRect(x - r * .12, y - r * 1.72, r * .24, r * 1.1);
+    const pulse = .7 + Math.sin(time / 280) * .3;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = `rgba(255, 250, 200, ${pulse * .35})`;
+    ctx.beginPath();
+    ctx.moveTo(x + r * .95, y - r * .85);
+    ctx.lineTo(x + r * 4, y - r * 1.6);
+    ctx.lineTo(x + r * 4, y + r * .2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = '#fffbe0';
+    ctx.beginPath();
+    ctx.arc?.(x + r * .95, y - r * .85, r * .22, 0, Math.PI * 2);
+    ctx.fill();
+  },
+  circlet(ctx, head) {
+    const { x, y, r } = head;
+    ctx.fillStyle = metalGradient(ctx, 0, y - r * 1.2, 0, y - r * .4, '#fff2a0', '#c8900f');
+    ctx.strokeStyle = '#6a4a00';
+    ctx.lineWidth = Math.max(.5, r * .08);
+    ctx.beginPath();
+    ctx.moveTo(x - r * .95, y - r * .5);
+    ctx.lineTo(x - r * .95, y - r * .8);
+    ctx.lineTo(x - r * .6, y - r * .62);
+    ctx.lineTo(x - r * .3, y - r * 1.0);
+    ctx.lineTo(x, y - r * .65);
+    ctx.lineTo(x + r * .3, y - r * 1.15);
+    ctx.lineTo(x + r * .6, y - r * .65);
+    ctx.lineTo(x + r * .95, y - r * .85);
+    ctx.lineTo(x + r * .95, y - r * .5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#d6203a';
+    ctx.beginPath();
+    ctx.arc?.(x + r * .3, y - r * .75, r * .14, 0, Math.PI * 2);
+    ctx.fill();
+  },
+};
+
 const BEHIND_EFFECTS = new Set(['smoke', 'dust']);
 
 function drawSkinnedActor(ctx, image, crop, width, height, skin, time) {
   const sprite = renderSkinnedSprite(image, crop, skin, width, height, time);
+  const anchor = findHeadAnchor(image, crop);
+  const head = { x: -width / 2 + anchor.x * width, y: -height + anchor.y * height, r: anchor.r * height };
   if (BEHIND_EFFECTS.has(skin.effect)) drawSkinEffect(ctx, skin, width, height, time);
+  // Pecas de tras (caudas, capas) ficam por tras do corpo; as da frente so cobrem o que uma roupa real cobriria.
+  if (skin.garment && GARMENT_BACK[skin.garment]) {
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    GARMENT_BACK[skin.garment](ctx, head, time);
+    ctx.restore();
+  }
   ctx.save();
   if (skin.aura) {
     ctx.shadowColor = skin.aura.color;
@@ -1490,8 +1827,22 @@ function drawSkinnedActor(ctx, image, crop, width, height, skin, time) {
   }
   ctx.drawImage(sprite, -width / 2, -height, width, height);
   ctx.restore();
-  const anchor = findHeadAnchor(image, crop);
-  if (skin.accessory) drawSkinAccessory(ctx, skin, { x: -width / 2 + anchor.x * width, y: -height + anchor.y * height, r: anchor.r * height }, time);
+  if (skin.keepFace && image && crop) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc?.(head.x + head.r * .05, head.y + head.r * .1, head.r * 1.12, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(image, ...crop, -width / 2, -height, width, height);
+    ctx.restore();
+  }
+  if (skin.garment && GARMENT_FRONT[skin.garment]) {
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    GARMENT_FRONT[skin.garment](ctx, head, time);
+    ctx.restore();
+  }
+  if (skin.accessory) drawSkinAccessory(ctx, skin, head, time);
   if (!BEHIND_EFFECTS.has(skin.effect)) drawSkinEffect(ctx, skin, width, height, time);
 }
 

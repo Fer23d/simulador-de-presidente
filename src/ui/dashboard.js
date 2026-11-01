@@ -668,12 +668,18 @@ function wardrobeCard(state, skin, { discovered, entitled, trial, now }) {
   const exclusive = skin.exclusiveClass ? PRESIDENT_CLASSES.find((profile) => profile.id === skin.exclusiveClass) : null;
   const badges = [`<span class="wardrobe-rarity">${rarity.label}</span>`,
     ...(exclusive ? [`<span class="wardrobe-badge wardrobe-badge--exclusive">EXCLUSIVA · ${escapeHtml(exclusive.name.toUpperCase())}</span>`] : []),
-    ...(skin.premium ? ['<span class="wardrobe-badge wardrobe-badge--premium">★ PREMIUM</span>'] : [])].join('');
+    ...(skin.premium ? ['<span class="wardrobe-badge wardrobe-badge--premium">★ PREMIUM</span>'] : []),
+    ...(skin.levelReward ? [`<span class="wardrobe-badge wardrobe-badge--trail">★ TRILHA · NV ${skin.levelReward}</span>`] : [])].join('');
   const lock = !owned && requirement
     ? `<p class="wardrobe-lock${requirementMet ? ' is-met' : ''}">${requirementMet ? '✓' : '🔒'} Requer descoberta: ${escapeHtml(requirementMet ? requirement.name : '???')}</p>` : '';
   let actions;
   if (owned) {
     actions = `<button type="button" class="quiet-action" data-action="skin-equip" data-skin="${skin.id}" ${equipped ? 'disabled' : ''}>${equipped ? '[ EQUIPADA ]' : '[ EQUIPAR ]'}</button>`;
+  } else if (skin.levelReward) {
+    // Exclusiva da trilha: nao se compra; da para experimentar e ver quanto falta para o nivel.
+    const trialLabel = trying ? `[ PROVANDO · ${formatTrialClock(trial.endsAt - now)} ]` : '[ 👁 EXPERIMENTAR 2 MIN ]';
+    const missing = Math.max(0, skin.levelReward - getLevel(state));
+    actions = `<button type="button" class="primary-action" data-action="skin-trial" data-skin="${skin.id}" ${trying ? 'disabled' : ''}>${trialLabel}</button><button type="button" class="quiet-action wardrobe-store-button" disabled>[ 🔒 NÍVEL ${skin.levelReward}${missing ? ` · FALTAM ${missing}` : ''} ]</button>`;
   } else if (skin.premium) {
     const trialLabel = trying ? `[ PROVANDO · ${formatTrialClock(trial.endsAt - now)} ]` : '[ 👁 EXPERIMENTAR 2 MIN ]';
     actions = `<button type="button" class="primary-action" data-action="skin-trial" data-skin="${skin.id}" ${trying ? 'disabled' : ''}>${trialLabel}</button><button type="button" class="quiet-action wardrobe-store-button" disabled>[ 🛒 LOJA EM BREVE ]</button>`;
@@ -682,9 +688,10 @@ function wardrobeCard(state, skin, { discovered, entitled, trial, now }) {
     const disabled = !requirementMet || Math.max(0, Number(state.scrap) || 0) < skin.cost;
     actions = `<button type="button" class="primary-action" data-action="skin-buy" data-skin="${skin.id}" ${disabled ? 'disabled' : ''}>${label}</button>`;
   }
-  const price = skin.premium ? '<p class="wardrobe-price wardrobe-price--premium">Conteúdo premium da Loja do Vault</p>'
+  const price = skin.levelReward ? `<p class="wardrobe-price wardrobe-price--trail">Exclusiva da Trilha de Níveis · desbloqueia no nível ${skin.levelReward}</p>`
+    : skin.premium ? '<p class="wardrobe-price wardrobe-price--premium">Conteúdo premium da Loja do Vault</p>'
     : `<p class="wardrobe-price">${skin.cost ? `${formatNumber.format(skin.cost)} sucatas` : 'Sem custo'}</p>`;
-  return `<article class="wardrobe-skin wardrobe-skin--${skin.rarity}${equipped ? ' wardrobe-skin--equipped' : ''}${trying ? ' wardrobe-skin--trying' : ''}${skin.premium ? ' wardrobe-skin--premium' : ''}" style="--rarity-color:${rarity.color}"><div class="wardrobe-preview"><canvas width="120" height="150" data-skin-preview="${skin.id}" aria-label="Prévia: ${escapeHtml(skin.name)}"></canvas></div><div class="wardrobe-badges">${badges}</div><h3>${escapeHtml(skin.name)}</h3><p class="wardrobe-description">${escapeHtml(skin.description)}</p>${lock}${price}<div class="wardrobe-actions">${actions}</div></article>`;
+  return `<article class="wardrobe-skin wardrobe-skin--${skin.rarity}${equipped ? ' wardrobe-skin--equipped' : ''}${trying ? ' wardrobe-skin--trying' : ''}${skin.premium ? ' wardrobe-skin--premium' : ''}${skin.levelReward ? ' wardrobe-skin--trail' : ''}" style="--rarity-color:${rarity.color}"><div class="wardrobe-preview"><canvas width="120" height="150" data-skin-preview="${skin.id}" aria-label="Prévia: ${escapeHtml(skin.name)}"></canvas></div><div class="wardrobe-badges">${badges}</div><h3>${escapeHtml(skin.name)}</h3><p class="wardrobe-description">${escapeHtml(skin.description)}</p>${lock}${price}<div class="wardrobe-actions">${actions}</div></article>`;
 }
 
 // discovered: entradas da enciclopedia; entitled: skins premium da conta; trial: provador ativo nesta sessao.
@@ -693,14 +700,17 @@ export function renderWardrobeView(state, { discovered = [], entitled = [], tria
   const profile = PRESIDENT_CLASSES.find((item) => item.id === state.presidentClass);
   const visible = PRESIDENT_SKINS.filter((skin) => isSkinAvailableForClass(skin, state.presidentClass));
   const exclusives = visible.filter((skin) => skin.exclusiveClass);
-  const general = visible.filter((skin) => !skin.exclusiveClass);
+  const general = visible.filter((skin) => !skin.exclusiveClass && !skin.levelReward);
+  const trail = visible.filter((skin) => skin.levelReward).sort((a, b) => a.levelReward - b.levelReward);
   const unlocked = new Set(state.unlockedSkins ?? ['default']);
   const owned = visible.filter((skin) => unlocked.has(skin.id) || entitled.includes(skin.id)).length;
   const context = { discovered, entitled, trial, now };
   const exclusiveSection = exclusives.length
     ? `<section class="wardrobe-section wardrobe-section--exclusive" aria-labelledby="wardrobe-exclusive-title"><h3 id="wardrobe-exclusive-title" class="wardrobe-section-title">EXCLUSIVAS · ${escapeHtml((profile?.name ?? '').toUpperCase())}</h3><div class="wardrobe-grid">${exclusives.map((skin) => wardrobeCard(state, skin, context)).join('')}</div></section>` : '';
+  const trailSection = trail.length
+    ? `<section class="wardrobe-section wardrobe-section--trail" aria-labelledby="wardrobe-trail-title"><h3 id="wardrobe-trail-title" class="wardrobe-section-title">TRILHA DE NÍVEIS · EXCLUSIVAS (SEU NÍVEL: ${getLevel(state)})</h3><div class="wardrobe-grid">${trail.map((skin) => wardrobeCard(state, skin, context)).join('')}</div></section>` : '';
   const trialNotice = trial ? `<p class="wardrobe-trial" role="status">👁 PROVADOR ATIVO: ${escapeHtml(getSkin(trial.skinId)?.name ?? '')} · ${formatTrialClock(trial.endsAt - now)} restantes. Feche o guarda-roupa para desfilar pelo Vault.</p>` : '';
-  return `<section class="bunker-dialog wardrobe-dialog" role="dialog" aria-modal="true" aria-labelledby="wardrobe-title"><p class="eyebrow">/// ACERVO PESSOAL DO COMANDANTE ///</p><h2 id="wardrobe-title">Guarda-Roupa</h2><p class="wardrobe-balance">SUCATA DISPONÍVEL: ${formatNumber.format(scrap)} · COLEÇÃO ${owned}/${visible.length}</p>${trialNotice}${exclusiveSection}<section class="wardrobe-section" aria-labelledby="wardrobe-general-title"><h3 id="wardrobe-general-title" class="wardrobe-section-title">COLEÇÃO GERAL</h3><div class="wardrobe-grid">${general.map((skin) => wardrobeCard(state, skin, context)).join('')}</div></section><p class="wardrobe-note">As vestimentas são cosméticas e não alteram atributos. As mais raras exigem descobertas na Enciclopédia do Ermo; as PREMIUM podem ser experimentadas por 2 minutos.</p><button type="button" class="quiet-action" data-action="wardrobe-back">[ VOLTAR À SUÍTE ]</button></section>`;
+  return `<section class="bunker-dialog wardrobe-dialog" role="dialog" aria-modal="true" aria-labelledby="wardrobe-title"><p class="eyebrow">/// ACERVO PESSOAL DO COMANDANTE ///</p><h2 id="wardrobe-title">Guarda-Roupa</h2><p class="wardrobe-balance">SUCATA DISPONÍVEL: ${formatNumber.format(scrap)} · COLEÇÃO ${owned}/${visible.length}</p>${trialNotice}${exclusiveSection}${trailSection}<section class="wardrobe-section" aria-labelledby="wardrobe-general-title"><h3 id="wardrobe-general-title" class="wardrobe-section-title">COLEÇÃO GERAL</h3><div class="wardrobe-grid">${general.map((skin) => wardrobeCard(state, skin, context)).join('')}</div></section><p class="wardrobe-note">As vestimentas são cosméticas e não alteram atributos. As mais raras exigem descobertas na Enciclopédia do Ermo; as PREMIUM podem ser experimentadas por 2 minutos.</p><button type="button" class="quiet-action" data-action="wardrobe-back">[ VOLTAR À SUÍTE ]</button></section>`;
 }
 
 function sectorSummary(sector) {

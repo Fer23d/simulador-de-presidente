@@ -104,7 +104,13 @@ test('the wardrobe groups class exclusives, marks premium and shows the fitting 
   assert.match(view, /★ PREMIUM/);
   assert.match(view, /data-action="skin-trial" data-skin="worker_foreman"/);
   assert.match(view, /LOJA EM BREVE/);
-  assert.match(view, /COLEÇÃO 2\/12/);
+  assert.match(view, /COLEÇÃO 2\/18/);
+  assert.match(view, /TRILHA DE NÍVEIS · EXCLUSIVAS \(SEU NÍVEL: 1\)/);
+  assert.match(view, /Casaco de Estadista/);
+  assert.match(view, /★ TRILHA · NV 60/);
+  assert.match(view, /\[ 🔒 NÍVEL 10 · FALTAM 9 \]/);
+  assert.match(view, /data-action="skin-trial" data-skin="trail_statesman"/);
+  assert.doesNotMatch(view, /data-action="skin-buy" data-skin="trail_/, 'trail skins are never bought');
   assert.match(view, /🔒 Requer descoberta: \?\?\?/);
   assert.match(view, /data-action="skin-equip" data-skin="hazmat" disabled>\[ EQUIPADA \]/);
   const trying = renderWardrobeView(state, { trial: { skinId: 'worker_foreman', endsAt: 90_000 }, now: 0 });
@@ -112,4 +118,64 @@ test('the wardrobe groups class exclusives, marks premium and shows the fitting 
   assert.match(trying, /PROVANDO · 1:30/);
   const entitled = renderWardrobeView(state, { entitled: ['worker_foreman'], now: 0 });
   assert.match(entitled, /data-action="skin-equip" data-skin="worker_foreman"/);
+});
+
+test('the six Level Track skins are exclusive: one per level ending in 0, never sold, always free of cost', async () => {
+  const { LEVEL_SKINS, getLevelTier } = await import('../src/core/levels.js');
+  const trail = PRESIDENT_SKINS.filter((skin) => skin.levelReward);
+  assert.equal(trail.length, 6);
+  assert.deepEqual(trail.map((skin) => skin.levelReward), [10, 20, 30, 40, 50, 60]);
+  for (const skin of trail) {
+    assert.equal(LEVEL_SKINS[skin.levelReward], skin.id, 'the level table points at the skin');
+    assert.equal(getLevelTier(skin.levelReward), 'zero', 'only levels ending in 0');
+    assert.equal(skin.cost, 0);
+    assert.ok(!skin.premium && !skin.exclusiveClass, 'not a store or class skin');
+    assert.match(skin.id, /^trail_/);
+    assert.ok(skin.description.length > 20);
+  }
+  assert.equal(new Set(trail.map((skin) => skin.accessory)).size, 6, 'six different head pieces');
+  assert.deepEqual(trail.map((skin) => skin.accessory), ['trilby', 'beret', 'laurel', 'hardhat', 'halo', 'circlet']);
+  assert.deepEqual(trail.map((skin) => skin.garment), ['statesman_coat', 'veteran_gear', 'founder_tunic', 'architect_vest', 'legend_coat', 'president_regalia'],
+    'six different pieces of clothing, drawn on top of the sprite');
+  assert.deepEqual(trail.filter((skin) => skin.keepFace).map((skin) => skin.levelReward), [10, 20, 30, 40, 60], 'faces keep their natural colour, except the dark Legend');
+  assert.ok(!PRESIDENT_SKINS.some((skin) => skin.id === 'debug_grid'), 'no calibration leftovers');
+  assert.deepEqual(trail.map((skin) => skin.rarity), ['rare', 'epic', 'epic', 'legendary', 'legendary', 'legendary'], 'rarity climbs with the level');
+  const state = { ...suiteState(999_999, 'worker'), unlockedSkins: ['default'] };
+  for (const skin of trail) {
+    const attempt = purchaseSkin(state, skin.id);
+    assert.equal(attempt.scrap, state.scrap, 'no scrap is spent');
+    assert.ok(!attempt.unlockedSkins.includes(skin.id));
+    assert.match(attempt.notice, new RegExp(`Trilha de Níveis e chega no nível ${skin.levelReward}`));
+  }
+  const buyable = PRESIDENT_SKINS.filter((skin) => !skin.levelReward && !skin.premium && skin.id !== 'default');
+  assert.ok(buyable.length >= 10 && buyable.every((skin) => skin.cost > 0), 'everything else is still bought with scrap');
+});
+
+test('a Level Track skin can be tried on before it is earned, and is equipped normally once unlocked', async () => {
+  const { startSkinTrial, getActiveTrial } = await import('../src/core/store.js');
+  const trial = startSkinTrial('trail_legend', 0);
+  assert.ok(trial, 'the fitting room works for the track skins');
+  assert.equal(getActiveTrial(trial, 1_000)?.skinId, 'trail_legend');
+  assert.equal(startSkinTrial('scrap_armor', 0), null, 'ordinary skins are still bought, not tried');
+  const earned = { ...suiteState(0, 'survivor'), unlockedSkins: ['default', 'trail_legend'] };
+  const equipped = equipSkin(earned, 'trail_legend');
+  assert.equal(equipped.equippedSkin, 'trail_legend');
+  assert.equal(equipSkin({ ...earned, unlockedSkins: ['default'] }, 'trail_legend').equippedSkin, earned.equippedSkin, 'not earned, not equipped');
+});
+
+test('every Level Track skin draws on the actor without errors, including the new laurel, halo and cape', async () => {
+  const { drawSkinPreview } = await import('../src/core/sprite_engine.js');
+  const calls = [];
+  const gradient = { addColorStop() {} };
+  const ctx = new Proxy({}, { get: (target, property) => {
+    if (property === 'canvas') return { width: 120, height: 150 };
+    if (property === 'createLinearGradient' || property === 'createRadialGradient') return () => gradient;
+    if (property === 'getImageData') return () => ({ data: new Uint8ClampedArray(4 * 16), width: 4, height: 4 });
+    return (...args) => { calls.push(property); return undefined; };
+  }, set: () => true });
+  const sheet = { width: 400, height: 400, naturalWidth: 400, naturalHeight: 400 };
+  const assets = { getImage: () => sheet };
+  for (const skin of PRESIDENT_SKINS.filter((candidate) => candidate.levelReward)) {
+    assert.doesNotThrow(() => drawSkinPreview(ctx, { assets, presidentClass: 'survivor', skinId: skin.id, time: 321 }), skin.id);
+  }
 });
