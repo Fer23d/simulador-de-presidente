@@ -35,17 +35,23 @@ const REALISTIC_BUILDING_ASSETS = Object.freeze({
   guard: 'assets/img/city_building_guard_realistic.png',
 });
 const buildingImages = new Map();
-const CITIZEN_SPRITE_SHEET = 'assets/img/npc_walk_sheet.png';
-const CITIZEN_FRAME_SIZE = 352;
-let citizenSpriteSheet = null;
+const CITIZEN_ASSETS = Object.freeze([
+  'assets/img/city_citizen_worker_realistic.png',
+  'assets/img/city_citizen_scientist_realistic.png',
+  'assets/img/city_citizen_medic_realistic.png',
+  'assets/img/city_citizen_guard_realistic.png',
+]);
+const citizenImages = new Map();
 
-function getCitizenSpriteSheet() {
+function getCitizenImage(role) {
   if (typeof Image === 'undefined') return null;
-  if (!citizenSpriteSheet) {
-    citizenSpriteSheet = new Image();
-    citizenSpriteSheet.src = CITIZEN_SPRITE_SHEET;
-  }
-  return citizenSpriteSheet;
+  const source = CITIZEN_ASSETS[role % CITIZEN_ASSETS.length];
+  const cached = citizenImages.get(source);
+  if (cached) return cached;
+  const image = new Image();
+  image.src = source;
+  citizenImages.set(source, image);
+  return image;
 }
 function getCityGroundImage() {
   if (typeof document === 'undefined') return null;
@@ -629,7 +635,6 @@ function drawCitizens(ctx, city, analysis, time) {
   gateLinks.forEach(([x, y]) => pairs.push([{ x, y }, { x: CITY_GATE.x, y: CITY_GATE.y }]));
   if (!pairs.length) return;
   const walkers = Math.min(46, Math.floor(city.population / 3));
-  const spriteSheet = getCitizenSpriteSheet();
   for (let index = 0; index < walkers; index++) {
     const [a, b] = pairs[(index * 13 + 5) % pairs.length];
     const t = (Math.sin(time / (900 + hash(index, 1, 9) * 600) + index * 1.7) + 1) / 2;
@@ -637,29 +642,26 @@ function drawCitizens(ctx, city, analysis, time) {
     const horizontal = a.y === b.y;
     const x = center(a.x) + (center(b.x) - center(a.x)) * t + (horizontal ? 0 : lane);
     const y = center(a.y) + (center(b.y) - center(a.y)) * t + (horizontal ? lane : 0);
-    const walkFrame = Math.floor(time / (170 + hash(index, 2, 7) * 60)) % 4;
-    const roleRow = index % 4; // operário, cientista, médico e segurança.
-    // O frame original possui muita transparência lateral. Recortamos essa
-    // margem e desenhamos o habitante numa escala compatível com a largura de
-    // uma rua, preservando detalhes do capacete, mochila, mãos e botas.
-    const spriteWidth = 24;
-    const spriteHeight = 29;
-    const sourceX = walkFrame * CITIZEN_FRAME_SIZE + 34;
-    const sourceY = roleRow * CITIZEN_FRAME_SIZE;
-    const sourceWidth = 284;
-    const sourceHeight = 342;
+    const role = index % CITIZEN_ASSETS.length; // operário, cientista, médico e segurança.
+    const sprite = getCitizenImage(role);
+    const spriteHeight = 30;
+    const spriteWidth = sprite?.naturalWidth && sprite?.naturalHeight
+      ? spriteHeight * (sprite.naturalWidth / sprite.naturalHeight)
+      : 21;
     const groundY = y + 6;
     ctx.fillStyle = 'rgba(0, 0, 0, .48)';
     ctx.beginPath(); ctx.ellipse(x, groundY, 5.5, 1.7, 0, 0, Math.PI * 2); ctx.fill();
 
-    if (spriteSheet?.complete && spriteSheet.naturalWidth) {
-      // Os habitantes usam o mesmo spritesheet detalhado do bunker. O pé é
-      // ancorado na rua, e não no centro da célula, para não parecerem voando.
+    if (sprite?.complete && sprite.naturalWidth) {
+      // Cada papel tem uma arte própria, com silhueta e equipamento legíveis.
+      // A sola é alinhada à rua para que o habitante não pareça flutuar.
       ctx.save();
       ctx.globalAlpha = .96;
-      ctx.drawImage(spriteSheet, sourceX, sourceY, sourceWidth, sourceHeight,
-        x - spriteWidth / 2, groundY - spriteHeight,
-        spriteWidth, spriteHeight);
+      ctx.shadowColor = 'rgba(0, 0, 0, .7)';
+      ctx.shadowBlur = 2;
+      ctx.shadowOffsetY = 1;
+      const bob = Math.sin(time / (520 + role * 80) + index) * .35;
+      ctx.drawImage(sprite, x - spriteWidth / 2, groundY - spriteHeight + bob, spriteWidth, spriteHeight);
       ctx.restore();
     } else {
       // Fallback pequeno e orgânico para ambientes de teste sem Image.
