@@ -29,6 +29,7 @@ let cityRoadImageRequested = false;
 const REALISTIC_BUILDING_ASSETS = Object.freeze({
   house: 'assets/img/city_building_house_realistic.png',
   farm: 'assets/img/city_building_greenhouse_realistic.png',
+  well: 'assets/img/city_building_purifier_realistic.png',
   generator: 'assets/img/city_building_generator_realistic.png',
   clinic: 'assets/img/city_building_clinic_realistic.png',
   workshop: 'assets/img/city_building_workshop_realistic.png',
@@ -566,7 +567,7 @@ const DRAWERS = {
 function drawRealisticBuilding(ctx, px, py, type, status) {
   const image = getRealisticBuildingImage(type);
   if (!image?.complete || !image.naturalWidth) return false;
-  const scale = type === 'farm' ? 1.28 : type === 'purifier' ? 1.34 : type === 'guard' ? 1.22 : 1.18;
+  const scale = type === 'farm' ? 1.28 : ['well', 'purifier'].includes(type) ? 1.34 : type === 'guard' ? 1.22 : 1.18;
   const width = CITY_TILE * scale;
   const height = CITY_TILE * scale;
   const x = px + (CITY_TILE - width) / 2;
