@@ -12,7 +12,8 @@ import { normalizeOilField } from './oil.js';
 import { rollSurfaceRaid } from './defense.js';
 import { getGeneratorFuelPlan } from './oil_economy.js';
 import { DAYS_PER_MONTH, dayShare, getVaultDayOfMonth } from './vault_time.js';
-import { ENDINGS, isDoorOpen } from './endings.js';
+import { DOOR_OPENS_AT_MONTH, ENDINGS, isDoorOpen } from './endings.js';
+import { describeLevelGate } from './levels.js';
 import { nextRandom } from './geopolitics.js';
 import { getPresidentClassModifiers } from './player_state.js';
 import { createVaultCouncil, getNextCouncilEvent, getCouncilModifiers, isCouncilTurn } from './vault_council.js';
@@ -69,7 +70,7 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
     ending: null,
     presidentClass: null,
     president_selection_pending: true,
-    unlockedSkins: ['default'],
+    unlockedSkins: ['default', ...(state.level?.skins ?? [])],
     equippedSkin: 'default',
     wasteland_cinematic_pending: true,
     wasteland_cinematic_ready: false,
@@ -164,8 +165,13 @@ export function advanceWastelandDay(state, now = Date.now()) {
   const burned = fuel.active ? { ...next, oil: Math.max(0, (Number(next.oil) || 0) - fuel.cost) } : next;
   const dry = fuel.enabled && !fuel.funded && fuel.cost > 0 && closesMonth;
   const noted = dry ? { ...burned, notice: [burned.notice, '> Sem petróleo para os geradores: voltaram ao normal.'].filter(Boolean).join(' ') } : burned;
+  if (!closesMonth) return noted;
+  // Passados os tres anos, a Porta so cede no nivel exigido: avisa o jogador do que falta.
+  const gate = describeLevelGate(noted);
+  const locked = gate && (Number(noted.wasteland_turn) || 0) >= DOOR_OPENS_AT_MONTH
+    ? { ...noted, notice: `${noted.notice} A Porta do Vault está pronta, mas só abre no nível ${gate.required}: faltam ${gate.missing}.` } : noted;
   // Os saqueadores so aparecem quando o mes fecha.
-  return closesMonth ? rollSurfaceRaid(noted, now) : noted;
+  return rollSurfaceRaid(locked, now);
 }
 
 // Avanca varios dias de uma vez e para assim que algo exige uma decisao do jogador.

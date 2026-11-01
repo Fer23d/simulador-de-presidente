@@ -11,7 +11,7 @@ import { doorView } from '../src/ui/dashboard.js';
 function vault(overrides = {}) {
   const base = transicionarParaWasteland(createGameState('bra'), 'ataque-nuclear-inimigo');
   return { ...base, president_selection_pending: false, presidentClass: 'doctor', wasteland_turn: DOOR_OPENS_AT_MONTH,
-    inhabitants: base.inhabitants.map((npc) => ({ ...npc, loyalty: 80 })), ...overrides };
+    level: { ...base.level, xp: 4_000, level: 25 }, inhabitants: base.inhabitants.map((npc) => ({ ...npc, loyalty: 80 })), ...overrides };
 }
 
 test('the door opens after three years and blocks further months until an ending is chosen', () => {

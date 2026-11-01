@@ -1,5 +1,6 @@
 import { getSurfaceMap, getExplorationPercent } from './surface_map.js';
 import { getPresidentClass } from './player_state.js';
+import { DOOR_REQUIRED_LEVEL, getLevel } from './levels.js';
 
 // Capitulo X — A Porta: depois de alguns anos no Vault a superficie volta a ser habitavel e o jogador
 // escolhe como sair. Cada final exige um historico (fase presidencial + governo do Vault) e vira um trofeu.
@@ -34,7 +35,8 @@ export function averageLoyalty(state) {
 }
 
 export function isDoorOpen(state) {
-  return Boolean(state?.is_wasteland) && Number(state.wasteland_turn) >= DOOR_OPENS_AT_MONTH && !state.ending;
+  // Alem dos 36 meses, a Porta so cede quando o jogador alcanca o nivel exigido.
+  return Boolean(state?.is_wasteland) && Number(state.wasteland_turn) >= DOOR_OPENS_AT_MONTH && !state.ending && getLevel(state) >= DOOR_REQUIRED_LEVEL;
 }
 
 // Requisitos de cada saida; quando falha, devolve o motivo para mostrar ao jogador.

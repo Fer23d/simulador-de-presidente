@@ -29,6 +29,8 @@ import { DAYS_PER_MONTH, getVaultDay, getVaultDayOfMonth } from '../core/vault_t
 import { startCity, CITY_ORIGINS } from '../core/city.js';
 import { transicionarParaWasteland } from '../core/wasteland.js';
 import { cityEpilogueView, cityView, createCityController } from './city_ui.js';
+import { awardXp, describeLevelGate, getGameMode, getLevel, getNewLevelEntries } from '../core/levels.js';
+import { levelTabView, levelToastParts, levelTrackView } from './level_ui.js';
 import { DOOR_OPENS_AT_MONTH } from '../core/endings.js';
 import { getGeneratorFuelPlan, getOilSaleOffer, sellOil, toggleGeneratorFuel } from '../core/oil_economy.js';
 import { buildOilDerrick, collectOil, formatDuration, getDerrickBuildCost, getDerrickStatus, normalizeOilField, OIL_LEVELS, OIL_MAX_LEVEL, upgradeOilDerrick } from '../core/oil.js';
@@ -346,6 +348,17 @@ export function encyclopediaView(encyclopedia, activeCategory = ENCYCLOPEDIA_CAT
   return `<section class="bunker-dialog encyclopedia-dialog" role="dialog" aria-modal="true" aria-labelledby="encyclopedia-title"><p class="eyebrow">/// ARQUIVO DO VAULT ///</p><h2 id="encyclopedia-title">ENCICLOPÉDIA DO ERMO</h2><p class="encyclopedia-progress">${discovered}/${total} DESCOBERTOS · ${percent}%</p><span class="encyclopedia-meter" role="meter" aria-label="Progresso da enciclopédia" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${discovered}"><span style="width:${percent}%"></span></span><nav class="encyclopedia-tabs" aria-label="Categorias">${tabs}</nav><div class="encyclopedia-grid">${cards}</div><div class="action-row"><button type="button" class="quiet-action" data-action="close-encyclopedia">[ FECHAR ARQUIVO ]</button></div></section>`;
 }
 
+function showLevelToast(stack, entry) {
+  if (!stack || !entry || typeof document === 'undefined') return;
+  const parts = levelToastParts(entry);
+  const toast = document.createElement('div');
+  toast.className = `level-toast level-toast--${parts.tier}`;
+  toast.setAttribute('role', 'status');
+  toast.innerHTML = `<strong>${escapeHtml(parts.title)}</strong><span>${escapeHtml(parts.detail)}</span>`;
+  stack.append(toast);
+  window.setTimeout(() => toast.remove(), parts.durationMs);
+}
+
 function showCodexToast(stack, item) {
   if (!stack || !item || typeof document === 'undefined') return;
   const toast = document.createElement('p');
@@ -582,7 +595,7 @@ export function bunkerView(state) {
       : '<button type="button" class="loot-alert" data-action="open-expedition-lootbox">[!] NOVA CARGA DETETADA NO PORTÃO [!]</button>'
     : '';
   return `<section class="bunker-chamber">
-    <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2><p class="vault-clock" data-vault-clock>DIA ${getVaultDay(state)} · MÊS ${(Number(state.wasteland_turn) || 0) + 1} DE ${DOOR_OPENS_AT_MONTH}<span class="vault-clock-bar" aria-hidden="true"><span style="width:${Math.round(getVaultDayOfMonth(state) / DAYS_PER_MONTH * 100)}%"></span></span></p></div><div class="bunker-header-actions">${lootNotice}<button type="button" class="primary-action" data-action="advance" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 1 DIA ]</button><button type="button" class="quiet-action" data-action="advance-days" data-days="3" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 3 DIAS ]</button><button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button><button type="button" class="quiet-action" data-action="open-encyclopedia">[ 📖 ENCICLOPÉDIA ]</button></div></div>
+    <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2><p class="vault-clock" data-vault-clock>DIA ${getVaultDay(state)} · MÊS ${(Number(state.wasteland_turn) || 0) + 1} DE ${DOOR_OPENS_AT_MONTH}${describeLevelGate(state) ? ` · PORTA: NV ${describeLevelGate(state).required}` : ''}<span class="vault-clock-bar" aria-hidden="true"><span style="width:${Math.round(getVaultDayOfMonth(state) / DAYS_PER_MONTH * 100)}%"></span></span></p></div><div class="bunker-header-actions">${lootNotice}<button type="button" class="primary-action" data-action="advance" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 1 DIA ]</button><button type="button" class="quiet-action" data-action="advance-days" data-days="3" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 3 DIAS ]</button><button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button><button type="button" class="quiet-action" data-action="open-encyclopedia">[ 📖 ENCICLOPÉDIA ]</button></div></div>
     <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'scrap'))}</span><span class="oil-resource">🛢 PETRÓLEO ${formatNumber.format(state.oil ?? 0)}</span><span>🪖 SOLDADOS ${formatNumber.format(getArmySoldiers(state))}</span><span>🛡 DEFESA ${formatNumber.format(getFortStatus(state.surface_fort)?.defense ?? 0)}</span><span>CIÊNCIA ${formatNumber.format(state.science ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'science'))}</span><span>COMIDA ${formatNumber.format(state.shelter_supplies?.food ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'food'))}</span><span>ENERGIA ${formatNumber.format(state.shelter_supplies?.energy ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'energy'))}</span><span class="oxygen-resource ${state.oxygen_deprived ? 'oxygen-deprived' : ''}" aria-label="Oxigênio ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} de ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ', produção insuficiente' : ''}">💨 O₂ ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ' · ALERTA' : ''}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'weapons'))}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'medkits'))}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
     <div class="bunker-build-controls" hidden aria-label="Módulos de construção">${modules.map(([id, module]) => { const cost = getShelterBuildCost(id, 0, state.presidentClass); return `<button type="button" class="bunker-module-button" data-action="shelter-module" data-module="${id}" aria-pressed="${id === 'dormitory'}" ${state.scrap < cost ? 'disabled' : ''}>${module.name}<small>${formatNumber.format(cost)} sucatas${buildCostMultiplier < 1 ? ' · DESCONTO DO OPERÁRIO' : ''}</small></button>`; }).join('')}<div class="bunker-slot-controls"><label for="shelter-build-slot">Setor livre</label><select id="shelter-build-slot" class="bunker-build-slot"></select><button type="button" class="primary-action" data-action="shelter-place">[ CONSTRUIR ]</button></div></div>
     <div class="bunker-stage"><canvas id="shelterCanvas" class="bunker-canvas" width="960" height="600" tabindex="0" aria-label="Bunker lateral. A e D movem o Presidente, W e S operam o elevador, E interage. Na construção, clique num setor livre."></canvas>${bunkerEnvironmentHudView(state.environment, state.isNight, state.inhabitants, state.shelter_guards, state.presidentClass, state.weather)}${missionObjectiveView(state)}<div class="bunker-tooltip" data-bunker-tooltip role="status" hidden></div>${renderDialogueView(null)}</div>
@@ -1181,6 +1194,7 @@ export function mountDashboard(root) {
 
   function closeTitle() {
     titleOpen = false;
+    updateLevelTab();
     renderTitle();
     syncAudioMood();
     updateTutorial();
@@ -1247,6 +1261,55 @@ export function mountDashboard(root) {
       renderTitle();
     }
   });
+
+  const levelsModal = document.getElementById('modal-niveis');
+  let levelsMode = null;
+
+  // Aba do topo com o nivel; o painel da trilha so e refeito quando o nivel muda, mantendo a rolagem.
+  function updateLevelTab() {
+    const slot = root.querySelector('[data-level-tab]');
+    if (slot) slot.innerHTML = levelTabView(state);
+    const panel = levelsModal?.querySelector('[data-levels-panel]');
+    if (panel && !levelsModal.hidden && Number(panel.dataset.level) !== getLevel(state)) renderLevelsPanel();
+  }
+
+  function renderLevelsPanel({ scrollToCurrent = false } = {}) {
+    if (!levelsModal) return;
+    const scroll = levelsModal.querySelector('[data-levels-panel]')?.scrollTop ?? 0;
+    levelsModal.innerHTML = levelTrackView(state, levelsMode ?? undefined);
+    const panel = levelsModal.querySelector('[data-levels-panel]');
+    if (!panel) return;
+    if (scrollToCurrent) levelsModal.querySelector('.is-current')?.scrollIntoView({ block: 'center' });
+    else panel.scrollTop = scroll;
+  }
+
+  function openLevels() {
+    if (!levelsModal) return;
+    levelsMode = getGameMode(state);
+    levelsModal.hidden = false;
+    renderLevelsPanel({ scrollToCurrent: true });
+    bunkerController?.pause();
+  }
+
+  function closeLevels() {
+    if (!levelsModal || levelsModal.hidden) return;
+    levelsModal.hidden = true;
+    levelsModal.innerHTML = '';
+    if (![bunkerGeneratorModal, wastelandCinematicModal, doorModal, raidModal].some((modal) => modal && !modal.hidden)) bunkerController?.resume();
+  }
+
+  levelsModal?.addEventListener('click', (event) => {
+    const modeButton = event.target.closest('[data-level-mode]');
+    if (modeButton) { levelsMode = modeButton.dataset.levelMode; renderLevelsPanel(); return; }
+    if (event.target === levelsModal || event.target.closest('[data-action="close-levels"]')) closeLevels();
+  });
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeLevels(); });
+
+  function announceLevels(previous, next) {
+    const entries = getNewLevelEntries(previous, next);
+    entries.forEach((entry) => showLevelToast(codexToastStack, entry));
+    if (entries.length) audio.play(entries.some((entry) => entry.tier !== 'normal') ? 'reward' : 'chime');
+  }
 
   function syncAudioMood() {
     if (titleOpen) return;
@@ -1545,7 +1608,7 @@ export function mountDashboard(root) {
       : `<label class="country-picker"><span>Pais</span><select data-action="select-country" aria-label="Selecionar pais">${COUNTRIES.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((country) => `<option value="${country.id}" ${country.id === state.country.id ? 'selected' : ''}>${country.nome}</option>`).join('')}</select></label><button type="button" class="quiet-action" data-action="reset">Reiniciar</button>`;
     root.innerHTML = `<div class="app-shell">
       <aside class="sidebar"><div class="brand"><span class="brand-mark">LO</span><div><strong>LAST OFFICE</strong><small>Após a guerra, tudo muda</small></div></div><nav class="tab-list" aria-label="Navegacao principal">${tabs.map(([id, label]) => `<button type="button" class="tab-button ${activeTab === id ? 'active' : ''}" data-action="tab" data-tab="${id}">${label}</button>`).join('')}</nav><div class="sidebar-footer"><span>Mandato em curso</span><strong>${state.calendar.year}</strong></div></aside>
-      <section class="workspace"><header class="topbar"><div><p class="eyebrow">${state.city ? 'RECONSTRUÇÃO PÓS-BOMBA' : (state.title ?? 'Presidente')}</p><h1>${state.city ? 'MODO CIDADE' : state.is_wasteland ? 'ANO ZERO PÓS-BOMBA' : `${MONTHS[state.calendar.month - 1]} de ${state.calendar.year}`}</h1></div><div class="topbar-actions">${topbarActions}</div></header>
+      <section class="workspace"><header class="topbar"><div><p class="eyebrow">${state.city ? 'RECONSTRUÇÃO PÓS-BOMBA' : (state.title ?? 'Presidente')}</p><h1>${state.city ? 'MODO CIDADE' : state.is_wasteland ? 'ANO ZERO PÓS-BOMBA' : `${MONTHS[state.calendar.month - 1]} de ${state.calendar.year}`}</h1></div><div class="topbar-actions"><span data-level-tab>${levelTabView(state)}</span>${topbarActions}</div></header>
       <section class="metrics">${metric('PIB', formatMoney(state.economy.gdp))}${metric('Inflacao', formatPercent(state.economy.inflation), state.economy.inflation > 0.1 ? 'negative' : '')}${metric('Desemprego', formatPercent(state.economy.unemployment))}${metric('Apoio interno', `${getFactionSupport(state.factions).toFixed(0)}%`, getFactionSupport(state.factions) >= 55 ? 'positive' : '')}${metric('Caixa nacional', formatMoney(state.economy.cash))}${metric('DEFCON', `DEFCON: ${state.global_defcon}`, `defcon-${state.global_defcon}`)}${metric('Saldo projetado', formatMoney(projection.monthlyBalance), projection.monthlyBalance >= 0 ? 'positive' : 'negative')}</section>
       ${storageNotice ? `<p class="storage-notice">${storageNotice}</p>` : ''}
       ${state.notice === STORY_NOTICE ? `<p class="storage-notice story-notification" role="status">${STORY_NOTICE}</p>` : ''}
@@ -1555,7 +1618,10 @@ export function mountDashboard(root) {
       cityController = createCityController(root, {
         getState: () => state,
         onChange: (next, { persist, rerender }) => {
-          state = next;
+          const previous = state;
+          state = awardXp(previous, next);
+          announceLevels(previous, state);
+          updateLevelTab();
           if (persist) storageNotice = persistState(state);
           if (rerender) render();
         },
@@ -1760,6 +1826,7 @@ export function mountDashboard(root) {
     if (hostileAlertModal) { const markup = renderHostileAlert(state); hostileAlertModal.hidden = !markup; hostileAlertModal.innerHTML = markup; }
     if (governmentModal) { const markup = renderGovernmentModal(state); governmentModal.hidden = !markup; governmentModal.innerHTML = markup; }
     syncRaidModal();
+    if (levelsModal && !levelsModal.hidden) bunkerController?.pause();
     if (doorModal) {
       const doorMarkup = state.is_wasteland && !state.wasteland_cinematic_ready ? doorView(state, trophies) : '';
       doorModal.innerHTML = doorMarkup;
@@ -1809,7 +1876,7 @@ export function mountDashboard(root) {
 
   function commit(nextState) {
     const previous = state;
-    state = nextState;
+    state = awardXp(previous, nextState);
     storageNotice = persistState(state);
     render();
     syncAudioMood();
@@ -1817,6 +1884,8 @@ export function mountDashboard(root) {
     startFalloutCinematicIfNeeded();
     syncDiscoveries();
     updateTutorial();
+    announceLevels(previous, state);
+    updateLevelTab();
   }
 
   window.logHistoryEvent = (type, text) => commit(registrarEventoHistorico(state, type, text));
@@ -2267,6 +2336,7 @@ export function mountDashboard(root) {
     if (action === 'negotiate') { commit(negotiate(state, control.dataset.bloc)); return; }
     if (action === 'vote') { commit(voteLaborLaw(state)); return; }
     if (action === 'open-law-vote') { window.abrirModalVotacao(control.dataset.law); return; }
+    if (action === 'open-levels') { openLevels(); return; }
     if (action === 'advance') { commit(state.is_wasteland ? advanceDay(state) : advanceMonth(state)); return; }
     if (action === 'advance-days') { commit(advanceDay(state, Number(control.dataset.days) || 1)); return; }
     if (action === 'country') { activeTab = 'overview'; commit(createGameState(control.dataset.country)); return; }

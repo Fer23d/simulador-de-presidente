@@ -72,7 +72,7 @@ test('several days stop as soon as something needs the player', () => {
   const blocked = advanceWastelandDay({ ...vaultState(), pendingRaid: { faction: 'X', won: true } }, 0);
   assert.equal(blocked.wasteland_day, 0);
   assert.match(blocked.notice, /relatório do ataque/);
-  const door = vaultState({ wasteland_turn: DOOR_OPENS_AT_MONTH });
+  const door = vaultState({ wasteland_turn: DOOR_OPENS_AT_MONTH, level: { xp: 4_000, level: 25, recent: [], skins: [] } });
   assert.match(advanceWastelandDay(door, 0).notice, /Decida o destino do Vault/);
 });
 
