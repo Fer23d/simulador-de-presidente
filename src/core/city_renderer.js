@@ -639,9 +639,16 @@ function drawCitizens(ctx, city, analysis, time) {
     const y = center(a.y) + (center(b.y) - center(a.y)) * t + (horizontal ? lane : 0);
     const walkFrame = Math.floor(time / (170 + hash(index, 2, 7) * 60)) % 4;
     const roleRow = index % 4; // operário, cientista, médico e segurança.
-    const spriteWidth = 15;
-    const spriteHeight = 23;
-    const groundY = y + 4;
+    // O frame original possui muita transparência lateral. Recortamos essa
+    // margem e desenhamos o habitante numa escala compatível com a largura de
+    // uma rua, preservando detalhes do capacete, mochila, mãos e botas.
+    const spriteWidth = 24;
+    const spriteHeight = 29;
+    const sourceX = walkFrame * CITIZEN_FRAME_SIZE + 34;
+    const sourceY = roleRow * CITIZEN_FRAME_SIZE;
+    const sourceWidth = 284;
+    const sourceHeight = 342;
+    const groundY = y + 6;
     ctx.fillStyle = 'rgba(0, 0, 0, .48)';
     ctx.beginPath(); ctx.ellipse(x, groundY, 5.5, 1.7, 0, 0, Math.PI * 2); ctx.fill();
 
@@ -650,8 +657,8 @@ function drawCitizens(ctx, city, analysis, time) {
       // ancorado na rua, e não no centro da célula, para não parecerem voando.
       ctx.save();
       ctx.globalAlpha = .96;
-      ctx.drawImage(spriteSheet, walkFrame * CITIZEN_FRAME_SIZE, roleRow * CITIZEN_FRAME_SIZE,
-        CITIZEN_FRAME_SIZE, CITIZEN_FRAME_SIZE, x - spriteWidth / 2, groundY - spriteHeight,
+      ctx.drawImage(spriteSheet, sourceX, sourceY, sourceWidth, sourceHeight,
+        x - spriteWidth / 2, groundY - spriteHeight,
         spriteWidth, spriteHeight);
       ctx.restore();
     } else {
