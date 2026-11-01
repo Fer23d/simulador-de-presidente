@@ -24,6 +24,15 @@ let cityGroundImage = null;
 let cityGroundImageRequested = false;
 let cityRoadImage = null;
 let cityRoadImageRequested = false;
+const REALISTIC_BUILDING_ASSETS = Object.freeze({
+  house: 'assets/img/city_building_house_realistic.png',
+  farm: 'assets/img/city_building_greenhouse_realistic.png',
+  generator: 'assets/img/city_building_generator_realistic.png',
+  clinic: 'assets/img/city_building_clinic_realistic.png',
+  workshop: 'assets/img/city_building_workshop_realistic.png',
+  guard: 'assets/img/city_building_guard_realistic.png',
+});
+const buildingImages = new Map();
 function getCityGroundImage() {
   if (typeof document === 'undefined') return null;
   if (cityGroundImageRequested) return cityGroundImage;
@@ -31,7 +40,7 @@ function getCityGroundImage() {
   const image = document.createElement('img');
   image.decoding = 'async';
   image.alt = '';
-  image.src = 'assets/img/city_wasteland_ground.png';
+  image.src = 'assets/img/city_ground_realistic_v2.png';
   image.addEventListener('load', () => { cityGroundImage = image; groundCache = null; });
   return null;
 }
@@ -48,6 +57,21 @@ function getCityRoadImage() {
   return null;
 }
 
+function getRealisticBuildingImage(type) {
+  const source = REALISTIC_BUILDING_ASSETS[type];
+  if (typeof document === 'undefined' || !source) return null;
+  const cached = buildingImages.get(type);
+  if (cached) return cached.failed ? null : cached.image;
+  const image = document.createElement('img');
+  image.decoding = 'async';
+  image.alt = '';
+  const entry = { image, failed: false };
+  image.addEventListener('error', () => { entry.failed = true; });
+  image.src = source;
+  buildingImages.set(type, entry);
+  return null;
+}
+
 // ---------- Terreno (pre-renderizado, so refeito quando a limpeza muda o chao) ----------
 
 let groundCache = null;
@@ -59,7 +83,8 @@ function getGroundCanvas(ground) {
   canvas.height = CITY_CANVAS_HEIGHT;
   const ctx = canvas.getContext('2d');
   const material = getCityGroundImage();
-  if (material?.complete && material.naturalWidth) {
+  const realisticMaterial = Boolean(material?.complete && material.naturalWidth);
+  if (realisticMaterial) {
     // A textura cobre o mapa inteiro; a escala grande evita o efeito de
     // azulejo e deixa os marcadores de terreno para as camadas seguintes.
     ctx.drawImage(material, 0, 0, CITY_CANVAS_WIDTH, CITY_CANVAS_HEIGHT);
@@ -76,7 +101,7 @@ function getGroundCanvas(ground) {
       // Variacao suave em ondas mais um pouco de ruido, para o chao nao parecer um tabuleiro de quadradinhos.
       const low = Math.sin(x * .55 + 1.3) * Math.cos(y * .62 + .4) + Math.sin((x + y) * .31);
       const tint = Math.max(0, Math.min(1, .5 + low * .18 + (hash(x, y, 3) - .5) * .12));
-      if (!material) {
+      if (!realisticMaterial) {
         if (tile === 'x') ctx.fillStyle = `rgb(${58 + tint * 14},${54 + tint * 12},${50 + tint * 10})`;
         else if (tile === 'r') ctx.fillStyle = `rgb(${112 + tint * 18},${100 + tint * 14},${84 + tint * 12})`;
         else ctx.fillStyle = `rgb(${150 + tint * 22},${118 + tint * 18},${80 + tint * 14})`;
@@ -85,7 +110,7 @@ function getGroundCanvas(ground) {
         ctx.fillStyle = 'rgba(207, 171, 112, .18)';
         ctx.fillRect(px, py, CITY_TILE, CITY_TILE);
       }
-      for (let speck = 0; speck < 26; speck++) {
+      if (!realisticMaterial) for (let speck = 0; speck < 26; speck++) {
         const sx = px + hash(x, y, speck + 10) * CITY_TILE;
         const sy = py + hash(y, x, speck + 40) * CITY_TILE;
         ctx.fillStyle = hash(sx, sy, 5) > .5 ? 'rgba(255, 235, 190, .13)' : 'rgba(30, 18, 8, .2)';
@@ -101,7 +126,7 @@ function getGroundCanvas(ground) {
         ctx.strokeStyle = 'rgba(40, 36, 30, .8)';
         ctx.beginPath(); ctx.moveTo(px + 8, py + 30); ctx.lineTo(px + 26, py + 12); ctx.stroke();
       }
-      if (tile === 'x') {
+      if (tile === 'x' && !realisticMaterial) {
         // Marca de perigo e manchas escuras de residuo.
         ctx.strokeStyle = 'rgba(224, 190, 40, .55)'; ctx.lineWidth = 1.4;
         ctx.beginPath(); ctx.moveTo(px + 6, py + 6); ctx.lineTo(px + 14, py + 14); ctx.moveTo(px + 14, py + 6); ctx.lineTo(px + 6, py + 14); ctx.stroke();
@@ -111,7 +136,7 @@ function getGroundCanvas(ground) {
           ctx.beginPath(); ctx.ellipse(px + 8 + hash(x, y, stain + 120) * 26, py + 14 + hash(y, x, stain + 130) * 22, 5 + hash(x, y, stain + 140) * 5, 3 + hash(y, x, stain + 150) * 3, hash(x, y, stain) * 3, 0, Math.PI * 2); ctx.fill();
         }
       }
-      if (tile === 'c') {
+      if (tile === 'c' && !realisticMaterial) {
         ctx.strokeStyle = 'rgba(247, 209, 145, .12)';
         ctx.beginPath();
         ctx.moveTo(px + 3, py + CITY_TILE - 5); ctx.lineTo(px + CITY_TILE - 4, py + 3);
@@ -502,17 +527,46 @@ const DRAWERS = {
   },
 };
 
+function drawRealisticBuilding(ctx, px, py, type, status) {
+  const image = getRealisticBuildingImage(type);
+  if (!image?.complete || !image.naturalWidth) return false;
+  const scale = type === 'farm' ? 1.28 : type === 'guard' ? 1.22 : 1.18;
+  const width = CITY_TILE * scale;
+  const height = CITY_TILE * scale;
+  const x = px + (CITY_TILE - width) / 2;
+  const y = py + CITY_TILE - height - 2;
+  ctx.save();
+  ctx.globalAlpha = status.connected ? 1 : .52;
+  ctx.shadowColor = 'rgba(0, 0, 0, .7)';
+  ctx.shadowBlur = 5;
+  ctx.shadowOffsetY = 3;
+  ctx.drawImage(image, x, y, width, height);
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+  // Status lamp colocado sobre a arte, sem cobrir a fachada.
+  ctx.fillStyle = status.connected && status.efficiency > 0 ? '#8dffb2' : '#ff6658';
+  ctx.shadowColor = status.connected && status.efficiency > 0 ? 'rgba(141, 255, 178, .75)' : 'rgba(255, 102, 88, .6)';
+  ctx.shadowBlur = 4;
+  ctx.beginPath(); ctx.arc(px + CITY_TILE - 6, py + 7, 1.8, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  return true;
+}
+
 function drawBuilding(ctx, building, status, time) {
   const px = building.x * CITY_TILE;
   const py = building.y * CITY_TILE;
   shadow(ctx, px, py);
-  buildingBase(ctx, px, py, building.type, status.connected);
-  if (['house', 'clinic', 'market', 'farm'].includes(building.type)) drawBuildingVolume(ctx, px, py, building.type, status, time);
-  ctx.save();
-  if (!status.connected) ctx.globalAlpha = .55;
-  DRAWERS[building.type]?.(ctx, px, py, status, time);
-  ctx.restore();
-  drawBuildingDetails(ctx, px, py, building.type, status, time);
+  const realistic = drawRealisticBuilding(ctx, px, py, building.type, status);
+  if (!realistic) {
+    buildingBase(ctx, px, py, building.type, status.connected);
+    if (['house', 'clinic', 'market', 'farm'].includes(building.type)) drawBuildingVolume(ctx, px, py, building.type, status, time);
+    ctx.save();
+    if (!status.connected) ctx.globalAlpha = .55;
+    DRAWERS[building.type]?.(ctx, px, py, status, time);
+    ctx.restore();
+    drawBuildingDetails(ctx, px, py, building.type, status, time);
+  }
   // Pequenos marcadores arquitetônicos: cobertura, placa e ponto de acesso.
   ctx.fillStyle = status.connected ? 'rgba(229, 184, 91, .8)' : 'rgba(255, 94, 70, .7)';
   ctx.fillRect(px + 6, py + 34, 9, 2);
