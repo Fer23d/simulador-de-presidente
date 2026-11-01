@@ -33,6 +33,7 @@ const REALISTIC_BUILDING_ASSETS = Object.freeze({
   clinic: 'assets/img/city_building_clinic_realistic.png',
   workshop: 'assets/img/city_building_workshop_realistic.png',
   guard: 'assets/img/city_building_guard_realistic.png',
+  purifier: 'assets/img/city_building_purifier_realistic.png',
 });
 const buildingImages = new Map();
 const CITIZEN_ASSETS = Object.freeze([
@@ -565,7 +566,7 @@ const DRAWERS = {
 function drawRealisticBuilding(ctx, px, py, type, status) {
   const image = getRealisticBuildingImage(type);
   if (!image?.complete || !image.naturalWidth) return false;
-  const scale = type === 'farm' ? 1.28 : type === 'guard' ? 1.22 : 1.18;
+  const scale = type === 'farm' ? 1.28 : type === 'purifier' ? 1.34 : type === 'guard' ? 1.22 : 1.18;
   const width = CITY_TILE * scale;
   const height = CITY_TILE * scale;
   const x = px + (CITY_TILE - width) / 2;
@@ -637,14 +638,21 @@ function drawCitizens(ctx, city, analysis, time) {
   const walkers = Math.min(46, Math.floor(city.population / 3));
   for (let index = 0; index < walkers; index++) {
     const [a, b] = pairs[(index * 13 + 5) % pairs.length];
-    const t = (Math.sin(time / (900 + hash(index, 1, 9) * 600) + index * 1.7) + 1) / 2;
-    const lane = (index % 2 ? 1 : -1) * 5;
+    const phase = index * 1.618 + hash(index, 17, 31) * 2.2;
+    const period = 2_600 + hash(index, 1, 9) * 1_700;
+    const motion = time / period + phase;
+    // Ping-pong contínuo: o cidadão desacelera nas esquinas e nunca teleporta
+    // de uma ponta da rua para a outra.
+    const t = (Math.sin(motion * Math.PI * 2) + 1) / 2;
+    const velocity = Math.cos(motion * Math.PI * 2);
+    const lane = (index % 2 ? 1 : -1) * (4.2 + hash(index, 4, 12) * 1.4);
     const horizontal = a.y === b.y;
     const x = center(a.x) + (center(b.x) - center(a.x)) * t + (horizontal ? 0 : lane);
     const y = center(a.y) + (center(b.y) - center(a.y)) * t + (horizontal ? lane : 0);
     const role = index % CITIZEN_ASSETS.length; // operário, cientista, médico e segurança.
     const sprite = getCitizenImage(role);
-    const spriteHeight = 30;
+    const spriteScale = .9 + hash(index, 20, 21) * .12;
+    const spriteHeight = 28 * spriteScale;
     const spriteWidth = sprite?.naturalWidth && sprite?.naturalHeight
       ? spriteHeight * (sprite.naturalWidth / sprite.naturalHeight)
       : 21;
@@ -660,8 +668,12 @@ function drawCitizens(ctx, city, analysis, time) {
       ctx.shadowColor = 'rgba(0, 0, 0, .7)';
       ctx.shadowBlur = 2;
       ctx.shadowOffsetY = 1;
-      const bob = Math.sin(time / (520 + role * 80) + index) * .35;
-      ctx.drawImage(sprite, x - spriteWidth / 2, groundY - spriteHeight + bob, spriteWidth, spriteHeight);
+      const bob = Math.sin(motion * Math.PI * 4) * (Math.abs(velocity) * .55);
+      const horizontalDirection = b.x === a.x || (b.x - a.x) * velocity >= 0 ? 1 : -1;
+      ctx.translate(x, groundY + bob);
+      ctx.scale(horizontalDirection, 1);
+      ctx.rotate(Math.sin(motion * Math.PI * 4) * .018 * Math.abs(velocity));
+      ctx.drawImage(sprite, -spriteWidth / 2, -spriteHeight, spriteWidth, spriteHeight);
       ctx.restore();
     } else {
       // Fallback pequeno e orgânico para ambientes de teste sem Image.
