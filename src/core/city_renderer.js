@@ -636,16 +636,21 @@ function drawCitizens(ctx, city, analysis, time) {
   const gateLinks = [[CITY_GATE.x, CITY_GATE.y - 1]].filter(([x, y]) => analysis.roads.has(y * CITY_WIDTH + x));
   gateLinks.forEach(([x, y]) => pairs.push([{ x, y }, { x: CITY_GATE.x, y: CITY_GATE.y }]));
   if (!pairs.length) return;
-  const walkers = Math.min(46, Math.floor(city.population / 3));
+  // Poucos agentes bem separados parecem vivos; dezenas sobrepostas viram
+  // uma massa tremida e fazem a cidade parecer quebrada.
+  const walkers = Math.min(18, Math.max(6, Math.floor(city.population / 5)));
   for (let index = 0; index < walkers; index++) {
     const [a, b] = pairs[(index * 13 + 5) % pairs.length];
     const phase = index * 1.618 + hash(index, 17, 31) * 2.2;
-    const period = 2_600 + hash(index, 1, 9) * 1_700;
-    const motion = time / period + phase;
-    // Ping-pong contínuo: o cidadão desacelera nas esquinas e nunca teleporta
-    // de uma ponta da rua para a outra.
-    const t = (Math.sin(motion * Math.PI * 2) + 1) / 2;
-    const velocity = Math.cos(motion * Math.PI * 2);
+    const period = 5_000 + hash(index, 1, 9) * 2_000;
+    const cycle = (time / period + phase) % 1;
+    const pause = .1;
+    const travel = Math.max(0, Math.min(1, (cycle - pause) / (1 - pause * 2)));
+    const goingForward = travel <= .5;
+    const linear = goingForward ? travel * 2 : (1 - travel) * 2;
+    // Smoothstep evita arrancadas secas, mas mantém a rota previsível.
+    const t = linear * linear * (3 - 2 * linear);
+    const velocity = goingForward ? 1 : -1;
     const lane = (index % 2 ? 1 : -1) * (4.2 + hash(index, 4, 12) * 1.4);
     const horizontal = a.y === b.y;
     const x = center(a.x) + (center(b.x) - center(a.x)) * t + (horizontal ? 0 : lane);
@@ -669,11 +674,10 @@ function drawCitizens(ctx, city, analysis, time) {
       ctx.shadowColor = 'rgba(0, 0, 0, .7)';
       ctx.shadowBlur = 2;
       ctx.shadowOffsetY = 1;
-      const bob = Math.sin(motion * Math.PI * 4) * (Math.abs(velocity) * .55);
+      const bob = Math.sin(time / 150 + index * 1.7) * .22;
       const horizontalDirection = b.x === a.x || (b.x - a.x) * velocity >= 0 ? 1 : -1;
       ctx.translate(x, groundY + bob);
       ctx.scale(horizontalDirection, 1);
-      ctx.rotate(Math.sin(motion * Math.PI * 4) * .018 * Math.abs(velocity));
       ctx.drawImage(sprite, -spriteWidth / 2, -spriteHeight, spriteWidth, spriteHeight);
       ctx.restore();
     } else {
