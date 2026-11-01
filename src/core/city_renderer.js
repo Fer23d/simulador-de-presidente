@@ -8,7 +8,7 @@ export const CITY_CANVAS_HEIGHT = CITY_HEIGHT * CITY_TILE;
 // O zoom é aplicado como câmera, preservando a grade lógica e o hit-test.
 // Mantemos a câmera próxima o bastante para que os detalhes dos sprites
 // realistas sejam legíveis sem perder a referência da malha de construção.
-export const CITY_DEFAULT_ZOOM = 1.78;
+export const CITY_DEFAULT_ZOOM = 2.05;
 
 export function getCityCamera(zoom = CITY_DEFAULT_ZOOM) {
   return {
