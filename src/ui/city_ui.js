@@ -7,6 +7,9 @@ const number = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
 const escapeText = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const PALETTE = Object.freeze(['road', 'house', 'farm', 'well', 'generator', 'solar', 'derrick', 'workshop', 'market', 'clinic', 'guard', 'plaza', 'purifier']);
 const SPEED_LABELS = Object.freeze({ 0: '⏸', 1: '▶', 2: '▶▶', 3: '▶▶▶' });
+const CITY_ZOOM_MIN = 1.25;
+const CITY_ZOOM_MAX = 2.8;
+const CITY_ZOOM_STEP = 0.15;
 
 export function cityClockText(city) {
   const date = getCityDate(city);
@@ -26,7 +29,14 @@ export function cityView(state) {
     <div class="city-topbar">
       <div><p class="eyebrow">/// RECONSTRUÇÃO ///</p><h2>${escapeText(origin.title)}</h2></div>
       <div class="city-clock" data-city-clock>${cityClockText(city)}</div>
-      <div class="city-speeds" role="group" aria-label="Velocidade do tempo">${[0, 1, 2, 3].map((speed) => `<button type="button" class="city-speed" data-city-speed="${speed}" aria-pressed="${city.speed === speed}" aria-label="${speed ? `Velocidade ${speed}` : 'Pausar'}">${SPEED_LABELS[speed]}</button>`).join('')}</div>
+      <div class="city-topbar-controls">
+        <div class="city-speeds" role="group" aria-label="Velocidade do tempo">${[0, 1, 2, 3].map((speed) => `<button type="button" class="city-speed" data-city-speed="${speed}" aria-pressed="${city.speed === speed}" aria-label="${speed ? `Velocidade ${speed}` : 'Pausar'}">${SPEED_LABELS[speed]}</button>`).join('')}</div>
+        <div class="city-zoom-controls" role="group" aria-label="Zoom do mapa">
+          <button type="button" class="city-zoom-button" data-city-zoom="out" aria-label="Diminuir zoom">−</button>
+          <button type="button" class="city-zoom-readout" data-city-zoom="reset" aria-label="Restaurar zoom">${Math.round(CITY_DEFAULT_ZOOM * 100)}%</button>
+          <button type="button" class="city-zoom-button" data-city-zoom="in" aria-label="Aumentar zoom">+</button>
+        </div>
+      </div>
     </div>
     <div class="city-hud" data-city-hud role="status"></div>
     <div class="city-main">
@@ -118,8 +128,8 @@ export function createCityController(root, { getState, onChange, onSound = () =>
   let destroyed = false;
   let lastSave = 0;
   let lastMessage = '';
-  const zoom = CITY_DEFAULT_ZOOM;
-  const camera = getCityCamera(zoom);
+  let zoom = CITY_DEFAULT_ZOOM;
+  let camera = getCityCamera(zoom);
 
   const city = () => getState().city;
 
@@ -133,6 +143,12 @@ export function createCityController(root, { getState, onChange, onSound = () =>
     if (message) lastMessage = current.message;
     info.innerHTML = `${message ? `<p class="city-message">${escapeText(message)}</p>` : ''}${infoView(current, analysis, tool, selected)}`;
     root.querySelectorAll('[data-city-speed]').forEach((button) => button.setAttribute('aria-pressed', String(Number(button.dataset.citySpeed) === current.speed)));
+    const zoomReadout = root.querySelector('[data-city-zoom="reset"]');
+    if (zoomReadout) zoomReadout.textContent = `${Math.round(zoom * 100)}%`;
+    const zoomOut = root.querySelector('[data-city-zoom="out"]');
+    const zoomIn = root.querySelector('[data-city-zoom="in"]');
+    if (zoomOut) zoomOut.disabled = zoom <= CITY_ZOOM_MIN;
+    if (zoomIn) zoomIn.disabled = zoom >= CITY_ZOOM_MAX;
     root.querySelectorAll('[data-city-tool]').forEach((button) => {
       const def = CITY_BUILDINGS[button.dataset.cityTool];
       button.setAttribute('aria-pressed', String(button.dataset.cityTool === tool));
@@ -165,6 +181,12 @@ export function createCityController(root, { getState, onChange, onSound = () =>
   function setSpeed(speed) {
     commit(setCitySpeed(getState(), speed), { persist: true });
     schedule();
+  }
+
+  function setZoom(nextZoom) {
+    zoom = Math.min(CITY_ZOOM_MAX, Math.max(CITY_ZOOM_MIN, nextZoom));
+    camera = getCityCamera(zoom);
+    refresh();
   }
 
   function tileAt(event) {
@@ -219,6 +241,13 @@ export function createCityController(root, { getState, onChange, onSound = () =>
     }
     const speedButton = event.target.closest('[data-city-speed]');
     if (speedButton) setSpeed(Number(speedButton.dataset.citySpeed));
+    const zoomButton = event.target.closest('[data-city-zoom]');
+    if (zoomButton) {
+      const action = zoomButton.dataset.cityZoom;
+      if (action === 'in') setZoom(zoom + CITY_ZOOM_STEP);
+      if (action === 'out') setZoom(zoom - CITY_ZOOM_STEP);
+      if (action === 'reset') setZoom(CITY_DEFAULT_ZOOM);
+    }
   }
 
   function onKey(event) {
