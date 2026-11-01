@@ -17,6 +17,8 @@ import { LORE_CHAPTERS, STORY_NOTICE } from '../core/story_lore.js';
 import { INTERNAL_PROJECTS } from '../core/infrastructure.js';
 import { broadcastShelterSignal, buildShelterRoom, calculateShelterCapacity, equipShelterGuard, findBuildSlots, getRoom, getShelterBuildCost, INITIAL_SHELTER_GRID, repairShelterGenerator, SHELTER_TYPES, upgradeShelterRoom, useShelterMedkit } from '../core/shelter_engine.js';
 import { createRpgBunkerEngine } from '../core/rpg_bunker.js';
+import { adoptLayd, hasLayd } from '../core/companion.js';
+import { playBark } from '../core/dog_sound.js';
 import { calculateSuppression, canResolveWastelandEvent, detainRebel, dismissExpeditionReport, getWastelandEvent, resolveWastelandEvent, startExpedition } from '../core/game_mechanics.js';
 import { advanceEnvironmentCycle } from '../core/environment.js';
 import { advanceLootboxClick, collectExpeditionLoot, createExpeditionLocation, openExpeditionLootbox, resolveExpeditionLocation } from '../core/expeditions.js';
@@ -595,7 +597,7 @@ export function bunkerView(state) {
       : '<button type="button" class="loot-alert" data-action="open-expedition-lootbox">[!] NOVA CARGA DETETADA NO PORTÃO [!]</button>'
     : '';
   return `<section class="bunker-chamber">
-    <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2><p class="vault-clock" data-vault-clock>DIA ${getVaultDay(state)} · MÊS ${(Number(state.wasteland_turn) || 0) + 1} DE ${DOOR_OPENS_AT_MONTH}${describeLevelGate(state) ? ` · PORTA: NV ${describeLevelGate(state).required}` : ''}<span class="vault-clock-bar" aria-hidden="true"><span style="width:${Math.round(getVaultDayOfMonth(state) / DAYS_PER_MONTH * 100)}%"></span></span></p></div><div class="bunker-header-actions">${lootNotice}<button type="button" class="primary-action" data-action="advance" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 1 DIA ]</button><button type="button" class="quiet-action" data-action="advance-days" data-days="3" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 3 DIAS ]</button><button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button><button type="button" class="quiet-action" data-action="open-encyclopedia">[ 📖 ENCICLOPÉDIA ]</button></div></div>
+    <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2><p class="vault-clock" data-vault-clock>DIA ${getVaultDay(state)} · MÊS ${(Number(state.wasteland_turn) || 0) + 1}${(Number(state.wasteland_turn) || 0) + 1 <= DOOR_OPENS_AT_MONTH ? ` DE ${DOOR_OPENS_AT_MONTH}` : ''}${isDoorOpen(state) ? ' · 🚪 PORTA PRONTA' : describeLevelGate(state) ? ` · PORTA: NV ${describeLevelGate(state).required}` : ''}<span class="vault-clock-bar" aria-hidden="true"><span style="width:${Math.round(getVaultDayOfMonth(state) / DAYS_PER_MONTH * 100)}%"></span></span></p></div><div class="bunker-header-actions">${lootNotice}<button type="button" class="primary-action" data-action="advance" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 1 DIA ]</button><button type="button" class="quiet-action" data-action="advance-days" data-days="3" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 3 DIAS ]</button>${isDoorOpen(state) && !state.ending ? '<button type="button" class="primary-action door-ready-button" data-action="open-door">[ 🚪 PORTA DO VAULT ]</button>' : ''}<button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button><button type="button" class="quiet-action" data-action="open-encyclopedia">[ 📖 ENCICLOPÉDIA ]</button></div></div>
     <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'scrap'))}</span><span class="oil-resource">🛢 PETRÓLEO ${formatNumber.format(state.oil ?? 0)}</span><span>🪖 SOLDADOS ${formatNumber.format(getArmySoldiers(state))}</span><span>🛡 DEFESA ${formatNumber.format(getFortStatus(state.surface_fort)?.defense ?? 0)}</span><span>CIÊNCIA ${formatNumber.format(state.science ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'science'))}</span><span>COMIDA ${formatNumber.format(state.shelter_supplies?.food ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'food'))}</span><span>ENERGIA ${formatNumber.format(state.shelter_supplies?.energy ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'energy'))}</span><span class="oxygen-resource ${state.oxygen_deprived ? 'oxygen-deprived' : ''}" aria-label="Oxigênio ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} de ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ', produção insuficiente' : ''}">💨 O₂ ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ' · ALERTA' : ''}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'weapons'))}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'medkits'))}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
     <div class="bunker-build-controls" hidden aria-label="Módulos de construção">${modules.map(([id, module]) => { const cost = getShelterBuildCost(id, 0, state.presidentClass); return `<button type="button" class="bunker-module-button" data-action="shelter-module" data-module="${id}" aria-pressed="${id === 'dormitory'}" ${state.scrap < cost ? 'disabled' : ''}>${module.name}<small>${formatNumber.format(cost)} sucatas${buildCostMultiplier < 1 ? ' · DESCONTO DO OPERÁRIO' : ''}</small></button>`; }).join('')}<div class="bunker-slot-controls"><label for="shelter-build-slot">Setor livre</label><select id="shelter-build-slot" class="bunker-build-slot"></select><button type="button" class="primary-action" data-action="shelter-place">[ CONSTRUIR ]</button></div></div>
     <div class="bunker-stage"><canvas id="shelterCanvas" class="bunker-canvas" width="960" height="600" tabindex="0" aria-label="Bunker lateral. A e D movem o Presidente, W e S operam o elevador, E interage. Na construção, clique num setor livre."></canvas>${bunkerEnvironmentHudView(state.environment, state.isNight, state.inhabitants, state.shelter_guards, state.presidentClass, state.weather)}${missionObjectiveView(state)}<div class="bunker-tooltip" data-bunker-tooltip role="status" hidden></div>${renderDialogueView(null)}</div>
@@ -987,16 +989,16 @@ export function doorView(state, trophies = createTrophies()) {
   // Com a cidade em andamento a porta ja foi cruzada: so o resultado final volta a cobrir a tela.
   if (state.city) return state.city.result ? cityEpilogueView(state) : '';
   if (state.ending) return epilogueView(state, trophies);
-  if (!isDoorOpen(state)) return '';
+  if (!isDoorOpen(state) || !state.door_prompt) return '';
   const forced = getForcedEnding(state);
   const leader = PRESIDENT_CLASSES.find((profile) => profile.id === state.presidentClass)?.leader ?? 'Presidente';
   const intro = forced
     ? `Os sensores confirmam: o ar lá fora voltou a ser respirável. Mas, antes que ${leader} desse qualquer ordem, a assembleia dos moradores já tinha se reunido no refeitório. Lia Moraes pediu silêncio e olhou para você.`
-    : `Trinta e seis meses depois da bomba, os sensores da superfície acendem em verde: o ar voltou a ser respirável. A colônia inteira se reúne diante da porta do Vault. Helena guarda a chave de latão. Tomé segura a sua mão. Todos esperam a última ordem de ${leader}.`;
+    : `${Number(state.wasteland_turn) || 0} meses depois da bomba, os sensores da superfície acendem em verde: o ar voltou a ser respirável. A colônia inteira se reúne diante da porta do Vault. Helena guarda a chave de latão. Tomé segura a sua mão. Todos esperam a última ordem de ${leader}.`;
   const choices = forced
     ? `<button type="button" class="door-choice is-forced" data-action="choose-ending" data-ending="${forced.id}"><span class="door-choice-icon">${forced.icon}</span><strong>[ OUVIR A ASSEMBLEIA ]</strong><small>A lealdade da colônia caiu demais. Ela decide por você.</small></button>`
     : getEndingOptions(state).map((option) => `<button type="button" class="door-choice${option.secret ? ' is-secret' : ''}" data-action="choose-ending" data-ending="${option.id}" ${option.available ? '' : 'disabled'}><span class="door-choice-icon">${option.icon}</span><strong>${escapeHtml(option.choice)}</strong><small>${option.available ? (option.secret ? 'Um caminho que só existe para quem nunca sujou as mãos.' : escapeHtml(option.title)) : `🔒 ${escapeHtml(option.requirement)}`}</small></button>`).join('');
-  return `<section class="door-dialog" role="dialog" aria-modal="true" aria-labelledby="door-title"><p class="story-classification">/// CAPÍTULO X · ANO ${Math.floor((Number(state.wasteland_turn) || 0) / 12)} PÓS-BOMBA ///</p><h2 id="door-title">A PORTA</h2><p class="door-intro">${escapeHtml(intro)}</p><div class="door-choices">${choices}</div></section>`;
+  return `<section class="door-dialog" role="dialog" aria-modal="true" aria-labelledby="door-title"><p class="story-classification">/// CAPÍTULO X · ANO ${Math.floor((Number(state.wasteland_turn) || 0) / 12)} PÓS-BOMBA ///</p><h2 id="door-title">A PORTA</h2><p class="door-intro">${escapeHtml(intro)}</p><div class="door-choices">${choices}</div><div class="action-row"><button type="button" class="quiet-action" data-action="door-later">[ AINDA NÃO — CONTINUAR NO VAULT ]</button></div></section>`;
 }
 
 function epilogueView(state, trophies) {
@@ -1682,6 +1684,9 @@ export function mountDashboard(root) {
           onOilDerrick: handleOilDerrick,
           surfaceFort: state.surface_fort,
           onFort: openFortPanel,
+          companion: hasLayd(state),
+          dog: bunkerSnapshot?.dog ?? null,
+          onPet: () => playBark(),
           onPlayerChanged: (player) => {
             state = { ...state, rpg_player: player };
             storageNotice = persistState(state);
@@ -2090,6 +2095,12 @@ export function mountDashboard(root) {
       commit(next);
       return;
     }
+    if (event.target.closest('[data-action="door-later"]')) {
+      const adopting = !hasLayd(state);
+      commit(adoptLayd({ ...state, door_prompt: false }));
+      if (adopting) playBark();
+      return;
+    }
     if (event.target.closest('[data-action="start-city"]')) {
       commit(startCity(state));
       return;
@@ -2347,6 +2358,7 @@ export function mountDashboard(root) {
     if (action === 'vote') { commit(voteLaborLaw(state)); return; }
     if (action === 'open-law-vote') { window.abrirModalVotacao(control.dataset.law); return; }
     if (action === 'open-levels') { openLevels(); return; }
+    if (action === 'open-door') { commit({ ...state, door_prompt: true }); return; }
     if (action === 'advance') { commit(state.is_wasteland ? advanceDay(state) : advanceMonth(state)); return; }
     if (action === 'advance-days') { commit(advanceDay(state, Number(control.dataset.days) || 1)); return; }
     if (action === 'country') { activeTab = 'overview'; commit(createGameState(control.dataset.country)); return; }

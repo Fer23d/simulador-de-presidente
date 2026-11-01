@@ -73,7 +73,8 @@ test('several days stop as soon as something needs the player', () => {
   assert.equal(blocked.wasteland_day, 0);
   assert.match(blocked.notice, /relatório do ataque/);
   const door = vaultState({ wasteland_turn: DOOR_OPENS_AT_MONTH, level: { xp: 4_000, level: 25, recent: [], skins: [] } });
-  assert.match(advanceWastelandDay(door, 0).notice, /Decida o destino do Vault/);
+  assert.equal(advanceWastelandDay(door, 0).wasteland_day, 1, 'a ready Door does not stop the days');
+  assert.doesNotMatch(advanceWastelandDay(door, 0).notice, /Decida o destino do Vault/);
 });
 
 test('the game state exposes advanceDay and keeps the day in the save', () => {
@@ -98,4 +99,37 @@ test('the Vault screen offers only 1 and 3 days and shows the clock', async () =
   assert.doesNotMatch(html, /data-days="7"|data-days="30"|\+7 DIAS|\+30 DIAS/);
   assert.match(html, /DIA 45 · MÊS 2 DE 36/);
   assert.doesNotMatch(html, /AVANÇAR MÊS/);
+});
+
+test('the Door interrupts the multi-day advance only on the day it becomes ready', () => {
+  const level25 = { xp: 4_000, level: 25, recent: [], skins: [] };
+  const almost = vaultState({ wasteland_turn: DOOR_OPENS_AT_MONTH - 1, wasteland_day: 28, level: level25 });
+  const stopped = advanceWastelandDays(almost, 5, 0);
+  assert.equal(stopped.wasteland_turn, DOOR_OPENS_AT_MONTH, 'stopped as the month closed');
+  assert.match(stopped.notice, /Porta do Vault está pronta\. Abra quando quiser sair/);
+  const ready = vaultState({ wasteland_turn: DOOR_OPENS_AT_MONTH + 2, wasteland_day: 5, level: level25 });
+  assert.equal(advanceWastelandDays(ready, 3, 0).wasteland_day, 8, 'three full days once the Door has been ready for a while');
+  assert.equal(advanceDay(ready, 3).wasteland_day, 8);
+});
+
+test('the Vault screen shows the Door button, the ready clock and keeps counting months past 36', async () => {
+  const { bunkerView } = await import('../src/ui/dashboard.js');
+  const level25 = { xp: 4_000, level: 25, recent: [], skins: [] };
+  const ready = bunkerView(vaultState({ wasteland_turn: 39, wasteland_day: 4, level: level25 }));
+  assert.match(ready, /data-action="open-door"/);
+  assert.match(ready, /🚪 PORTA PRONTA/);
+  assert.match(ready, /MÊS 40(?! DE)/, 'no more "DE 36" once the three years passed');
+  assert.match(ready, /data-action="advance" /, 'the day button is still there');
+  const early = bunkerView(vaultState({ wasteland_turn: 10, level: level25 }));
+  assert.doesNotMatch(early, /open-door/);
+  assert.match(early, /MÊS 11 DE 36/);
+  const locked = bunkerView(vaultState({ wasteland_turn: 39 }));
+  assert.doesNotMatch(locked, /open-door/, 'level 25 is still required');
+  assert.match(locked, /PORTA: NV 25/);
+});
+
+test('whether the player has the Door open is saved', () => {
+  const state = { ...vaultState(), door_prompt: true };
+  assert.equal(hydrateGameState(JSON.stringify({ ...state, version: createGameState().version })).door_prompt, true);
+  assert.equal(hydrateGameState(JSON.stringify({ ...createGameState(), version: createGameState().version })).door_prompt, false);
 });

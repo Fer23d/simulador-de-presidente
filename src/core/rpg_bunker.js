@@ -8,6 +8,7 @@ import { isFortAt } from './defense_renderer.js';
 import { AssetManager, DEFAULT_ASSETS, drawNeedsPanel, getActorPlacement, renderSpriteScene } from './sprite_engine.js';
 import { isLootboxCrateClick } from './lootbox_renderer.js';
 import { Inhabitant } from './inhabitant.js';
+import { canPetDog, createDogActor, petDog, updateDogActor } from './companion.js';
 import { advanceEnvironmentCycle, countActiveGenerators, createEnvironmentState, FULL_CYCLE_MS, getNpcMovementDelta } from './environment.js';
 import { chooseDialogueLine } from './dialogues.js';
 import { normalizeNeeds } from './needs.js';
@@ -271,7 +272,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   onDetain, onAssetsReady, onEnvironmentChanged, environment = {}, isNight = environment?.isNight ?? false, weather: savedWeather = {},
   oxygenDeprived = false, assetUrls = {}, lootbox = {}, onLootboxClick,
   presidentClass = null, equippedSkin = 'default', currentDay = 1, onDayPassed, mission = null, onMission,
-  onDialogue, onDialogueAdvance, onDialogueClose, oilDerricks = null, oilFeedback = null, onOilDerrick, surfaceFort = null, onFort } = {}) {
+  onDialogue, onDialogueAdvance, onDialogueClose, oilDerricks = null, oilFeedback = null, onOilDerrick, surfaceFort = null, onFort, companion = false, dog: savedDog = null, onPet } = {}) {
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
   const assets = new AssetManager({ ...DEFAULT_ASSETS, ...assetUrls });
@@ -298,6 +299,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   const activeGenerators = countActiveGenerators(grid);
   const keys = new Set();
   const actors = inhabitants.map((data) => new Inhabitant(data));
+  let dog = companion ? (savedDog ?? createDogActor(player)) : null;
 
   function savePlayer() { onPlayerChanged?.({ ...player, vx: 0, vy: 0, liftTarget: null }); }
   function frame(time) {
@@ -331,6 +333,8 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
       if (player.floor !== previousFloor) { cabinFloor = player.floor; savePlayer(); }
       if (Math.abs(player.vx) > 0 && time - lastSave > 700) { savePlayer(); lastSave = time; }
       const oxygenMovementDelta = oxygenDeprived ? 0.5 : 1;
+      if (dog) dog = updateDogActor(dog, player, dt, { elevatorX: cellCenter(player.floor, 0).x,
+        bounds: { min: WORLD_LEFT + 20, max: WORLD_LEFT + MAX_COLUMNS * SLOT_WIDTH - 20 } });
       for (const actor of actors) actor.update(dt, getNpcMovementDelta(1, dayNight.isNight, activeGenerators) * oxygenMovementDelta);
       if (time - lastNpcSave > 2500) {
         onInhabitantsChanged?.(actors.map((actor) => actor.snapshot()));
@@ -344,7 +348,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     camera.offset_y += (targetY - camera.offset_y) * Math.min(1, dt * 8);
     renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants: actors, cabinFloor, time,
       isNight: dayNight.isNight, activeGenerators, oxygenDeprived, lootbox, presidentClass, equippedSkin,
-      weather: weather.type, oilDerricks, oilFeedback, surfaceFort });
+      weather: weather.type, oilDerricks, oilFeedback, surfaceFort, companion: dog });
     const rebel = paused || buildMode ? null : findNearbyRebel(player, grid, actors);
     const nearbyInhabitant = paused || buildMode ? null : trackNearbyInhabitant(player, grid, actors, time);
     const nearbyRoom = nearbyInhabitant && getRoom(grid, nearbyInhabitant.npc.floor, nearbyInhabitant.npc.column);
@@ -420,6 +424,11 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
         return;
       }
       const nearby = trackNearbyInhabitant(player, grid, actors, lastTime, true);
+      if (!nearby && canPetDog(dog, player) && !findNearbyTrigger(player, grid)) {
+        dog = petDog(dog, player);
+        onPet?.();
+        return;
+      }
       if (nearby) {
         dialogueNpc = nearby.npc;
         paused = true;
@@ -479,7 +488,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   });
   return {
     ready,
-    getSnapshot: () => ({ player: { ...player }, camera: { ...camera }, cabinFloor,
+    getSnapshot: () => ({ player: { ...player }, camera: { ...camera }, cabinFloor, dog: dog ? { ...dog } : null,
       dialogueOpen: Boolean(dialogueNpc), currentDay,
       environment: { elapsedMs: dayNight.elapsedMs, isNight: dayNight.isNight },
       weather: { ...weather },

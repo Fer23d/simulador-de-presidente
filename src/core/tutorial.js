@@ -21,7 +21,7 @@ export const TUTORIAL_STEPS = Object.freeze([
     text: 'Clique em [ AVANÇAR 1 DIA ]. Cada dia as salas produzem um pouco e os moradores consomem; a cada 30 dias o mês fecha e o Ermo responde.',
     done: (state) => getVaultDay(state) >= 1 }),
   Object.freeze({ id: 'finish', phase: 'vault', ack: true, title: 'VOCÊ ESTÁ NO COMANDO',
-    text: 'Mantenha o Vault vivo até a porta abrir no fim do terceiro ano. Alertas de missão mostram andar e setor: vá até lá para ver o que aconteceu.' }),
+    text: 'Depois de 36 meses e do nível 25 a Porta do Vault fica pronta, mas só você decide quando sair: use o tempo para montar e melhorar o bunker. Alertas de missão mostram andar e setor: vá até lá para ver o que aconteceu.' }),
 ]);
 
 export const TUTORIAL_TIPS = Object.freeze([

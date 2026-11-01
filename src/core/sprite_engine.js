@@ -2,6 +2,7 @@ import { cellCenter, FLOOR_SPACING, ROOM_HEIGHT, SLOT_WIDTH, WORLD_LEFT, WORLD_T
 import { renderLootboxOverlay } from './lootbox_renderer.js';
 import { renderOilField, renderOilFieldOverlay } from './oil_renderer.js';
 import { renderFort, renderFortOverlay } from './defense_renderer.js';
+import { DOG_HEIGHT, drawDog, warmDogFrames } from './dog_renderer.js';
 import { getPresidentClass, getSkin } from './player_state.js';
 import { hasReliableNightPower } from './environment.js';
 import { getCriticalNeeds, NEED_CRITICAL_THRESHOLD, NEED_ICONS, NEED_KEYS, NEED_LABELS, normalizeNeeds } from './needs.js';
@@ -1943,7 +1944,7 @@ export function applyOxygenDeprivationOverlay(ctx, width, height, oxygenDeprived
 
 export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants = [], cabinFloor = player.floor,
   time = 0, isNight = false, activeGenerators = 0, oxygenDeprived = false, lootbox = {},
-  presidentClass = null, equippedSkin = 'default', weather = 'clear', oilDerricks = null, oilNow = Date.now(), oilFeedback = null, surfaceFort = undefined }) {
+  presidentClass = null, equippedSkin = 'default', weather = 'clear', oilDerricks = null, oilNow = Date.now(), oilFeedback = null, surfaceFort = undefined, companion = null }) {
   renderSurface(ctx, camera, assets, { isNight, time, weather });
   renderDirt(ctx, camera, assets);
   ctx.save();
@@ -2026,6 +2027,7 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
   const playerY = placement.floorY;
   drawPresident(ctx, { ...player, y: playerY, role: 'president' }, assets,
     { presidentClass, equippedSkin, time, placement });
+  if (companion) drawCompanion(ctx, companion, grid, time, placement.height, player);
   for (const room of grid.flat()) {
     if (!room) continue;
     const x = WORLD_LEFT + room.column * SLOT_WIDTH;
@@ -2048,6 +2050,21 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
   }
   if (ctx.canvas) applyOxygenDeprivationOverlay(ctx, ctx.canvas.width, ctx.canvas.height, oxygenDeprived, time);
   renderLootboxOverlay(ctx, { ...lootbox, time, crateImage: assets.getImage('loot_crate') });
+}
+
+// Layd acompanha o presidente: mesma regra de chao dos habitantes, tamanho proporcional a um cao de verdade.
+function drawCompanion(ctx, dog, grid, time, humanHeight, player) {
+  warmDogFrames(humanHeight * .31 / DOG_HEIGHT);
+  if (dog.riding) {
+    const cabin = getActorPlacement({ floor: player.floor, column: 0, type: 'elevator' }, { liftY: player.y });
+    drawDog(ctx, { x: dog.x, y: cabin.floorY, facing: dog.facing, scale: humanHeight * .31 / DOG_HEIGHT, pose: 'stand', time });
+    return;
+  }
+  const column = Math.max(0, Math.min((grid[dog.floor]?.length ?? 1) - 1, Math.floor((dog.x - WORLD_LEFT) / SLOT_WIDTH)));
+  const room = grid[dog.floor]?.[column] ?? { floor: dog.floor, column, type: 'vault' };
+  const placement = getActorPlacement(room);
+  drawDog(ctx, { x: dog.x, y: placement.floorY, facing: dog.facing, scale: humanHeight * .31 / DOG_HEIGHT,
+    pose: dog.pose, gait: dog.gait, time, happy: dog.petSeconds > 0 });
 }
 
 function steelGradient(ctx, x0, y0, x1, y1, fallback) {

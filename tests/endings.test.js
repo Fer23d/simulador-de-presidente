@@ -11,17 +11,21 @@ import { doorView } from '../src/ui/dashboard.js';
 function vault(overrides = {}) {
   const base = transicionarParaWasteland(createGameState('bra'), 'ataque-nuclear-inimigo');
   return { ...base, president_selection_pending: false, presidentClass: 'doctor', wasteland_turn: DOOR_OPENS_AT_MONTH,
-    level: { ...base.level, xp: 4_000, level: 25 }, inhabitants: base.inhabitants.map((npc) => ({ ...npc, loyalty: 80 })), ...overrides };
+    level: { ...base.level, xp: 4_000, level: 25 }, door_prompt: true, inhabitants: base.inhabitants.map((npc) => ({ ...npc, loyalty: 80 })), ...overrides };
 }
 
-test('the door opens after three years and blocks further months until an ending is chosen', () => {
+test('the door becomes ready after three years but never forces the player out of the Vault', () => {
   assert.equal(isDoorOpen(vault({ wasteland_turn: DOOR_OPENS_AT_MONTH - 1 })), false);
   const state = vault();
   assert.equal(isDoorOpen(state), true);
-  const blocked = advanceWastelandMonth(state);
-  assert.equal(blocked.wasteland_turn, state.wasteland_turn);
-  assert.match(blocked.notice, /Decida o destino do Vault/);
+  const later = advanceWastelandMonth(state);
+  assert.equal(later.wasteland_turn, state.wasteland_turn + 1, 'the Vault keeps running with the door ready');
+  assert.doesNotMatch(later.notice, /Decida o destino do Vault/);
+  assert.equal(isDoorOpen(later), true);
   assert.match(doorView(state), /A PORTA/);
+  assert.match(doorView(state), /AINDA NÃO — CONTINUAR NO VAULT/);
+  assert.equal(doorView({ ...state, door_prompt: false }), '', 'the door only appears when the player opens it');
+  assert.match(doorView(state), new RegExp(`${DOOR_OPENS_AT_MONTH} meses depois da bomba`));
 });
 
 test('each ending checks its requirement and the secret one needs clean hands', () => {
@@ -45,6 +49,7 @@ test('a colony without loyalty forces the exile ending', () => {
   assert.equal(chooseEnding(angry, 'sealed').ending, null);
   assert.equal(chooseEnding(angry, 'exile').ending.id, 'exile');
   assert.match(doorView(angry), /OUVIR A ASSEMBLEIA/);
+  assert.equal(doorView({ ...angry, door_prompt: false }), '');
 });
 
 test('choosing an ending tells the epilogue, survives the save and becomes a trophy', () => {

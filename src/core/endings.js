@@ -10,7 +10,7 @@ const PLAYER_LAUNCH_REASONS = new Set(['ataque-nuclear', 'mao-morta']);
 export const ENDINGS = Object.freeze({
   republic: Object.freeze({ id: 'republic', title: 'A Nova República', icon: '🗳️', choice: '[ ABRIR A PORTA E CONVOCAR ELEIÇÕES ]',
     epigraph: 'Pela primeira vez, ninguém precisou de um presidente.',
-    story: 'A porta abriu devagar, rangendo trinta e seis meses de ferrugem. {leader} subiu por último. Lá fora, Lia Moraes organizava a primeira votação do novo mundo em caixas de munição vazias. Tomé contou os votos em voz alta. {leader} não estava em nenhuma cédula — e, pela primeira vez, isso pareceu uma vitória.' }),
+    story: 'A porta abriu devagar, rangendo anos de ferrugem. {leader} subiu por último. Lá fora, Lia Moraes organizava a primeira votação do novo mundo em caixas de munição vazias. Tomé contou os votos em voz alta. {leader} não estava em nenhuma cédula — e, pela primeira vez, isso pareceu uma vitória.' }),
   empire: Object.freeze({ id: 'empire', title: 'O Império das Cinzas', icon: '👑', choice: '[ ABRIR A PORTA E PROCLAMAR O IMPÉRIO ]',
     epigraph: 'Você reconstruiu o mundo. À sua imagem.',
     story: 'Os guardas saíram primeiro, em formação. O Coronel Rui Silva fincou a bandeira no topo das ruínas e ninguém ousou perguntar de quem era o país agora. {leader} subiu ao som de botas marchando. As cinzas viraram tijolos, os tijolos viraram muros, e os muros tinham o seu rosto pintado.' }),

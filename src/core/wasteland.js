@@ -80,6 +80,7 @@ export function transicionarParaWasteland(state, reason = 'colapso-nuclear') {
     oil_derricks: normalizeOilField(),
     surface_fort: null,
     wasteland_day: 0,
+    door_prompt: false,
     generator_fuel: false,
     pendingRaid: null,
     raidCooldownUntilTurn: 0,
@@ -169,7 +170,9 @@ export function advanceWastelandDay(state, now = Date.now()) {
   // Passados os tres anos, a Porta so cede no nivel exigido: avisa o jogador do que falta.
   const gate = describeLevelGate(noted);
   const locked = gate && (Number(noted.wasteland_turn) || 0) >= DOOR_OPENS_AT_MONTH
-    ? { ...noted, notice: `${noted.notice} A Porta do Vault está pronta, mas só abre no nível ${gate.required}: faltam ${gate.missing}.` } : noted;
+    ? { ...noted, notice: `${noted.notice} A Porta do Vault está pronta, mas só abre no nível ${gate.required}: faltam ${gate.missing}.` }
+    : isDoorOpen(noted) && !isDoorOpen(state)
+      ? { ...noted, notice: `${noted.notice} A Porta do Vault está pronta. Abra quando quiser sair: enquanto isso o Vault continua funcionando.` } : noted;
   // Os saqueadores so aparecem quando o mes fecha.
   return rollSurfaceRaid(locked, now);
 }
@@ -180,15 +183,16 @@ export function advanceWastelandDays(state, days, now = Date.now()) {
   for (let step = 0; step < Math.max(1, Math.floor(days) || 1); step++) {
     const next = advanceWastelandDay(current, now);
     if (next === current || (next.wasteland_turn === current.wasteland_turn && next.wasteland_day === current.wasteland_day)) return next;
+    const before = current;
     current = next;
-    if (current.pendingRaid || current.pendingBunkerEvent || current.ending || current.pendingLoot || isDoorOpen(current)) break;
+    // A Porta so interrompe uma vez, no dia em que fica pronta; depois o jogador avanca o tempo normalmente.
+    if (current.pendingRaid || current.pendingBunkerEvent || current.ending || current.pendingLoot || (isDoorOpen(current) && !isDoorOpen(before))) break;
   }
   return current;
 }
 
 function advanceVaultMonth(state, dayIndex = 0) {
   if (state.ending) return { ...state, notice: `A história do Vault terminou: ${ENDINGS[state.ending.id]?.title ?? 'fim'}.` };
-  if (isDoorOpen(state)) return { ...state, notice: 'A superfície voltou a ser habitável. Decida o destino do Vault diante da Porta.' };
   if (state.pendingRaid) return { ...state, notice: 'Veja o relatório do ataque na superfície antes de avançar o mês.' };
   if (state.pendingBunkerEvent || state.pendingLoot || state.pendingExpeditionReports?.length) {
     return { ...state, notice: state.pendingBunkerEvent
