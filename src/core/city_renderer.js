@@ -31,10 +31,18 @@ const REALISTIC_BUILDING_ASSETS = Object.freeze({
   farm: 'assets/img/city_building_greenhouse_realistic.png',
   well: 'assets/img/city_building_purifier_realistic.png',
   generator: 'assets/img/city_building_generator_realistic.png',
+  solar: 'assets/img/city_building_solar_realistic.png',
+  derrick: 'assets/img/city_building_derrick_realistic.png',
+  market: 'assets/img/city_building_market_realistic.png',
   clinic: 'assets/img/city_building_clinic_realistic.png',
   workshop: 'assets/img/city_building_workshop_realistic.png',
   guard: 'assets/img/city_building_guard_realistic.png',
+  plaza: 'assets/img/city_building_plaza_realistic.png',
   purifier: 'assets/img/city_building_purifier_realistic.png',
+});
+const REALISTIC_BUILDING_SCALES = Object.freeze({
+  farm: 1.28, well: 1.34, purifier: 1.28, solar: 1.28, derrick: 1.35,
+  market: 1.3, clinic: 1.18, workshop: 1.18, guard: 1.22, plaza: 1.28,
 });
 const buildingImages = new Map();
 const CITIZEN_ASSETS = Object.freeze([
@@ -567,7 +575,7 @@ const DRAWERS = {
 function drawRealisticBuilding(ctx, px, py, type, status) {
   const image = getRealisticBuildingImage(type);
   if (!image?.complete || !image.naturalWidth) return false;
-  const scale = type === 'farm' ? 1.28 : ['well', 'purifier'].includes(type) ? 1.34 : type === 'guard' ? 1.22 : 1.18;
+  const scale = REALISTIC_BUILDING_SCALES[type] ?? 1.18;
   const width = CITY_TILE * scale;
   const height = CITY_TILE * scale;
   const x = px + (CITY_TILE - width) / 2;
