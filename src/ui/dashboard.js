@@ -955,7 +955,7 @@ export function renderStoryCard(state) {
   const story = state.pendingStory ? getStoryEvent(state.currentStory) : null;
   if (story) {
     return `<section class="story-dialog" role="dialog" aria-modal="true" aria-labelledby="story-title">
-      <p class="story-classification">/// DOSSIÊ CONFIDENCIAL // NÍVEL ÔMEGA ///</p>
+      <p class="story-classification">${escapeHtml(story.classification ?? '/// DOSSIÊ CONFIDENCIAL // NÍVEL ÔMEGA ///')}</p>
       <h2 id="story-title">${escapeHtml(story.title)}</h2>
       <p class="story-typewriter">${escapeHtml(story.text)}</p>
       <button type="button" class="arcade-vote-yes story-dismiss" data-action="dismiss-story">${escapeHtml(story.button_label)}</button>

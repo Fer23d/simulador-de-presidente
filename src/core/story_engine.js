@@ -15,6 +15,14 @@ function nuclearConsequence(state) {
 
 export const STORY_EVENTS = Object.freeze([
   Object.freeze({
+    id: 'layd_arrives',
+    trigger_condition: () => false,
+    classification: '/// REGISTRO DA PORTA · NOVO MORADOR ///',
+    title: 'OS LATIDOS NA PORTA',
+    text: "Por vários dias, os soldados da Porta do Vault ouviram latidos vindos do Ermo. Primeiro acharam que era o vento nos canos, depois uma armadilha dos saqueadores. Mas o som voltava toda noite, sempre à mesma hora, sempre mais perto. Na manhã em que você decidiu ficar, um sentinela abriu a vigia e viu uma sombra magra, de pelo cor de ferrugem, sentada na chuva ácida diante da escotilha. Esperava. Havia uma coleira rachada no pescoço e uma plaquinha de latão com um nome riscado a mão: LAYD. Ninguém no Vault via um cão vivo desde a bomba. Ela não rosnou. Quando a escotilha abriu, entrou, deu três voltas em torno das suas botas e deitou. Os soldados juram que ela já sabia quem você era. Desde então, onde o presidente for, Layd vai atrás.",
+    button_label: '[ DEIXAR ELA ENTRAR ]',
+  }),
+  Object.freeze({
     id: 'first_nuke',
     trigger_condition: (state) => (state.unlocked_techs ?? []).includes('nuke'),
     title: 'O NASCIMENTO DE UM DEUS',

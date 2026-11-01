@@ -15,16 +15,12 @@ export function hasLayd(state) {
   return state?.companion?.adopted === true;
 }
 
-export const LAYD_ARRIVAL_STORY = Object.freeze({
-  title: 'ALGO ARRANHA A PORTA',
-  text: 'Na noite em que você escolheu ficar, um arranhar fraco veio do lado de fora. Uma cadela magra, de pelo cor de ferrugem e coleira rachada, esperou sozinha até a escotilha abrir. A plaquinha de latão tem um nome riscado a mão: LAYD. Ela entrou, deu três voltas no seu pé e deitou. Desde então, onde você for, ela vai.',
-});
-
 export function adoptLayd(state) {
   if (hasLayd(state)) return state;
   return {
     ...state,
     companion: { adopted: true, name: LAYD_NAME, since: Number(state?.wasteland_turn) || 0, bond: 0 },
+    ...(state?.pendingStory ? {} : { pendingStory: true, currentStory: 'layd_arrives' }),
     notice: 'Layd, uma cadela do Ermo, escolheu ficar com você. Ela vai te seguir por onde for.',
   };
 }

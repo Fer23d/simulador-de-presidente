@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { adoptLayd, canPetDog, createDogActor, hasLayd, normalizeCompanion, petDog, updateDogActor } from '../src/core/companion.js';
 import { createGameState, hydrateGameState } from '../src/core/game-state.js';
+import { getStoryEvent, dismissStory } from '../src/core/story_engine.js';
 import { drawDog, DOG_HEIGHT } from '../src/core/dog_renderer.js';
 
 const player = (extra = {}) => ({ x: 400, floor: 1, facing: 1, vx: 0, liftTarget: null, ...extra });
@@ -14,6 +15,9 @@ test('Layd only joins once, when the player chooses to stay, and the save rememb
   assert.equal(adopted.companion.name, 'Layd');
   assert.equal(adopted.companion.since, 40);
   assert.match(adopted.notice, /Layd/);
+  assert.equal(adopted.pendingStory, true, 'her arrival is told as a story card');
+  assert.match(getStoryEvent(adopted.currentStory).text, /latidos/);
+  assert.match(dismissStory(adopted).seen_stories.join(), /layd_arrives/);
   assert.equal(adoptLayd(adopted), adopted, 'adopting twice changes nothing');
   const loaded = hydrateGameState(JSON.stringify({ ...adopted, version: createGameState().version }));
   assert.equal(loaded.companion.adopted, true);
