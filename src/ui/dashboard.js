@@ -55,6 +55,9 @@ import { DIALOGUE_CHAR_INTERVAL_MS, isDialogueTextComplete, renderDialogueView }
 import { equipSkin, getPresidentClassModifiers, getSkin, isSkinAvailableForClass, isSkinRequirementMet, PRESIDENT_CLASSES, PRESIDENT_SKINS, purchaseSkin, SKIN_RARITIES, startGame } from '../core/player_state.js';
 import { createEntitlements, getActiveTrial, startSkinTrial } from '../core/store.js';
 import { AssetManager, DEFAULT_ASSETS, drawSkinPreview } from '../core/sprite_engine.js';
+import { createOnboarding, getBootTips, getStoryScenes, guessLanguage, MIN_BOOT_MS, onboardingText, ONBOARDING_KEY } from '../core/onboarding.js';
+import { drawCoverArt } from '../core/cover_art.js';
+import { bootScreenView, profileOnboardingView, storyOnboardingView } from './onboarding_ui.js';
 import {
   advanceMonth,
   advanceDay,
@@ -284,7 +287,7 @@ export function oilDerrickView(state, slot, now = Date.now()) {
 export function titleScreenView({ view = 'main', hasSave = false, audio = {}, tutorialEnabled = true } = {}) {
   const { muted, volume } = normalizeAudioSettings(audio);
   const panels = {
-    main: `<nav class="title-menu" aria-label="Menu principal">${hasSave ? '<button type="button" class="title-button is-primary" data-title-action="continue" autofocus>CONTINUAR</button>' : ''}<button type="button" class="title-button${hasSave ? '' : ' is-primary'}" data-title-action="${hasSave ? 'confirm-new' : 'new-game'}" ${hasSave ? '' : 'autofocus'}>NOVO JOGO</button><button type="button" class="title-button" data-title-action="options">OPÇÕES</button><button type="button" class="title-button" data-title-action="credits">CRÉDITOS</button></nav>`,
+    main: `<nav class="title-menu" aria-label="Menu principal">${hasSave ? '<button type="button" class="title-button is-primary" data-title-action="continue" autofocus>CONTINUAR</button>' : ''}<button type="button" class="title-button${hasSave ? '' : ' is-primary'}" data-title-action="${hasSave ? 'confirm-new' : 'new-game'}" ${hasSave ? '' : 'autofocus'}>NOVO JOGO</button><button type="button" class="title-button" data-title-action="story-replay">HISTÓRIA</button><button type="button" class="title-button" data-title-action="options">OPÇÕES</button><button type="button" class="title-button" data-title-action="credits">CRÉDITOS</button></nav>`,
     'confirm-new': `<div class="title-panel" role="alertdialog" aria-labelledby="title-confirm"><h2 id="title-confirm">COMEÇAR DE NOVO?</h2><p>A partida salva será apagada. Finais descobertos, enciclopédia e skins continuam com você.</p><div class="title-menu"><button type="button" class="title-button is-danger" data-title-action="new-game" autofocus>SIM, NOVO JOGO</button><button type="button" class="title-button" data-title-action="main">VOLTAR</button></div></div>`,
     options: `<div class="title-panel"><h2>OPÇÕES</h2><label class="title-option"><span>VOLUME</span><input type="range" min="0" max="100" value="${Math.round(volume * 100)}" data-title-volume aria-label="Volume"></label><label class="title-option"><span>SOM MUDO</span><input type="checkbox" data-title-mute ${muted ? 'checked' : ''}></label><label class="title-option"><span>TUTORIAL E DICAS</span><input type="checkbox" data-title-tutorial ${tutorialEnabled ? 'checked' : ''}></label><div class="title-menu"><button type="button" class="title-button" data-title-action="restart-tutorial">REINICIAR TUTORIAL</button><button type="button" class="title-button" data-title-action="fullscreen">TELA CHEIA</button><button type="button" class="title-button" data-title-action="main" autofocus>VOLTAR</button></div><p class="title-status" data-title-status role="status"></p></div>`,
     credits: `<div class="title-panel title-credits"><h2>CRÉDITOS</h2><dl><dt>CRIAÇÃO E DIREÇÃO</dt><dd>Fer23d</dd><dt>ARTE E TRILHA</dt><dd>Gerados em código, quadro a quadro e nota a nota</dd><dt>FONTES</dt><dd>Press Start 2P · Share Tech Mono (SIL Open Font License)</dd></dl><p class="title-dedication">Para quem ficou do lado de fora da porta.</p><div class="title-menu"><button type="button" class="title-button" data-title-action="main" autofocus>VOLTAR</button></div></div>`,
@@ -1238,7 +1241,16 @@ export function mountDashboard(root) {
   tutorialCoach.hidden = true;
   document.body.append(tutorialCoach);
   let titleOpen = !localCityPreview;
-  let titleView = 'main';
+  let titleView = localCityPreview ? 'main' : 'boot';
+  let onboarding = (() => { try { return createOnboarding(JSON.parse(localStorage.getItem(ONBOARDING_KEY) ?? '{}')); } catch { return createOnboarding(); } })();
+  const saveOnboarding = () => { try { localStorage.setItem(ONBOARDING_KEY, JSON.stringify(onboarding)); } catch { /* so nesta sessao */ } };
+  let afterProfile = 'new';
+  let storyIndex = 0;
+  let storyReplay = false;
+  let bootStarted = false;
+  let bootReady = false;
+  let coverFrame = null;
+  const uiLanguage = () => state.playerProfile?.language ?? 'pt-BR';
   let titleAshFrame = null;
   const titleScreen = document.createElement('div');
   titleScreen.className = 'title-screen-host';
@@ -1303,7 +1315,19 @@ export function mountDashboard(root) {
     if (!titleOpen) { titleScreen.innerHTML = ''; return; }
     const viewChanged = titleScreen.dataset.view !== titleView;
     titleScreen.dataset.view = titleView;
-    titleScreen.innerHTML = titleScreenView({ view: titleView, hasSave: hadSave, audio: audio.settings, tutorialEnabled: tutorial.enabled });
+    const language = uiLanguage();
+    const settings = audio.settings ?? {};
+    if (titleView === 'boot') {
+      if (viewChanged) titleScreen.innerHTML = bootScreenView({ language, tip: getBootTips(language)[0], progress: 0, ready: bootReady });
+      if (!bootStarted) startBoot();
+      if (viewChanged) animateCover();
+    } else if (titleView === 'profile') {
+      titleScreen.innerHTML = profileOnboardingView({ language, name: state.playerProfile?.name ?? '', volume: settings.volume ?? .7, muted: Boolean(settings.muted),
+        tutorialEnabled: tutorial.enabled, backAction: afterProfile === 'continue' ? '' : 'main' });
+    } else if (titleView === 'story') {
+      const scenes = getStoryScenes(language, state.playerProfile?.name);
+      titleScreen.innerHTML = storyOnboardingView({ language, scene: scenes[Math.min(storyIndex, scenes.length - 1)], replay: storyReplay });
+    } else titleScreen.innerHTML = titleScreenView({ view: titleView, hasSave: hadSave, audio: audio.settings, tutorialEnabled: tutorial.enabled });
     titleScreen.querySelector('[autofocus]')?.focus();
     if (viewChanged || titleAshFrame === null) animateTitleAsh();
     audio.setMood('vault_night');
@@ -1318,20 +1342,124 @@ export function mountDashboard(root) {
     root.querySelector('button, canvas')?.focus();
   }
 
+  // Capa: a arte do Vault anima enquanto os recursos carregam; no fim, qualquer tecla abre o menu.
+  function animateCover() {
+    const canvas = titleScreen.querySelector('.cover-art');
+    if (!canvas || typeof requestAnimationFrame !== 'function') return;
+    if (coverFrame !== null) cancelAnimationFrame(coverFrame);
+    const ctx = canvas.getContext('2d');
+    const frame = (time) => {
+      if (!titleOpen || titleView !== 'boot' || !canvas.isConnected) { coverFrame = null; return; }
+      const width = Math.min(1280, canvas.clientWidth || 960);
+      const height = Math.round(width * (canvas.clientHeight || 600) / (canvas.clientWidth || 960));
+      if (canvas.width !== width) canvas.width = width;
+      if (canvas.height !== height) canvas.height = height;
+      drawCoverArt(ctx, width, height, time);
+      coverFrame = requestAnimationFrame(frame);
+    };
+    coverFrame = requestAnimationFrame(frame);
+  }
+
+  function startBoot() {
+    bootStarted = true;
+    // Primeira vez: sugere o idioma do navegador antes de mostrar qualquer texto.
+    if (!onboarding.profileDone && typeof navigator !== 'undefined') {
+      const guess = guessLanguage(navigator.language);
+      if (guess !== uiLanguage()) commit(updatePlayerProfile(state, { language: guess }));
+    }
+    const language = uiLanguage();
+    const tips = getBootTips(language);
+    const urls = Object.values(DEFAULT_ASSETS);
+    let loaded = 0;
+    const started = performance.now();
+    const settle = () => { loaded += 1; };
+    if (typeof Image === 'function') {
+      for (const url of urls) {
+        const image = new Image();
+        image.onload = settle;
+        image.onerror = settle;
+        image.src = url;
+      }
+    } else loaded = urls.length;
+    const tick = () => {
+      const bar = titleScreen.querySelector('[data-boot-fill]');
+      if (titleView !== 'boot') return;
+      const elapsed = performance.now() - started;
+      const real = urls.length ? loaded / urls.length : 1;
+      const progress = Math.min(real, elapsed / MIN_BOOT_MS);
+      const percent = Math.round(progress * 100);
+      if (bar) bar.style.width = percent + '%';
+      const label = titleScreen.querySelector('[data-boot-label]');
+      const number = titleScreen.querySelector('[data-boot-percent]');
+      const tip = titleScreen.querySelector('[data-boot-tip]');
+      if (number) number.textContent = percent + '%';
+      if (tip) tip.textContent = tips[Math.floor(elapsed / 1400) % tips.length];
+      if (progress >= 1) {
+        bootReady = true;
+        if (label) label.textContent = onboardingText(language, 'ready');
+        titleScreen.querySelector('.title-boot')?.setAttribute('data-boot-ready', '1');
+        return;
+      }
+      window.setTimeout(tick, 60);
+    };
+    tick();
+  }
+
+  function leaveBoot() {
+    if (titleView !== 'boot' || !bootReady) return;
+    titleView = 'main';
+    renderTitle();
+  }
+
+  function startNewGame() {
+    tutorial = { ...restartTutorial(), enabled: tutorial.enabled };
+    saveTutorial();
+    activeTab = 'overview';
+    falloutCinematicStarted = false;
+    introScene = 0;
+    commit(createGameState('bra', state.playerProfile));
+    closeTitle();
+  }
+
+  function showStoryOrStart() {
+    if (onboarding.skipStory) { startNewGame(); return; }
+    storyIndex = 0;
+    storyReplay = false;
+    titleView = 'story';
+    renderTitle();
+  }
+
+  function finishStory() {
+    if (storyReplay) { titleView = 'main'; renderTitle(); return; }
+    startNewGame();
+  }
+
   titleScreen.addEventListener('click', (event) => {
+    if (titleView === 'boot') { leaveBoot(); return; }
     const action = event.target.closest('[data-title-action]')?.dataset.titleAction;
     if (!action) return;
-    if (action === 'continue') { closeTitle(); return; }
-    if (action === 'new-game') {
-      tutorial = { ...restartTutorial(), enabled: tutorial.enabled };
-      saveTutorial();
-      activeTab = 'overview';
-      falloutCinematicStarted = false;
-      introScene = 0;
-      commit(createGameState('bra', state.playerProfile));
+    if (action === 'continue') {
+      if (!onboarding.profileDone) { afterProfile = 'continue'; titleView = 'profile'; renderTitle(); return; }
       closeTitle();
       return;
     }
+    if (action === 'new-game') {
+      afterProfile = 'new';
+      if (!onboarding.profileDone) { titleView = 'profile'; renderTitle(); return; }
+      showStoryOrStart();
+      return;
+    }
+    if (action === 'profile-continue') {
+      const name = titleScreen.querySelector('[data-onb-name]')?.value ?? '';
+      commit(updatePlayerProfile(state, { name }));
+      onboarding = { ...onboarding, profileDone: true };
+      saveOnboarding();
+      if (afterProfile === 'continue') closeTitle(); else showStoryOrStart();
+      return;
+    }
+    if (action === 'story-replay') { storyIndex = 0; storyReplay = true; titleView = 'story'; renderTitle(); return; }
+    if (action === 'story-next') { storyIndex += 1; renderTitle(); return; }
+    if (action === 'story-skip' || action === 'story-start') { finishStory(); return; }
     if (action === 'restart-tutorial') {
       tutorial = restartTutorial();
       saveTutorial();
@@ -1361,6 +1489,17 @@ export function mountDashboard(root) {
   });
 
   titleScreen.addEventListener('change', (event) => {
+    if (event.target.matches('[data-onb-language]')) {
+      const name = titleScreen.querySelector('[data-onb-name]')?.value ?? '';
+      commit(updatePlayerProfile(state, { name, language: event.target.value }));
+      renderTitle();
+      return;
+    }
+    if (event.target.matches('[data-onb-never]')) {
+      onboarding = { ...onboarding, skipStory: event.target.checked };
+      saveOnboarding();
+      return;
+    }
     if (event.target.matches('[data-title-mute]')) {
       const settings = audio.setSettings({ muted: event.target.checked });
       saveAudio(settings);
@@ -1373,7 +1512,12 @@ export function mountDashboard(root) {
   });
 
   document.addEventListener('keydown', (event) => {
-    if (titleOpen && event.key === 'Escape' && titleView !== 'main') {
+    if (titleOpen && titleView === 'boot') {
+      if (!['Shift', 'Control', 'Alt', 'Meta', 'Tab'].includes(event.key)) leaveBoot();
+      return;
+    }
+    if (titleOpen && titleView === 'story' && event.key === 'Escape') { finishStory(); return; }
+    if (titleOpen && ['options', 'credits', 'confirm-new'].includes(titleView) && event.key === 'Escape') {
       titleView = 'main';
       renderTitle();
     }
