@@ -15,6 +15,30 @@ function nuclearConsequence(state) {
 
 export const STORY_EVENTS = Object.freeze([
   Object.freeze({
+    id: 'layd_sick',
+    trigger_condition: () => false,
+    classification: '/// DIÁRIO DA SUÍTE · LAYD ///',
+    title: 'O ANO LÁ FORA',
+    text: 'Layd passou meses vagando pelo Ermo antes de chegar à sua porta, bebendo água de poça e dormindo sobre ferro quente. Por um ano ela pareceu inteira. Hoje de manhã não levantou da cama. O pelo veio na sua mão em tufos. Ela olhou para você com a paciência de quem entende mais do que deveria. A médica do Vault diria que é radiação, e que existe uma vacina. Só que a vacina é do Vault. Cada dose dada a Layd é uma dose tirada de alguém. E as pessoas contam.',
+    button_label: '[ ENCONTRAR UM JEITO ]',
+  }),
+  Object.freeze({
+    id: 'layd_cured',
+    trigger_condition: () => false,
+    classification: '/// DIÁRIO DA SUÍTE · LAYD ///',
+    title: 'A ÚLTIMA DOSE',
+    text: 'A quarta dose foi a mais difícil de aplicar. Sua mão tremeu. Layd lambeu seu pulso antes mesmo de a agulha sair. Na manhã seguinte ela já estava na porta, rabo batendo no chão, pedindo para sair. A radiação ficou para trás, como o resto do mundo velho. O custo ficou com você: o que desviou, o que escondeu, quem mentiu por você. Mas ela está viva.',
+    button_label: '[ ABRAÇAR LAYD ]',
+  }),
+  Object.freeze({
+    id: 'layd_dead',
+    trigger_condition: () => false,
+    classification: '/// DIÁRIO DA SUÍTE · LAYD ///',
+    title: 'O SILÊNCIO NA SUÍTE',
+    text: 'Não havia mais latidos, nem unhas no piso, nem o barulho de três voltas antes de deitar. O Vault inteiro percebeu o silêncio antes de você contar. Os soldados da Porta tiraram os capacetes. Alguém deixou uma lata de ração no corredor, sem bilhete. Você enterrou Layd perto da escotilha, onde ela esperou por você naquela primeira noite, e o Vault ficou em silêncio por três dias.',
+    button_label: '[ LEVANTAR E SEGUIR ]',
+  }),
+  Object.freeze({
     id: 'layd_arrives',
     trigger_condition: () => false,
     classification: '/// REGISTRO DA PORTA · NOVO MORADOR ///',

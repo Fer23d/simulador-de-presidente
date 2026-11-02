@@ -39,7 +39,7 @@ const SURFACE_CAMERA_HEADROOM = 46;
 const LABELS = Object.freeze({
   vault: 'ACEDER AO COMANDO', generator: 'ACEDER AO TERMINAL DO GERADOR',
   greenhouse: 'INSPECIONAR A ESTUFA', dormitory: 'GERIR DORMITÓRIO',
-  arsenal: 'ABRIR O ARSENAL', medical: 'ACEDER AO CENTRO MÉDICO',
+  arsenal: 'ABRIR O ARSENAL', medical: 'ACEDER AO CENTRO MÉDICO', radiation_clinic: 'ENTRAR NA SALA DE TRATAMENTO',
   radio: 'OPERAR A SALA DE RÁDIO', office: 'ENTRAR NO GABINETE',
   life_support: 'ACEDER AO SUPORTE DE VIDA',
   detention: 'INSPECIONAR A CELA DE DETENÇÃO',

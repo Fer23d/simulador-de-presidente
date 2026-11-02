@@ -11,6 +11,7 @@ import { createMissionLocation } from './missions.js';
 import { normalizeOilField } from './oil.js';
 import { rollSurfaceRaid } from './defense.js';
 import { rollDarkMarket } from './market.js';
+import { advanceLaydMonth } from './layd_care.js';
 import { getGeneratorFuelPlan } from './oil_economy.js';
 import { DAYS_PER_MONTH, dayShare, getVaultDayOfMonth } from './vault_time.js';
 import { DOOR_OPENS_AT_MONTH, ENDINGS, isDoorOpen } from './endings.js';
@@ -187,7 +188,7 @@ export function advanceWastelandDays(state, days, now = Date.now()) {
     const before = current;
     current = next;
     // A Porta so interrompe uma vez, no dia em que fica pronta; depois o jogador avanca o tempo normalmente.
-    if (current.pendingRaid || current.pendingBunkerEvent || current.ending || current.pendingLoot || (isDoorOpen(current) && !isDoorOpen(before))) break;
+    if (current.pendingRaid || current.pendingBunkerEvent || current.pendingLaydDiscovery || current.ending || current.pendingLoot || (isDoorOpen(current) && !isDoorOpen(before))) break;
   }
   return current;
 }
@@ -195,6 +196,7 @@ export function advanceWastelandDays(state, days, now = Date.now()) {
 function advanceVaultMonth(state, dayIndex = 0) {
   if (state.ending) return { ...state, notice: `A história do Vault terminou: ${ENDINGS[state.ending.id]?.title ?? 'fim'}.` };
   if (state.pendingRaid) return { ...state, notice: 'Veja o relatório do ataque na superfície antes de avançar o mês.' };
+  if (state.pendingLaydDiscovery) return { ...state, notice: 'O povo descobriu Layd. Decida antes de continuar.' };
   if (state.pendingBunkerEvent || state.pendingLoot || state.pendingExpeditionReports?.length) {
     return { ...state, notice: state.pendingBunkerEvent
       ? 'Resolva o dilema do Vault antes de avancar o mes.'
@@ -321,7 +323,8 @@ function advanceVaultMonth(state, dayIndex = 0) {
         .filter(Boolean).join(' '),
     };
   }
-  if (processed.pendingBunkerEvent) return processed;
+  processed = advanceLaydMonth(processed);
+  if (processed.pendingBunkerEvent || processed.pendingLaydDiscovery) return processed;
   if (isCouncilTurn(wastelandMonthCounter)) {
     const event = getNextCouncilEvent(processed.vaultCouncil);
     const urgentNotice = /SINAL DO EXPLORADOR|ALERTA CRÍTICO|ASFIXIA|oxigênio insuficiente/i.test(processed.notice ?? '')

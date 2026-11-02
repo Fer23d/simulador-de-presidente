@@ -903,3 +903,13 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .market-icon { font-size: 20px; text-align: center; }
 .market-deal { display: grid; font-family: 'Share Tech Mono', monospace; font-size: 13px; }
 .market-deal small { opacity: .6; font-size: 11px; }
+
+/* Layd: cuidados */
+.layd-care { border-top: 1px solid rgba(244, 211, 110, .25); margin-top: 10px; padding-top: 8px; }
+.layd-stats { display: grid; gap: 4px; margin: 6px 0; font-family: 'Share Tech Mono', monospace; font-size: 12px; }
+.layd-stat { display: grid; grid-template-columns: 150px 1fr 54px; align-items: center; gap: 8px; }
+.layd-bar { display: block; height: 8px; background: rgba(255, 255, 255, .1); border: 1px solid rgba(244, 211, 110, .3); }
+.layd-bar > span { display: block; height: 100%; background: #7bff6a; }
+.layd-bar.is-warn > span { background: #f4d36e; }
+.layd-bar.is-danger > span { background: #ff5a4a; }
+.layd-button.is-sick { color: #ff8a6a; border-color: #ff8a6a; }

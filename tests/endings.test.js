@@ -58,12 +58,12 @@ test('choosing an ending tells the epilogue, survives the save and becomes a tro
   assert.match(getEndingStory(ended, 'republic'), /Beatriz Okafor/);
   const epilogue = doorView(ended, recordTrophy(createTrophies(), 'republic'));
   assert.match(epilogue, /A NOVA REPÚBLICA/);
-  assert.match(epilogue, /FINAIS DESCOBERTOS · 1\/6/);
+  assert.match(epilogue, /FINAIS DESCOBERTOS · 1\/7/);
   assert.match(epilogue, /ending-new-game/);
   const restored = hydrateGameState(JSON.stringify(ended));
   assert.deepEqual(restored.ending, ended.ending);
   assert.equal(restored.wasteland_reason, 'ataque-nuclear-inimigo');
   assert.equal(isDoorOpen(restored), false);
   assert.deepEqual(recordTrophy(recordTrophy(createTrophies(), 'republic'), 'republic').endings, ['republic']);
-  assert.equal(Object.keys(ENDINGS).length, 6);
+  assert.equal(Object.keys(ENDINGS).length, 7);
 });

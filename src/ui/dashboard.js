@@ -18,7 +18,8 @@ import { checkStoryChapters, LORE_CHAPTERS, STORY_NOTICE } from '../core/story_l
 import { INTERNAL_PROJECTS } from '../core/infrastructure.js';
 import { broadcastShelterSignal, buildShelterRoom, calculateShelterCapacity, equipShelterGuard, findBuildSlots, getRoom, getShelterBuildCost, INITIAL_SHELTER_GRID, repairShelterGenerator, SHELTER_TYPES, upgradeShelterRoom, useShelterMedkit } from '../core/shelter_engine.js';
 import { createRpgBunkerEngine } from '../core/rpg_bunker.js';
-import { adoptLayd, hasLayd } from '../core/companion.js';
+import { adoptLayd, hasLayd, isLaydVisible } from '../core/companion.js';
+import { applyVaccine, buyRation, divertFood, DOSE_SCRAP_COST, getLaydStatus, RATION_SCRAP_COST, resolveLaydDiscovery, SUSPICION_LIMIT, toggleHideLayd } from '../core/layd_care.js';
 import { canTrade, describeOffer, getStock, hasMarketSuit, isMarketOpen, MARKET_GOODS, tradeAtMarket } from '../core/market.js';
 import { playBark } from '../core/dog_sound.js';
 import { calculateSuppression, canResolveWastelandEvent, detainRebel, dismissExpeditionReport, getWastelandEvent, resolveWastelandEvent, startExpedition } from '../core/game_mechanics.js';
@@ -160,6 +161,29 @@ export function oilDerrickLiveView(state, slot, now = Date.now()) {
     : status.upgrading ? '' : '<span class="oil-max">★ NÍVEL MÁXIMO ★</span>';
   const collect = status.stored > 0 ? `<button type="button" class="primary-action" data-action="oil-collect" data-slot="${slot}">[ RECOLHER ${formatNumber.format(status.stored)} BARRIS ]</button>` : '';
   return `${stats}${line}<div class="action-row oil-actions">${collect}${upgrade}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div>`;
+}
+
+// Cuidados com Layd: saude, racao, vacinas e a desconfianca do povo do Vault.
+export function laydCareView(state, inClinic = false) {
+  const status = getLaydStatus(state);
+  if (!status || status.phase === 'dead' || status.phase === 'gone') return '';
+  const bar = (label, value, max, tone) => `<div class="layd-stat"><span>${label}</span><span class="layd-bar ${tone}"><span style="width:${Math.round(Math.max(0, Math.min(1, value / max)) * 100)}%"></span></span><b>${Math.round(value)}${max === 100 ? '%' : '/' + max}</b></div>`;
+  const phaseText = {
+    healthy: status.monthsToSick > 0 ? `Saudável. Ela passou muito tempo lá fora: os sintomas devem aparecer em ${status.monthsToSick} ${status.monthsToSick === 1 ? 'mês' : 'meses'}.` : 'Saudável por enquanto.',
+    sick: 'DOENTE: radiação. Ela precisa de 4 doses de vacina, uma por mês.',
+    cured: 'Curada. A radiação perdeu.',
+  }[status.phase];
+  const clinicButton = status.phase === 'sick'
+    ? `<button type="button" class="primary-action" data-action="layd-vaccine" data-clinic="${inClinic ? 1 : 0}" ${inClinic && status.canDose ? '' : 'disabled'}>[ APLICAR VACINA: ${DOSE_SCRAP_COST} SUCATAS ]<small>${inClinic ? (status.vaccines ? `tem ${status.vaccines} vacina(s)` : 'sem vacinas: procure no laboratório') : 'só na Sala de Tratamento'}</small></button>` : '';
+  const suspicionTone = status.suspicion >= 70 ? 'is-danger' : status.suspicion >= 40 ? 'is-warn' : '';
+  return `<div class="layd-care" data-layd-care><p class="eyebrow">/// 🐕 LAYD ///</p><p class="oil-status">&gt; ${phaseText}</p><div class="layd-stats">${bar('SAÚDE', status.health, 100, status.health < 40 ? 'is-danger' : '')}${bar('RAÇÃO', status.ration, 12, status.ration <= 1 ? 'is-danger' : '')}${status.phase === 'cured' ? '' : bar('VACINAS', status.doses, status.dosesNeeded, '')}${bar('DESCONFIANÇA DO VAULT', status.suspicion, SUSPICION_LIMIT, suspicionTone)}</div><p class="fort-last">Escolhas: ${status.choices.layd} por Layd · ${status.choices.vault} pelo Vault${status.hidden ? ' · ESCONDIDA' : ''}</p><div class="action-row oil-actions">${clinicButton}<button type="button" class="quiet-action" data-action="layd-buy-ration" ${state.scrap >= RATION_SCRAP_COST ? '' : 'disabled'}>[ COMPRAR RAÇÃO: ${RATION_SCRAP_COST} SUCATAS ]</button><button type="button" class="quiet-action" data-action="layd-divert-food">[ DESVIAR COMIDA DO VAULT ]<small>+desconfiança</small></button><button type="button" class="quiet-action" data-action="layd-hide">[ ${status.hidden ? 'TIRAR LAYD DO ESCONDERIJO' : 'ESCONDER LAYD NA SUÍTE'} ]</button></div></div>`;
+}
+
+// O povo descobriu Layd: fugir com ela pela Porta ou entrega-la ao Vault.
+export function laydDiscoveryView(state) {
+  const status = getLaydStatus(state);
+  const health = status ? ` Ela está com ${Math.round(status.health)}% de saúde.` : '';
+  return `<section class="door-dialog" role="dialog" aria-modal="true" aria-labelledby="layd-discovery-title"><p class="story-classification">/// A DESCOBERTA ///</p><h2 id="layd-discovery-title">ELES SABEM</h2><p class="door-intro">Era para ser uma noite comum. Uma voz bateu na porta da suíte, depois outra, depois dezenas. Alguém tinha contado as latas, alguém tinha contado as ampolas, e todos tinham contado as mentiras. Layd, atrás das suas pernas, não rosnou. Do corredor vem uma única pergunta: "Você escolheu ela em vez de nós?"</p><div class="door-choices"><button type="button" class="door-choice" data-action="layd-flee"><span class="door-choice-icon">🚪</span><strong>[ PEGAR LAYD E FUGIR PELA PORTA ]</strong><small>O Vault te perde. Você e ela abrem a Porta e vão embora para o Ermo.</small></button><button type="button" class="door-choice" data-action="layd-surrender"><span class="door-choice-icon">🐕</span><strong>[ ENTREGAR LAYD AO VAULT ]</strong><small>O povo te perdoa e você continua no comando. Layd é levada embora.${health}</small></button></div></section>`;
 }
 
 // Mercado Sombrio: troca de mercadorias na superficie, so para quem veste o Traje Antirradiacao.
@@ -619,7 +643,7 @@ export function bunkerView(state) {
       : '<button type="button" class="loot-alert" data-action="open-expedition-lootbox">[!] NOVA CARGA DETETADA NO PORTÃO [!]</button>'
     : '';
   return `<section class="bunker-chamber">
-    <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2><p class="vault-clock" data-vault-clock>DIA ${getVaultDay(state)} · MÊS ${(Number(state.wasteland_turn) || 0) + 1}${(Number(state.wasteland_turn) || 0) + 1 <= DOOR_OPENS_AT_MONTH ? ` DE ${DOOR_OPENS_AT_MONTH}` : ''}${isDoorOpen(state) ? ' · 🚪 PORTA PRONTA' : describeLevelGate(state) ? ` · PORTA: NV ${describeLevelGate(state).required}` : ''}<span class="vault-clock-bar" aria-hidden="true"><span style="width:${Math.round(getVaultDayOfMonth(state) / DAYS_PER_MONTH * 100)}%"></span></span></p></div><div class="bunker-header-actions">${lootNotice}<button type="button" class="primary-action" data-action="advance" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 1 DIA ]</button><button type="button" class="quiet-action" data-action="advance-days" data-days="3" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 3 DIAS ]</button>${isDoorOpen(state) && !state.ending ? '<button type="button" class="primary-action door-ready-button" data-action="open-door">[ 🚪 PORTA DO VAULT ]</button>' : ''}<button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button><button type="button" class="quiet-action" data-action="open-encyclopedia">[ 📖 ENCICLOPÉDIA ]</button></div></div>
+    <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2><p class="vault-clock" data-vault-clock>DIA ${getVaultDay(state)} · MÊS ${(Number(state.wasteland_turn) || 0) + 1}${(Number(state.wasteland_turn) || 0) + 1 <= DOOR_OPENS_AT_MONTH ? ` DE ${DOOR_OPENS_AT_MONTH}` : ''}${isDoorOpen(state) ? ' · 🚪 PORTA PRONTA' : describeLevelGate(state) ? ` · PORTA: NV ${describeLevelGate(state).required}` : ''}<span class="vault-clock-bar" aria-hidden="true"><span style="width:${Math.round(getVaultDayOfMonth(state) / DAYS_PER_MONTH * 100)}%"></span></span></p></div><div class="bunker-header-actions">${lootNotice}<button type="button" class="primary-action" data-action="advance" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 1 DIA ]</button><button type="button" class="quiet-action" data-action="advance-days" data-days="3" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 3 DIAS ]</button>${isDoorOpen(state) && !state.ending ? '<button type="button" class="primary-action door-ready-button" data-action="open-door">[ 🚪 PORTA DO VAULT ]</button>' : ''}<button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button><button type="button" class="quiet-action" data-action="open-encyclopedia">[ 📖 ENCICLOPÉDIA ]</button>${hasLayd(state) ? `<button type="button" class="quiet-action layd-button ${state.companion.sick ? 'is-sick' : ''}" data-action="open-layd">[ 🐕 LAYD${state.companion.sick ? ' · DOENTE' : ''} ]</button>` : ''}</div></div>
     <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'scrap'))}</span><span class="oil-resource">🛢 PETRÓLEO ${formatNumber.format(state.oil ?? 0)}</span><span>🪖 SOLDADOS ${formatNumber.format(getArmySoldiers(state))}</span><span>🛡 DEFESA ${formatNumber.format(getFortStatus(state.surface_fort)?.defense ?? 0)}</span><span>CIÊNCIA ${formatNumber.format(state.science ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'science'))}</span><span>COMIDA ${formatNumber.format(state.shelter_supplies?.food ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'food'))}</span><span>ENERGIA ${formatNumber.format(state.shelter_supplies?.energy ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'energy'))}</span><span class="oxygen-resource ${state.oxygen_deprived ? 'oxygen-deprived' : ''}" aria-label="Oxigênio ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} de ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ', produção insuficiente' : ''}">💨 O₂ ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ' · ALERTA' : ''}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'weapons'))}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'medkits'))}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
     <div class="bunker-build-controls" hidden aria-label="Módulos de construção">${modules.map(([id, module]) => { const cost = getShelterBuildCost(id, 0, state.presidentClass); return `<button type="button" class="bunker-module-button" data-action="shelter-module" data-module="${id}" aria-pressed="${id === 'dormitory'}" ${state.scrap < cost ? 'disabled' : ''}>${module.name}<small>${formatNumber.format(cost)} sucatas${buildCostMultiplier < 1 ? ' · DESCONTO DO OPERÁRIO' : ''}</small></button>`; }).join('')}<div class="bunker-slot-controls"><label for="shelter-build-slot">Setor livre</label><select id="shelter-build-slot" class="bunker-build-slot"></select><button type="button" class="primary-action" data-action="shelter-place">[ CONSTRUIR ]</button></div></div>
     <div class="bunker-stage"><canvas id="shelterCanvas" class="bunker-canvas" width="960" height="600" tabindex="0" aria-label="Bunker lateral. A e D movem o Presidente, W e S operam o elevador, E interage. Na construção, clique num setor livre."></canvas>${bunkerEnvironmentHudView(state.environment, state.isNight, state.inhabitants, state.shelter_guards, state.presidentClass, state.weather)}${missionObjectiveView(state)}<div class="bunker-tooltip" data-bunker-tooltip role="status" hidden></div>${renderDialogueView(null)}</div>
@@ -1030,6 +1054,7 @@ export function doorView(state, trophies = createTrophies()) {
   // Com a cidade em andamento a porta ja foi cruzada: so o resultado final volta a cobrir a tela.
   if (state.city) return state.city.result ? cityEpilogueView(state) : '';
   if (state.ending) return epilogueView(state, trophies);
+  if (state.pendingLaydDiscovery) return laydDiscoveryView(state);
   if (!isDoorOpen(state) || !state.door_prompt) return '';
   const forced = getForcedEnding(state);
   const leader = PRESIDENT_CLASSES.find((profile) => profile.id === state.presidentClass)?.leader ?? 'Presidente';
@@ -1412,9 +1437,10 @@ export function mountDashboard(root) {
       office: 'Coordena operações e gera 5 sucatas por nível a cada mês.',
       detention: 'Cela reforçada para conter habitantes em rebelião. Dissidentes presos deixam de sabotar o Vault.',
       presidential_suite: 'Alojamento do comandante. O guarda-roupa permite adquirir e equipar vestimentas cosméticas.',
+      radiation_clinic: 'Mesa de exame forrada de chumbo, contador Geiger e geladeira de vacinas. Leve Layd até aqui para aplicar as doses.',
     }[room.type];
     bunkerGeneratorModal.innerHTML = `<section class="bunker-dialog" role="dialog" aria-modal="true" aria-labelledby="bunker-room-title"><p class="eyebrow">/// GESTÃO DO VAULT ///</p>${renderRoomManagement(state, room)}<pre>&gt; ANDAR ${room.floor + 1} / SETOR ${room.column}
-&gt; ${description}</pre>${room.type === 'vault' ? expeditionLogisticsView(state) : ''}${isGenerator ? generatorFuelView(state) : ''}${room.type === 'radio' ? oilTradeView(state) : ''}<div class="action-row">${room.type === 'presidential_suite' ? '<button type="button" class="primary-action" data-action="open-wardrobe">[ ABRIR GUARDA-ROUPA ]</button>' : ''}${isGenerator && !room.operational ? `<button type="button" class="primary-action" data-action="repair-generator" data-floor="${room.floor}" data-column="${room.column}" ${state.scrap >= 25 ? '' : 'disabled'}>[ REPARAR: 25 SUCATAS ]</button>` : ''}${room.type === 'arsenal' ? `<button type="button" class="primary-action" data-action="equip-guard" ${state.shelter_supplies?.weapons > 0 ? '' : 'disabled'}>[ EQUIPAR GUARDA: 1 ARMA ]</button>` : ''}${room.type === 'medical' ? `<button type="button" class="primary-action" data-action="treat-radiation" ${state.shelter_supplies?.medkits > 0 ? '' : 'disabled'}>[ TRATAR RADIAÇÃO: 1 CURATIVO ]</button>` : ''}${room.type === 'radio' ? `<button type="button" class="primary-action" data-action="broadcast-radio" ${state.scrap >= 10 ? '' : 'disabled'}>[ TRANSMITIR SINAL: 10 SUCATAS ]</button>` : ''}${room.type === 'office' ? (state.geopolitics?.contacts ?? []).map((contact) => `<button type="button" class="quiet-action" data-action="vault-scout" data-contact="${escapeHtml(contact.id)}" ${state.scrap >= 25 ? '' : 'disabled'}>[ BATEDORES: ${escapeHtml(contact.name)} ]</button>`).join('') : ''}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div></section>`;
+&gt; ${description}</pre>${room.type === 'vault' ? expeditionLogisticsView(state) : ''}${isGenerator ? generatorFuelView(state) : ''}${room.type === 'radio' ? oilTradeView(state) : ''}${room.type === 'radiation_clinic' ? laydCareView(state, true) : room.type === 'presidential_suite' ? laydCareView(state, false) : ''}<div class="action-row">${room.type === 'presidential_suite' ? '<button type="button" class="primary-action" data-action="open-wardrobe">[ ABRIR GUARDA-ROUPA ]</button>' : ''}${isGenerator && !room.operational ? `<button type="button" class="primary-action" data-action="repair-generator" data-floor="${room.floor}" data-column="${room.column}" ${state.scrap >= 25 ? '' : 'disabled'}>[ REPARAR: 25 SUCATAS ]</button>` : ''}${room.type === 'arsenal' ? `<button type="button" class="primary-action" data-action="equip-guard" ${state.shelter_supplies?.weapons > 0 ? '' : 'disabled'}>[ EQUIPAR GUARDA: 1 ARMA ]</button>` : ''}${room.type === 'medical' ? `<button type="button" class="primary-action" data-action="treat-radiation" ${state.shelter_supplies?.medkits > 0 ? '' : 'disabled'}>[ TRATAR RADIAÇÃO: 1 CURATIVO ]</button>` : ''}${room.type === 'radio' ? `<button type="button" class="primary-action" data-action="broadcast-radio" ${state.scrap >= 10 ? '' : 'disabled'}>[ TRANSMITIR SINAL: 10 SUCATAS ]</button>` : ''}${room.type === 'office' ? (state.geopolitics?.contacts ?? []).map((contact) => `<button type="button" class="quiet-action" data-action="vault-scout" data-contact="${escapeHtml(contact.id)}" ${state.scrap >= 25 ? '' : 'disabled'}>[ BATEDORES: ${escapeHtml(contact.name)} ]</button>`).join('') : ''}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div></section>`;
     bunkerGeneratorModal.hidden = false;
     bunkerController?.pause();
     if (requestLocation && room.type === 'vault' && !state.expeditionLocation && !locationRequestPending) {
@@ -1481,6 +1507,15 @@ export function mountDashboard(root) {
     closeOilPanel();
     activeShelterRoom = null;
     bunkerGeneratorModal.innerHTML = marketView(state, currentSkinId());
+    bunkerGeneratorModal.hidden = false;
+    bunkerController?.pause();
+  }
+
+  function openLaydPanel() {
+    if (!bunkerGeneratorModal) return;
+    closeOilPanel();
+    activeShelterRoom = null;
+    bunkerGeneratorModal.innerHTML = `<section class="bunker-dialog oil-dialog layd-dialog" role="dialog" aria-modal="true" aria-labelledby="layd-title"><p class="eyebrow">/// COMPANHEIRA ///</p><h2 id="layd-title">LAYD</h2>${laydCareView(state, false)}<div class="action-row oil-actions"><button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div></section>`;
     bunkerGeneratorModal.hidden = false;
     bunkerController?.pause();
   }
@@ -1737,7 +1772,7 @@ export function mountDashboard(root) {
           onFort: openFortPanel,
           darkMarket: isMarketOpen(state) ? state.dark_market : null,
           onMarket: openMarketPanel,
-          companion: hasLayd(state),
+          companion: isLaydVisible(state),
           dog: bunkerSnapshot?.dog ?? null,
           onPet: () => playBark(),
           onPlayerChanged: (player) => {
@@ -2155,6 +2190,11 @@ export function mountDashboard(root) {
       commit(next);
       return;
     }
+    const laydChoice = event.target.closest('[data-action="layd-flee"], [data-action="layd-surrender"]');
+    if (laydChoice) {
+      commit(resolveLaydDiscovery(state, laydChoice.dataset.action === 'layd-flee' ? 'flee' : 'surrender'));
+      return;
+    }
     if (event.target.closest('[data-action="door-later"]')) {
       const adopting = !hasLayd(state);
       commit(adoptLayd({ ...state, door_prompt: false }));
@@ -2199,6 +2239,21 @@ export function mountDashboard(root) {
   bunkerGeneratorModal?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-action]');
     const action = button?.dataset.action;
+    if (action && action.startsWith('layd-')) {
+      const update = {
+        'layd-vaccine': () => applyVaccine(state, button.dataset.clinic === '1'),
+        'layd-buy-ration': () => buyRation(state),
+        'layd-divert-food': () => divertFood(state),
+        'layd-hide': () => toggleHideLayd(state),
+      }[action];
+      if (update) {
+        audio.play('click');
+        const room = activeShelterRoom;
+        commit(update());
+        if (room) openShelterRoom(room, { requestLocation: false }); else openLaydPanel();
+      }
+      return;
+    }
     if (action === 'open-wardrobe') { openWardrobe(); return; }
     if (action === 'wardrobe-back') { openShelterRoom(activeShelterRoom, { requestLocation: false }); return; }
     if (action === 'skin-trial') {
@@ -2427,6 +2482,7 @@ export function mountDashboard(root) {
     if (action === 'open-law-vote') { window.abrirModalVotacao(control.dataset.law); return; }
     if (action === 'open-levels') { openLevels(); return; }
     if (action === 'open-door') { commit({ ...state, door_prompt: true }); return; }
+    if (action === 'open-layd') { openLaydPanel(); return; }
     if (action === 'advance') { commit(state.is_wasteland ? advanceDay(state) : advanceMonth(state)); return; }
     if (action === 'advance-days') { commit(advanceDay(state, Number(control.dataset.days) || 1)); return; }
     if (action === 'country') { activeTab = 'overview'; commit(createGameState(control.dataset.country)); return; }

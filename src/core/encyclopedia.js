@@ -31,6 +31,7 @@ export const ENCYCLOPEDIA_ENTRIES = Object.freeze([
   entry('room-radio', 'room', '📻', 'Sala de Rádio', 'Uma antena apontada para o nada. Às vezes, o nada responde.'),
   entry('room-office', 'room', '🗄', 'Gabinete do Ditador', 'Mapas, ordens e batedores. Daqui o comandante governa o que restou.'),
   entry('room-detention', 'room', '⛓', 'Cela de Detenção', 'Barras enferrujadas e uma lâmpada que falha. Dissidentes aqui não sabotam ninguém.'),
+  entry('room-radiation_clinic', 'room', '☢', 'Sala de Tratamento de Radiação', 'Mesa forrada de chumbo, contador Geiger e uma geladeira de vacinas. Aqui se trata quem passou tempo demais lá fora, inclusive quem tem quatro patas.'),
   entry('room-laboratory', 'room', '🔬', 'Laboratório de Pesquisa', 'Ciência produzida a cada mês. Os especialistas rendem o dobro aqui dentro.'),
   entry('room-life_support', 'room', '🌀', 'Suporte de Vida', 'Ventiladores que nunca param. Cada respiração no Vault passa por estas hélices.'),
   entry('room-presidential_suite', 'room', '👑', 'Suíte Presidencial', 'O último luxo do fim do mundo, com guarda-roupa e tudo.'),

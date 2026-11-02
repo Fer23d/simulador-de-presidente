@@ -13,15 +13,28 @@ const PET_RANGE = 80;
 const PET_SECONDS = 2.6;
 const SURFACE_FLOOR = -1;
 
+// Layd esta com o jogador enquanto estiver viva e nao tiver sido entregue ao Vault.
 export function hasLayd(state) {
-  return state?.companion?.adopted === true;
+  const companion = state?.companion;
+  return companion?.adopted === true && companion.status !== 'dead' && companion.status !== 'gone';
+}
+
+// Escondida, ela some da vista de todos: nao segue o jogador pelos corredores.
+export function isLaydVisible(state) {
+  return hasLayd(state) && state.companion.hidden !== true;
+}
+
+export function createLaydCare(since = 0) {
+  return { status: 'ok', ration: 4, health: 100, sick: false, cured: false, doses: 0, vaccines: 0, lastDoseTurn: -1,
+    hidden: false, suspicion: 0, choices: { layd: 0, vault: 0 }, lastMissionTurn: -1, since };
 }
 
 export function adoptLayd(state) {
-  if (hasLayd(state)) return state;
+  if (state?.companion?.adopted) return state;
+  const since = Number(state?.wasteland_turn) || 0;
   return {
     ...state,
-    companion: { adopted: true, name: LAYD_NAME, since: Number(state?.wasteland_turn) || 0, bond: 0 },
+    companion: { adopted: true, name: LAYD_NAME, since, bond: 0, ...createLaydCare(since) },
     ...(state?.pendingStory ? {} : { pendingStory: true, currentStory: 'layd_arrives' }),
     notice: 'Layd, uma cadela do Ermo, escolheu ficar com você. Ela vai te seguir por onde for.',
   };
@@ -29,8 +42,16 @@ export function adoptLayd(state) {
 
 export function normalizeCompanion(value) {
   if (value?.adopted !== true) return null;
-  return { adopted: true, name: LAYD_NAME, since: Math.max(0, Math.floor(Number(value.since) || 0)),
-    bond: Math.max(0, Math.min(100, Math.floor(Number(value.bond) || 0))) };
+  const since = Math.max(0, Math.floor(Number(value.since) || 0));
+  const care = createLaydCare(since);
+  const int = (input, min, max, fallback) => Math.max(min, Math.min(max, Math.floor(Number.isFinite(Number(input)) ? Number(input) : fallback)));
+  return { adopted: true, name: LAYD_NAME, since, bond: int(value.bond, 0, 100, 0),
+    status: ['ok', 'dead', 'gone'].includes(value.status) ? value.status : 'ok',
+    ration: int(value.ration, 0, 99, care.ration), health: int(value.health, 0, 100, care.health),
+    sick: value.sick === true, cured: value.cured === true, doses: int(value.doses, 0, 99, 0), vaccines: int(value.vaccines, 0, 99, 0),
+    lastDoseTurn: int(value.lastDoseTurn, -1, 100000, -1), hidden: value.hidden === true, suspicion: int(value.suspicion, 0, 100, 0),
+    choices: { layd: int(value.choices?.layd, 0, 999, 0), vault: int(value.choices?.vault, 0, 999, 0) },
+    lastMissionTurn: int(value.lastMissionTurn, -1, 100000, -1) };
 }
 
 export function createDogActor(player) {

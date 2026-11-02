@@ -22,6 +22,7 @@ export const SHELTER_TYPES = Object.freeze({
   radio: Object.freeze({ name: 'Sala de Rádio', cost: 105, capacity: 0, accent: '#b9a277' }),
   office: Object.freeze({ name: 'Gabinete do Ditador', cost: 220, capacity: 0, accent: '#b396b1' }),
   detention: Object.freeze({ name: 'Cela de Detenção', cost: 180, capacity: 0, accent: '#a9574c' }),
+  radiation_clinic: Object.freeze({ name: 'Sala de Tratamento de Radiação', cost: 180, capacity: 0, accent: '#7bff6a' }),
   laboratory: Object.freeze({ name: 'Laboratório de Pesquisa', cost: 300, capacity: 0, accent: '#79c7d1' }),
   life_support: Object.freeze({ name: 'Suporte de Vida', cost: 180, capacity: 0, accent: '#84cbd4' }),
   presidential_suite: Object.freeze({ name: 'Suíte Presidencial', cost: 220, capacity: 0, accent: '#d3ae5d' }),
@@ -134,7 +135,7 @@ export function buildShelterRoom(state, type, floor, column) {
   const buildCost = getShelterBuildCost(type, floor, state.presidentClass);
   if ((Number(state.scrap) || 0) < buildCost) return { ...state, notice: 'Sucata insuficiente.' };
   const grid = state.shelter_grid.map((row) => [...row]);
-  const roles = { generator: 'engineer', greenhouse: 'scientist', laboratory: 'scientist', medical: 'medic', arsenal: 'guard', radio: 'engineer', office: 'resident' };
+  const roles = { generator: 'engineer', greenhouse: 'scientist', laboratory: 'scientist', medical: 'medic', radiation_clinic: 'medic', arsenal: 'guard', radio: 'engineer', office: 'resident' };
   const hasWorker = Array.isArray(state.inhabitants) && !['elevator', 'detention', 'life_support', 'presidential_suite'].includes(type);
   const workerId = `worker-${floor}-${column}`;
   const productiveRoom = ['generator', 'greenhouse', 'laboratory'].includes(type);

@@ -10,6 +10,8 @@ const MISSION_ROOM_TYPES = Object.freeze({
   'air-filter-crisis': Object.freeze(['life_support', 'medical']),
   'radio-signal-unknown': Object.freeze(['radio', 'office']),
   'greenhouse-fungus': Object.freeze(['greenhouse']),
+  'layd-vaccine': Object.freeze(['laboratory', 'medical']),
+  'layd-ration': Object.freeze(['greenhouse', 'dormitory', 'office']),
 });
 
 const UNREACHABLE = new Set(['elevator']);
@@ -20,6 +22,8 @@ export const MISSION_STORIES = Object.freeze({
   'generator-bearings': 'O barulho guia você até o setor {setor} do andar {andar} antes mesmo de abrir a porta: um gemido metálico, ritmado, como um animal ferido. O engenheiro de plantão está coberto de graxa, segurando um rolamento rachado na palma da mão. "Aguenta mais umas semanas", murmura, sem acreditar no que diz. As luzes do corredor piscam a cada volta da turbina.',
   'air-filter-crisis': 'No andar {andar}, o ar do setor {setor} tem gosto de ferrugem. Habitantes tossem encostados nas paredes e uma criança respira por um pano molhado. Os filtros do sistema estão negros de fuligem. A médica de plantão ergue o último curativo esterilizado e espera a sua ordem.',
   'radio-signal-unknown': 'O rádio do setor {setor}, andar {andar}, chia sozinho no escuro. Entre a estática, uma voz repete coordenadas e uma palavra: "sobreviventes". O operador anotou tudo em um guardanapo com mãos trêmulas. Pode ser um esconderijo cheio de suprimentos. Pode ser uma isca. Lá fora, ninguém responde a perguntas.',
+  'layd-vaccine': 'No andar {andar}, setor {setor}, a geladeira do laboratório zumbe baixinho. Atrás do vidro embaçado, uma única ampola azul com a etiqueta da enfermaria. Você pensa em Layd, deitada no chão da suíte com o focinho quente. Pensa nos habitantes que também tossem à noite. A ampola brilha. O corredor está vazio.',
+  'layd-ration': 'A despensa do setor {setor}, andar {andar}, cheira a lata aberta e a medo. As prateleiras estão contadas, etiquetadas, assinadas. Layd te seguiu até a porta e ficou sentada, sem entrar, como se soubesse que aquilo não era dela. A balança do estoque marca o peso exato de cada lata.',
   'greenhouse-fungus': 'A luz violeta da estufa do andar {andar} revela o problema assim que você entra no setor {setor}: uma penugem cinzenta cobrindo as folhas, espalhando-se de bandeja em bandeja. O botânico arranca uma planta morta e mostra as raízes apodrecidas. "Se não agirmos agora, perdemos a colheita inteira. Talvez a próxima também."',
 });
 

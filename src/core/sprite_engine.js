@@ -12,11 +12,12 @@ const SURFACE_Y = WORLD_TOP - 30;
 const ATLAS_CELLS = Object.freeze({
   vault: [0, 0], elevator: [1, 0], dormitory: [2, 0],
   generator: [0, 1], greenhouse: [1, 1], arsenal: [2, 1],
-  medical: [0, 2], radio: [1, 2], office: [2, 2], presidential_suite: [2, 2],
+  medical: [0, 2], radiation_clinic: [0, 2], radio: [1, 2], office: [2, 2], presidential_suite: [2, 2],
 });
 const ROOM_AMBIENT_LIGHTS = Object.freeze({
   medical: Object.freeze(['rgba(200, 240, 255, .3)', 'rgba(200, 240, 255, .12)']),
   laboratory: Object.freeze(['rgba(100, 255, 100, .2)', 'rgba(100, 255, 100, .08)']),
+  radiation_clinic: Object.freeze(['rgba(120, 255, 110, .3)', 'rgba(120, 255, 110, .1)']),
   life_support: Object.freeze(['rgba(150, 225, 255, .2)', 'rgba(100, 190, 225, .08)']),
 });
 const NPC_ROWS = Object.freeze({ resident: 0, engineer: 0, scientist: 1, medic: 2, guard: 3 });
@@ -367,7 +368,77 @@ export function renderRoom(ctx, room, assets, time = 0) {
     drawOrMissing(ctx, atlas, x, y, SLOT_WIDTH, ROOM_HEIGHT,
       atlas ? [column * cellWidth, row * cellHeight, cellWidth, cellHeight] : null);
   }
+  if (room.type === 'radiation_clinic') renderCachedProceduralInterior(ctx, 'radiation_clinic', x, y, time, renderRadiationClinicDetails);
   renderRoomAmbientLight(ctx, room, x, y);
+}
+
+// Sala de Tratamento de Radiacao: o Centro Medico ganha placa de risco, contador Geiger, mesa forrada de chumbo e geladeira de vacinas.
+function renderRadiationClinicDetails(ctx, x, y, time = 0) {
+  const floorY = y + ROOM_HEIGHT - 14;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x + 4, y + 4, SLOT_WIDTH - 8, ROOM_HEIGHT - 8);
+  ctx.clip();
+  // Placa de risco na parede.
+  const signX = x + SLOT_WIDTH - 52;
+  const signY = y + 40;
+  ctx.fillStyle = '#e8c53a';
+  ctx.beginPath();
+  ctx.moveTo(signX, signY - 22);
+  ctx.lineTo(signX + 22, signY + 16);
+  ctx.lineTo(signX - 22, signY + 16);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#1a1408';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#1a1408';
+  ctx.beginPath();
+  ctx.arc(signX, signY + 1, 2.6, 0, Math.PI * 2);
+  ctx.fill();
+  for (let blade = 0; blade < 3; blade++) {
+    const a = blade * Math.PI * 2 / 3 - Math.PI / 2;
+    ctx.beginPath();
+    ctx.moveTo(signX, signY + 1);
+    ctx.arc(signX, signY + 1, 9, a - .5, a + .5);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // Mesa de exame forrada de chumbo, com manta de cachorro.
+  const tableX = x + 38;
+  ctx.fillStyle = '#5c646a';
+  ctx.fillRect(tableX, floorY - 34, 92, 9);
+  ctx.fillStyle = '#2f3438';
+  ctx.fillRect(tableX + 8, floorY - 25, 6, 25);
+  ctx.fillRect(tableX + 78, floorY - 25, 6, 25);
+  ctx.fillStyle = '#8a4a3a';
+  ctx.fillRect(tableX + 6, floorY - 40, 60, 7);
+  ctx.fillStyle = 'rgba(255, 220, 190, .5)';
+  for (const px of [18, 30, 42, 54]) {
+    ctx.beginPath();
+    ctx.arc(tableX + px, floorY - 37, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Geladeira de vacinas com luz azul.
+  const fridgeX = x + 150;
+  ctx.fillStyle = '#b7c3c8';
+  ctx.fillRect(fridgeX, floorY - 52, 34, 52);
+  ctx.strokeStyle = '#1a2224';
+  ctx.lineWidth = 1.4;
+  ctx.strokeRect(fridgeX + .5, floorY - 51.5, 33, 51);
+  ctx.fillStyle = 'rgba(120, 190, 255, .55)';
+  ctx.fillRect(fridgeX + 5, floorY - 44, 24, 22);
+  ctx.fillStyle = '#e8f4ff';
+  for (const vy of [-40, -33, -26]) ctx.fillRect(fridgeX + 9, floorY + vy, 16, 3);
+  // Contador Geiger piscando.
+  const blink = Math.sin(time / 140) > .3;
+  ctx.fillStyle = '#1b2a1b';
+  ctx.fillRect(x + 196, floorY - 46, 24, 18);
+  ctx.fillStyle = blink ? '#7bff6a' : '#2f6a2a';
+  ctx.fillRect(x + 200, floorY - 42, 16, 4);
+  ctx.fillStyle = '#e8c53a';
+  ctx.fillRect(x + 200, floorY - 35, 7, 3);
+  ctx.restore();
 }
 
 // Laboratorio desenhado sobre a sala base: azulejos clinicos, tanque de especime, terminal, bancada com vidraria,

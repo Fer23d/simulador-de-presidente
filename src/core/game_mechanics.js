@@ -6,6 +6,7 @@ import { createExpeditionLoot, createExpeditionNodes } from './expeditions.js';
 import { normalizeNeeds } from './needs.js';
 import { getWeather } from './weather.js';
 import { getMissionReward, isMissionPending } from './missions.js';
+import { applyLaydEvent, getLaydEvent } from './layd_care.js';
 import { getSector, getSectorExpedition, getSurfaceMap, isSectorSelectable, revealSector } from './surface_map.js';
 import { getCouncilEvent, getCouncilModifiers, resolveCouncilChoice } from './vault_council.js';
 
@@ -153,7 +154,7 @@ export function calculateSuppressedChance(baseChance, suppressionFactor) {
 }
 
 export function getWastelandEvent(eventId) {
-  return getCouncilEvent(eventId) ?? WASTELAND_EVENTS.find((event) => event.id === eventId) ?? null;
+  return getCouncilEvent(eventId) ?? WASTELAND_EVENTS.find((event) => event.id === eventId) ?? getLaydEvent(eventId);
 }
 
 export function canResolveWastelandEvent(state, eventId, optionId) {
@@ -365,6 +366,10 @@ export function advanceMonthlyGameMechanics(state) {
 }
 
 export function resolveWastelandEvent(state, optionId) {
+  return applyLaydEvent(state, resolveBaseWastelandEvent(state, optionId), optionId);
+}
+
+function resolveBaseWastelandEvent(state, optionId) {
   const event = getWastelandEvent(state.pendingBunkerEvent?.id);
   const option = event?.options.find((choice) => choice.id === optionId);
   if (!state.is_wasteland || !event || !option) return { ...state, notice: 'Dilema do Vault indisponível.' };
