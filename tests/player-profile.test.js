@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createGameState, hydrateGameState, updatePlayerProfile } from '../src/core/game-state.js';
-import { getUiLanguage, monthName, uiText } from '../src/core/i18n.js';
+import { getUiLanguage, monthName, translateUiText, uiText } from '../src/core/i18n.js';
 import { createPlayerProfile, getPlayerDisplayName, normalizeLanguage } from '../src/core/player_profile.js';
 import { profileView } from '../src/ui/dashboard.js';
 
@@ -39,5 +39,6 @@ test('interface labels and calendar months change without touching story text', 
   assert.equal(uiText('es', 'nav.profile'), 'Mi perfil');
   assert.equal(uiText('en', 'metric.cash'), 'National treasury');
   assert.equal(monthName('es', 3), 'Marzo');
+  assert.equal(translateUiText('Diplomacia e Mapa · Reputação global', 'en'), 'Diplomacy and map · Global reputation');
   assert.equal(getUiLanguage({ playerProfile: { language: 'en' } }), 'en');
 });

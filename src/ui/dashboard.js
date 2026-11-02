@@ -13,7 +13,7 @@ import { canPromulgarConstituicao } from '../core/constitution.js';
 import { RESOLUTIONS } from '../core/un_assembly.js';
 import { getStoryEvent } from '../core/story_engine.js';
 import { resolvePresidentialBriefing } from '../core/presidential_briefing.js';
-import { getUiLanguage, languageOptionLabel, monthName, uiText } from '../core/i18n.js';
+import { getUiLanguage, languageOptionLabel, monthName, translateDom, translateUiText, uiText } from '../core/i18n.js';
 import { getLeaderName, getPlayerDisplayName, SUPPORTED_LANGUAGES } from '../core/player_profile.js';
 import { COUNCIL_LEADERS } from '../core/vault_council.js';
 import { checkStoryChapters, LORE_CHAPTERS, STORY_NOTICE } from '../core/story_lore.js';
@@ -1167,6 +1167,14 @@ export function mountDashboard(root) {
   };
   let state = localCityPreview ? createLocalCityPreview() : loadState();
   const persistState = (nextState) => localCityPreview ? '' : saveState(nextState);
+  const localizeDocument = () => {
+    if (typeof document !== 'undefined' && document.body) translateDom(document.body, getUiLanguage(state));
+  };
+  const translationObserver = typeof MutationObserver !== 'undefined' && typeof document !== 'undefined' && document.body
+    ? new MutationObserver(() => localizeDocument()) : null;
+  // Traduzimos novos blocos DOM, mas não observamos cada caractere: isso evita
+  // que o efeito de máquina de escrever do diálogo provoque trabalho por frame.
+  translationObserver?.observe(document.body, { childList: true, subtree: true });
   let activeTab = 'overview';
   let storageNotice = '';
   let diplomacyQuery = '';
@@ -1746,6 +1754,7 @@ export function mountDashboard(root) {
       ${state.notice === STORY_NOTICE ? `<p class="storage-notice story-notification" role="status">${STORY_NOTICE}</p>` : ''}
       <section class="content-area">${content}</section>${renderNews(state)}
     </section></div>`;
+    localizeDocument();
     if (state.city) {
       cityController = createCityController(root, {
         getState: () => state,
@@ -1902,7 +1911,7 @@ export function mountDashboard(root) {
           onHint: (hint) => {
             const tooltip = root.querySelector('[data-bunker-tooltip]');
             if (!tooltip) return;
-            tooltip.textContent = hint;
+            tooltip.textContent = translateUiText(hint, getUiLanguage(state));
             tooltip.hidden = !hint;
           },
           onAssetsReady: (failed) => {
