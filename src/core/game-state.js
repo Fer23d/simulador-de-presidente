@@ -40,6 +40,7 @@ import { normalizeOilField } from './oil.js';
 import { normalizeCity } from './city.js';
 import { normalizeCompanion } from './companion.js';
 import { normalizeDarkMarket } from './market.js';
+import { normalizeLaydEscape } from './layd_care.js';
 import { createLevelState, estimateLegacyXp, normalizeLevelState } from './levels.js';
 import { normalizeFort, normalizeRaidReport } from './defense.js';
 import { INITIAL_SHELTER_GRID, migrateLegacyPlayer, migrateLegacyRooms, normalizeShelterGrid, normalizeShelterInhabitants } from './shelter_engine.js';
@@ -53,6 +54,7 @@ import { createExpeditionLocation } from './expeditions.js';
 import { normalizePlayerCosmetics } from './player_state.js';
 import { createVaultCouncil } from './vault_council.js';
 import { createPresidentialMandate, getPresidentialBriefing, queuePresidentialBriefing } from './presidential_briefing.js';
+import { createPlayerProfile, normalizeLanguage, updatePlayerProfile as applyPlayerProfileUpdate } from './player_profile.js';
 
 const STATE_VERSION = 22;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
@@ -199,7 +201,7 @@ function collectPuppetTribute(economy, geopolitics) {
   return tribute > 0 ? { ...economy, cash: economy.cash + tribute } : economy;
 }
 
-export function createGameState(countryId = 'bra') {
+export function createGameState(countryId = 'bra', playerProfile = {}) {
   const country = createCountryProfile(getCountryById(countryId) ?? COUNTRIES.find((item) => item.id === 'bra'));
   const geopolitics = createGeopolitics(country.id);
   return {
@@ -210,6 +212,7 @@ export function createGameState(countryId = 'bra') {
     budget: { ...DEFAULT_BUDGET },
     government: 'republic',
     title: 'Presidente',
+    playerProfile: createPlayerProfile(playerProfile),
     pendingGovernmentChoice: false,
     is_wasteland: false,
     wasteland_cinematic_pending: false,
@@ -229,6 +232,7 @@ export function createGameState(countryId = 'bra') {
     companion: null,
     dark_market: null,
     pendingLaydDiscovery: false,
+    layd_escape: null,
     wasteland_day: 0,
     generator_fuel: false,
     pendingRaid: null,
@@ -334,6 +338,14 @@ export function changeTax(state, taxKey, delta) {
     budget: { ...state.budget, [taxKey]: nextRate },
     notice: taxKey === 'incomeTaxRate' ? 'Imposto de renda ajustado.' : 'IVA ajustado.',
   });
+}
+
+export function updatePlayerProfile(state, patch = {}) {
+  const next = applyPlayerProfileUpdate(state, patch);
+  return {
+    ...next,
+    playerProfile: { ...next.playerProfile, language: normalizeLanguage(next.playerProfile.language) },
+  };
 }
 
 export function setBudget(state, budgetKey, value) {
@@ -1280,6 +1292,7 @@ export function hydrateGameState(serialized) {
       defcon_one_triggered: Boolean(parsed.defcon_one_triggered),
       government: ['republic', 'empire', 'corporate'].includes(parsed.government) ? parsed.government : base.government,
       title: typeof parsed.title === 'string' ? parsed.title : base.title,
+      playerProfile: createPlayerProfile(parsed.playerProfile ?? { name: parsed.playerName, language: parsed.language }),
       pendingGovernmentChoice: Boolean(parsed.pendingGovernmentChoice),
       is_wasteland: Boolean(parsed.is_wasteland),
       ...playerCosmetics,
@@ -1299,6 +1312,7 @@ export function hydrateGameState(serialized) {
       companion: normalizeCompanion(parsed.companion),
       dark_market: normalizeDarkMarket(parsed.dark_market),
       pendingLaydDiscovery: parsed.pendingLaydDiscovery === true,
+      layd_escape: normalizeLaydEscape(parsed.layd_escape),
       wasteland_day: Math.max(0, Math.min(29, Math.floor(Number(parsed.wasteland_day) || 0))),
       pendingRaid: normalizeRaidReport(parsed.pendingRaid),
       raidCooldownUntilTurn: Math.max(0, Math.floor(Number(parsed.raidCooldownUntilTurn) || 0)),

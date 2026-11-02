@@ -304,7 +304,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   onDetain, onAssetsReady, onEnvironmentChanged, environment = {}, isNight = environment?.isNight ?? false, weather: savedWeather = {},
   oxygenDeprived = false, assetUrls = {}, lootbox = {}, onLootboxClick,
   presidentClass = null, equippedSkin = 'default', currentDay = 1, onDayPassed, mission = null, onMission,
-  onDialogue, onDialogueAdvance, onDialogueClose, oilDerricks = null, oilFeedback = null, onOilDerrick, surfaceFort = null, onFort, companion = false, dog: savedDog = null, onPet, darkMarket = null, onMarket } = {}) {
+  onDialogue, onDialogueAdvance, onDialogueClose, oilDerricks = null, oilFeedback = null, onOilDerrick, surfaceFort = null, onFort, companion = false, dog: savedDog = null, onPet, darkMarket = null, onMarket, escape = null, onEscape } = {}) {
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
   const assets = new AssetManager({ ...DEFAULT_ASSETS, ...assetUrls });
@@ -332,6 +332,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   const keys = new Set();
   const hasSuit = hasMarketSuit(equippedSkin);
   let farMarketHintUntil = 0;
+  const dogIsNear = () => Boolean(dog) && dog.floor === player.floor && Math.abs(dog.x - player.x) < 200;
   const nearMarket = () => Boolean(darkMarket) && player.floor === SURFACE_FLOOR && player.liftTarget === null && Math.abs(player.x - MARKET_X) <= MARKET_REACH;
   const actors = inhabitants.map((data) => new Inhabitant(data));
   let dog = companion ? (savedDog ?? createDogActor(player)) : null;
@@ -393,6 +394,14 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants: actors, cabinFloor, time,
       isNight: dayNight.isNight, activeGenerators, oxygenDeprived, lootbox, presidentClass, equippedSkin,
       weather: weather.type, oilDerricks, oilFeedback, surfaceFort, companion: dog, darkMarket });
+    if (escape) {
+      // Alarme: o Vault inteiro esta acordado e atras de voce.
+      ctx.save();
+      ctx.globalAlpha = .06 + (Math.sin(time / 260) + 1) * .045;
+      ctx.fillStyle = '#ff1a1a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
     const rebel = paused || buildMode ? null : findNearbyRebel(player, grid, actors);
     const nearbyInhabitant = paused || buildMode ? null : trackNearbyInhabitant(player, grid, actors, time);
     const nearbyRoom = nearbyInhabitant && getRoom(grid, nearbyInhabitant.npc.floor, nearbyInhabitant.npc.column);
@@ -409,7 +418,8 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     const missionHere = mission && roomTrigger && roomTrigger.room.floor === mission.floor && roomTrigger.room.column === mission.column;
     const marketPrompt = nearMarket() ? `[ E ] NEGOCIAR COM ${darkMarket.merchant.toUpperCase()}` : '';
     const farHint = time < farMarketHintUntil ? (hasSuit ? 'SOBE PELO ELEVADOR ATÉ A SUPERFÍCIE PARA NEGOCIAR' : 'A SUPERFÍCIE MATA: EQUIPE O TRAJE ANTIRRADIAÇÃO') : '';
-    const hint = paused || buildMode ? '' : marketPrompt || farHint || rebel?.label || (missionHere ? `[ E ] RESOLVER: ${mission.title ?? 'PROBLEMA'}` : '')
+    const escapeHint = escape && roomTrigger?.room.type === escape.room ? (escape.room === 'vault' && !dogIsNear() ? 'ESPERE LAYD TE ALCANÇAR' : escape.hint) : '';
+    const hint = paused || buildMode ? '' : escapeHint || marketPrompt || farHint || rebel?.label || (missionHere ? `[ E ] RESOLVER: ${mission.title ?? 'PROBLEMA'}` : '')
       || nearbyInhabitant?.label || getElevatorPrompt(player, grid, { surface: true, suit: hasSuit }) || roomTrigger?.label || '';
     if (hint !== lastHint) { lastHint = hint; onHint?.(hint); }
     frameId = requestAnimationFrame(frame);
@@ -451,6 +461,15 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     if (!['a', 'd', 'w', 's', 'e', 'arrowleft', 'arrowright', 'arrowup', 'arrowdown'].includes(key)) return;
     event.preventDefault();
     if (key === 'e' && !event.repeat) {
+      if (escape) {
+        const target = findNearbyTrigger(player, grid);
+        if (target && target.room.type === escape.room) {
+          paused = true;
+          keys.clear();
+          onEscape?.(target.room, { dogNear: dogIsNear() });
+          return;
+        }
+      }
       if (nearMarket()) {
         paused = true;
         keys.clear();

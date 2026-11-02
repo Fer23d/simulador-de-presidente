@@ -187,11 +187,37 @@ export function advanceLaydMonth(state) {
   return notes.length ? { ...next, notice: `${next.notice ?? ''} ${notes.join(' ')}`.trim() } : next;
 }
 
+export const ESCAPE_STAGES = Object.freeze({
+  fetch: Object.freeze({ room: 'presidential_suite', hint: '[ E ] PEGAR LAYD NO ESCONDERIJO', objective: 'Vá até a suíte presidencial e pegue Layd.' }),
+  run: Object.freeze({ room: 'vault', hint: '[ E ] ABRIR A PORTA E PARTIR COM LAYD', objective: 'Leve Layd até a Porta do Vault. Ela precisa estar perto de você.' }),
+});
+
+export function normalizeLaydEscape(value) {
+  if (!value || !ESCAPE_STAGES[value.stage]) return null;
+  return { stage: value.stage, month: Math.max(0, Math.floor(Number(value.month) || 0)) };
+}
+
+// Um passo da fuga: pega Layd no esconderijo e, com ela ao lado, abre a Porta.
+export function advanceLaydEscape(state, room, { dogNear = false } = {}) {
+  const escape = state?.layd_escape;
+  const stage = ESCAPE_STAGES[escape?.stage];
+  if (!stage || room?.type !== stage.room) return state;
+  if (escape.stage === 'fetch') {
+    return { ...patchCompanion(state, { hidden: false }), layd_escape: { ...escape, stage: 'run' },
+      notice: 'Layd te reconhece no escuro e não late. Ela segue você. Agora, até a Porta.' };
+  }
+  if (!dogNear) return { ...state, notice: 'Layd ainda não chegou. Espere por ela: sem ela, você não sai.' };
+  return { ...state, layd_escape: null, ending: { id: 'layd_flight', month: Number(state.wasteland_turn) || 0 } };
+}
+
 // A descoberta: o povo sabe. Fugir pela Porta com Layd ou entrega-la ao Vault.
 export function resolveLaydDiscovery(state, choice) {
   if (!state.pendingLaydDiscovery || !hasLayd(state)) return state;
   if (choice === 'flee') {
-    return { ...state, pendingLaydDiscovery: false, ending: { id: 'layd_flight', month: Number(state.wasteland_turn) || 0 } };
+    // A fuga e fisica: Layd esta escondida na suite, e o jogador precisa busca-la e leva-la ate a Porta.
+    return { ...patchCompanion(state, { hidden: true }), pendingLaydDiscovery: false,
+      layd_escape: { stage: 'fetch', month: Number(state.wasteland_turn) || 0 },
+      notice: 'A FUGA: pegue Layd na suíte presidencial e leve-a até a Porta do Vault antes que o povo feche os corredores.' };
   }
   if (choice === 'surrender') {
     const next = { ...patchCompanion(state, { status: 'gone', hidden: false, suspicion: 0 }), pendingLaydDiscovery: false };

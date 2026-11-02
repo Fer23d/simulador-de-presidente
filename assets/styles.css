@@ -514,6 +514,24 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .briefing-option strong { display: block; margin-bottom: 9px; color: var(--amber); font: 12px/1.5 "Press Start 2P", monospace; }
 .briefing-option span { display: block; color: var(--muted); font: 16px/1.45 "Share Tech Mono", monospace; }
 @media (max-width: 680px) { .presidential-briefing { padding: 20px; } .briefing-options { grid-template-columns: 1fr; } }
+.profile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.profile-identity-panel, .profile-settings-panel, .profile-preview-panel { min-height: 100%; }
+.profile-preview-panel { grid-column: 1 / -1; border-color: var(--cyan); background: linear-gradient(135deg, rgba(8, 30, 27, .9), rgba(10, 16, 13, .95)); }
+.profile-preview-panel h2 { margin: 8px 0; color: var(--cyan); font-family: "Press Start 2P", monospace; font-size: clamp(18px, 3vw, 28px); text-shadow: 0 0 11px rgba(99, 221, 255, .55); }
+.profile-preview-panel p:last-child { color: var(--muted); font: 17px/1.45 "Share Tech Mono", monospace; }
+.profile-lead { margin: 0 0 18px; color: var(--phosphor); font: 18px/1.45 "Share Tech Mono", monospace; }
+.profile-field, .profile-option { display: grid; gap: 8px; margin: 0 0 16px; color: var(--amber); font: 12px/1.4 "Press Start 2P", monospace; }
+.profile-field input, .profile-field select { width: 100%; min-height: 44px; padding: 10px 12px; border: 2px solid var(--line-hot); background: #050a07; color: var(--phosphor); font: 18px "Share Tech Mono", monospace; }
+.profile-field input:focus, .profile-field select:focus, .profile-option input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.profile-option { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px dashed var(--line); }
+.profile-option > span { display: flex; justify-content: space-between; gap: 14px; width: 100%; }
+.profile-option strong { color: var(--cyan); }
+.profile-option input[type="range"] { width: 100%; accent-color: var(--cyan); }
+.profile-option input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--cyan); }
+.profile-hint { margin: -4px 0 18px; color: var(--muted); font: 16px/1.45 "Share Tech Mono", monospace; }
+.profile-save-note { margin-top: 16px; margin-bottom: 0; color: var(--cyan); }
+.profile-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+@media (max-width: 780px) { .profile-grid { grid-template-columns: 1fr; } .profile-preview-panel { grid-column: auto; } }
 .terminal-dialog, .escape-dialog { width: min(620px, 100%); padding: 24px; border: 3px double var(--phosphor); background: #030806; box-shadow: 0 0 22px rgba(57, 255, 20, .45), 8px 8px 0 #010201; text-align: center; }
 .escape-dialog { border-color: #ffd700; background: #0d0a02; }
 .terminal-dialog pre, .escape-dialog pre { margin: 18px auto; color: var(--phosphor); font-family: "Share Tech Mono", monospace; font-size: 16px; line-height: 1.35; text-align: left; text-shadow: 0 0 8px rgba(57, 255, 20, .7); white-space: pre-wrap; }
@@ -822,6 +840,7 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .city-tool-name { line-height: 1.1; }
 .city-tool-cost { color: #ffb000; font-weight: bold; }
 .city-info { min-height: 108px; padding: 9px 10px; border: 1px dashed #8a5a1c; color: #e8cfa0; font: 13px/1.4 'Share Tech Mono', monospace; }
+.city-leader-tag { display: inline-block; margin-top: 5px; color: #9bffb0; font: 11px 'Share Tech Mono', monospace; letter-spacing: .08em; }
 .city-info h3 { margin: 0 0 5px; color: #ffb000; font: 12px 'Press Start 2P', monospace; }
 .city-info p, .city-info ul { margin: 4px 0; padding: 0; list-style: none; }
 .city-info-cost { color: #ffcf7a; }
@@ -913,3 +932,6 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .layd-bar.is-warn > span { background: #f4d36e; }
 .layd-bar.is-danger > span { background: #ff5a4a; }
 .layd-button.is-sick { color: #ff8a6a; border-color: #ff8a6a; }
+
+.layd-escape-banner { margin: 6px 0 0; color: #ff8a6a; font-family: 'Share Tech Mono', monospace; font-weight: bold; animation: layd-escape-pulse 1s infinite; }
+@keyframes layd-escape-pulse { 50% { opacity: .55; } }

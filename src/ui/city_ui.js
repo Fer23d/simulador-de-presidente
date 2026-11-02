@@ -3,6 +3,7 @@ import { advanceCityDay, analyzeCity, canPlaceAt, CITY_BUILDINGS, CITY_GATE, CIT
   getCityObjective, SCAVENGE_PER_CITIZEN, setCitySpeed, UPKEEP_PER_BUILDING, WATER_PER_CITIZEN } from '../core/city.js';
 import { checkStoryChapters } from '../core/story_lore.js';
 import { CITY_CANVAS_HEIGHT, CITY_CANVAS_WIDTH, CITY_DEFAULT_ZOOM, CITY_TILE, getCityCamera, renderCity } from '../core/city_renderer.js';
+import { getPlayerDisplayName } from '../core/player_profile.js';
 
 const number = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
 const escapeText = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -36,7 +37,7 @@ export function cityView(state) {
   const origin = CITY_ORIGINS[city.origin];
   return `<section class="panel city-panel" data-city>
     <div class="city-topbar">
-      <div><p class="eyebrow">/// RECONSTRUÇÃO ///</p><h2>${escapeText(origin.title)}</h2></div>
+      <div><p class="eyebrow">/// RECONSTRUÇÃO ///</p><h2>${escapeText(origin.title)}</h2><span class="city-leader-tag">COMANDO: ${escapeText(getPlayerDisplayName(state).toUpperCase())}</span></div>
       <div class="city-clock" data-city-clock>${cityClockText(city)}</div>
       <div class="city-topbar-controls">
         <button type="button" class="city-history-button" data-action="city-story">[ DIÁRIO ]</button>

@@ -188,7 +188,7 @@ export function advanceWastelandDays(state, days, now = Date.now()) {
     const before = current;
     current = next;
     // A Porta so interrompe uma vez, no dia em que fica pronta; depois o jogador avanca o tempo normalmente.
-    if (current.pendingRaid || current.pendingBunkerEvent || current.pendingLaydDiscovery || current.ending || current.pendingLoot || (isDoorOpen(current) && !isDoorOpen(before))) break;
+    if (current.pendingRaid || current.pendingBunkerEvent || current.pendingLaydDiscovery || current.layd_escape || current.ending || current.pendingLoot || (isDoorOpen(current) && !isDoorOpen(before))) break;
   }
   return current;
 }
@@ -197,6 +197,7 @@ function advanceVaultMonth(state, dayIndex = 0) {
   if (state.ending) return { ...state, notice: `A história do Vault terminou: ${ENDINGS[state.ending.id]?.title ?? 'fim'}.` };
   if (state.pendingRaid) return { ...state, notice: 'Veja o relatório do ataque na superfície antes de avançar o mês.' };
   if (state.pendingLaydDiscovery) return { ...state, notice: 'O povo descobriu Layd. Decida antes de continuar.' };
+  if (state.layd_escape) return { ...state, notice: 'Não há tempo: leve Layd até a Porta.' };
   if (state.pendingBunkerEvent || state.pendingLoot || state.pendingExpeditionReports?.length) {
     return { ...state, notice: state.pendingBunkerEvent
       ? 'Resolva o dilema do Vault antes de avancar o mes.'

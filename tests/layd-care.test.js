@@ -4,7 +4,7 @@ import { adoptLayd, hasLayd, isLaydVisible } from '../src/core/companion.js';
 import { createGameState, hydrateGameState } from '../src/core/game-state.js';
 import { transicionarParaWasteland, advanceWastelandMonth } from '../src/core/wasteland.js';
 import { resolveWastelandEvent, getWastelandEvent } from '../src/core/game_mechanics.js';
-import { applyVaccine, advanceLaydMonth, buyRation, canApplyVaccine, divertFood, DOSES_NEEDED, getLaydStatus, resolveLaydDiscovery,
+import { advanceLaydEscape, applyVaccine, advanceLaydMonth, buyRation, canApplyVaccine, divertFood, DOSES_NEEDED, getLaydStatus, resolveLaydDiscovery,
   SICK_AFTER_MONTHS, SUSPICION_LIMIT, toggleHideLayd } from '../src/core/layd_care.js';
 import { ENDINGS, getEndingStory } from '../src/core/endings.js';
 import { SHELTER_TYPES } from '../src/core/shelter_engine.js';
@@ -137,9 +137,26 @@ test('when the Vault finds out the player can flee through the Door or hand Layd
   const month = advanceWastelandMonth(found);
   assert.equal(month.wasteland_turn, found.wasteland_turn, 'time stops until the player decides');
   const fled = resolveLaydDiscovery(found, 'flee');
-  assert.equal(fled.ending.id, 'layd_flight');
   assert.equal(fled.pendingLaydDiscovery, false);
-  assert.match(getEndingStory(fled, 'layd_flight'), /Layd/);
+  assert.equal(fled.ending ?? null, null, 'the flight is not instant: the player has to walk it');
+  assert.equal(fled.layd_escape.stage, 'fetch');
+  assert.equal(isLaydVisible(fled), false, 'Layd is still hidden in the suite');
+  assert.equal(advanceWastelandMonth(fled).wasteland_turn, fled.wasteland_turn, 'no time passes during the escape');
+  assert.match(doorView(fled), /^$/, 'the discovery modal is gone');
+  const wrongRoom = advanceLaydEscape(fled, { type: 'laboratory' });
+  assert.equal(wrongRoom.layd_escape.stage, 'fetch');
+  const picked = advanceLaydEscape(fled, { type: 'presidential_suite' });
+  assert.equal(picked.layd_escape.stage, 'run');
+  assert.equal(isLaydVisible(picked), true, 'Layd follows the player now');
+  const alone = advanceLaydEscape(picked, { type: 'vault' }, { dogNear: false });
+  assert.equal(alone.layd_escape.stage, 'run', 'the Door will not open without her');
+  assert.match(alone.notice, /Layd ainda não chegou/);
+  const done = advanceLaydEscape(picked, { type: 'vault' }, { dogNear: true });
+  assert.equal(done.ending.id, 'layd_flight');
+  assert.equal(done.layd_escape, null);
+  assert.match(getEndingStory(done, 'layd_flight'), /Layd/);
+  const loaded = hydrateGameState(JSON.stringify({ ...picked, version: createGameState().version }));
+  assert.equal(loaded.layd_escape.stage, 'run', 'the escape survives the save');
   assert.equal(ENDINGS.layd_flight.forced, true);
   const surrendered = resolveLaydDiscovery(found, 'surrender');
   assert.ok(!surrendered.ending);

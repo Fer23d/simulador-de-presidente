@@ -13,13 +13,15 @@ import { canPromulgarConstituicao } from '../core/constitution.js';
 import { RESOLUTIONS } from '../core/un_assembly.js';
 import { getStoryEvent } from '../core/story_engine.js';
 import { resolvePresidentialBriefing } from '../core/presidential_briefing.js';
+import { getUiLanguage, languageOptionLabel, monthName, uiText } from '../core/i18n.js';
+import { getPlayerDisplayName, SUPPORTED_LANGUAGES } from '../core/player_profile.js';
 import { COUNCIL_LEADERS } from '../core/vault_council.js';
 import { checkStoryChapters, LORE_CHAPTERS, STORY_NOTICE } from '../core/story_lore.js';
 import { INTERNAL_PROJECTS } from '../core/infrastructure.js';
 import { broadcastShelterSignal, buildShelterRoom, calculateShelterCapacity, equipShelterGuard, findBuildSlots, getRoom, getShelterBuildCost, INITIAL_SHELTER_GRID, repairShelterGenerator, SHELTER_TYPES, upgradeShelterRoom, useShelterMedkit } from '../core/shelter_engine.js';
 import { createRpgBunkerEngine } from '../core/rpg_bunker.js';
 import { adoptLayd, hasLayd, isLaydVisible } from '../core/companion.js';
-import { applyVaccine, buyRation, divertFood, DOSE_SCRAP_COST, getLaydStatus, RATION_SCRAP_COST, resolveLaydDiscovery, SUSPICION_LIMIT, toggleHideLayd } from '../core/layd_care.js';
+import { advanceLaydEscape, ESCAPE_STAGES, applyVaccine, buyRation, divertFood, DOSE_SCRAP_COST, getLaydStatus, RATION_SCRAP_COST, resolveLaydDiscovery, SUSPICION_LIMIT, toggleHideLayd } from '../core/layd_care.js';
 import { canTrade, describeOffer, getStock, hasMarketSuit, isMarketOpen, MARKET_GOODS, tradeAtMarket } from '../core/market.js';
 import { playBark } from '../core/dog_sound.js';
 import { calculateSuppression, canResolveWastelandEvent, detainRebel, dismissExpeditionReport, getWastelandEvent, resolveWastelandEvent, startExpedition } from '../core/game_mechanics.js';
@@ -121,6 +123,7 @@ import {
   pesquisarTecnologiaMilitar,
   dispensarHistoria,
   registrarEventoHistorico,
+  updatePlayerProfile,
 } from '../core/game-state.js';
 
 const STORAGE_KEY = 'simulador-presidente-state-v1';
@@ -303,6 +306,33 @@ export function soundControlView(settings) {
   const { muted, volume } = normalizeAudioSettings(settings);
   return `<button type="button" class="sound-toggle" data-sound-toggle aria-pressed="${muted}" aria-label="${muted ? 'Ligar som' : 'Desligar som'}">${muted ? '🔇' : '🔊'}</button><input type="range" class="sound-volume" data-sound-volume min="0" max="100" value="${Math.round(volume * 100)}" aria-label="Volume">`;
 }
+
+export function profileView(state, { audio = {}, tutorialEnabled = true } = {}) {
+  const language = getUiLanguage(state);
+  const settings = normalizeAudioSettings(audio);
+  const profileName = state.playerProfile?.name ?? '';
+  const languageOptions = SUPPORTED_LANGUAGES.map((option) => `<option value="${option.id}" ${option.id === language ? 'selected' : ''}>${escapeHtml(languageOptionLabel(language, option.id))}</option>`).join('');
+  return `<section class="view-grid profile-grid">
+    <section class="panel profile-identity-panel">
+      <div class="panel-heading"><div><p class="eyebrow">/// ${escapeHtml(uiText(language, 'profile.kicker'))} ///</p><h2>${escapeHtml(uiText(language, 'profile.title'))}</h2></div><span class="status-dot"></span></div>
+      <p class="profile-lead">${escapeHtml(uiText(language, 'profile.identity'))}</p>
+      <label class="profile-field"><span>${escapeHtml(uiText(language, 'profile.nameLabel'))}</span><input type="text" maxlength="32" autocomplete="nickname" data-profile-name value="${escapeHtml(profileName)}" placeholder="${escapeHtml(uiText(language, 'profile.namePlaceholder'))}"></label>
+      <p class="profile-hint">${escapeHtml(uiText(language, 'profile.nameHint'))}</p>
+      <button type="button" class="primary-action" data-action="profile-save">${escapeHtml(uiText(language, 'profile.save'))}</button>
+    </section>
+    <section class="panel profile-settings-panel">
+      <div class="panel-heading"><div><p class="eyebrow">/// ${escapeHtml(uiText(language, 'profile.kicker'))} ///</p><h2>${escapeHtml(uiText(language, 'profile.settings'))}</h2></div></div>
+      <label class="profile-field"><span>${escapeHtml(uiText(language, 'profile.language'))}</span><select data-profile-language aria-label="${escapeHtml(uiText(language, 'profile.language'))}">${languageOptions}</select></label>
+      <p class="profile-hint">${escapeHtml(uiText(language, 'profile.languageHint'))}</p>
+      <label class="profile-option"><span>${escapeHtml(uiText(language, 'profile.volume'))}<strong>${Math.round(settings.volume * 100)}%</strong></span><input type="range" min="0" max="100" value="${Math.round(settings.volume * 100)}" data-profile-volume aria-label="${escapeHtml(uiText(language, 'profile.volume'))}"></label>
+      <label class="profile-option"><span>${escapeHtml(uiText(language, 'profile.mute'))}</span><input type="checkbox" data-profile-mute ${settings.muted ? 'checked' : ''}></label>
+      <label class="profile-option"><span>${escapeHtml(uiText(language, 'profile.tutorial'))}</span><input type="checkbox" data-profile-tutorial ${tutorialEnabled ? 'checked' : ''}></label>
+      <div class="profile-actions"><button type="button" class="quiet-action" data-action="profile-restart-tutorial">[ ${escapeHtml(uiText(language, 'profile.restartTutorial'))} ]</button><button type="button" class="quiet-action" data-action="profile-fullscreen">[ ${escapeHtml(uiText(language, 'profile.fullscreen'))} ]</button></div>
+      <p class="profile-hint profile-save-note">${escapeHtml(uiText(language, 'profile.version'))}</p>
+    </section>
+    <section class="panel profile-preview-panel"><p class="eyebrow">/// ${escapeHtml(uiText(language, 'profile.active'))} ///</p><h2>${escapeHtml(getPlayerDisplayName(state))}</h2><p>${escapeHtml(state.title ?? 'Presidente')} · ${escapeHtml(state.country?.nome ?? '')}</p></section>
+  </section>`;
+}
 const MONTHS = ['Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 const formatNumber = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
@@ -443,7 +473,7 @@ function taxControl(label, key, value) {
 
 function overviewView(state, projection) {
   const budgetTone = projection.monthlyBalance >= 0 ? 'positive' : 'negative';
-  const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid) || Boolean(state.pendingFinalDilemma) || Boolean(state.pendingInterrogation) || Boolean(state.pendingStory) || Boolean(state.pendingAllianceInvocation) || Boolean(state.pendingHostileAlert) || Boolean(state.wasteland_cinematic_pending) || Boolean(state.wasteland_cinematic_ready);
+  const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid) || Boolean(state.pendingFinalDilemma) || Boolean(state.pendingInterrogation) || Boolean(state.pendingStory) || Boolean(state.pendingBriefing) || Boolean(state.pendingAllianceInvocation) || Boolean(state.pendingHostileAlert) || Boolean(state.wasteland_cinematic_pending) || Boolean(state.wasteland_cinematic_ready);
   return `<section class="view-grid overview-grid">
     <section class="panel agenda-panel">
       <div class="panel-heading"><div><p class="eyebrow">Agenda presidencial</p><h2>Proximo movimento</h2></div><span class="status-dot"></span></div>
@@ -636,18 +666,18 @@ export function bunkerView(state) {
   const modules = Object.entries(SHELTER_TYPES).filter(([id]) => id !== 'vault');
   const buildCostMultiplier = getPresidentClassModifiers(state.presidentClass).buildCostMultiplier;
   const rooms = grid.flat().filter(Boolean);
-  const turnBlocked = state.pendingExpeditionReports?.some((report) => !report.success) || state.pendingBunkerEvent || state.pendingLoot;
+  const turnBlocked = state.pendingExpeditionReports?.some((report) => !report.success) || state.pendingBunkerEvent || state.pendingLoot || state.layd_escape;
   const lootNotice = state.pendingLoot
     ? state.lootbox_opened
       ? `<span class="lootbox-progress" role="status">COFRE DO ERMO · ${Math.min(3, Number(state.lootbox_click_count) || 0)}/3</span>`
       : '<button type="button" class="loot-alert" data-action="open-expedition-lootbox">[!] NOVA CARGA DETETADA NO PORTÃO [!]</button>'
     : '';
   return `<section class="bunker-chamber">
-    <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2><p class="vault-clock" data-vault-clock>DIA ${getVaultDay(state)} · MÊS ${(Number(state.wasteland_turn) || 0) + 1}${(Number(state.wasteland_turn) || 0) + 1 <= DOOR_OPENS_AT_MONTH ? ` DE ${DOOR_OPENS_AT_MONTH}` : ''}${isDoorOpen(state) ? ' · 🚪 PORTA PRONTA' : describeLevelGate(state) ? ` · PORTA: NV ${describeLevelGate(state).required}` : ''}<span class="vault-clock-bar" aria-hidden="true"><span style="width:${Math.round(getVaultDayOfMonth(state) / DAYS_PER_MONTH * 100)}%"></span></span></p></div><div class="bunker-header-actions">${lootNotice}<button type="button" class="primary-action" data-action="advance" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 1 DIA ]</button><button type="button" class="quiet-action" data-action="advance-days" data-days="3" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 3 DIAS ]</button>${isDoorOpen(state) && !state.ending ? '<button type="button" class="primary-action door-ready-button" data-action="open-door">[ 🚪 PORTA DO VAULT ]</button>' : ''}<button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button><button type="button" class="quiet-action" data-action="open-encyclopedia">[ 📖 ENCICLOPÉDIA ]</button>${hasLayd(state) ? `<button type="button" class="quiet-action layd-button ${state.companion.sick ? 'is-sick' : ''}" data-action="open-layd">[ 🐕 LAYD${state.companion.sick ? ' · DOENTE' : ''} ]</button>` : ''}</div></div>
+    <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2><p class="vault-clock" data-vault-clock>DIA ${getVaultDay(state)} · MÊS ${(Number(state.wasteland_turn) || 0) + 1}${(Number(state.wasteland_turn) || 0) + 1 <= DOOR_OPENS_AT_MONTH ? ` DE ${DOOR_OPENS_AT_MONTH}` : ''}${isDoorOpen(state) ? ' · 🚪 PORTA PRONTA' : describeLevelGate(state) ? ` · PORTA: NV ${describeLevelGate(state).required}` : ''}<span class="vault-clock-bar" aria-hidden="true"><span style="width:${Math.round(getVaultDayOfMonth(state) / DAYS_PER_MONTH * 100)}%"></span></span></p>${state.layd_escape ? `<p class="layd-escape-banner" role="alert">🚨 A FUGA · ${escapeHtml(ESCAPE_STAGES[state.layd_escape.stage].objective)}</p>` : ''}</div><div class="bunker-header-actions">${lootNotice}<button type="button" class="primary-action" data-action="advance" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 1 DIA ]</button><button type="button" class="quiet-action" data-action="advance-days" data-days="3" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 3 DIAS ]</button>${isDoorOpen(state) && !state.ending ? '<button type="button" class="primary-action door-ready-button" data-action="open-door">[ 🚪 PORTA DO VAULT ]</button>' : ''}<button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button><button type="button" class="quiet-action" data-action="open-encyclopedia">[ 📖 ENCICLOPÉDIA ]</button>${hasLayd(state) ? `<button type="button" class="quiet-action layd-button ${state.companion.sick ? 'is-sick' : ''}" data-action="open-layd">[ 🐕 LAYD${state.companion.sick ? ' · DOENTE' : ''} ]</button>` : ''}</div></div>
     <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'scrap'))}</span><span class="oil-resource">🛢 PETRÓLEO ${formatNumber.format(state.oil ?? 0)}</span><span>🪖 SOLDADOS ${formatNumber.format(getArmySoldiers(state))}</span><span>🛡 DEFESA ${formatNumber.format(getFortStatus(state.surface_fort)?.defense ?? 0)}</span><span>CIÊNCIA ${formatNumber.format(state.science ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'science'))}</span><span>COMIDA ${formatNumber.format(state.shelter_supplies?.food ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'food'))}</span><span>ENERGIA ${formatNumber.format(state.shelter_supplies?.energy ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'energy'))}</span><span class="oxygen-resource ${state.oxygen_deprived ? 'oxygen-deprived' : ''}" aria-label="Oxigênio ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} de ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ', produção insuficiente' : ''}">💨 O₂ ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ' · ALERTA' : ''}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'weapons'))}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'medkits'))}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
     <div class="bunker-build-controls" hidden aria-label="Módulos de construção">${modules.map(([id, module]) => { const cost = getShelterBuildCost(id, 0, state.presidentClass); return `<button type="button" class="bunker-module-button" data-action="shelter-module" data-module="${id}" aria-pressed="${id === 'dormitory'}" ${state.scrap < cost ? 'disabled' : ''}>${module.name}<small>${formatNumber.format(cost)} sucatas${buildCostMultiplier < 1 ? ' · DESCONTO DO OPERÁRIO' : ''}</small></button>`; }).join('')}<div class="bunker-slot-controls"><label for="shelter-build-slot">Setor livre</label><select id="shelter-build-slot" class="bunker-build-slot"></select><button type="button" class="primary-action" data-action="shelter-place">[ CONSTRUIR ]</button></div></div>
     <div class="bunker-stage"><canvas id="shelterCanvas" class="bunker-canvas" width="960" height="600" tabindex="0" aria-label="Bunker lateral. A e D movem o Presidente, W e S operam o elevador, E interage. Na construção, clique num setor livre."></canvas>${bunkerEnvironmentHudView(state.environment, state.isNight, state.inhabitants, state.shelter_guards, state.presidentClass, state.weather)}${missionObjectiveView(state)}<div class="bunker-tooltip" data-bunker-tooltip role="status" hidden></div>${renderDialogueView(null)}</div>
-    <div class="bunker-foot"><div><p class="bunker-status" data-shelter-status role="status">PRESIDENTE EM PATRULHA</p><p class="bunker-notice ${/SINAL DO EXPLORADOR|ALERTA CRÍTICO|ASFIXIA|oxigênio insuficiente/i.test(state.notice ?? '') ? 'danger' : ''}" role="status">${escapeHtml(state.notice ?? '')}</p></div><div class="shelter-room-controls"><label for="shelter-room-select">Setor</label><select id="shelter-room-select" class="bunker-build-slot">${rooms.map((room) => `<option value="${room.floor}:${room.column}">${SHELTER_TYPES[room.type].name} · A${room.floor + 1} S${room.column}</option>`).join('')}</select><button type="button" class="quiet-action" data-action="shelter-open-room">[ GERIR SALA ]</button></div></div>
+     <div class="bunker-foot"><div><p class="bunker-status" data-shelter-status role="status">PRESIDENTE EM PATRULHA · ${escapeHtml(getPlayerDisplayName(state).toUpperCase())}</p><p class="bunker-notice ${/SINAL DO EXPLORADOR|ALERTA CRÍTICO|ASFIXIA|oxigênio insuficiente/i.test(state.notice ?? '') ? 'danger' : ''}" role="status">${escapeHtml(state.notice ?? '')}</p></div><div class="shelter-room-controls"><label for="shelter-room-select">Setor</label><select id="shelter-room-select" class="bunker-build-slot">${rooms.map((room) => `<option value="${room.floor}:${room.column}">${SHELTER_TYPES[room.type].name} · A${room.floor + 1} S${room.column}</option>`).join('')}</select><button type="button" class="quiet-action" data-action="shelter-open-room">[ GERIR SALA ]</button></div></div>
   </section>`;
 }
 
@@ -1290,7 +1320,7 @@ export function mountDashboard(root) {
       activeTab = 'overview';
       falloutCinematicStarted = false;
       introScene = 0;
-      commit(createGameState());
+      commit(createGameState('bra', state.playerProfile));
       closeTitle();
       return;
     }
@@ -1677,21 +1707,25 @@ export function mountDashboard(root) {
       const flashPending = Boolean(state.is_wasteland && state.wasteland_cinematic_pending);
       document.body.classList.toggle('wasteland-mode', Boolean(state.is_wasteland && !flashPending));
       document.body.classList.toggle('theme-wasteland', Boolean(state.is_wasteland && !flashPending));
+      document.documentElement.lang = getUiLanguage(state);
     }
+    const language = getUiLanguage(state);
+    const playerName = getPlayerDisplayName(state);
     const projection = projectBudget(state.economy, state.budget);
     const tabs = [
-      ['overview', 'Visao geral'],
-      ['budget', 'Orcamento'],
-      ['diplomacy', 'Diplomacia'],
-      ['military', 'Forcas Armadas'],
-      ['cabinet', 'Gabinete'],
-      ['technology', 'Tecnologia'],
-      ['projects', 'Projetos Internos'],
-      ['congress', 'Congresso'],
-      ['history', '> MODO HISTÓRIA'],
-      ['countries', 'Paises'],
+      ['overview', uiText(language, 'nav.overview')],
+      ['budget', uiText(language, 'nav.budget')],
+      ['diplomacy', uiText(language, 'nav.diplomacy')],
+      ['military', uiText(language, 'nav.military')],
+      ['cabinet', uiText(language, 'nav.cabinet')],
+      ['technology', uiText(language, 'nav.technology')],
+      ['projects', uiText(language, 'nav.projects')],
+      ['congress', uiText(language, 'nav.congress')],
+      ['history', uiText(language, 'nav.history')],
+      ['countries', uiText(language, 'nav.countries')],
+      ['profile', uiText(language, 'nav.profile')],
     ];
-    const content = activeTab === 'history' ? storyModeView(state) : state.city ? cityView(state) : state.is_wasteland ? bunkerView(state)
+    const content = activeTab === 'history' ? storyModeView(state) : activeTab === 'profile' ? profileView(state, { audio: audio.settings, tutorialEnabled: tutorial.enabled }) : state.city ? cityView(state) : state.is_wasteland ? bunkerView(state)
       : activeTab === 'budget' ? budgetView(state, projection)
       : activeTab === 'diplomacy' ? diplomacyView(state, diplomacyQuery)
         : activeTab === 'military' ? militaryView(state)
@@ -1702,12 +1736,12 @@ export function mountDashboard(root) {
         : activeTab === 'countries' ? countriesView(state)
           : overviewView(state, projection);
     const topbarActions = state.is_wasteland
-      ? `<span class="bunker-era">${state.country.nome}</span><button type="button" class="quiet-action" data-action="reset">Nova partida</button>`
-      : `<label class="country-picker"><span>Pais</span><select data-action="select-country" aria-label="Selecionar pais">${COUNTRIES.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((country) => `<option value="${country.id}" ${country.id === state.country.id ? 'selected' : ''}>${country.nome}</option>`).join('')}</select></label><button type="button" class="quiet-action" data-action="reset">Reiniciar</button>`;
+      ? `<span class="bunker-era">${escapeHtml(state.country.nome)}</span><button type="button" class="quiet-action" data-action="reset">${escapeHtml(uiText(language, 'top.newGame'))}</button>`
+      : `<label class="country-picker"><span>${escapeHtml(uiText(language, 'top.country'))}</span><select data-action="select-country" aria-label="${escapeHtml(uiText(language, 'top.country'))}">${COUNTRIES.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((country) => `<option value="${country.id}" ${country.id === state.country.id ? 'selected' : ''}>${country.nome}</option>`).join('')}</select></label><button type="button" class="quiet-action" data-action="reset">${escapeHtml(uiText(language, 'top.restart'))}</button>`;
     root.innerHTML = `<div class="app-shell">
-      <aside class="sidebar"><div class="brand"><span class="brand-mark">LO</span><div><strong>LAST OFFICE</strong><small>Após a guerra, tudo muda</small></div></div><nav class="tab-list" aria-label="Navegacao principal">${tabs.map(([id, label]) => `<button type="button" class="tab-button ${activeTab === id ? 'active' : ''}" data-action="tab" data-tab="${id}">${label}</button>`).join('')}</nav><div class="sidebar-footer"><span>Mandato em curso</span><strong>${state.calendar.year}</strong></div></aside>
-      <section class="workspace"><header class="topbar"><div><p class="eyebrow">${state.city ? 'RECONSTRUÇÃO PÓS-BOMBA' : (state.title ?? 'Presidente')}</p><h1>${state.city ? 'MODO CIDADE' : state.is_wasteland ? 'ANO ZERO PÓS-BOMBA' : `${MONTHS[state.calendar.month - 1]} de ${state.calendar.year}`}</h1></div><div class="topbar-actions"><span data-level-tab>${levelTabView(state)}</span>${topbarActions}</div></header>
-      <section class="metrics">${metric('PIB', formatMoney(state.economy.gdp))}${metric('Inflacao', formatPercent(state.economy.inflation), state.economy.inflation > 0.1 ? 'negative' : '')}${metric('Desemprego', formatPercent(state.economy.unemployment))}${metric('Apoio interno', `${getFactionSupport(state.factions).toFixed(0)}%`, getFactionSupport(state.factions) >= 55 ? 'positive' : '')}${metric('Caixa nacional', formatMoney(state.economy.cash))}${metric('DEFCON', `DEFCON: ${state.global_defcon}`, `defcon-${state.global_defcon}`)}${metric('Saldo projetado', formatMoney(projection.monthlyBalance), projection.monthlyBalance >= 0 ? 'positive' : 'negative')}</section>
+      <aside class="sidebar"><div class="brand"><span class="brand-mark">LO</span><div><strong>LAST OFFICE</strong><small>${escapeHtml(playerName)}</small></div></div><nav class="tab-list" aria-label="${escapeHtml(uiText(language, 'nav.overview'))}">${tabs.map(([id, label]) => `<button type="button" class="tab-button ${activeTab === id ? 'active' : ''}" data-action="tab" data-tab="${id}">${escapeHtml(label)}</button>`).join('')}</nav><div class="sidebar-footer"><span>${escapeHtml(playerName)}</span><strong>${state.calendar.year}</strong></div></aside>
+      <section class="workspace"><header class="topbar"><div><p class="eyebrow">${escapeHtml(playerName)} · ${state.city ? 'RECONSTRUÇÃO PÓS-BOMBA' : (state.title ?? 'Presidente')}</p><h1>${state.city ? 'MODO CIDADE' : state.is_wasteland ? 'ANO ZERO PÓS-BOMBA' : `${monthName(language, state.calendar.month)} de ${state.calendar.year}`}</h1></div><div class="topbar-actions"><span data-level-tab>${levelTabView(state)}</span>${topbarActions}</div></header>
+      <section class="metrics">${metric(uiText(language, 'metric.gdp'), formatMoney(state.economy.gdp))}${metric(uiText(language, 'metric.inflation'), formatPercent(state.economy.inflation), state.economy.inflation > 0.1 ? 'negative' : '')}${metric(uiText(language, 'metric.unemployment'), formatPercent(state.economy.unemployment))}${metric(uiText(language, 'metric.support'), `${getFactionSupport(state.factions).toFixed(0)}%`, getFactionSupport(state.factions) >= 55 ? 'positive' : '')}${metric(uiText(language, 'metric.cash'), formatMoney(state.economy.cash))}${metric(uiText(language, 'metric.defcon'), `DEFCON: ${state.global_defcon}`, `defcon-${state.global_defcon}`)}${metric(uiText(language, 'metric.balance'), formatMoney(projection.monthlyBalance), projection.monthlyBalance >= 0 ? 'positive' : 'negative')}</section>
       ${storageNotice ? `<p class="storage-notice">${storageNotice}</p>` : ''}
       ${state.notice === STORY_NOTICE ? `<p class="storage-notice story-notification" role="status">${STORY_NOTICE}</p>` : ''}
       <section class="content-area">${content}</section>${renderNews(state)}
@@ -1858,6 +1892,8 @@ export function mountDashboard(root) {
             } : false;
           },
           onRoom: openShelterRoom,
+          escape: state.layd_escape ? ESCAPE_STAGES[state.layd_escape.stage] : null,
+          onEscape: (room, options) => commit(advanceLaydEscape(state, room, options)),
           mission: isMissionPending(state.pendingBunkerEvent)
             ? { ...state.pendingBunkerEvent, title: getWastelandEvent(state.pendingBunkerEvent.id)?.title } : null,
           onMission: () => commit(arriveAtMission(state)),
@@ -2129,11 +2165,11 @@ export function mountDashboard(root) {
   deadHandModal?.addEventListener('click', (event) => {
     if (event.target.closest('[data-action="dead-hand-reset"]')) {
       activeTab = 'overview';
-      commit(createGameState(state.country.id));
+      commit(createGameState(state.country.id, state.playerProfile));
     }
   });
 
-  escapeModal?.addEventListener('click', (event) => { if (event.target.closest('[data-action="escape-reset"]')) { activeTab = 'overview'; commit(createGameState(state.country.id)); } });
+  escapeModal?.addEventListener('click', (event) => { if (event.target.closest('[data-action="escape-reset"]')) { activeTab = 'overview'; commit(createGameState(state.country.id, state.playerProfile)); } });
   dilemmaModal?.addEventListener('click', (event) => {
     const action = event.target.closest('[data-action]')?.dataset.action;
     if (action === 'final-escape') commit(fugirEmSilencio(state));
@@ -2207,7 +2243,7 @@ export function mountDashboard(root) {
     }
     if (event.target.closest('[data-action="ending-new-game"]')) {
       activeTab = 'overview';
-      commit(createGameState(state.country.id.replace(/-wasteland$/, '')));
+      commit(createGameState(state.country.id.replace(/-wasteland$/, ''), state.playerProfile));
     }
   });
 
@@ -2481,12 +2517,29 @@ export function mountDashboard(root) {
     if (action === 'vote') { commit(voteLaborLaw(state)); return; }
     if (action === 'open-law-vote') { window.abrirModalVotacao(control.dataset.law); return; }
     if (action === 'open-levels') { openLevels(); return; }
+    if (action === 'profile-save') {
+      const input = root.querySelector('[data-profile-name]');
+      commit(updatePlayerProfile(state, { name: input?.value ?? '' }));
+      return;
+    }
+    if (action === 'profile-restart-tutorial') {
+      tutorial = restartTutorial();
+      saveTutorial();
+      updateTutorial();
+      return;
+    }
+    if (action === 'profile-fullscreen') {
+      const page = document.documentElement;
+      if (document.fullscreenElement) void document.exitFullscreen?.();
+      else void page.requestFullscreen?.().catch(() => {});
+      return;
+    }
     if (action === 'open-door') { commit({ ...state, door_prompt: true }); return; }
     if (action === 'open-layd') { openLaydPanel(); return; }
     if (action === 'advance') { commit(state.is_wasteland ? advanceDay(state) : advanceMonth(state)); return; }
     if (action === 'advance-days') { commit(advanceDay(state, Number(control.dataset.days) || 1)); return; }
-    if (action === 'country') { activeTab = 'overview'; commit(createGameState(control.dataset.country)); return; }
-    if (action === 'reset') { activeTab = 'overview'; commit(createGameState(state.country.id)); }
+    if (action === 'country') { activeTab = 'overview'; commit(createGameState(control.dataset.country, state.playerProfile)); return; }
+    if (action === 'reset') { activeTab = 'overview'; commit(createGameState(state.country.id, state.playerProfile)); }
   });
 
   root.addEventListener('change', (event) => {
@@ -2500,7 +2553,26 @@ export function mountDashboard(root) {
     }
     if (event.target.matches('[data-action="select-country"]')) {
       activeTab = 'overview';
-      commit(createGameState(event.target.value));
+      commit(createGameState(event.target.value, state.playerProfile));
+      return;
+    }
+    if (event.target.matches('[data-profile-language]')) {
+      commit(updatePlayerProfile(state, { language: event.target.value }));
+      return;
+    }
+    if (event.target.matches('[data-profile-name]')) {
+      commit(updatePlayerProfile(state, { name: event.target.value }));
+      return;
+    }
+    if (event.target.matches('[data-profile-mute]')) {
+      const settings = audio.setSettings({ muted: event.target.checked });
+      saveAudio(settings);
+      soundControl.innerHTML = soundControlView(settings);
+      return;
+    }
+    if (event.target.matches('[data-profile-tutorial]')) {
+      tutorial = setTutorialEnabled(tutorial, event.target.checked);
+      saveTutorial();
     }
   });
 
@@ -2508,6 +2580,14 @@ export function mountDashboard(root) {
     if (event.target.matches('[data-action="diplomacy-search"]')) {
       diplomacyQuery = event.target.value;
       filterDiplomacyRows(root, diplomacyQuery);
+      return;
+    }
+    if (event.target.matches('[data-profile-volume]')) {
+      const settings = audio.setSettings({ volume: Number(event.target.value) / 100, muted: false });
+      saveAudio(settings);
+      soundControl.innerHTML = soundControlView(settings);
+      const mute = root.querySelector('[data-profile-mute]');
+      if (mute) mute.checked = false;
     }
   });
 
