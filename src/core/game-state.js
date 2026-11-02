@@ -52,6 +52,7 @@ import { ENDINGS } from './endings.js';
 import { createExpeditionLocation } from './expeditions.js';
 import { normalizePlayerCosmetics } from './player_state.js';
 import { createVaultCouncil } from './vault_council.js';
+import { createPresidentialMandate, getPresidentialBriefing, queuePresidentialBriefing } from './presidential_briefing.js';
 
 const STATE_VERSION = 22;
 const TAX_KEYS = new Set(['incomeTaxRate', 'vatRate']);
@@ -285,6 +286,8 @@ export function createGameState(countryId = 'bra') {
     history_log: [],
     unlocked_chapters: ['cap_1_origem'],
     news: [],
+    presidentialMandate: createPresidentialMandate(),
+    pendingBriefing: null,
     pendingEvent: null,
     pendingAllianceInvocation: null,
     pendingHostileAlert: null,
@@ -924,6 +927,7 @@ export function advanceMonth(state) {
   if (state.pendingGlobalBid) return { ...state, notice: 'Decida a candidatura aos Jogos Mundiais antes de avancar o mes.' };
   if (state.pendingInterrogation) return { ...state, notice: 'Resolva o interrogatorio antes de avancar o mes.' };
   if (state.pendingStory) return { ...state, notice: 'Leia o dossie confidencial antes de avancar o mes.' };
+  if (state.pendingBriefing) return { ...state, notice: 'Resolva o briefing presidencial antes de avancar o mes.' };
   if (state.pendingAllianceInvocation) return { ...state, notice: 'Decida se a alianca sera defendida antes de avancar o mes.' };
   state = advanceGovernment(state);
   if (state.nuclearSanctionsPending) {
@@ -1076,7 +1080,10 @@ export function advanceMonth(state) {
   const assemblyState = verificarAssembleia(hostileState);
   if (assemblyState.pendingUnVote) return addNews(assemblyState, assemblyState.notice);
   const eventRoll = rollMonthlyEvent(stability.seed);
-  if (!eventRoll.event) return checkStoryChapters(checkStoryEvents(sortearCapturaAgente({ ...assemblyState, randomSeed: eventRoll.seed })));
+  if (!eventRoll.event) {
+    const quietMonth = checkStoryChapters(checkStoryEvents(sortearCapturaAgente({ ...assemblyState, randomSeed: eventRoll.seed })));
+    return queuePresidentialBriefing(quietMonth);
+  }
   return checkStoryChapters(checkStoryEvents(addNews({
     ...assemblyState,
     randomSeed: eventRoll.seed,
@@ -1225,6 +1232,8 @@ export function hydrateGameState(serialized) {
       news: Array.isArray(parsed.news)
         ? parsed.news.filter((item) => typeof item?.text === 'string' && item.calendar).slice(0, 5)
         : base.news,
+      presidentialMandate: createPresidentialMandate(parsed.presidentialMandate),
+      pendingBriefing: getPresidentialBriefing(parsed.pendingBriefing?.id),
       pendingEvent: EVENTS.find((event) => event.id === parsed.pendingEvent?.id) ?? null,
       pendingAllianceInvocation: parsed.pendingAllianceInvocation?.allyId && parsed.pendingAllianceInvocation?.attackerId
         ? {

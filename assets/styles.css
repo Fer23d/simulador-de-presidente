@@ -502,6 +502,18 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .story-typewriter { min-height: 88px; margin: 0 auto 22px; overflow: hidden; color: var(--phosphor); font-family: "Share Tech Mono", monospace; font-size: 19px; line-height: 1.4; text-align: left; text-shadow: 0 0 8px rgba(57, 255, 20, .68); animation: story-typewriter 2.5s steps(64, end) both; }
 .story-dismiss { min-width: 230px; }
 @keyframes story-typewriter { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+.presidential-briefing { width: min(760px, 100%); max-height: min(860px, 100%); overflow-y: auto; padding: 30px; border: 4px double var(--cyan); background: #06100c; box-shadow: 0 0 32px rgba(99, 221, 255, .28), 10px 10px 0 #010201, inset 0 0 0 1px var(--line); }
+.presidential-briefing h2 { margin: 18px 0 6px; color: var(--cyan); font-family: "Press Start 2P", monospace; font-size: clamp(15px, 2vw, 21px); line-height: 1.6; text-shadow: 0 0 10px rgba(99, 221, 255, .55); }
+.briefing-mandate { margin: 0; color: var(--muted); font: 11px/1.5 "Share Tech Mono", monospace; letter-spacing: .12em; }
+.briefing-subtitle { margin: 0 0 18px; color: var(--amber); font: 16px/1.45 "Share Tech Mono", monospace; }
+.briefing-description { min-height: 0; margin-bottom: 26px; }
+.briefing-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.briefing-option { min-height: 112px; padding: 16px; border: 2px solid var(--line-hot); background: rgba(12, 28, 21, .92); color: var(--phosphor); text-align: left; cursor: pointer; box-shadow: 4px 4px 0 #010201; transition: transform .12s ease, border-color .12s ease, background .12s ease; }
+.briefing-option:hover, .briefing-option:focus-visible { border-color: var(--cyan); background: rgba(17, 49, 47, .96); outline: none; transform: translate(-1px, -1px); }
+.briefing-option:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #010201; }
+.briefing-option strong { display: block; margin-bottom: 9px; color: var(--amber); font: 12px/1.5 "Press Start 2P", monospace; }
+.briefing-option span { display: block; color: var(--muted); font: 16px/1.45 "Share Tech Mono", monospace; }
+@media (max-width: 680px) { .presidential-briefing { padding: 20px; } .briefing-options { grid-template-columns: 1fr; } }
 .terminal-dialog, .escape-dialog { width: min(620px, 100%); padding: 24px; border: 3px double var(--phosphor); background: #030806; box-shadow: 0 0 22px rgba(57, 255, 20, .45), 8px 8px 0 #010201; text-align: center; }
 .escape-dialog { border-color: #ffd700; background: #0d0a02; }
 .terminal-dialog pre, .escape-dialog pre { margin: 18px auto; color: var(--phosphor); font-family: "Share Tech Mono", monospace; font-size: 16px; line-height: 1.35; text-align: left; text-shadow: 0 0 8px rgba(57, 255, 20, .7); white-space: pre-wrap; }

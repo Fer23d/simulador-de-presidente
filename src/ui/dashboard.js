@@ -12,6 +12,7 @@ import { getFactionSupport } from '../core/factions.js';
 import { canPromulgarConstituicao } from '../core/constitution.js';
 import { RESOLUTIONS } from '../core/un_assembly.js';
 import { getStoryEvent } from '../core/story_engine.js';
+import { resolvePresidentialBriefing } from '../core/presidential_briefing.js';
 import { COUNCIL_LEADERS } from '../core/vault_council.js';
 import { checkStoryChapters, LORE_CHAPTERS, STORY_NOTICE } from '../core/story_lore.js';
 import { INTERNAL_PROJECTS } from '../core/infrastructure.js';
@@ -1008,6 +1009,22 @@ export function resolveStoryCardAction(state, action, optionId = null) {
   return state;
 }
 
+export function renderPresidentialBriefing(state) {
+  const briefing = state.pendingBriefing;
+  if (!briefing) return '';
+  const mandate = state.presidentialMandate ?? {};
+  const month = Number(state.calendar?.month) || 1;
+  const year = Number(state.calendar?.year) || 2026;
+  return `<section class="presidential-briefing" role="dialog" aria-modal="true" aria-labelledby="briefing-title">
+    <p class="story-classification">/// BRIEFING PRESIDENCIAL · MÊS ${month} · ${year} ///</p>
+    <p class="briefing-mandate">MANDATO ${Number(mandate.term) || 1} · ${Number(mandate.monthsInOffice) || 0} MESES NO COMANDO</p>
+    <h2 id="briefing-title">${escapeHtml(briefing.title)}</h2>
+    <p class="briefing-subtitle">${escapeHtml(briefing.subtitle)}</p>
+    <p class="story-typewriter briefing-description">${escapeHtml(briefing.description)}</p>
+    <div class="briefing-options">${briefing.options.map((option) => `<button type="button" class="briefing-option" data-action="presidential-briefing" data-option="${escapeHtml(option.id)}"><strong>${escapeHtml(option.label)}</strong><span>${escapeHtml(option.detail)}</span></button>`).join('')}</div>
+  </section>`;
+}
+
 // Capitulo X: a Porta (escolha do final) e o epilogo com a galeria de finais descobertos.
 export function doorView(state, trophies = createTrophies()) {
   // Com a cidade em andamento a porta ja foi cruzada: so o resultado final volta a cobrir a tela.
@@ -1113,6 +1130,7 @@ export function mountDashboard(root) {
   const dilemmaModal = document.getElementById('modal-dilema-final');
   const interrogationModal = document.getElementById('modal-interrogatorio');
   const storyModal = document.getElementById('modal-historia');
+  const briefingModal = document.getElementById('modal-briefing');
   const allianceModal = document.getElementById('modal-alianca');
   const hostileAlertModal = document.getElementById('modal-alerta-hostil');
   const governmentModal = document.getElementById('modal-auto-golpe');
@@ -1872,6 +1890,7 @@ export function mountDashboard(root) {
     if (dilemmaModal) { const markup = renderFinalDilemma(state); dilemmaModal.hidden = !markup; dilemmaModal.innerHTML = markup; }
     if (interrogationModal) { const markup = renderInterrogation(state); interrogationModal.hidden = !markup; interrogationModal.style.display = markup ? '' : 'none'; interrogationModal.innerHTML = markup; }
     if (storyModal) { const markup = renderStoryCard(state); storyModal.hidden = !markup; storyModal.innerHTML = markup; }
+    if (briefingModal) { const markup = renderPresidentialBriefing(state); briefingModal.hidden = !markup; briefingModal.innerHTML = markup; }
     if (allianceModal) { const markup = renderAllianceInvocation(state); allianceModal.hidden = !markup; allianceModal.innerHTML = markup; }
     if (hostileAlertModal) { const markup = renderHostileAlert(state); hostileAlertModal.hidden = !markup; hostileAlertModal.innerHTML = markup; }
     if (governmentModal) { const markup = renderGovernmentModal(state); governmentModal.hidden = !markup; governmentModal.innerHTML = markup; }
@@ -2103,6 +2122,12 @@ export function mountDashboard(root) {
     if (nextState === state) return;
     commit(nextState);
     if (action === 'resolve-story-card') root.querySelector('#shelterCanvas')?.focus();
+  });
+
+  briefingModal?.addEventListener('click', (event) => {
+    const control = event.target.closest('[data-action="presidential-briefing"]');
+    if (!control || !state.pendingBriefing) return;
+    commit(resolvePresidentialBriefing(state, control.dataset.option));
   });
 
   allianceModal?.addEventListener('click', (event) => {
