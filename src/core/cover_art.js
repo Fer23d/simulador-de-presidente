@@ -42,6 +42,7 @@ function paintStatic(width, height) {
     c.fillStyle = `rgba(255, 240, 220, ${.2 + hash(i, 1, 7) * .5})`;
     c.fillRect(hash(i, 2, 7) * width, hash(i, 3, 7) * horizon * .7, 1, 1);
   }
+  skyline(c, width, horizon - 8, 5, height * .38, '#3a1a2c', 46);
   skyline(c, width, horizon, 11, height * .3, '#1a0c14', 38);
   skyline(c, width, horizon + 10, 23, height * .2, '#0c0609', 26);
   // Chao rachado.
@@ -59,12 +60,11 @@ function paintStatic(width, height) {
   return canvas;
 }
 
-// Porta de vault de verdade: parede de concreto, aro de aco com parafusos, travas, disco com sulcos, roda central
-// com raios e a fresta aberta deixando a luz ambar vazar para o chao.
-function metal(c, x0, y0, x1, y1, dark = false) {
-  return linear(c, x0, y0, x1, y1, dark
-    ? [[0, '#2a2723'], [.35, '#4a4640'], [.55, '#1d1b18'], [1, '#0e0d0b']]
-    : [[0, '#8e8a80'], [.3, '#5c5850'], [.6, '#3a3732'], [1, '#1a1815']]);
+// Porta de vault de verdade, embutida numa cupula de concreto (os predios continuam visiveis atras dela):
+// aro de aco com parafusos, corredor aceso na fresta, disco escovado com sulcos, pistoes hidraulicos,
+// roda central e uma lampada de alerta piscando.
+function metal(c, x0, y0, x1, y1) {
+  return linear(c, x0, y0, x1, y1, [[0, '#8e8a80'], [.3, '#5c5850'], [.6, '#3a3732'], [1, '#1a1815']]);
 }
 
 function bolt(c, x, y, r) {
@@ -82,61 +82,112 @@ function bolt(c, x, y, r) {
   c.fill();
 }
 
+function piston(c, x0, y0, x1, y1, width) {
+  const length = Math.hypot(x1 - x0, y1 - y0);
+  c.save();
+  c.translate(x0, y0);
+  c.rotate(Math.atan2(y1 - y0, x1 - x0));
+  c.fillStyle = 'rgba(0, 0, 0, .5)';
+  c.fillRect(2, width * .15, length * .7, width);
+  c.fillStyle = linear(c, 0, -width / 2, 0, width / 2, [[0, '#9a968a'], [.45, '#55524a'], [1, '#1f1d19']]);
+  c.fillRect(0, -width / 2, length * .6, width);
+  c.fillStyle = linear(c, 0, -width * .3, 0, width * .3, [[0, '#d4cfc0'], [1, '#6a665c']]);
+  c.fillRect(length * .55, -width * .28, length * .45, width * .56);
+  c.restore();
+  bolt(c, x0, y0, width * .55);
+  bolt(c, x1, y1, width * .5);
+}
+
+function concreteDome(c, cx, cy, radius) {
+  const dome = radius * 1.62;
+  c.save();
+  c.beginPath();
+  c.arc(cx, cy + radius * .25, dome, 0, Math.PI * 2);
+  c.clip();
+  c.fillStyle = linear(c, cx - dome, cy - dome, cx + dome * .6, cy + dome, [[0, '#46403a'], [.45, '#2a2622'], [1, '#0d0b0a']]);
+  c.fillRect(cx - dome, cy - dome, dome * 2, dome * 2.4);
+  // Marcas de forma do concreto, manchas de agua e musgo.
+  c.strokeStyle = 'rgba(0, 0, 0, .35)';
+  c.lineWidth = 1.5;
+  for (let i = -4; i <= 4; i++) {
+    c.beginPath();
+    c.arc(cx, cy + radius * .25, dome * (.55 + i * .06 + .3), Math.PI, Math.PI * 2);
+    c.stroke();
+  }
+  for (let i = 0; i < 26; i++) {
+    const x = cx - dome + hash(i, 1, 61) * dome * 2;
+    const y = cy - dome * .95 + hash(i, 2, 61) * dome * .6;
+    const len = radius * (.25 + hash(i, 3, 61) * .6);
+    c.fillStyle = linear(c, x, y, x, y + len, [[0, 'rgba(10, 8, 6, .5)'], [1, 'rgba(10, 8, 6, 0)']]);
+    c.fillRect(x, y, 2 + hash(i, 4, 61) * 5, len);
+  }
+  for (let i = 0; i < 18; i++) {
+    c.fillStyle = `rgba(60, 86, 40, ${.12 + hash(i, 5, 61) * .18})`;
+    c.beginPath();
+    c.ellipse(cx - dome * .9 + hash(i, 6, 61) * dome * 1.8, cy - dome * .8 + hash(i, 7, 61) * dome * .5, radius * (.06 + hash(i, 8, 61) * .12), radius * .04, 0, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.strokeStyle = 'rgba(0, 0, 0, .6)';
+  c.lineWidth = 1.2;
+  for (let i = 0; i < 7; i++) {
+    const a = Math.PI + (.1 + hash(i, 9, 61) * .8) * Math.PI;
+    const x = cx + Math.cos(a) * dome * .95;
+    const y = cy + radius * .25 + Math.sin(a) * dome * .95;
+    c.beginPath();
+    c.moveTo(x, y);
+    c.lineTo(x - Math.cos(a) * radius * (.3 + hash(i, 10, 61) * .5) + (hash(i, 11, 61) - .5) * 14, y - Math.sin(a) * radius * (.3 + hash(i, 10, 61) * .5));
+    c.stroke();
+  }
+  c.restore();
+  // Faixa de perigo ao longo do arco superior da cupula.
+  c.save();
+  c.lineWidth = radius * .12;
+  const segments = 30;
+  for (let i = 0; i < segments; i++) {
+    c.strokeStyle = i % 2 ? '#d8a820' : '#1a1408';
+    c.beginPath();
+    c.arc(cx, cy + radius * .25, dome * .94, Math.PI * (1 + i / segments), Math.PI * (1 + (i + 1) / segments));
+    c.stroke();
+  }
+  c.strokeStyle = 'rgba(0, 0, 0, .65)';
+  c.lineWidth = 2;
+  c.beginPath();
+  c.arc(cx, cy + radius * .25, dome, Math.PI, Math.PI * 2);
+  c.stroke();
+  c.beginPath();
+  c.arc(cx, cy + radius * .25, dome * .94 - radius * .06, Math.PI, Math.PI * 2);
+  c.stroke();
+  c.restore();
+}
+
 function drawVaultDoor(c, cx, cy, radius, time) {
   c.save();
   const pulse = .8 + Math.sin(time / 650) * .1 + Math.sin(time / 170) * .03;
-  // Parede de concreto com faixa de perigo no alto e rachaduras.
-  const wallW = radius * 3.3;
-  const wallH = radius * 2.9;
-  const wx = cx - wallW / 2;
-  const wy = cy - wallH * .52;
-  c.fillStyle = linear(c, wx, wy, wx, wy + wallH, [[0, '#2c2824'], [.5, '#1b1815'], [1, '#0c0a09']]);
-  c.fillRect(wx, wy, wallW, wallH);
-  c.strokeStyle = 'rgba(0, 0, 0, .55)';
-  c.lineWidth = 1.5;
-  for (let i = 0; i < 9; i++) {
-    const x = wx + hash(i, 1, 41) * wallW;
-    c.beginPath();
-    c.moveTo(x, wy + hash(i, 2, 41) * wallH * .3);
-    c.lineTo(x + (hash(i, 3, 41) - .5) * 40, wy + wallH * (.4 + hash(i, 4, 41) * .6));
-    c.stroke();
-  }
-  c.save();
-  c.beginPath();
-  c.rect(wx, wy, wallW, radius * .2);
-  c.clip();
-  for (let x = wx - radius; x < wx + wallW + radius; x += radius * .32) {
-    c.fillStyle = '#d8a820';
-    c.beginPath();
-    c.moveTo(x, wy + radius * .2);
-    c.lineTo(x + radius * .16, wy + radius * .2);
-    c.lineTo(x + radius * .32, wy);
-    c.lineTo(x + radius * .16, wy);
-    c.fill();
-  }
-  c.restore();
-  c.fillStyle = 'rgba(0, 0, 0, .4)';
-  c.fillRect(wx, wy + radius * .2, wallW, 3);
-  // Luz ambar saindo pela fresta: vaza para a frente e espalha no chao.
+  concreteDome(c, cx, cy, radius);
+  // Luz ambar vazando pela fresta: banha o chao e a cupula.
   c.globalCompositeOperation = 'lighter';
   const spill = c.createRadialGradient(cx, cy, radius * .3, cx, cy, radius * 2.8);
-  spill.addColorStop(0, `rgba(255, 160, 60, ${.55 * pulse})`);
-  spill.addColorStop(.5, `rgba(255, 110, 30, ${.16 * pulse})`);
+  spill.addColorStop(0, `rgba(255, 160, 60, ${.5 * pulse})`);
+  spill.addColorStop(.5, `rgba(255, 110, 30, ${.14 * pulse})`);
   spill.addColorStop(1, 'rgba(255, 90, 20, 0)');
   c.fillStyle = spill;
   c.fillRect(cx - radius * 3, cy - radius * 3, radius * 6, radius * 6);
-  const beam = c.createLinearGradient(cx - radius * .8, 0, cx - radius * 3.4, 0);
-  beam.addColorStop(0, `rgba(255, 170, 70, ${.28 * pulse})`);
+  const beam = c.createLinearGradient(cx - radius * .8, 0, cx - radius * 3.6, 0);
+  beam.addColorStop(0, `rgba(255, 170, 70, ${.3 * pulse})`);
   beam.addColorStop(1, 'rgba(255, 140, 40, 0)');
   c.fillStyle = beam;
   c.beginPath();
-  c.moveTo(cx - radius * .8, cy - radius * .55);
-  c.lineTo(cx - radius * 3.4, cy + radius * 1.7);
+  c.moveTo(cx - radius * .8, cy - radius * .5);
+  c.lineTo(cx - radius * 3.6, cy + radius * 1.7);
   c.lineTo(cx - radius * .8, cy + radius * 1.3);
   c.closePath();
   c.fill();
   c.globalCompositeOperation = 'source-over';
-  // Aro de aco com parafusos e sombra interna.
+  // Aro de aco com sombra projetada na cupula e parafusos.
+  c.fillStyle = 'rgba(0, 0, 0, .45)';
+  c.beginPath();
+  c.arc(cx + radius * .05, cy + radius * .07, radius * 1.27, 0, Math.PI * 2);
+  c.fill();
   c.fillStyle = metal(c, cx - radius * 1.25, cy - radius * 1.25, cx + radius * 1.25, cy + radius * 1.25);
   c.beginPath();
   c.arc(cx, cy, radius * 1.22, 0, Math.PI * 2);
@@ -144,7 +195,7 @@ function drawVaultDoor(c, cx, cy, radius, time) {
   c.strokeStyle = 'rgba(0, 0, 0, .7)';
   c.lineWidth = 2;
   c.stroke();
-  c.strokeStyle = 'rgba(255, 235, 200, .18)';
+  c.strokeStyle = 'rgba(255, 235, 200, .22)';
   c.lineWidth = 1.5;
   c.beginPath();
   c.arc(cx, cy, radius * 1.19, Math.PI * .9, Math.PI * 1.7);
@@ -153,12 +204,38 @@ function drawVaultDoor(c, cx, cy, radius, time) {
     const a = i / 24 * Math.PI * 2;
     bolt(c, cx + Math.cos(a) * radius * 1.12, cy + Math.sin(a) * radius * 1.12, Math.max(2.2, radius * .035));
   }
-  // Abertura interna: o interior iluminado onde a porta ja deslizou para o lado.
+  // Abertura: um corredor aceso, com as linhas das paredes fugindo para o fundo.
   const hole = radius * 1.02;
-  c.fillStyle = linear(c, cx, cy - hole, cx, cy + hole, [[0, '#ffd890'], [.5, '#ff9a3c'], [1, '#8a3a12']]);
+  c.save();
   c.beginPath();
   c.arc(cx, cy, hole, 0, Math.PI * 2);
+  c.clip();
+  c.fillStyle = linear(c, cx, cy - hole, cx, cy + hole, [[0, '#ffe2a0'], [.5, '#ff9a3c'], [1, '#7a3010']]);
+  c.fillRect(cx - hole, cy - hole, hole * 2, hole * 2);
+  const vx = cx + radius * .2;
+  c.strokeStyle = 'rgba(120, 50, 10, .6)';
+  c.lineWidth = 2;
+  for (let i = 0; i < 7; i++) {
+    const a = i / 7 * Math.PI * 2;
+    c.beginPath();
+    c.moveTo(vx, cy);
+    c.lineTo(cx + Math.cos(a) * hole * 1.3, cy + Math.sin(a) * hole * 1.3);
+    c.stroke();
+  }
+  for (let i = 1; i <= 4; i++) {
+    c.strokeStyle = `rgba(90, 36, 8, ${.55 - i * .08})`;
+    c.lineWidth = 2.2;
+    c.beginPath();
+    c.arc(vx, cy, hole * (1 - i * .2), 0, Math.PI * 2);
+    c.stroke();
+  }
+  c.fillStyle = 'rgba(255, 235, 190, .8)';
+  c.beginPath();
+  c.arc(vx, cy, radius * .09, 0, Math.PI * 2);
   c.fill();
+  c.fillStyle = 'rgba(40, 14, 4, .65)';
+  c.fillRect(vx - radius * .03, cy - radius * .2, radius * .06, radius * .4);
+  c.restore();
   // Travas cilindricas projetadas do disco para dentro do aro.
   for (let i = 0; i < 12; i++) {
     const a = i / 12 * Math.PI * 2 + Math.PI / 12;
@@ -169,38 +246,79 @@ function drawVaultDoor(c, cx, cy, radius, time) {
     c.fillRect(radius * .86, -radius * .07, radius * .2, radius * .14);
     c.restore();
   }
-  // O disco, deslocado para a esquerda: a fresta mostra a luz do lado direito.
+  // O disco, deslocado para a esquerda.
   const shift = radius * .16;
   const dx = cx - shift;
   c.save();
   c.beginPath();
   c.arc(cx, cy, hole, 0, Math.PI * 2);
   c.clip();
+  c.fillStyle = 'rgba(0, 0, 0, .5)';
+  c.beginPath();
+  c.arc(dx + radius * .06, cy + radius * .05, radius * .97, 0, Math.PI * 2);
+  c.fill();
   const disc = c.createRadialGradient(dx - radius * .3, cy - radius * .35, radius * .1, dx, cy, radius * .98);
-  disc.addColorStop(0, '#8a867c');
-  disc.addColorStop(.55, '#55524a');
+  disc.addColorStop(0, '#9a968c');
+  disc.addColorStop(.55, '#5a574e');
   disc.addColorStop(1, '#25231f');
   c.fillStyle = disc;
   c.beginPath();
   c.arc(dx, cy, radius * .96, 0, Math.PI * 2);
   c.fill();
+  c.save();
+  c.beginPath();
+  c.arc(dx, cy, radius * .96, 0, Math.PI * 2);
+  c.clip();
+  // Metal escovado: riscos radiais finos e um brilho diagonal.
+  c.lineWidth = .8;
+  for (let i = 0; i < 90; i++) {
+    const a = i / 90 * Math.PI * 2;
+    c.strokeStyle = i % 2 ? 'rgba(255, 245, 225, .06)' : 'rgba(0, 0, 0, .1)';
+    c.beginPath();
+    c.moveTo(dx + Math.cos(a) * radius * .12, cy + Math.sin(a) * radius * .12);
+    c.lineTo(dx + Math.cos(a) * radius * .96, cy + Math.sin(a) * radius * .96);
+    c.stroke();
+  }
+  const shine = c.createLinearGradient(dx - radius, cy - radius, dx + radius * .6, cy + radius * .6);
+  shine.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  shine.addColorStop(.35, 'rgba(255, 245, 225, .2)');
+  shine.addColorStop(.5, 'rgba(255, 245, 225, 0)');
+  shine.addColorStop(1, 'rgba(255, 150, 60, .16)');
+  c.fillStyle = shine;
+  c.fillRect(dx - radius, cy - radius, radius * 2, radius * 2);
+  // Reflexo laranja da luz do corredor no lado direito do disco.
+  const rim = c.createLinearGradient(dx + radius * .5, 0, dx + radius, 0);
+  rim.addColorStop(0, 'rgba(255, 150, 60, 0)');
+  rim.addColorStop(1, 'rgba(255, 150, 60, .35)');
+  c.fillStyle = rim;
+  c.fillRect(dx, cy - radius, radius, radius * 2);
+  c.restore();
   c.strokeStyle = 'rgba(0, 0, 0, .8)';
   c.lineWidth = 2.5;
+  c.beginPath();
+  c.arc(dx, cy, radius * .96, 0, Math.PI * 2);
   c.stroke();
-  // Sulcos concentricos com chanfro claro por baixo.
   for (const ring of [.84, .66, .48]) {
     c.strokeStyle = 'rgba(0, 0, 0, .65)';
     c.lineWidth = 3;
     c.beginPath();
     c.arc(dx, cy, radius * ring, 0, Math.PI * 2);
     c.stroke();
-    c.strokeStyle = 'rgba(255, 240, 210, .16)';
+    c.strokeStyle = 'rgba(255, 240, 210, .18)';
     c.lineWidth = 1.2;
     c.beginPath();
     c.arc(dx, cy + 1.5, radius * ring, 0.15, Math.PI - .15);
     c.stroke();
   }
-  // Ferrugem escorrendo dos parafusos do disco.
+  // Painel amarelo desgastado no alto do disco e ferrugem escorrendo dos parafusos.
+  c.save();
+  c.beginPath();
+  c.arc(dx, cy, radius * .9, Math.PI * 1.12, Math.PI * 1.88);
+  c.arc(dx, cy, radius * .8, Math.PI * 1.88, Math.PI * 1.12, true);
+  c.closePath();
+  c.fillStyle = 'rgba(200, 160, 30, .55)';
+  c.fill();
+  c.restore();
   for (let i = 0; i < 14; i++) {
     const a = i / 14 * Math.PI * 2;
     const sx = dx + Math.cos(a) * radius * .9;
@@ -210,40 +328,109 @@ function drawVaultDoor(c, cx, cy, radius, time) {
     c.fillRect(sx - 1.5, sy, 3, len);
     bolt(c, sx, sy, Math.max(2, radius * .03));
   }
-  // Numero estampado e a roda central.
-  c.fillStyle = 'rgba(225, 215, 190, .78)';
-  c.font = `bold ${Math.round(radius * .2)}px "Share Tech Mono", monospace`;
-  c.textAlign = 'center';
-  c.fillText('101', dx, cy - radius * .55);
+  // Dentes de engrenagem que engatam nas travas, arranhoes de uso e sujeira acumulada na borda.
+  for (let i = 0; i < 40; i++) {
+    c.save();
+    c.translate(dx, cy);
+    c.rotate(i / 40 * Math.PI * 2);
+    c.fillStyle = linear(c, radius * .9, 0, radius * .98, 0, [[0, '#6a665c'], [1, '#2a2824']]);
+    c.fillRect(radius * .9, -radius * .026, radius * .08, radius * .052);
+    c.fillStyle = 'rgba(255, 245, 225, .22)';
+    c.fillRect(radius * .9, -radius * .026, radius * .08, 1);
+    c.restore();
+  }
+  c.lineWidth = .8;
+  for (let i = 0; i < 34; i++) {
+    const a = hash(i, 1, 71) * Math.PI * 2;
+    const d = radius * (.2 + hash(i, 2, 71) * .6);
+    const sx = dx + Math.cos(a) * d;
+    const sy = cy + Math.sin(a) * d;
+    c.strokeStyle = i % 3 ? 'rgba(255, 245, 225, .14)' : 'rgba(0, 0, 0, .3)';
+    c.beginPath();
+    c.moveTo(sx, sy);
+    c.lineTo(sx + (hash(i, 3, 71) - .5) * radius * .3, sy + (hash(i, 4, 71) - .5) * radius * .16);
+    c.stroke();
+  }
+  const dirt = c.createRadialGradient(dx, cy, radius * .55, dx, cy, radius * .97);
+  dirt.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  dirt.addColorStop(1, 'rgba(18, 10, 4, .5)');
+  c.fillStyle = dirt;
+  c.beginPath();
+  c.arc(dx, cy, radius * .96, 0, Math.PI * 2);
+  c.fill();
+  // Roda central de vedacao.
   c.translate(dx, cy + radius * .08);
   c.fillStyle = 'rgba(0, 0, 0, .45)';
   c.beginPath();
   c.arc(radius * .03, radius * .04, radius * .3, 0, Math.PI * 2);
   c.fill();
   for (let spoke = 0; spoke < 6; spoke++) {
-    const a = spoke / 6 * Math.PI * 2 + .2;
     c.save();
-    c.rotate(a);
-    c.fillStyle = linear(c, 0, -radius * .04, 0, radius * .04, [[0, '#b8b2a2'], [.5, '#6a665c'], [1, '#2a2824']]);
+    c.rotate(spoke / 6 * Math.PI * 2 + .2);
+    c.fillStyle = linear(c, 0, -radius * .04, 0, radius * .04, [[0, '#c4beae'], [.5, '#6a665c'], [1, '#2a2824']]);
     c.fillRect(radius * .06, -radius * .035, radius * .22, radius * .07);
     c.restore();
   }
-  c.strokeStyle = linear(c, -radius * .3, -radius * .3, radius * .3, radius * .3, [[0, '#c4bfae'], [.5, '#6a665c'], [1, '#26241f']]);
+  c.strokeStyle = linear(c, -radius * .3, -radius * .3, radius * .3, radius * .3, [[0, '#d0cab8'], [.5, '#6a665c'], [1, '#26241f']]);
   c.lineWidth = radius * .05;
   c.beginPath();
   c.arc(0, 0, radius * .3, 0, Math.PI * 2);
   c.stroke();
-  c.fillStyle = linear(c, -radius * .1, -radius * .1, radius * .1, radius * .1, [[0, '#d0cab8'], [1, '#3a3832']]);
+  c.fillStyle = linear(c, -radius * .1, -radius * .1, radius * .1, radius * .1, [[0, '#d8d2c0'], [1, '#3a3832']]);
   c.beginPath();
   c.arc(0, 0, radius * .1, 0, Math.PI * 2);
   c.fill();
   c.restore();
-  // Sombra do disco sobre a luz e reflexo do metal na borda.
-  c.strokeStyle = 'rgba(255, 190, 110, .35)';
+  c.strokeStyle = 'rgba(255, 190, 110, .4)';
   c.lineWidth = 2;
   c.beginPath();
   c.arc(cx, cy, hole, -Math.PI * .45, Math.PI * .45);
   c.stroke();
+  // Pistoes hidraulicos ligando o aro ao disco.
+  piston(c, cx - radius * 1.17, cy - radius * .5, dx - radius * .82, cy - radius * .36, radius * .085);
+  piston(c, cx - radius * 1.17, cy + radius * .5, dx - radius * .82, cy + radius * .36, radius * .085);
+  // Vapor saindo dos pistoes, subindo e se desfazendo.
+  c.save();
+  for (const py of [-.5, .5]) {
+    for (let i = 0; i < 5; i++) {
+      const t = ((time / 1800) + i / 5 + (py > 0 ? .37 : 0)) % 1;
+      c.fillStyle = `rgba(210, 205, 195, ${.2 * (1 - t)})`;
+      c.beginPath();
+      c.arc(cx - radius * 1.3 + Math.sin(t * 6 + i) * radius * .05, cy + py * radius - t * radius * .5, radius * (.04 + t * .1), 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+  c.restore();
+  // Painel de status na cupula: tres luzes.
+  const panelX = cx + radius * 1.5;
+  const panelY = cy - radius * .55;
+  c.fillStyle = '#1a1815';
+  c.fillRect(panelX - radius * .09, panelY - radius * .1, radius * .18, radius * .32);
+  c.strokeStyle = '#4a463e';
+  c.lineWidth = 1.5;
+  c.strokeRect(panelX - radius * .09, panelY - radius * .1, radius * .18, radius * .32);
+  [['#3aff6a', 0], ['#ffb02a', 1], ['#ff3a2a', 2]].forEach(([color, index]) => {
+    const on = index === 1 || (index === 0 && Math.sin(time / 900) > 0);
+    c.fillStyle = on ? color : '#2a2824';
+    c.beginPath();
+    c.arc(panelX, panelY + index * radius * .1, radius * .03, 0, Math.PI * 2);
+    c.fill();
+  });
+  // Lampada de alerta no alto da cupula.
+  const lampX = cx;
+  const lampY = cy - radius * 1.42;
+  c.fillStyle = '#25221d';
+  c.fillRect(lampX - radius * .1, lampY, radius * .2, radius * .09);
+  c.fillStyle = `rgba(255, 50, 30, ${.55 + .45 * Math.max(0, Math.sin(time / 380))})`;
+  c.beginPath();
+  c.arc(lampX, lampY, radius * .08, Math.PI, Math.PI * 2);
+  c.fill();
+  c.globalCompositeOperation = 'lighter';
+  const lamp = c.createRadialGradient(lampX, lampY, 1, lampX, lampY, radius * .7);
+  lamp.addColorStop(0, `rgba(255, 60, 30, ${.5 * Math.max(0, Math.sin(time / 380))})`);
+  lamp.addColorStop(1, 'rgba(255, 60, 30, 0)');
+  c.fillStyle = lamp;
+  c.fillRect(lampX - radius * .7, lampY - radius * .7, radius * 1.4, radius * 1.4);
   c.restore();
 }
 
@@ -315,8 +502,8 @@ export function drawCoverArt(ctx, width, height, time = 0) {
   ctx.beginPath();
   ctx.arc(moonX, moonY, 26, 0, Math.PI * 2);
   ctx.fill();
-  const radius = Math.min(width, height) * .18;
-  drawVaultDoor(ctx, width * .86, horizon - radius * .15, radius, time);
+  const radius = Math.min(width, height) * .17;
+  drawVaultDoor(ctx, width * .81, horizon - radius * .15, radius, time);
   // Os dois, de costas para nos, olhando para a porta.
   const unit = Math.max(.5, Math.min(width, height) / 560);
   drawPresident(ctx, width * .11, height * .84, 1.15 * unit);
