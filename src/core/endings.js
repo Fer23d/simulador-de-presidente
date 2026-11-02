@@ -22,7 +22,7 @@ export const ENDINGS = Object.freeze({
     story: 'Quando a porta abriu, a assembleia de Lia Moraes já tinha votado. Entregaram a {leader} uma mochila, um cantil e um mapa rabiscado do Ermo. Ninguém gritou, ninguém aplaudiu. A porta fechou atrás de {leader} com o mesmo som do primeiro dia. Desta vez, do lado de fora.' }),
   layd_flight: Object.freeze({ id: 'layd_flight', title: 'A Fuga com Layd', icon: '🐕', forced: true,
     epigraph: 'Ela esperou por você uma vez. Você não a deixou esperar de novo.',
-    story: 'Os habitantes cercaram a suíte antes do amanhecer. Alguém tinha contado as latas, alguém tinha contado as ampolas, e todos tinham contado as mentiras. {leader} não discutiu. Pegou Layd no colo, a mochila e a chave de latão, e atravessou o corredor com a multidão abrindo caminho em silêncio. Os soldados da Porta viraram o rosto. O sol era forte demais, e Layd espirrou. Atrás deles, a porta do Vault se fechou devagar. À frente, o Ermo inteiro e uma cadela que sabia o caminho.' }),
+    story: 'Os habitantes cercaram a suíte antes do amanhecer. Alguém tinha contado as latas, alguém tinha contado as ampolas, e todos tinham contado as mentiras. {leader} não discutiu. Pegou Layd no colo, a mochila e a chave de latão, e atravessou o corredor com a multidão abrindo caminho em silêncio. Os soldados da Porta viraram o rosto. O sol era forte demais, e Layd espirrou. {layd} {vault}' }),
   encounter: Object.freeze({ id: 'encounter', title: 'O Encontro', icon: '📻', choice: '[ SEGUIR O SINAL ATÉ O VAULT 0 ]',
     epigraph: 'Dois presidentes. Um mundo. Nenhum cargo.',
     story: 'O mapa estava completo o bastante. {leader} seguiu as coordenadas da Voz até uma escotilha enferrujada a doze quilômetros do Vault. Lá embaixo, um velho de terno puído esperava sentado: o presidente que fugiu na primeira noite. "Demorou", disse ele. Os dois ficaram em silêncio por muito tempo. Não havia mais nada para governar.' }),
@@ -75,11 +75,30 @@ export function chooseEnding(state, endingId) {
   return { ...state, ending: { id: option.id, month: Number(state.wasteland_turn) || 0 } };
 }
 
+// O destino de Layd depende da saude com que ela chega a Porta.
+function laydFlightLine(state) {
+  const care = state?.companion ?? {};
+  const health = Number(care.health) || 0;
+  if (care.cured) return 'Layd, curada, correu na frente até o primeiro poste caído e voltou latindo, como quem diz que o Ermo agora era deles.';
+  if (care.sick && health < 40) return 'Layd não tinha mais força para andar. Dormiu a primeira noite no seu colo, respirando devagar, e na segunda você já não sabia se ela acordaria. Você caminhou assim mesmo, falando baixinho de coisas que ela gostava. Atrás de uma duna encontrou um poço limpo e uma cabana abandonada. Havia sombra e água. Era o melhor que o mundo tinha para oferecer.';
+  if (care.sick) return 'Layd tossia a cada duzentos passos, mas andava. As doses que você conseguiu roubar do Vault compraram dias, não anos, e vocês dois sabiam. Mesmo assim, ela deitava de barriga para cima nas pedras mornas e fechava os olhos, e você aprendeu a chamar isso de felicidade.';
+  return 'Layd, saudável, farejou o vento e escolheu o caminho. Você a seguiu.';
+}
+
+// O que acontece com quem ficou, medido pela lealdade que o Vault ainda tinha por voce.
+function vaultFateLine(state) {
+  const loyalty = averageLoyalty(state);
+  if (loyalty >= 60) return 'No Vault, a comida continuou rendendo e ninguém trancou a suíte presidencial: as pessoas deixaram a porta aberta, caso um dia vocês voltassem.';
+  if (loyalty >= 30) return 'No Vault, o povo discutiu por semanas quem seria o próximo líder, e alguém ainda guardou, escondida, uma lata de ração com o nome dela.';
+  return 'No Vault, a porta se fechou atrás de vocês como uma sentença, e a suíte presidencial virou depósito antes do fim da semana. Ninguém mencionou seu nome de novo.';
+}
+
 export function getEndingStory(state, endingId) {
   const ending = ENDINGS[endingId];
   if (!ending) return null;
   const leader = getPresidentClass(state.presidentClass)?.leader ?? 'O Presidente';
-  return ending.story.replaceAll('{leader}', leader);
+  const story = ending.story.replaceAll('{leader}', leader);
+  return endingId === 'layd_flight' ? story.replace('{layd}', laydFlightLine(state)).replace('{vault}', vaultFateLine(state)) : story;
 }
 
 // Trofeus ficam na conta do jogador (fora da partida) para incentivar jogar de novo.

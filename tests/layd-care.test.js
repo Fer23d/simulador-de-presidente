@@ -166,3 +166,22 @@ test('the radiation treatment room exists and the care panel shows the numbers',
   assert.match(laydCareView(sick, false), /só na Sala de Tratamento/);
   assert.equal(laydCareView({ ...sick, companion: { ...sick.companion, status: 'dead' } }, true), '');
 });
+
+test('the flight ending changes with how Layd and the Vault are doing', () => {
+  const flee = (care, loyalty) => {
+    const state = vault();
+    const inhabitants = state.inhabitants.map((npc) => ({ ...npc, loyalty }));
+    return getEndingStory({ ...withCare(state, care), inhabitants, ending: { id: 'layd_flight', month: 30 } }, 'layd_flight');
+  };
+  const cured = flee({ cured: true, health: 100 }, 80);
+  const dying = flee({ sick: true, health: 20 }, 10);
+  const sick = flee({ sick: true, health: 60 }, 45);
+  assert.match(cured, /curada/);
+  assert.match(cured, /porta aberta/);
+  assert.match(dying, /não tinha mais força/);
+  assert.match(dying, /Ninguém mencionou seu nome/);
+  assert.match(sick, /dias, não anos/);
+  assert.match(sick, /lata de ração com o nome dela/);
+  assert.doesNotMatch(cured + dying + sick, /\{layd\}|\{vault\}|\{leader\}/);
+  assert.notEqual(cured, dying);
+});
