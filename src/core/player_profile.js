@@ -1,3 +1,5 @@
+import { getPresidentClass } from './player_state.js';
+
 export const DEFAULT_PLAYER_NAME = 'Presidente';
 export const MAX_PLAYER_NAME_LENGTH = 32;
 
@@ -30,6 +32,12 @@ export function createPlayerProfile(value = {}) {
 export function getPlayerDisplayName(state) {
   const name = normalizeName(state?.playerProfile?.name);
   return name || (state?.title && state.title !== 'Presidente' ? state.title : DEFAULT_PLAYER_NAME);
+}
+
+// Nome do protagonista nas historias e dialogos: o do perfil do jogador e, sem ele, o do lider da classe escolhida.
+export function getLeaderName(state) {
+  const name = normalizeName(state?.playerProfile?.name);
+  return name || getPresidentClass(state?.presidentClass)?.leader || 'O Presidente';
 }
 
 export function updatePlayerProfile(state, patch = {}) {

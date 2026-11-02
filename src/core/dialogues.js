@@ -31,13 +31,19 @@ const ROLE_DIALOGUE = Object.freeze({
   worker: 'worker', resident: 'worker', scientist: 'worker',
 });
 
-export function chooseDialogueLine(npc, random = Math.random) {
+// Quem fala com o jogador o chama pelo nome do perfil, nao so por "Presidente" ou "Senhor".
+export function addressPlayer(line, playerName) {
+  const name = String(playerName ?? '').trim();
+  return name ? String(line).replace(/\b(Presidente|Senhor)\b/g, () => name) : String(line);
+}
+
+export function chooseDialogueLine(npc, random = Math.random, playerName = '') {
   const key = ROLE_DIALOGUE[npc?.role] ?? 'worker';
   const traitLine = RESIDENT_TRAITS[npc?.trait]?.line;
   const lines = traitLine ? [...DIALOGUES[key], traitLine] : DIALOGUES[key];
   const value = Number(random());
   const index = Math.min(lines.length - 1, Math.max(0, Math.floor((Number.isFinite(value) ? value : 0) * lines.length)));
-  return lines[index];
+  return addressPlayer(lines[index], playerName);
 }
 
 export function applyDialoguePacification(state, inhabitantId) {

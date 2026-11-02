@@ -1,5 +1,5 @@
 import { getSurfaceMap, getExplorationPercent } from './surface_map.js';
-import { getPresidentClass } from './player_state.js';
+import { getLeaderName } from './player_profile.js';
 import { DOOR_REQUIRED_LEVEL, getLevel } from './levels.js';
 
 // Capitulo X — A Porta: depois de alguns anos no Vault a superficie volta a ser habitavel e o jogador
@@ -96,7 +96,7 @@ function vaultFateLine(state) {
 export function getEndingStory(state, endingId) {
   const ending = ENDINGS[endingId];
   if (!ending) return null;
-  const leader = getPresidentClass(state.presidentClass)?.leader ?? 'O Presidente';
+  const leader = getLeaderName(state);
   const story = ending.story.replaceAll('{leader}', leader);
   return endingId === 'layd_flight' ? story.replace('{layd}', laydFlightLine(state)).replace('{vault}', vaultFateLine(state)) : story;
 }

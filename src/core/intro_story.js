@@ -1,10 +1,11 @@
 import { getPresidentClass } from './player_state.js';
+import { getLeaderName } from './player_profile.js';
 
 // Historia de abertura do Vault: contada depois do clarao da bomba, antes de o jogador assumir o bunker.
 // A ultima cena e o alerta de sistema que ja existia; o jogador pode pular tudo a qualquer momento.
 export function getIntroScenes(state = {}) {
   const profile = getPresidentClass(state.presidentClass) ?? getPresidentClass('survivor');
-  const leader = profile.leader;
+  const leader = getLeaderName(state) || profile.leader;
   return [
     {
       id: 'last-day', icon: '🏛️', title: 'O ÚLTIMO DIA',

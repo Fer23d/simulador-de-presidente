@@ -14,7 +14,7 @@ import { RESOLUTIONS } from '../core/un_assembly.js';
 import { getStoryEvent } from '../core/story_engine.js';
 import { resolvePresidentialBriefing } from '../core/presidential_briefing.js';
 import { getUiLanguage, languageOptionLabel, monthName, uiText } from '../core/i18n.js';
-import { getPlayerDisplayName, SUPPORTED_LANGUAGES } from '../core/player_profile.js';
+import { getLeaderName, getPlayerDisplayName, SUPPORTED_LANGUAGES } from '../core/player_profile.js';
 import { COUNCIL_LEADERS } from '../core/vault_council.js';
 import { checkStoryChapters, LORE_CHAPTERS, STORY_NOTICE } from '../core/story_lore.js';
 import { INTERNAL_PROJECTS } from '../core/infrastructure.js';
@@ -1087,7 +1087,7 @@ export function doorView(state, trophies = createTrophies()) {
   if (state.pendingLaydDiscovery) return laydDiscoveryView(state);
   if (!isDoorOpen(state) || !state.door_prompt) return '';
   const forced = getForcedEnding(state);
-  const leader = PRESIDENT_CLASSES.find((profile) => profile.id === state.presidentClass)?.leader ?? 'Presidente';
+  const leader = getLeaderName(state);
   const intro = forced
     ? `Os sensores confirmam: o ar lá fora voltou a ser respirável. Mas, antes que ${leader} desse qualquer ordem, a assembleia dos moradores já tinha se reunido no refeitório. Lia Moraes pediu silêncio e olhou para você.`
     : `${Number(state.wasteland_turn) || 0} meses depois da bomba, os sensores da superfície acendem em verde: o ar voltou a ser respirável. A colônia inteira se reúne diante da porta do Vault. Helena guarda a chave de latão. Tomé segura a sua mão. Todos esperam a última ordem de ${leader}.`;
@@ -1843,7 +1843,7 @@ export function mountDashboard(root) {
             dialogueCharactersRendered = 0;
             const modal = root.querySelector('[data-dialogue-modal]');
             if (!modal) return;
-            modal.outerHTML = renderDialogueView(npc);
+            modal.outerHTML = renderDialogueView(npc, '', getPlayerDisplayName(state));
             const activeModal = root.querySelector('[data-dialogue-modal]');
             activeModal.hidden = false;
             const textNode = activeModal.querySelector('[data-dialogue-text]');
@@ -1892,6 +1892,7 @@ export function mountDashboard(root) {
             } : false;
           },
           onRoom: openShelterRoom,
+          playerName: getPlayerDisplayName(state),
           escape: state.layd_escape ? ESCAPE_STAGES[state.layd_escape.stage] : null,
           onEscape: (room, options) => commit(advanceLaydEscape(state, room, options)),
           mission: isMissionPending(state.pendingBunkerEvent)

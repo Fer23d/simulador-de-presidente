@@ -1,5 +1,6 @@
 import { hash } from './art.js';
 import { getPresidentClass } from './player_state.js';
+import { getLeaderName } from './player_profile.js';
 import { DAYS_PER_MONTH } from './vault_time.js';
 
 // Modo Cidade: depois que o jogador sai do Vault, ele reconstroi o mundo numa grade durante CITY_YEARS anos.
@@ -331,7 +332,7 @@ export function getCityEpilogue(state) {
   if (!city?.result) return null;
   const outcome = OUTCOMES[city.result.outcome] ?? OUTCOMES.struggle;
   const origin = CITY_ORIGINS[city.origin];
-  const leader = getPresidentClass(state.presidentClass)?.leader ?? 'O Presidente';
+  const leader = getLeaderName(state);
   return { ...outcome, origin: origin?.title ?? '', story: `${origin?.intro ?? ''} ${outcome.text}`.trim().replaceAll('{leader}', leader), result: city.result };
 }
 
