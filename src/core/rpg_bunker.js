@@ -16,6 +16,7 @@ import { chooseDialogueLine } from './dialogues.js';
 import { normalizeNeeds } from './needs.js';
 import { generateResidentIdentity, resolveResidentIdentity } from './names.js';
 import { advanceWeather, createWeatherState } from './weather.js';
+import { translateUiText } from './i18n.js';
 
 // Movimento mais responsivo; a simulação continua usando delta time para manter a mesma distância em qualquer FPS.
 const WALK_SPEED = 220;
@@ -82,13 +83,13 @@ export function getElevatorPrompt(player, grid, { surface = false, suit = false 
   return [up ? '[ W ] SUBIR' : '', surfaceLabel, down ? '[ S ] DESCER' : ''].filter(Boolean).join('   |   ');
 }
 
-export function findNearbyTrigger(player, grid) {
+export function findNearbyTrigger(player, grid, language = 'pt-BR') {
   if (player.liftTarget !== null) return null;
   const room = getRoom(grid, player.floor, playerColumn(player));
   if (!room || room.type === 'elevator') return null;
   const center = cellCenter(room.floor, room.column);
   return Math.abs(player.x - center.x) <= TRIGGER_RADIUS
-    ? { room, label: `[ E ] ${LABELS[room.type] ?? 'GERIR SALA'}` } : null;
+    ? { room, label: translateUiText(`[ E ] ${LABELS[room.type] ?? 'GERIR SALA'}`, language) } : null;
 }
 
 export function findNearbyInhabitant(player, grid, inhabitants = [], range = 50) {
@@ -124,7 +125,7 @@ export function createNearbyInhabitantTracker(intervalMs = 200) {
   };
 }
 
-function drawPacificationFeedback(ctx, npc, camera, elapsed) {
+function drawPacificationFeedback(ctx, npc, camera, elapsed, language = 'pt-BR') {
   const x = WORLD_LEFT + npc.column * SLOT_WIDTH + SLOT_WIDTH / 2 + (Number(npc.offsetX) || 0) + camera.offset_x;
   const y = cellCenter(npc.floor, npc.column).y + camera.offset_y - 75 - elapsed * .025;
   ctx.save();
@@ -135,11 +136,11 @@ function drawPacificationFeedback(ctx, npc, camera, elapsed) {
   ctx.fillStyle = '#39ff14';
   ctx.shadowColor = '#39ff14';
   ctx.shadowBlur = 8;
-  ctx.fillText('+15 LEALDADE', x, y);
+  ctx.fillText(translateUiText('+15 LEALDADE', language), x, y);
   ctx.restore();
 }
 
-export function findNearbyRebel(player, grid, inhabitants = []) {
+export function findNearbyRebel(player, grid, inhabitants = [], language = 'pt-BR') {
   if (player.liftTarget !== null) return null;
   const column = playerColumn(player);
   let nearest = null;
@@ -151,7 +152,8 @@ export function findNearbyRebel(player, grid, inhabitants = []) {
   }
   if (!nearest) return null;
   const hasCell = grid.some((floor) => floor.some((room) => room?.type === 'detention'));
-  return { npc: nearest.npc, label: hasCell ? '[ E ] PRENDER DISSIDENTE' : '[ E ] CONSTRUA UMA CELA PARA PRENDER O DISSIDENTE' };
+  const label = hasCell ? '[ E ] PRENDER DISSIDENTE' : '[ E ] CONSTRUA UMA CELA PARA PRENDER O DISSIDENTE';
+  return { npc: nearest.npc, label: translateUiText(label, language) };
 }
 
 export function updatePlayer(player, input, grid, deltaSeconds, oxygenDeprived = false) {
@@ -304,7 +306,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   onDetain, onAssetsReady, onEnvironmentChanged, environment = {}, isNight = environment?.isNight ?? false, weather: savedWeather = {},
   oxygenDeprived = false, assetUrls = {}, lootbox = {}, onLootboxClick,
   presidentClass = null, equippedSkin = 'default', currentDay = 1, onDayPassed, mission = null, onMission,
-  onDialogue, onDialogueAdvance, onDialogueClose, oilDerricks = null, oilFeedback = null, onOilDerrick, surfaceFort = null, onFort, companion = false, dog: savedDog = null, onPet, darkMarket = null, onMarket, escape = null, onEscape, playerName = '' } = {}) {
+  onDialogue, onDialogueAdvance, onDialogueClose, oilDerricks = null, oilFeedback = null, onOilDerrick, surfaceFort = null, onFort, companion = false, dog: savedDog = null, onPet, darkMarket = null, onMarket, escape = null, onEscape, playerName = '', language = 'pt-BR' } = {}) {
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
   const assets = new AssetManager({ ...DEFAULT_ASSETS, ...assetUrls });
@@ -391,7 +393,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
       + (player.floor <= 0 ? Math.min(SURFACE_CAMERA_HEADROOM, canvas.height * .08) : 0);
     camera.offset_x += (targetX - camera.offset_x) * Math.min(1, dt * 8);
     camera.offset_y += (targetY - camera.offset_y) * Math.min(1, dt * 8);
-    renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants: actors, cabinFloor, time,
+    renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants: actors, cabinFloor, time, language,
       isNight: dayNight.isNight, activeGenerators, oxygenDeprived, lootbox, presidentClass, equippedSkin,
       weather: weather.type, oilDerricks, oilFeedback, surfaceFort, companion: dog, darkMarket });
     if (escape) {
@@ -402,19 +404,19 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
     }
-    const rebel = paused || buildMode ? null : findNearbyRebel(player, grid, actors);
+    const rebel = paused || buildMode ? null : findNearbyRebel(player, grid, actors, language);
     const nearbyInhabitant = paused || buildMode ? null : trackNearbyInhabitant(player, grid, actors, time);
     const nearbyRoom = nearbyInhabitant && getRoom(grid, nearbyInhabitant.npc.floor, nearbyInhabitant.npc.column);
     if (nearbyRoom) {
       const placement = getActorPlacement(nearbyRoom);
       drawNeedsPanel(ctx, WORLD_LEFT + nearbyInhabitant.npc.column * SLOT_WIDTH + SLOT_WIDTH / 2
         + (Number(nearbyInhabitant.npc.offsetX) || 0) + camera.offset_x,
-      placement.floorY - placement.height - 26 + camera.offset_y, nearbyInhabitant.npc.needs);
+      placement.floorY - placement.height - 26 + camera.offset_y, nearbyInhabitant.npc.needs, language);
     }
     if (pacificationFeedback && time - pacificationFeedback.startedAt < 1_600) {
-      drawPacificationFeedback(ctx, pacificationFeedback.npc, camera, time - pacificationFeedback.startedAt);
+      drawPacificationFeedback(ctx, pacificationFeedback.npc, camera, time - pacificationFeedback.startedAt, language);
     } else pacificationFeedback = null;
-    const roomTrigger = findNearbyTrigger(player, grid);
+    const roomTrigger = findNearbyTrigger(player, grid, language);
     const missionHere = mission && roomTrigger && roomTrigger.room.floor === mission.floor && roomTrigger.room.column === mission.column;
     const marketPrompt = nearMarket() ? `[ E ] NEGOCIAR COM ${darkMarket.merchant.toUpperCase()}` : '';
     const farHint = time < farMarketHintUntil ? (hasSuit ? 'SOBE PELO ELEVADOR ATÉ A SUPERFÍCIE PARA NEGOCIAR' : 'A SUPERFÍCIE MATA: EQUIPE O TRAJE ANTIRRADIAÇÃO') : '';

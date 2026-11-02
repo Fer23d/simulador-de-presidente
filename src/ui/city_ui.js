@@ -4,6 +4,7 @@ import { advanceCityDay, analyzeCity, canPlaceAt, CITY_BUILDINGS, CITY_GATE, CIT
 import { checkStoryChapters } from '../core/story_lore.js';
 import { CITY_CANVAS_HEIGHT, CITY_CANVAS_WIDTH, CITY_DEFAULT_ZOOM, CITY_TILE, getCityCamera, renderCity } from '../core/city_renderer.js';
 import { getPlayerDisplayName } from '../core/player_profile.js';
+import { translateUiText } from '../core/i18n.js';
 
 const number = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
 const escapeText = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -120,7 +121,7 @@ function infoView(city, analysis, tool, tile) {
   return '<h3>Escolha uma construção</h3><p>Todo prédio precisa de estrada ligada à Porta do Vault, energia e gente para trabalhar. O terreno amarelo-esverdeado está contaminado: use um Descontaminador.</p>';
 }
 
-export function createCityController(root, { getState, onChange, onSound = () => {} }) {
+export function createCityController(root, { getState, onChange, onSound = () => {}, language = 'pt-BR' }) {
   const canvas = root.querySelector('#cityCanvas');
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
@@ -148,13 +149,13 @@ export function createCityController(root, { getState, onChange, onSound = () =>
   function refresh() {
     const current = city();
     analysis = analyzeCity(current);
-    hud.innerHTML = cityHudView(current, analysis);
-    clock.textContent = cityClockText(current);
-    if (objective) objective.innerHTML = cityObjectiveContents(current, analysis);
-    logList.innerHTML = [...current.log].reverse().map((entry) => `<li><small>Dia ${entry.day}</small> ${escapeText(entry.text)}</li>`).join('');
+    hud.innerHTML = translateUiText(cityHudView(current, analysis), language);
+    clock.textContent = translateUiText(cityClockText(current), language);
+    if (objective) objective.innerHTML = translateUiText(cityObjectiveContents(current, analysis), language);
+    logList.innerHTML = translateUiText([...current.log].reverse().map((entry) => `<li><small>Dia ${entry.day}</small> ${escapeText(entry.text)}</li>`).join(''), language);
     const message = current.message && current.message !== lastMessage ? current.message : '';
     if (message) lastMessage = current.message;
-    info.innerHTML = `${message ? `<p class="city-message">${escapeText(message)}</p>` : ''}${infoView(current, analysis, tool, selected)}`;
+    info.innerHTML = translateUiText(`${message ? `<p class="city-message">${escapeText(message)}</p>` : ''}${infoView(current, analysis, tool, selected)}`, language);
     root.querySelectorAll('[data-city-speed]').forEach((button) => button.setAttribute('aria-pressed', String(Number(button.dataset.citySpeed) === current.speed)));
     const zoomReadout = root.querySelector('[data-city-zoom="reset"]');
     if (zoomReadout) zoomReadout.textContent = `${Math.round(zoom * 100)}%`;
@@ -220,13 +221,13 @@ export function createCityController(root, { getState, onChange, onSound = () =>
     hover = tileAt(event);
     const current = city();
     const building = hover ? getBuildingAt(current, hover.x, hover.y) : null;
-    if (!hover) { tip.hidden = true; if (readout) readout.textContent = 'SELECIONE UM SETOR'; return; }
+    if (!hover) { tip.hidden = true; if (readout) readout.textContent = translateUiText('SELECIONE UM SETOR', language); return; }
     const ground = current.ground[hover.y * CITY_WIDTH + hover.x];
     const text = building ? CITY_BUILDINGS[building.type].name : hover.x === CITY_GATE.x && hover.y === CITY_GATE.y ? 'Porta do Vault'
       : ground === 'x' ? 'Terreno contaminado' : ground === 'r' ? 'Entulho (+8 para construir)' : '';
-    if (readout) readout.textContent = `SETOR ${String.fromCharCode(65 + hover.x)}-${String(hover.y + 1).padStart(2, '0')}${text ? ` · ${text.toUpperCase()}` : ''}`;
+    if (readout) readout.textContent = translateUiText(`SETOR ${String.fromCharCode(65 + hover.x)}-${String(hover.y + 1).padStart(2, '0')}${text ? ` · ${text.toUpperCase()}` : ''}`, language);
     tip.hidden = !text;
-    tip.textContent = text;
+    tip.textContent = translateUiText(text, language);
     const rect = canvas.getBoundingClientRect();
     tip.style.left = `${event.clientX - rect.left + 14}px`;
     tip.style.top = `${event.clientY - rect.top + 14}px`;
@@ -279,7 +280,7 @@ export function createCityController(root, { getState, onChange, onSound = () =>
     if (destroyed) return;
     const current = city();
     const canPlace = hover && tool && tool !== 'demolish' ? canPlaceAt(current, tool, hover.x, hover.y).ok : true;
-    renderCity(ctx, current, analysis, { time, hover, tool, canPlace, zoom, camera });
+    renderCity(ctx, current, analysis, { time, hover, tool, canPlace, zoom, camera, language });
     frameId = requestAnimationFrame(frame);
   }
 

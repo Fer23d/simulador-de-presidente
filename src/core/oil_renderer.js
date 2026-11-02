@@ -1,6 +1,7 @@
 import { WORLD_TOP } from './shelter_engine.js';
 import { formatDuration, getDerrickStatus } from './oil.js';
 import { gradeStructure, hash, linear, paintBackdrop, tone as T } from './art.js';
+import { translateUiText } from './i18n.js';
 
 // Os tres pontos de perfuracao ficam na faixa de superficie que a camera mostra desde o inicio,
 // a direita do Forte, sobre a porta do Vault.
@@ -662,7 +663,7 @@ function drawScaffold(ctx, time) {
 }
 
 // Terreno livre: estacas de topografo com fita, marcacao da laje e placa de obra.
-function drawEmptyPlot(ctx, time) {
+function drawEmptyPlot(ctx, time, language = 'pt-BR') {
   ctx.save();
   ctx.fillStyle = 'rgba(0, 0, 0, .3)';
   ctx.beginPath(); ctx.ellipse(10, 2, 120, 7, 0, 0, Math.PI * 2); ctx.fill();
@@ -694,20 +695,20 @@ function drawEmptyPlot(ctx, time) {
   ctx.fillStyle = '#2a1608';
   ctx.font = 'bold 9px "Share Tech Mono", monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('PERFURE', 6, -77);
-  ctx.fillText('AQUI', 6, -64);
+  ctx.fillText(translateUiText('PERFURE', language), 6, -77);
+  ctx.fillText(translateUiText('AQUI', language), 6, -64);
   ctx.restore();
 }
 
 // Corpo dos pocos: desenhado no mundo, antes da noite escurecer a superficie.
-export function renderOilField(ctx, derricks = [], { time = 0, now = Date.now() } = {}) {
+export function renderOilField(ctx, derricks = [], { time = 0, now = Date.now(), language = 'pt-BR' } = {}) {
   for (let slot = 0; slot < OIL_SLOT_X.length; slot++) {
     const { centerX, groundY } = getOilDerrickRect(slot);
     const status = getDerrickStatus(derricks[slot], now);
     ctx.save();
     ctx.translate(centerX, groundY);
     ctx.scale(SCALE, SCALE);
-    if (!status) drawEmptyPlot(ctx, time);
+    if (!status) drawEmptyPlot(ctx, time, language);
     else {
       const level = Math.max(1, Math.min(5, status.activeLevel));
       const back = getLayer(level, 'back');
@@ -724,7 +725,7 @@ export function renderOilField(ctx, derricks = [], { time = 0, now = Date.now() 
 }
 
 // Bolhas, barras de obra e o "+N" de coleta: desenhados por cima da noite para continuarem legiveis.
-export function renderOilFieldOverlay(ctx, derricks = [], { time = 0, now = Date.now(), feedback = null, perfNow = time } = {}) {
+export function renderOilFieldOverlay(ctx, derricks = [], { time = 0, now = Date.now(), feedback = null, perfNow = time, language = 'pt-BR' } = {}) {
   ctx.save();
   ctx.textAlign = 'center';
   for (let slot = 0; slot < OIL_SLOT_X.length; slot++) {
@@ -740,7 +741,7 @@ export function renderOilFieldOverlay(ctx, derricks = [], { time = 0, now = Date
       ctx.fillRect(centerX - 46, y + 2, 92 * Math.max(0, Math.min(1, status.upgradeProgress)), 7);
       ctx.fillStyle = '#ffe2a8';
       ctx.font = 'bold 11px "Share Tech Mono", monospace';
-      ctx.fillText(`${status.building ? 'MONTANDO' : `NÍVEL ${status.level}`} · ${formatDuration(status.upgradeRemainingMs)}`, centerX, y - 3);
+      ctx.fillText(translateUiText(`${status.building ? 'MONTANDO' : `NÍVEL ${status.level}`} · ${formatDuration(status.upgradeRemainingMs)}`, language), centerX, y - 3);
     } else if (status?.ready) {
       const bob = Math.sin(time / 260 + slot) * 4;
       const y = groundY - 128 + bob;
@@ -764,7 +765,7 @@ export function renderOilFieldOverlay(ctx, derricks = [], { time = 0, now = Date
       ctx.fillStyle = 'rgba(170, 150, 255, .8)';
       ctx.fillRect(centerX - 4, y - 2, 2, 6);
       // Etiqueta escura para a quantidade continuar legivel sobre a ferragem do poco.
-      const label = status.full ? `CHEIO ${status.stored}` : String(status.stored);
+      const label = status.full ? translateUiText(`CHEIO ${status.stored}`, language) : String(status.stored);
       ctx.font = 'bold 12px "Share Tech Mono", monospace';
       const labelWidth = ctx.measureText(label).width + 12;
       ctx.fillStyle = 'rgba(8, 5, 2, .82)';

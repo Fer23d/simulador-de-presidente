@@ -4,6 +4,7 @@ import { getFortStatus } from './defense.js';
 import { drawActorSprite } from './sprite_engine.js';
 import { getSkin } from './player_state.js';
 import { gradeStructure, hash, linear, paintBackdrop } from './art.js';
+import { translateUiText } from './i18n.js';
 
 // O Forte fica a esquerda do campo de petroleo, guardando a entrada do Vault.
 export const FORT_X = 150;
@@ -505,7 +506,7 @@ function garrisonSoldiers(ctx, centerX, groundY, level, garrison, time, soldierI
 // de trás e a cobertura frontal. Se a arte de alta qualidade falhar, a versão
 // procedural continua disponível como fallback funcional.
 export function drawFort(ctx, centerX, groundY, { level = 1, turrets = 1, garrison = 0, time = 0, night = false, firing = false,
-  soldierImage = null, fortImage = null } = {}) {
+  soldierImage = null, fortImage = null, language = 'pt-BR' } = {}) {
   ctx.save();
   const metrics = drawFortAsset(ctx, fortImage, centerX, groundY, level);
   if (!metrics) drawStructureLayer(ctx, centerX, groundY, level, 'back');
@@ -550,7 +551,7 @@ export function drawFort(ctx, centerX, groundY, { level = 1, turrets = 1, garris
   ctx.restore();
 }
 
-function drawEmptyFortPlot(ctx, centerX, groundY, time) {
+function drawEmptyFortPlot(ctx, centerX, groundY, time, language = 'pt-BR') {
   ctx.save();
   ctx.setLineDash([6, 5]);
   ctx.strokeStyle = `rgba(255, 120, 80, ${.45 + Math.sin(time / 300) * .25})`;
@@ -568,8 +569,8 @@ function drawEmptyFortPlot(ctx, centerX, groundY, time) {
   ctx.fillStyle = '#2a1608';
   ctx.font = 'bold 10px "Share Tech Mono", monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('ERGUER', centerX + 30, groundY - 59);
-  ctx.fillText('FORTE', centerX + 30, groundY - 48);
+  ctx.fillText(translateUiText('ERGUER', language), centerX + 30, groundY - 59);
+  ctx.fillText(translateUiText('FORTE', language), centerX + 30, groundY - 48);
   ctx.restore();
 }
 
@@ -587,17 +588,17 @@ function drawFortScaffold(ctx, centerX, groundY, time) {
   ctx.restore();
 }
 
-export function renderFort(ctx, fort, { time = 0, now = Date.now(), night = false, soldierImage = null, fortImage = null } = {}) {
+export function renderFort(ctx, fort, { time = 0, now = Date.now(), night = false, soldierImage = null, fortImage = null, language = 'pt-BR' } = {}) {
   const { centerX, groundY } = getFortRect();
   const status = getFortStatus(fort, now);
-  if (!status) { drawEmptyFortPlot(ctx, centerX, groundY, time); return; }
+  if (!status) { drawEmptyFortPlot(ctx, centerX, groundY, time, language); return; }
   if (status.activeLevel >= 1) {
-    drawFort(ctx, centerX, groundY, { level: status.activeLevel, turrets: status.turrets, garrison: status.garrison, time, night, soldierImage, fortImage });
+    drawFort(ctx, centerX, groundY, { level: status.activeLevel, turrets: status.turrets, garrison: status.garrison, time, night, soldierImage, fortImage, language });
   } else sandbagWall(ctx, centerX - 60, centerX + 20, groundY, 1, 3);
   if (status.upgrading) drawFortScaffold(ctx, centerX, groundY, time);
 }
 
-export function renderFortOverlay(ctx, fort, { now = Date.now() } = {}) {
+export function renderFortOverlay(ctx, fort, { now = Date.now(), language = 'pt-BR' } = {}) {
   const status = getFortStatus(fort, now);
   if (!status?.upgrading) return;
   const { centerX, groundY } = getFortRect();
@@ -612,7 +613,7 @@ export function renderFortOverlay(ctx, fort, { now = Date.now() } = {}) {
   ctx.fillRect(centerX - 54, y + 2, 108 * Math.max(0, Math.min(1, status.upgradeProgress)), 7);
   ctx.fillStyle = '#ffe2a8';
   ctx.font = 'bold 11px "Share Tech Mono", monospace';
-  ctx.fillText(`${status.building ? 'ERGUENDO' : `FORTE N${status.level}`} · ${formatDuration(status.upgradeRemainingMs)}`, centerX, y - 3);
+  ctx.fillText(translateUiText(`${status.building ? 'ERGUENDO' : `FORTE N${status.level}`} · ${formatDuration(status.upgradeRemainingMs)}`, language), centerX, y - 3);
   ctx.restore();
 }
 
@@ -637,7 +638,7 @@ const FACTION_FILTERS = Object.freeze({
   'Irmandade de Sucateiros': 'sepia(.9) hue-rotate(-20deg) saturate(1.4) brightness(.8)',
 });
 
-export function drawRaidBattle(ctx, report, { fort = null, elapsed = 0, time = 0, width = 560, height = 220, soldierImage = null, fortImage = null, scenery = null } = {}) {
+export function drawRaidBattle(ctx, report, { fort = null, elapsed = 0, time = 0, width = 560, height = 220, soldierImage = null, fortImage = null, scenery = null, language = 'pt-BR' } = {}) {
   const groundY = height - 34;
   paintBackdrop(ctx, width, height, groundY, scenery);
   const status = getFortStatus(fort, Date.now());
@@ -690,6 +691,6 @@ export function drawRaidBattle(ctx, report, { fort = null, elapsed = 0, time = 0
     ctx.fillStyle = report.won ? '#8fe39a' : '#ff6b5c';
     ctx.font = 'bold 22px "Press Start 2P", monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(report.won ? 'ATAQUE REPELIDO' : 'CAMPO SAQUEADO', width / 2, height / 2 + 6);
+    ctx.fillText(translateUiText(report.won ? 'ATAQUE REPELIDO' : 'CAMPO SAQUEADO', language), width / 2, height / 2 + 6);
   }
 }

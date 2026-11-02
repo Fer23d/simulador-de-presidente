@@ -429,9 +429,9 @@ export function encyclopediaView(encyclopedia, activeCategory = ENCYCLOPEDIA_CAT
   return `<section class="bunker-dialog encyclopedia-dialog" role="dialog" aria-modal="true" aria-labelledby="encyclopedia-title"><p class="eyebrow">/// ARQUIVO DO VAULT ///</p><h2 id="encyclopedia-title">ENCICLOPÉDIA DO ERMO</h2><p class="encyclopedia-progress">${discovered}/${total} DESCOBERTOS · ${percent}%</p><span class="encyclopedia-meter" role="meter" aria-label="Progresso da enciclopédia" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${discovered}"><span style="width:${percent}%"></span></span><nav class="encyclopedia-tabs" aria-label="Categorias">${tabs}</nav><div class="encyclopedia-grid">${cards}</div><div class="action-row"><button type="button" class="quiet-action" data-action="close-encyclopedia">[ FECHAR ARQUIVO ]</button></div></section>`;
 }
 
-function showLevelToast(stack, entry) {
+function showLevelToast(stack, entry, language = 'pt-BR') {
   if (!stack || !entry || typeof document === 'undefined') return;
-  const parts = levelToastParts(entry);
+  const parts = levelToastParts(entry, language);
   const toast = document.createElement('div');
   toast.className = `level-toast level-toast--${parts.tier}`;
   toast.setAttribute('role', 'status');
@@ -1568,7 +1568,7 @@ export function mountDashboard(root) {
 
   function announceLevels(previous, next) {
     const entries = getNewLevelEntries(previous, next);
-    entries.forEach((entry) => showLevelToast(codexToastStack, entry));
+    entries.forEach((entry) => showLevelToast(codexToastStack, entry, getUiLanguage(next)));
     if (entries.length) audio.play(entries.some((entry) => entry.tier !== 'normal') ? 'reward' : 'chime');
   }
 
@@ -1902,6 +1902,7 @@ export function mountDashboard(root) {
     if (state.city) {
       cityController = createCityController(root, {
         getState: () => state,
+        language: getUiLanguage(state),
         onChange: (next, { persist, rerender }) => {
           const previous = state;
           state = checkStoryChapters(awardXp(previous, next));
@@ -1929,6 +1930,7 @@ export function mountDashboard(root) {
           isNight: state.isNight,
           oxygenDeprived: state.oxygen_deprived,
           currentDay: state.currentDay,
+          language: getUiLanguage(state),
           presidentClass: state.presidentClass,
           equippedSkin: getActiveTrial(skinTrial)?.skinId ?? state.equippedSkin,
           lootbox: {

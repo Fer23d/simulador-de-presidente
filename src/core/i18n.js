@@ -26,6 +26,7 @@ const UI_MESSAGES = Object.freeze({
     'metric.cash': 'Caixa nacional',
     'metric.defcon': 'DEFCON',
     'metric.balance': 'Saldo projetado',
+    'level.abbrev': 'NV',
     'top.country': 'País',
     'top.restart': 'Reiniciar',
     'top.newGame': 'Nova partida',
@@ -38,7 +39,7 @@ const UI_MESSAGES = Object.freeze({
     'profile.save': '[ SALVAR IDENTIDADE ]',
     'profile.settings': 'Configurações',
     'profile.language': 'Idioma da interface',
-    'profile.languageHint': 'A história, os diálogos e o lore continuam no idioma original.',
+    'profile.languageHint': 'Rótulos, níveis, painéis, alertas e modos acompanham o idioma selecionado.',
     'profile.volume': 'Volume',
     'profile.mute': 'Som mudo',
     'profile.tutorial': 'Tutorial e dicas',
@@ -69,6 +70,7 @@ const UI_MESSAGES = Object.freeze({
     'metric.cash': 'Tesoro nacional',
     'metric.defcon': 'DEFCON',
     'metric.balance': 'Saldo proyectado',
+    'level.abbrev': 'NIV',
     'top.country': 'País',
     'top.restart': 'Reiniciar',
     'top.newGame': 'Nueva partida',
@@ -81,7 +83,7 @@ const UI_MESSAGES = Object.freeze({
     'profile.save': '[ GUARDAR IDENTIDAD ]',
     'profile.settings': 'Configuración',
     'profile.language': 'Idioma de la interfaz',
-    'profile.languageHint': 'La historia, los diálogos y el lore permanecen en el idioma original.',
+    'profile.languageHint': 'Etiquetas, niveles, paneles, alertas y modos siguen el idioma seleccionado.',
     'profile.volume': 'Volumen',
     'profile.mute': 'Silenciar sonido',
     'profile.tutorial': 'Tutorial y consejos',
@@ -112,6 +114,7 @@ const UI_MESSAGES = Object.freeze({
     'metric.cash': 'National treasury',
     'metric.defcon': 'DEFCON',
     'metric.balance': 'Projected balance',
+    'level.abbrev': 'LVL',
     'top.country': 'Country',
     'top.restart': 'Restart',
     'top.newGame': 'New game',
@@ -124,7 +127,7 @@ const UI_MESSAGES = Object.freeze({
     'profile.save': '[ SAVE IDENTITY ]',
     'profile.settings': 'Settings',
     'profile.language': 'Interface language',
-    'profile.languageHint': 'The story, dialogue and lore remain in their original language.',
+    'profile.languageHint': 'Labels, levels, panels, alerts and game modes follow the selected language.',
     'profile.volume': 'Volume',
     'profile.mute': 'Mute sound',
     'profile.tutorial': 'Tutorial and tips',
@@ -143,6 +146,36 @@ const UI_MESSAGES = Object.freeze({
 // Conteúdo narrativo (lore, finais e falas) fica fora dela de propósito.
 const LEGACY_UI_TRANSLATIONS = Object.freeze({
   es: Object.freeze([
+    // Progressão global, níveis, recompensas e estados dos painéis.
+    ['NÍVEIS', 'NIVELES'], ['níveis', 'niveles'], ['TRILHA DE NÍVEIS', 'RUTA DE NIVELES'], ['PROGRESSÃO', 'PROGRESIÓN'], ['Progressão', 'Progresión'],
+    ['PRÊMIO MÁXIMO', 'PREMIO MÁXIMO'], ['PRÊMIO ESPECIAL', 'PREMIO ESPECIAL'], ['Prêmio de nível', 'Premio de nivel'],
+    ['Ponto de partida da jornada', 'Punto de partida del viaje'], ['Já alcançado', 'Ya alcanzado'], ['VOCÊ ESTÁ AQUI', 'ESTÁS AQUÍ'],
+    ['A Porta do Vault abre no nível', 'La Puerta del Refugio se abre en el nivel'], ['A Porta do Vault abre no nível', 'La Puerta del Refugio se abre en el nivel'], ['A Porta do Vault só abre neste nível', 'La Puerta del Refugio solo se abre en este nivel'], ['A Porta do Vault só abre no nível', 'La Puerta del Refugio solo se abre en el nivel'],
+    ['XP máximo', 'XP máximo'], ['Próximo prêmio especial', 'Próximo premio especial'], ['Você chegou ao nível máximo.', 'Has llegado al nivel máximo.'],
+    ['faltam', 'faltan'], ['níveis', 'niveles'], ['nível', 'nivel'], ['capítulos recuperados', 'capítulos recuperados'], ['Modo dos prêmios', 'Modo de las recompensas'],
+    ['Todo nível dá um prêmio do modo em que você está.', 'Cada nivel da una recompensa del modo en el que estás.'],
+    ['Nível comum', 'Nivel común'], ['terminado em 5', 'terminado en 5'], ['terminado em 0', 'terminado en 0'],
+    ['com título, vestimenta exclusiva e bônus extra.', 'con título, vestimenta exclusiva y bonificación extra.'], ['(atual)', '(actual)'],
+    ['recompensas', 'recompensas'], ['Título', 'Título'], ['Vestimenta exclusiva', 'Vestimenta exclusiva'],
+    ['Caixa nacional', 'Tesoro nacional'], ['Pontos de tecnologia', 'Puntos de tecnología'], ['Água', 'Agua'], ['Felicidade', 'Felicidad'], ['Presidência', 'Presidencia'], ['Cidade', 'Ciudad'],
+    ['Não disponível', 'No disponible'], ['Não definido', 'No definido'], ['SEM SETOR DISPONÍVEL', 'SIN SECTOR DISPONIBLE'],
+    ['Pronto para iniciar', 'Listo para iniciar'], ['PP INSUFICIENTES', 'PP INSUFICIENTES'], ['DEPENDÊNCIA PENDENTE', 'DEPENDENCIA PENDIENTE'],
+    ['CONCLUÍDO', 'COMPLETADO'], ['INICIAR PROJETO', 'INICIAR PROYECTO'], ['Pontos de experiência', 'Puntos de experiencia'],
+    ['Pontos de Pesquisa', 'Puntos de investigación'], ['Pesquisa militar', 'Investigación militar'], ['Nível', 'Nivel'], ['NÍVEL', 'NIVEL'],
+    ['LINHA DE RECONSTRUÇÃO CONCLUÍDA', 'LÍNEA DE RECONSTRUCCIÓN COMPLETADA'], ['ORDEM ATUAL', 'ORDEN ACTUAL'], ['REDE DE SOBREVIVÊNCIA', 'RED DE SUPERVIVENCIA'],
+    ['SISTEMA ONLINE', 'SISTEMA EN LÍNEA'], ['ÚLTIMOS REGISTROS', 'ÚLTIMOS REGISTROS'], ['ESCOLHA UMA CONSTRUÇÃO', 'ELIGE UNA CONSTRUCCIÓN'],
+    ['RECURSOS', 'RECURSOS'], ['FELICIDADE', 'FELICIDAD'], ['DENSIDADE', 'DENSIDAD'], ['CONTAMINADO', 'CONTAMINADO'], ['SERVIÇO ATIVO', 'SERVICIO ACTIVO'],
+    ['MONTANDO', 'MONTANDO'], ['OBRA PARA O NÍVEL', 'OBRA PARA EL NIVEL'], ['FALTAM', 'FALTAN'], ['BARRIS', 'BARRILES'], ['SEM DEFESA', 'SIN DEFENSA'],
+    ['FORTE DA SUPERFÍCIE', 'FUERTE DE LA SUPERFICIE'], ['TERRENO DO FORTE', 'TERRENO DEL FUERTE'], ['BARRIS A PROTEGER', 'BARRILES A PROTEGER'],
+    ['ATAQUE REPELIDO', 'ATAQUE REPELIDO'], ['CAMPO SAQUEADO', 'CAMPO SAQUEADO'], ['MERCADO SOMBRIO', 'MERCADO SOMBRÍO'], ['RECOMPENSA', 'RECOMPENSA'],
+    ['BATEDORES', 'EXPLORADORES'], ['ANDAR', 'PLANTA'], ['SETOR', 'SECTOR'], ['VÁ ATÉ LÁ E APERTE [E]', 'VE ALLÍ Y PULSA [E]'],
+    ['PROBLEMA NO VAULT', 'PROBLEMA EN EL REFUGIO'], ['ESCONDIDA', 'ESCONDIDA'], ['DESCONFIANÇA DO VAULT', 'DESCONFIANZA DEL REFUGIO'],
+    ['ANO ZERO PÓS-BOMBA', 'AÑO CERO POSBOMBA'], ['ECONOMIA DE SUCATA', 'ECONOMÍA DE CHATARRA'], ['A superfície morreu.', 'La superficie murió.'],
+    ['PRESIDENTE EM PATRULHA', 'PRESIDENTE EN PATRULLA'], ['GERIR SALA', 'GESTIONAR SALA'], ['VOLTAR AO VAULT', 'VOLVER AL REFUGIO'],
+    ['REPARAR', 'REPARAR'], ['RECRUTAR', 'RECLUTAR'], ['EQUIPAR GUARDA', 'EQUIPAR GUARDIA'], ['TRATAR RADIAÇÃO', 'TRATAR RADIACIÓN'],
+    ['TRANSMITIR SINAL', 'TRANSMITIR SEÑAL'], ['OPERAR A SALA DE RÁDIO', 'OPERAR LA SALA DE RADIO'], ['ABRIR O GUARDA-ROUPA', 'ABRIR EL ARMARIO'],
+    ['CHEIO', 'LLENO'], ['ERGUER', 'LEVANTAR'], ['FORTE', 'FUERTE'], ['ERGUENDO', 'LEVANTANDO'], ['ATAQUE REPELIDO', 'ATAQUE REPELIDO'],
+    ['MODO PRESIDÊNCIA', 'MODO PRESIDENCIA'], ['PRÓXIMO', 'PRÓXIMO'], ['ATUAL', 'ACTUAL'],
     ['Agenda presidencial', 'Agenda presidencial'], ['Próximo movimento', 'Próximo movimiento'], ['Proximo movimento', 'Próximo movimiento'],
     ['Nação', 'Nación'], ['Nacao', 'Nación'], ['Painel mundial', 'Panel mundial'], ['Diplomacia e Mapa', 'Diplomacia y mapa'],
     ['Diplomacia de risco', 'Diplomacia de riesgo'], ['Reputação global', 'Reputación global'], ['Reputacao global', 'Reputación global'],
@@ -226,6 +259,36 @@ const LEGACY_UI_TRANSLATIONS = Object.freeze({
     ['Ligar som', 'Activar sonido'], ['Desligar som', 'Desactivar sonido'], ['Volume', 'Volumen'],
   ]),
   en: Object.freeze([
+    // Global progression, levels, rewards and panel states.
+    ['NÍVEIS', 'LEVELS'], ['níveis', 'levels'], ['TRILHA DE NÍVEIS', 'LEVEL TRACK'], ['PROGRESSÃO', 'PROGRESSION'], ['Progressão', 'Progression'],
+    ['PRÊMIO MÁXIMO', 'MAXIMUM REWARD'], ['PRÊMIO ESPECIAL', 'SPECIAL REWARD'], ['Prêmio de nível', 'Level reward'],
+    ['Ponto de partida da jornada', 'Starting point of the journey'], ['Já alcançado', 'Already reached'], ['VOCÊ ESTÁ AQUI', 'YOU ARE HERE'],
+    ['A Porta do Vault abre no nível', 'The Vault Door opens at level'], ['A Porta do Vault só abre neste nível', 'The Vault Door only opens at this level'], ['A Porta do Vault só abre no nível', 'The Vault Door only opens at level'],
+    ['XP máximo', 'MAX XP'], ['Próximo prêmio especial', 'Next special reward'], ['Você chegou ao nível máximo.', 'You reached the maximum level.'],
+    ['faltam', 'missing'], ['níveis', 'levels'], ['nível', 'level'], ['capítulos recuperados', 'chapters recovered'], ['Modo dos prêmios', 'Reward mode'],
+    ['Todo nível dá um prêmio do modo em que você está.', 'Every level grants a reward from your current mode.'],
+    ['Nível comum', 'Standard level'], ['terminado em 5', 'ending in 5'], ['terminado em 0', 'ending in 0'],
+    ['com título, vestimenta exclusiva e bônus extra.', 'with a title, exclusive outfit and extra bonus.'], ['(atual)', '(current)'],
+    ['recompensas', 'rewards'], ['Título', 'Title'], ['Vestimenta exclusiva', 'Exclusive outfit'],
+    ['Caixa nacional', 'National treasury'], ['Pontos de tecnologia', 'Technology points'], ['Água', 'Water'], ['Felicidade', 'Happiness'], ['Presidência', 'Presidency'], ['Cidade', 'City'],
+    ['Não disponível', 'Unavailable'], ['Não definido', 'Undefined'], ['SEM SETOR DISPONÍVEL', 'NO SECTOR AVAILABLE'],
+    ['Pronto para iniciar', 'Ready to start'], ['PP INSUFICIENTES', 'INSUFFICIENT RP'], ['DEPENDÊNCIA PENDENTE', 'DEPENDENCY PENDING'],
+    ['CONCLUÍDO', 'COMPLETED'], ['INICIAR PROJETO', 'START PROJECT'], ['Pontos de experiência', 'Experience points'],
+    ['Pontos de Pesquisa', 'Research points'], ['Pesquisa militar', 'Military research'], ['Nível', 'Level'], ['NÍVEL', 'LEVEL'],
+    ['LINHA DE RECONSTRUÇÃO CONCLUÍDA', 'RECONSTRUCTION LINE COMPLETE'], ['ORDEM ATUAL', 'CURRENT ORDER'], ['REDE DE SOBREVIVÊNCIA', 'SURVIVAL NETWORK'],
+    ['SISTEMA ONLINE', 'SYSTEM ONLINE'], ['ÚLTIMOS REGISTROS', 'LATEST RECORDS'], ['ESCOLHA UMA CONSTRUÇÃO', 'CHOOSE A BUILDING'],
+    ['RECURSOS', 'RESOURCES'], ['FELICIDADE', 'HAPPINESS'], ['DENSIDADE', 'DENSITY'], ['CONTAMINADO', 'CONTAMINATED'], ['SERVIÇO ATIVO', 'SERVICE ACTIVE'],
+    ['MONTANDO', 'ASSEMBLING'], ['OBRA PARA O NÍVEL', 'UPGRADE TO LEVEL'], ['FALTAM', 'MISSING'], ['BARRIS', 'BARRELS'], ['SEM DEFESA', 'NO DEFENSE'],
+    ['FORTE DA SUPERFÍCIE', 'SURFACE FORT'], ['TERRENO DO FORTE', 'FORT SITE'], ['BARRIS A PROTEGER', 'BARRELS TO PROTECT'],
+    ['ATAQUE REPELIDO', 'ATTACK REPELLED'], ['CAMPO SAQUEADO', 'FIELD LOOTED'], ['MERCADO SOMBRIO', 'DARK MARKET'], ['RECOMPENSA', 'REWARD'],
+    ['BATEDORES', 'SCOUTS'], ['ANDAR', 'FLOOR'], ['SETOR', 'SECTOR'], ['VÁ ATÉ LÁ E APERTE [E]', 'GO THERE AND PRESS [E]'],
+    ['PROBLEMA NO VAULT', 'VAULT PROBLEM'], ['ESCONDIDA', 'HIDDEN'], ['DESCONFIANÇA DO VAULT', 'VAULT SUSPICION'],
+    ['ANO ZERO PÓS-BOMBA', 'POST-BOMB YEAR ZERO'], ['ECONOMIA DE SUCATA', 'SCRAP ECONOMY'], ['A superfície morreu.', 'The surface died.'],
+    ['PRESIDENTE EM PATRULHA', 'PRESIDENT ON PATROL'], ['GERIR SALA', 'MANAGE ROOM'], ['VOLTAR AO VAULT', 'RETURN TO VAULT'],
+    ['REPARAR', 'REPAIR'], ['RECRUTAR', 'RECRUIT'], ['EQUIPAR GUARDA', 'EQUIP GUARD'], ['TRATAR RADIAÇÃO', 'TREAT RADIATION'],
+    ['TRANSMITIR SINAL', 'BROADCAST SIGNAL'], ['OPERAR A SALA DE RÁDIO', 'OPERATE RADIO ROOM'], ['ABRIR O GUARDA-ROUPA', 'OPEN WARDROBE'],
+    ['CHEIO', 'FULL'], ['ERGUER', 'BUILD'], ['FORTE', 'FORT'], ['ERGUENDO', 'BUILDING'], ['ATAQUE REPELIDO', 'ATTACK REPELLED'],
+    ['MODO PRESIDÊNCIA', 'PRESIDENCY MODE'], ['PRÓXIMO', 'NEXT'], ['ATUAL', 'CURRENT'],
     ['Agenda presidencial', 'Presidential agenda'], ['Próximo movimento', 'Next move'], ['Proximo movimento', 'Next move'],
     ['Nação', 'Nation'], ['Nacao', 'Nation'], ['Painel mundial', 'World panel'], ['Diplomacia e Mapa', 'Diplomacy and map'],
     ['Diplomacia de risco', 'High-risk diplomacy'], ['Reputação global', 'Global reputation'], ['Reputacao global', 'Global reputation'],
@@ -303,7 +366,134 @@ const LEGACY_UI_TRANSLATIONS = Object.freeze({
   ]),
 });
 
+// Mensagens geradas pelo motor de simulação. Elas não são apenas títulos de
+// UI: aparecem depois de uma ação e precisam trocar de idioma no mesmo frame
+// que o restante do painel.
+const DYNAMIC_UI_TRANSLATIONS = Object.freeze({
+  es: Object.freeze([
+    ['Sucata insuficiente.', 'Chatarra insuficiente.'],
+    ['Sucata insuficiente para este projeto.', 'Chatarra insuficiente para este proyecto.'],
+    ['Sucata insuficiente para melhorar a sala.', 'Chatarra insuficiente para mejorar la sala.'],
+    ['Ciência insuficiente para melhorar a sala.', 'Ciencia insuficiente para mejorar la sala.'],
+    ['Caixa insuficiente para esta ação.', 'Tesoro insuficiente para esta acción.'],
+    ['Energia insuficiente para esta ação.', 'Energía insuficiente para esta acción.'],
+    ['Petróleo insuficiente para esta ação.', 'Petróleo insuficiente para esta acción.'],
+    ['Sala não encontrada.', 'Sala no encontrada.'],
+    ['Nenhum habitante disponível para expedição.', 'Ningún habitante disponible para expedición.'],
+    ['O Vault sobrevive mais um mês.', 'El Refugio sobrevive un mes más.'],
+    ['A partida foi encerrada.', 'La partida ha terminado.'],
+    ['Projeto de sobrevivência inválido.', 'Proyecto de supervivencia no válido.'],
+    ['Caixa insuficiente para o Mega-Vault.', 'Tesoro insuficiente para el Mega-Refugio.'],
+    ['Aço insuficiente para o Mega-Vault.', 'Acero insuficiente para el Mega-Refugio.'],
+  ]),
+  en: Object.freeze([
+    ['Sucata insuficiente.', 'Insufficient scrap.'],
+    ['Sucata insuficiente para este projeto.', 'Not enough scrap for this project.'],
+    ['Sucata insuficiente para melhorar a sala.', 'Not enough scrap to upgrade the room.'],
+    ['Ciência insuficiente para melhorar a sala.', 'Not enough science to upgrade the room.'],
+    ['Caixa insuficiente para esta ação.', 'Not enough treasury funds for this action.'],
+    ['Energia insuficiente para esta ação.', 'Not enough energy for this action.'],
+    ['Petróleo insuficiente para esta ação.', 'Not enough oil for this action.'],
+    ['Sala não encontrada.', 'Room not found.'],
+    ['Nenhum habitante disponível para expedição.', 'No inhabitant is available for an expedition.'],
+    ['O Vault sobrevive mais um mês.', 'The Vault survives another month.'],
+    ['A partida foi encerrada.', 'The game is over.'],
+    ['Projeto de sobrevivência inválido.', 'Invalid survival project.'],
+    ['Caixa insuficiente para o Mega-Vault.', 'Not enough treasury funds for the Mega-Vault.'],
+    ['Aço insuficiente para o Mega-Vault.', 'Not enough steel for the Mega-Vault.'],
+  ]),
+});
+
 const LEGACY_TRANSLATION_CACHE = new Map();
+const CANONICAL_VARIANTS = new Map();
+const CANONICAL_FOLD_VARIANTS = new Map();
+const LOCALE_TARGETS = { es: new Map(), en: new Map() };
+const SAFE_WORDS = Object.freeze([
+  Object.freeze(['DIA', 'DÍA', 'DAY']), Object.freeze(['MÊS', 'MES', 'MONTH']), Object.freeze(['ANO', 'AÑO', 'YEAR']),
+  Object.freeze(['SUCATA', 'CHATARRA', 'SCRAP']), Object.freeze(['SUCATAS', 'CHATARRAS', 'SCRAP']),
+  Object.freeze(['COMIDA', 'COMIDA', 'FOOD']), Object.freeze(['ENERGIA', 'ENERGÍA', 'ENERGY']), Object.freeze(['ÁGUA', 'AGUA', 'WATER']),
+  Object.freeze(['PETRÓLEO', 'PETRÓLEO', 'OIL']), Object.freeze(['NÍVEL', 'NIVEL', 'LEVEL']), Object.freeze(['NÍVEIS', 'NIVELES', 'LEVELS']),
+  Object.freeze(['CIÊNCIA', 'CIENCIA', 'SCIENCE']), Object.freeze(['TRABALHADORES', 'TRABAJADORES', 'WORKERS']),
+  Object.freeze(['PRODUÇÃO', 'PRODUCCIÓN', 'PRODUCTION']), Object.freeze(['MANUTENÇÃO', 'MANTENIMIENTO', 'MAINTENANCE']),
+  Object.freeze(['CAPACIDADE', 'CAPACIDAD', 'CAPACITY']), Object.freeze(['DEFESA', 'DEFENSA', 'DEFENSE']),
+  Object.freeze(['SOLDADOS', 'SOLDADOS', 'SOLDIERS']), Object.freeze(['RADIAÇÃO', 'RADIACIÓN', 'RADIATION']),
+  Object.freeze(['PONTOS', 'PUNTOS', 'POINTS']), Object.freeze(['PESQUISA', 'INVESTIGACIÓN', 'RESEARCH']),
+  Object.freeze(['RECOMPENSA', 'RECOMPENSA', 'REWARD']), Object.freeze(['FELICIDADE', 'FELICIDAD', 'HAPPINESS']),
+]);
+
+// Vocabulário de interface que aparece em avisos dinâmicos, tooltips e
+// painéis recriados pelo motor do bunker. As frases maiores continuam no
+// catálogo acima; este vocabulário impede que um aviso novo fique misturado
+// em português quando o jogador troca de idioma no meio da partida.
+const LEXICAL_WORDS = Object.freeze([
+  ['MODO', 'MODO', 'MODE'], ['HISTÓRIA', 'HISTORIA', 'STORY'], ['DIÁRIO', 'DIARIO', 'DIARY'],
+  ['CIDADE', 'CIUDAD', 'CITY'], ['RECONSTRUÇÃO', 'RECONSTRUCCIÓN', 'RECONSTRUCTION'],
+  ['ORDEM', 'ORDEN', 'ORDER'], ['ATUAL', 'ACTUAL', 'CURRENT'], ['PRÓXIMO', 'PRÓXIMO', 'NEXT'],
+  ['MÁXIMO', 'MÁXIMO', 'MAXIMUM'], ['MÍNIMO', 'MÍNIMO', 'MINIMUM'], ['PRÊMIO', 'PREMIO', 'PRIZE'],
+  ['ESPECIAL', 'ESPECIAL', 'SPECIAL'], ['JORNADA', 'VIAJE', 'JOURNEY'], ['CAPÍTULO', 'CAPÍTULO', 'CHAPTER'],
+  ['CAPÍTULOS', 'CAPÍTULOS', 'CHAPTERS'], ['PONTO', 'PUNTO', 'POINT'], ['PONTOS', 'PUNTOS', 'POINTS'],
+  ['EXPERIÊNCIA', 'EXPERIENCIA', 'EXPERIENCE'], ['MILITAR', 'MILITAR', 'MILITARY'], ['TECNOLOGIA', 'TECNOLOGÍA', 'TECHNOLOGY'],
+  ['OXIGÊNIO', 'OXÍGENO', 'OXYGEN'], ['SAÚDE', 'SALUD', 'HEALTH'], ['CONSUMO', 'CONSUMO', 'CONSUMPTION'], ['VAGAS', 'PUESTOS', 'JOBS'],
+  ['RECURSOS', 'RECURSOS', 'RESOURCES'], ['DISPONÍVEL', 'DISPONIBLE', 'AVAILABLE'], ['DISPONÍVEIS', 'DISPONIBLES', 'AVAILABLE'],
+  ['INSUFICIENTE', 'INSUFICIENTE', 'INSUFFICIENT'], ['INSUFICIENTES', 'INSUFICIENTES', 'INSUFFICIENT'],
+  ['CONSTRUIR', 'CONSTRUIR', 'BUILD'], ['CONSTRUÇÃO', 'CONSTRUCCIÓN', 'BUILDING'], ['MELHORAR', 'MEJORAR', 'UPGRADE'],
+  ['MELHORIA', 'MEJORA', 'UPGRADE'], ['CUSTO', 'COSTE', 'COST'], ['GRÁTIS', 'GRATIS', 'FREE'],
+  ['PERFURE', 'PERFORA', 'DRILL'], ['AQUI', 'AQUÍ', 'HERE'],
+  ['COMPRAR', 'COMPRAR', 'BUY'], ['VENDER', 'VENDER', 'SELL'], ['RECOLHER', 'RECOGER', 'COLLECT'],
+  ['ENVIAR', 'ENVIAR', 'SEND'], ['VOLTAR', 'VOLVER', 'BACK'], ['FECHAR', 'CERRAR', 'CLOSE'],
+  ['ABRIR', 'ABRIR', 'OPEN'], ['GERIR', 'GESTIONAR', 'MANAGE'], ['REPARAR', 'REPARAR', 'REPAIR'],
+  ['RECRUTAR', 'RECLUTAR', 'RECRUIT'], ['EQUIPAR', 'EQUIPAR', 'EQUIP'], ['TRATAR', 'TRATAR', 'TREAT'],
+  ['TRANSMITIR', 'TRANSMITIR', 'BROADCAST'], ['OPERAR', 'OPERAR', 'OPERATE'], ['SINAL', 'SEÑAL', 'SIGNAL'],
+  ['EXPEDIÇÃO', 'EXPEDICIÓN', 'EXPEDITION'], ['SUPERFÍCIE', 'SUPERFICIE', 'SURFACE'], ['SUBTERRÂNEO', 'SUBTERRÁNEO', 'UNDERGROUND'],
+  ['ANDAR', 'PLANTA', 'FLOOR'], ['SETOR', 'SECTOR', 'SECTOR'], ['TERRENO', 'TERRENO', 'PLOT'],
+  ['LIVRE', 'LIBRE', 'FREE'], ['OCUPADO', 'OCUPADO', 'OCCUPIED'], ['GUERRA', 'GUERRA', 'WAR'],
+  ['ALIANÇA', 'ALIANZA', 'ALLIANCE'], ['RELAÇÃO', 'RELACIÓN', 'RELATION'], ['PODER', 'PODER', 'POWER'],
+  ['GOVERNO', 'GOBIERNO', 'GOVERNMENT'], ['POPULAÇÃO', 'POBLACIÓN', 'POPULATION'], ['ÁREA', 'ÁREA', 'AREA'],
+  ['ACORDO', 'ACUERDO', 'AGREEMENT'], ['COMÉRCIO', 'COMERCIO', 'TRADE'], ['SANÇÃO', 'SANCIÓN', 'SANCTION'],
+  ['ATAQUE', 'ATAQUE', 'ATTACK'], ['NUCLEAR', 'NUCLEAR', 'NUCLEAR'], ['SABOTAGEM', 'SABOTAJE', 'SABOTAGE'],
+  ['AMEAÇA', 'AMENAZA', 'THREAT'], ['ALERTA', 'ALERTA', 'ALERT'], ['VITÓRIA', 'VICTORIA', 'VICTORY'],
+  ['DERROTA', 'DERROTA', 'DEFEAT'], ['MENSAL', 'MENSUAL', 'MONTHLY'],
+  ['ELEIÇÃO', 'ELECCIÓN', 'ELECTION'], ['LEI', 'LEY', 'LAW'], ['LEIS', 'LEYES', 'LAWS'], ['CONGRESSO', 'CONGRESO', 'CONGRESS'],
+  ['APOIO', 'APOYO', 'SUPPORT'], ['NEGOCIAR', 'NEGOCIAR', 'NEGOTIATE'], ['IMPOSTO', 'IMPUESTO', 'TAX'],
+  ['ORÇAMENTO', 'PRESUPUESTO', 'BUDGET'], ['GASTOS', 'GASTOS', 'SPENDING'], ['ARRECADAÇÃO', 'RECAUDACIÓN', 'REVENUE'],
+  ['SALDO', 'SALDO', 'BALANCE'], ['SUPERÁVIT', 'SUPERÁVIT', 'SURPLUS'], ['DÉFICIT', 'DÉFICIT', 'DEFICIT'],
+  ['INFLAÇÃO', 'INFLACIÓN', 'INFLATION'], ['DESEMPREGO', 'DESEMPLEO', 'UNEMPLOYMENT'], ['REPUTAÇÃO', 'REPUTACIÓN', 'REPUTATION'],
+  ['GLOBAL', 'GLOBAL', 'GLOBAL'], ['INTERNACIONAL', 'INTERNACIONAL', 'INTERNATIONAL'], ['INSTITUIÇÕES', 'INSTITUCIONES', 'INSTITUTIONS'],
+  ['PROJETOS', 'PROYECTOS', 'PROJECTS'], ['INTERNOS', 'INTERNOS', 'INTERNAL'], ['AUTOMATIZAR', 'AUTOMATIZAR', 'AUTOMATE'],
+  ['AMBIENTE', 'AMBIENTE', 'ENVIRONMENT'], ['SOCIEDADE', 'SOCIEDAD', 'SOCIETY'], ['SEGURANÇA', 'SEGURIDAD', 'SECURITY'],
+  ['PÚBLICOS', 'PÚBLICOS', 'PUBLIC'], ['EDUCAÇÃO', 'EDUCACIÓN', 'EDUCATION'], ['INFRAESTRUTURA', 'INFRAESTRUCTURA', 'INFRASTRUCTURE'],
+  ['RENDA', 'RENTA', 'INCOME'], ['APLICAR', 'APLICAR', 'APPLY'], ['ESTADO', 'ESTADO', 'STATE'], ['PAÍS', 'PAÍS', 'COUNTRY'],
+  ['PAÍSES', 'PAÍSES', 'COUNTRIES'], ['NAÇÃO', 'NACIÓN', 'NATION'], ['NAÇÕES', 'NACIONES', 'NATIONS'],
+  ['PRESIDENTE', 'PRESIDENTE', 'PRESIDENT'], ['CIDADÃO', 'CIUDADANO', 'CITIZEN'], ['CIDADÃOS', 'CIUDADANOS', 'CITIZENS'],
+  ['MORADORES', 'HABITANTES', 'RESIDENTS'], ['HABITANTES', 'HABITANTES', 'INHABITANTS'], ['TRATAMENTO', 'TRATAMIENTO', 'TREATMENT'],
+  ['VACINA', 'VACUNA', 'VACCINE'], ['VACINAS', 'VACUNAS', 'VACCINES'], ['DOENTE', 'ENFERMO', 'SICK'], ['SAUDÁVEL', 'SALUDABLE', 'HEALTHY'],
+  ['ESCOLHA', 'ELECCIÓN', 'CHOICE'], ['ESCOLHAS', 'ELECCIONES', 'CHOICES'], ['PROBLEMA', 'PROBLEMA', 'PROBLEM'],
+  ['SOLUÇÃO', 'SOLUCIÓN', 'SOLUTION'], ['ATIVO', 'ACTIVO', 'ACTIVE'], ['ATIVA', 'ACTIVA', 'ACTIVE'], ['ATIVOS', 'ACTIVOS', 'ACTIVE'],
+  ['INATIVO', 'INACTIVO', 'INACTIVE'], ['CHEIO', 'LLENO', 'FULL'], ['VAZIO', 'VACÍO', 'EMPTY'], ['PRONTO', 'LISTO', 'READY'],
+  ['CONCLUÍDO', 'COMPLETADO', 'COMPLETED'], ['BLOQUEADO', 'BLOQUEADO', 'LOCKED'], ['DESBLOQUEADO', 'DESBLOQUEADO', 'UNLOCKED'],
+  ['PENDENTE', 'PENDIENTE', 'PENDING'], ['APROVADA', 'APROBADA', 'APPROVED'], ['REJEITADA', 'RECHAZADA', 'REJECTED'],
+  ['FALTAM', 'FALTAN', 'MISSING'], ['FALTA', 'FALTA', 'MISSING'], ['ABAIXO', 'DEBAJO', 'BELOW'], ['ACIMA', 'ENCIMA', 'ABOVE'],
+  ['DENTRO', 'DENTRO', 'INSIDE'], ['FORA', 'FUERA', 'OUTSIDE'], ['PRÓPRIO', 'PROPIO', 'OWN'], ['TOTAL', 'TOTAL', 'TOTAL'],
+]);
+
+// O DOM é recriado várias vezes durante uma partida. Por isso a tradução não
+// pode depender de o texto ainda estar em português: ao trocar de idioma,
+// normalizamos qualquer variante conhecida para a chave canônica e só então
+// aplicamos o idioma escolhido. Isso também corrige o caminho EN -> ES -> PT.
+function foldVariant(value) {
+  return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+}
+
+for (const locale of ['es', 'en']) {
+  for (const [source, target] of [...(LEGACY_UI_TRANSLATIONS[locale] ?? []), ...(DYNAMIC_UI_TRANSLATIONS[locale] ?? [])]) {
+    const canonical = CANONICAL_FOLD_VARIANTS.get(foldVariant(source)) ?? source;
+    CANONICAL_FOLD_VARIANTS.set(foldVariant(source), canonical);
+    CANONICAL_FOLD_VARIANTS.set(foldVariant(target), canonical);
+    CANONICAL_VARIANTS.set(source, canonical);
+    CANONICAL_VARIANTS.set(target, canonical);
+    if (target !== source) LOCALE_TARGETS[locale].set(canonical, target);
+  }
+}
 
 function legacyTranslationPairs(language) {
   const locale = normalizeLanguage(language);
@@ -311,10 +501,84 @@ function legacyTranslationPairs(language) {
   return LEGACY_TRANSLATION_CACHE.get(locale);
 }
 
-export function translateUiText(value, language) {
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function replaceVariants(value, mapping, preserveMatchCase = false) {
+  const variants = [...mapping.keys()].filter(Boolean).sort((a, b) => b.length - a.length);
+  if (!variants.length) return String(value ?? '');
+  const pattern = new RegExp(variants.map(escapeRegExp).join('|'), 'g');
+  return String(value ?? '').replace(pattern, (match) => {
+    const replacement = mapping.get(match) ?? match;
+    return preserveMatchCase ? preserveCase(match, replacement) : replacement;
+  });
+}
+
+function replaceSafeWords(value, language) {
+  const localeIndex = normalizeLanguage(language) === 'en' ? 2 : normalizeLanguage(language) === 'es' ? 1 : 0;
+  const variants = new Map();
+  for (const [canonical, spanish, english] of SAFE_WORDS) {
+    variants.set(canonical, canonical);
+    variants.set(spanish, canonical);
+    // SCRAP/RESEARCH e outros recursos podem ser singular/plural em
+    // português, mas o inglês usa a mesma palavra. Prefira a forma singular
+    // quando o token estrangeiro não permite distinguir as duas formas.
+    if (!variants.has(english)) variants.set(english, canonical);
+  }
   let result = String(value ?? '');
-  for (const [source, target] of legacyTranslationPairs(language)) result = result.split(source).join(target);
-  return result;
+  const names = [...variants.keys()].sort((a, b) => b.length - a.length).map(escapeRegExp).join('|');
+  if (names) {
+    const boundary = new RegExp(`(^|[^\\p{L}\\p{N}_])(${names})(?=$|[^\\p{L}\\p{N}_])`, 'gu');
+    result = result.replace(boundary, (_match, prefix, token) => `${prefix}${variants.get(token) ?? token}`);
+  }
+  if (localeIndex === 0) return result;
+  const target = new Map(SAFE_WORDS.map(([canonical, spanish, english]) => [canonical, localeIndex === 1 ? spanish : english]));
+  const targetNames = [...target.keys()].sort((a, b) => b.length - a.length).map(escapeRegExp).join('|');
+  const targetBoundary = new RegExp(`(^|[^\\p{L}\\p{N}_])(${targetNames})(?=$|[^\\p{L}\\p{N}_])`, 'gu');
+  return result.replace(targetBoundary, (_match, prefix, token) => `${prefix}${target.get(token) ?? token}`);
+}
+
+function replaceKnownVariants(value) {
+  return replaceVariants(value, CANONICAL_VARIANTS, true);
+}
+
+function preserveCase(token, replacement) {
+  if (token === token.toLocaleUpperCase('pt-BR')) return replacement.toLocaleUpperCase('pt-BR');
+  if (token[0] === token[0]?.toLocaleUpperCase('pt-BR')) {
+    return replacement.charAt(0).toLocaleUpperCase('pt-BR') + replacement.slice(1);
+  }
+  return replacement.toLocaleLowerCase('pt-BR');
+}
+
+function replaceLexicalWords(value, language) {
+  const locale = normalizeLanguage(language);
+  const targetIndex = locale === 'es' ? 1 : locale === 'en' ? 2 : 0;
+  const canonicalByVariant = new Map();
+  const targetByCanonical = new Map();
+  for (const [portuguese, spanish, english] of LEXICAL_WORDS) {
+    const canonical = portuguese.toLocaleLowerCase('pt-BR');
+    for (const variant of [portuguese, spanish, english]) canonicalByVariant.set(variant.toLocaleLowerCase('pt-BR'), canonical);
+    // As chaves estão em caixa alta para facilitar a leitura do catálogo,
+    // mas o texto devolvido deve respeitar a caixa original do token.
+    targetByCanonical.set(canonical, [portuguese, spanish, english][targetIndex].toLocaleLowerCase('pt-BR'));
+  }
+  const variants = [...canonicalByVariant.keys()].sort((a, b) => b.length - a.length).map(escapeRegExp).join('|');
+  if (!variants) return String(value ?? '');
+  const boundary = new RegExp(`(^|[^\\p{L}\\p{N}_])(${variants})(?=$|[^\\p{L}\\p{N}_])`, 'giu');
+  return String(value ?? '').replace(boundary, (_match, prefix, token) => {
+    const canonical = canonicalByVariant.get(token.toLocaleLowerCase('pt-BR'));
+    const target = targetByCanonical.get(canonical);
+    return `${prefix}${target ? preserveCase(token, target) : token}`;
+  });
+}
+
+export function translateUiText(value, language) {
+  const locale = normalizeLanguage(language);
+  let result = replaceSafeWords(replaceKnownVariants(value), 'pt-BR');
+  result = replaceVariants(result, LOCALE_TARGETS[locale] ?? new Map());
+  result = replaceSafeWords(result, locale);
+  return replaceLexicalWords(result, locale);
 }
 
 const TRANSLATION_SKIP_SELECTOR = 'script, style, .story-typewriter, .ending-story, .dialogue-text, [data-story-content]';

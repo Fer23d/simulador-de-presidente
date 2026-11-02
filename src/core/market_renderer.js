@@ -1,5 +1,6 @@
 import { WORLD_TOP } from './shelter_engine.js';
 import { hash, linear } from './art.js';
+import { translateUiText } from './i18n.js';
 
 // A banca do Mercado Sombrio fica na superficie, depois do ultimo poco de petroleo.
 export const MARKET_X = 990;
@@ -75,7 +76,7 @@ function barrel(c, x, y, tint) {
   c.fill();
 }
 
-function drawStatic(c) {
+function drawStatic(c, language = 'pt-BR') {
   c.lineJoin = 'round';
   c.lineCap = 'round';
   // Sombra no chao.
@@ -213,7 +214,7 @@ function drawStatic(c) {
   c.fillStyle = '#e4d0a0';
   c.font = 'bold 9px monospace';
   c.textAlign = 'center';
-  c.fillText('MERCADO SOMBRIO', 1, -70);
+  c.fillText(translateUiText('MERCADO SOMBRIO', language), 1, -70);
   c.strokeStyle = '#2a1c10';
   c.lineWidth = 1;
   c.beginPath();
@@ -315,7 +316,7 @@ function drawLantern(ctx, time, night) {
   ctx.restore();
 }
 
-export function renderMarket(ctx, market, { time = 0, night = false } = {}) {
+export function renderMarket(ctx, market, { time = 0, night = false, language = 'pt-BR' } = {}) {
   if (!market?.open) return;
   ctx.save();
   ctx.translate(MARKET_X, GROUND_Y);
@@ -325,7 +326,7 @@ export function renderMarket(ctx, market, { time = 0, night = false } = {}) {
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(sprite, -ORIGIN_X, -ORIGIN_Y, W, H);
   } else {
-    drawStatic(ctx);
+    drawStatic(ctx, language);
   }
   drawMerchant(ctx, time);
   drawLantern(ctx, time, night);
@@ -333,7 +334,7 @@ export function renderMarket(ctx, market, { time = 0, night = false } = {}) {
 }
 
 // Etiqueta flutuante com o nome do mercador, desenhada por cima da noite para continuar legivel.
-export function renderMarketOverlay(ctx, market, { time = 0 } = {}) {
+export function renderMarketOverlay(ctx, market, { time = 0, language = 'pt-BR' } = {}) {
   if (!market?.open) return;
   const y = GROUND_Y - 124 * SCALE - 16 + Math.sin(time / 600) * 2;
   ctx.save();

@@ -1,3 +1,4 @@
+import { translateUiText } from './i18n.js';
 import { hash, linear } from './art.js';
 import { CITY_BUILDINGS, CITY_GATE, CITY_HEIGHT, CITY_WIDTH } from './city.js';
 
@@ -17,7 +18,6 @@ export function getCityCamera(zoom = CITY_DEFAULT_ZOOM) {
     zoom,
   };
 }
-
 const center = (tile) => tile * CITY_TILE + CITY_TILE / 2;
 
 // A textura é um asset de apoio, não a fonte da simulação. Se ela falhar, o
@@ -233,7 +233,7 @@ function drawRoad(ctx, x, y, roadSet, connected) {
   ctx.lineWidth = 1;
 }
 
-function drawGate(ctx, time) {
+function drawGate(ctx, time, language = 'pt-BR') {
   const px = CITY_GATE.x * CITY_TILE;
   const py = CITY_GATE.y * CITY_TILE;
   ctx.fillStyle = linear(ctx, px, py, px, py + CITY_TILE, [[0, '#6e7378'], [1, '#2a2d30']]);
@@ -249,7 +249,7 @@ function drawGate(ctx, time) {
   ctx.fillStyle = '#ffcf7a';
   ctx.font = 'bold 8px "Share Tech Mono", monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('VAULT', px + CITY_TILE / 2, py + 33);
+  ctx.fillText(translateUiText('VAULT', language), px + CITY_TILE / 2, py + 33);
 }
 
 function drawStreetFurniture(ctx, city, analysis, time) {
@@ -702,7 +702,7 @@ function drawCitizens(ctx, city, analysis, time) {
   }
 }
 
-function drawWorldFrame(ctx, time, zoom = CITY_DEFAULT_ZOOM) {
+function drawWorldFrame(ctx, time, zoom = CITY_DEFAULT_ZOOM, language = 'pt-BR') {
   const pulse = .55 + Math.sin(time / 1_600) * .12;
   // Moldura de mapa: separa o terreno jogável do terminal e dá uma leitura
   // de "mesa de operações" em vez de uma folha de tiles.
@@ -717,7 +717,7 @@ function drawWorldFrame(ctx, time, zoom = CITY_DEFAULT_ZOOM) {
   ctx.fillStyle = 'rgba(255, 235, 190, .55)';
   ctx.font = '10px "Share Tech Mono", monospace';
   ctx.textAlign = 'left';
-  ctx.fillText('SETOR DE RECONSTRUÇÃO / MAPA TÁTICO', 22, 31);
+  ctx.fillText(translateUiText('SETOR DE RECONSTRUÇÃO / MAPA TÁTICO', language), 22, 31);
   ctx.textAlign = 'right';
   ctx.fillText(`ESCALA 1 : ${Math.round(CITY_TILE / zoom)}`, CITY_CANVAS_WIDTH - 22, CITY_CANVAS_HEIGHT - 24);
   ctx.textAlign = 'left';
@@ -741,7 +741,7 @@ function drawAtmosphere(ctx, time) {
   }
 }
 
-export function renderCity(ctx, city, analysis, { time = 0, hover = null, tool = null, canPlace = true, zoom = CITY_DEFAULT_ZOOM, camera = getCityCamera(zoom) } = {}) {
+export function renderCity(ctx, city, analysis, { time = 0, hover = null, tool = null, canPlace = true, zoom = CITY_DEFAULT_ZOOM, camera = getCityCamera(zoom), language = 'pt-BR' } = {}) {
   ctx.clearRect(0, 0, CITY_CANVAS_WIDTH, CITY_CANVAS_HEIGHT);
   ctx.fillStyle = '#24170d';
   ctx.fillRect(0, 0, CITY_CANVAS_WIDTH, CITY_CANVAS_HEIGHT);
@@ -778,7 +778,7 @@ export function renderCity(ctx, city, analysis, { time = 0, hover = null, tool =
   const roadSet = new Set(city.buildings.filter((building) => building.type === 'road').map((building) => `${building.x},${building.y}`));
   for (const building of city.buildings) if (building.type === 'road') drawRoad(ctx, building.x, building.y, roadSet, analysis.roads.has(building.y * CITY_WIDTH + building.x));
   drawStreetFurniture(ctx, city, analysis, time);
-  drawGate(ctx, time);
+  drawGate(ctx, time, language);
   for (const building of [...city.buildings].filter((candidate) => candidate.type !== 'road').sort((a, b) => a.y - b.y)) {
     drawBuilding(ctx, building, analysis.status.get(building.id) ?? { connected: false, efficiency: 0 }, time);
   }
@@ -801,7 +801,7 @@ export function renderCity(ctx, city, analysis, { time = 0, hover = null, tool =
   }
   ctx.restore();
   drawAtmosphere(ctx, time);
-  drawWorldFrame(ctx, time, zoom);
+  drawWorldFrame(ctx, time, zoom, language);
   // Escurece o entorno para o jogador sentir o horizonte da cidade.
   const vignette = ctx.createRadialGradient(CITY_CANVAS_WIDTH / 2, CITY_CANVAS_HEIGHT / 2, 260, CITY_CANVAS_WIDTH / 2, CITY_CANVAS_HEIGHT / 2, 640);
   vignette.addColorStop(0, 'rgba(0,0,0,0)'); vignette.addColorStop(1, 'rgba(20, 8, 0, .42)');

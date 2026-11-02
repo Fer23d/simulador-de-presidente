@@ -7,6 +7,7 @@ import { renderMarket, renderMarketOverlay } from './market_renderer.js';
 import { getPresidentClass, getSkin } from './player_state.js';
 import { hasReliableNightPower } from './environment.js';
 import { getCriticalNeeds, NEED_CRITICAL_THRESHOLD, NEED_ICONS, NEED_KEYS, NEED_LABELS, normalizeNeeds } from './needs.js';
+import { translateUiText } from './i18n.js';
 
 const SURFACE_Y = WORLD_TOP - 30;
 const ATLAS_CELLS = Object.freeze({
@@ -2020,18 +2021,18 @@ export function applyOxygenDeprivationOverlay(ctx, width, height, oxygenDeprived
 
 export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants = [], cabinFloor = player.floor,
   time = 0, isNight = false, activeGenerators = 0, oxygenDeprived = false, lootbox = {},
-  presidentClass = null, equippedSkin = 'default', weather = 'clear', oilDerricks = null, oilNow = Date.now(), oilFeedback = null, surfaceFort = undefined, companion = null, darkMarket = null }) {
+  presidentClass = null, equippedSkin = 'default', weather = 'clear', oilDerricks = null, oilNow = Date.now(), oilFeedback = null, surfaceFort = undefined, companion = null, darkMarket = null, language = 'pt-BR' }) {
   renderSurface(ctx, camera, assets, { isNight, time, weather });
   renderDirt(ctx, camera, assets);
   ctx.save();
   ctx.translate(camera.offset_x, camera.offset_y);
   const surfaceVisible = isWorldAreaVisible(ctx, camera, 0, SURFACE_Y - 320, 1_250, 360, 96);
   if (oilDerricks && surfaceVisible) {
-    renderFort(ctx, surfaceFort ?? null, { time, now: oilNow, night: isNight,
+    renderFort(ctx, surfaceFort ?? null, { time, now: oilNow, night: isNight, language,
       soldierImage: assets.getImage('npc_walk_sheet'), fortImage: assets.getImage('surface_fort') });
-    renderOilField(ctx, oilDerricks, { time, now: oilNow });
+    renderOilField(ctx, oilDerricks, { time, now: oilNow, language });
   }
-  if (darkMarket && surfaceVisible) renderMarket(ctx, darkMarket, { time, night: isNight });
+  if (darkMarket && surfaceVisible) renderMarket(ctx, darkMarket, { time, night: isNight, language });
   const atlas = assets.getImage('room_atlas');
   for (let floor = 0; floor < grid.length; floor++) {
     for (let column = 0; column < grid[floor].length; column++) {
@@ -2121,9 +2122,9 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
   if (oilDerricks && surfaceVisible) {
     ctx.save();
     ctx.translate(camera.offset_x, camera.offset_y);
-    renderOilFieldOverlay(ctx, oilDerricks, { time, now: oilNow, feedback: oilFeedback, perfNow: time });
-    renderFortOverlay(ctx, surfaceFort ?? null, { now: oilNow });
-    if (darkMarket) renderMarketOverlay(ctx, darkMarket, { time });
+    renderOilFieldOverlay(ctx, oilDerricks, { time, now: oilNow, feedback: oilFeedback, perfNow: time, language });
+    renderFortOverlay(ctx, surfaceFort ?? null, { now: oilNow, language });
+    if (darkMarket) renderMarketOverlay(ctx, darkMarket, { time, language });
     ctx.restore();
   }
   if (ctx.canvas) applyOxygenDeprivationOverlay(ctx, ctx.canvas.width, ctx.canvas.height, oxygenDeprived, time);
@@ -2296,7 +2297,7 @@ function renderDetentionBars(ctx, room, time = 0) {
 const NEED_BAR_COLORS = Object.freeze({ good: '#39ff14', warning: '#e6c75a', critical: '#ff263d' });
 
 // Painel compacto de necessidades exibido sobre o habitante mais proximo do Presidente.
-export function drawNeedsPanel(ctx, centerX, bottomY, needs) {
+export function drawNeedsPanel(ctx, centerX, bottomY, needs, language = 'pt-BR') {
   const values = normalizeNeeds(needs);
   const width = 92;
   const rowHeight = 10;
@@ -2317,7 +2318,7 @@ export function drawNeedsPanel(ctx, centerX, bottomY, needs) {
     const value = values[key];
     const tone = value < NEED_CRITICAL_THRESHOLD ? 'critical' : value < 60 ? 'warning' : 'good';
     ctx.fillStyle = '#ffd88a';
-    ctx.fillText(NEED_LABELS[key], left + 4, rowY + 4);
+    ctx.fillText(translateUiText(NEED_LABELS[key], language), left + 4, rowY + 4);
     ctx.fillStyle = '#2a2f2c';
     ctx.fillRect(left + 46, rowY + 1, 42, 6);
     ctx.fillStyle = NEED_BAR_COLORS[tone];
