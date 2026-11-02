@@ -10,6 +10,7 @@ import { getWeather } from './weather.js';
 import { createMissionLocation } from './missions.js';
 import { normalizeOilField } from './oil.js';
 import { rollSurfaceRaid } from './defense.js';
+import { rollDarkMarket } from './market.js';
 import { getGeneratorFuelPlan } from './oil_economy.js';
 import { DAYS_PER_MONTH, dayShare, getVaultDayOfMonth } from './vault_time.js';
 import { DOOR_OPENS_AT_MONTH, ENDINGS, isDoorOpen } from './endings.js';
@@ -272,6 +273,7 @@ function advanceVaultMonth(state, dayIndex = 0) {
     wasteland_turn: wastelandMonthCounter,
     wasteland_day: 0,
     wastelandMonthCounter,
+    dark_market: rollDarkMarket(wastelandMonthCounter),
     wastelandEventCursor: Math.max(0, Math.floor(Number(state.wastelandEventCursor) || 0)) % WASTELAND_EVENTS.length,
     shelter_grid: nextGrid,
     ...(Array.isArray(state.inhabitants) ? { inhabitants: inhabitantsWithNeeds } : {}),
@@ -282,7 +284,7 @@ function advanceVaultMonth(state, dayIndex = 0) {
     oxygen_deprived: oxygenDeficit,
     shelter_radiation: Math.max(0, Math.min(100, (Number(state.shelter_radiation) || 0) + radiationGain - medical - councilModifiers.radiationReduction)),
     country: { ...state.country, populacao: population, populacao_base: population },
-    notice: 'O Vault sobrevive mais um mês. Os módulos operacionais sustentam a população.',
+     notice: 'O Vault sobrevive mais um mês. Os módulos operacionais sustentam a população. O Mercado Sombrio montou banca na superfície por 3 dias.',
   };
   let processed = advanceMonthlyGameMechanics(advanced);
   const needsNotice = [

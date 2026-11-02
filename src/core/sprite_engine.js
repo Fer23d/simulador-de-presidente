@@ -3,6 +3,7 @@ import { renderLootboxOverlay } from './lootbox_renderer.js';
 import { renderOilField, renderOilFieldOverlay } from './oil_renderer.js';
 import { renderFort, renderFortOverlay } from './defense_renderer.js';
 import { DOG_HEIGHT, drawDog, warmDogFrames } from './dog_renderer.js';
+import { renderMarket, renderMarketOverlay } from './market_renderer.js';
 import { getPresidentClass, getSkin } from './player_state.js';
 import { hasReliableNightPower } from './environment.js';
 import { getCriticalNeeds, NEED_CRITICAL_THRESHOLD, NEED_ICONS, NEED_KEYS, NEED_LABELS, normalizeNeeds } from './needs.js';
@@ -723,6 +724,10 @@ function visibleFrameBounds(image, frame, row, rows) {
 }
 
 export function getActorPlacement(room, { liftY } = {}) {
+  if (room.floor < 0) {
+    const surfaceInner = ROOM_HEIGHT - ROOM_CEILING_THICKNESS - ROOM_FLOOR_THICKNESS;
+    return { innerHeight: surfaceInner, height: surfaceInner * .55, floorY: (liftY ?? SURFACE_Y) + ELEVATOR_SPRITE_FOOT_OFFSET };
+  }
   const physicalFloorY = cellCenter(room.floor, room.column).y;
   // Atores mantem o mesmo tamanho em todo o bunker, inclusive dentro da cabine do elevador.
   const innerHeight = ROOM_HEIGHT - ROOM_CEILING_THICKNESS - ROOM_FLOOR_THICKNESS;
@@ -1944,7 +1949,7 @@ export function applyOxygenDeprivationOverlay(ctx, width, height, oxygenDeprived
 
 export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants = [], cabinFloor = player.floor,
   time = 0, isNight = false, activeGenerators = 0, oxygenDeprived = false, lootbox = {},
-  presidentClass = null, equippedSkin = 'default', weather = 'clear', oilDerricks = null, oilNow = Date.now(), oilFeedback = null, surfaceFort = undefined, companion = null }) {
+  presidentClass = null, equippedSkin = 'default', weather = 'clear', oilDerricks = null, oilNow = Date.now(), oilFeedback = null, surfaceFort = undefined, companion = null, darkMarket = null }) {
   renderSurface(ctx, camera, assets, { isNight, time, weather });
   renderDirt(ctx, camera, assets);
   ctx.save();
@@ -1955,6 +1960,7 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
       soldierImage: assets.getImage('npc_walk_sheet'), fortImage: assets.getImage('surface_fort') });
     renderOilField(ctx, oilDerricks, { time, now: oilNow });
   }
+  if (darkMarket && surfaceVisible) renderMarket(ctx, darkMarket, { time, night: isNight });
   const atlas = assets.getImage('room_atlas');
   for (let floor = 0; floor < grid.length; floor++) {
     for (let column = 0; column < grid[floor].length; column++) {
@@ -1973,7 +1979,7 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
       }
     }
   }
-  const cabinY = player.liftTarget !== null ? player.y : cellCenter(cabinFloor, 0).y;
+  const cabinY = player.liftTarget !== null ? player.y : cabinFloor < 0 ? SURFACE_Y : cellCenter(cabinFloor, 0).y;
   drawOrMissing(ctx, assets.getImage('elevator_cabin'), WORLD_LEFT + 74,
     cabinY + ELEVATOR_ART_FLOOR_INSET - ELEVATOR_CABIN_HEIGHT, 116, ELEVATOR_CABIN_HEIGHT);
   const npcSheet = assets.getImage('npc_walk_sheet');
@@ -2019,7 +2025,7 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
       }
     }
   }
-  const playerColumn = Math.max(0, Math.min(grid[player.floor]?.length - 1 ?? 0,
+  const playerColumn = player.floor < 0 ? 0 : Math.max(0, Math.min(grid[player.floor]?.length - 1 ?? 0,
     Math.floor((player.x - WORLD_LEFT) / SLOT_WIDTH)));
   const playerRoom = grid[player.floor]?.[playerColumn] ?? { floor: player.floor, column: playerColumn, type: 'vault' };
   const placement = getActorPlacement(playerRoom,
@@ -2046,6 +2052,7 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
     ctx.translate(camera.offset_x, camera.offset_y);
     renderOilFieldOverlay(ctx, oilDerricks, { time, now: oilNow, feedback: oilFeedback, perfNow: time });
     renderFortOverlay(ctx, surfaceFort ?? null, { now: oilNow });
+    if (darkMarket) renderMarketOverlay(ctx, darkMarket, { time });
     ctx.restore();
   }
   if (ctx.canvas) applyOxygenDeprivationOverlay(ctx, ctx.canvas.width, ctx.canvas.height, oxygenDeprived, time);

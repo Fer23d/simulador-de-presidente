@@ -3,13 +3,15 @@ export const LAYD_ID = 'layd';
 export const LAYD_NAME = 'Layd';
 
 const FOLLOW_GAP = 66;
-const WALK_SPEED = 120;
-const RUN_SPEED = 250;
+// A companheira deve conseguir cruzar a superfície sem ficar vários segundos atrás.
+const WALK_SPEED = 160;
+const RUN_SPEED = 320;
 const RUN_DISTANCE = 230;
 const SIT_AFTER_SECONDS = 2.4;
 const STRIDE = 13;
 const PET_RANGE = 80;
 const PET_SECONDS = 2.6;
+const SURFACE_FLOOR = -1;
 
 export function hasLayd(state) {
   return state?.companion?.adopted === true;
@@ -33,7 +35,8 @@ export function normalizeCompanion(value) {
 
 export function createDogActor(player) {
   const facing = player.facing === -1 ? -1 : 1;
-  return { x: player.x - facing * FOLLOW_GAP, floor: player.floor, facing, pose: 'sit', gait: 0, idleSeconds: 0, petSeconds: 0, speed: 0 };
+  return { x: player.x - facing * FOLLOW_GAP, floor: player.floor, facing, pose: 'sit', gait: 0,
+    idleSeconds: 0, petSeconds: 0, speed: 0, riding: false };
 }
 
 export function petDog(dog, player) {
@@ -47,7 +50,9 @@ export function canPetDog(dog, player) {
 
 // Um passo do comportamento: caminha atras do jogador, corre se ficou longe, senta quando ele para.
 // elevatorX: onde fica o elevador, usado para trocar de andar junto com o jogador.
-export function updateDogActor(dog, player, deltaSeconds, { elevatorX = null, bounds = null } = {}) {
+export function updateDogActor(dog, player, deltaSeconds, {
+  elevatorX = null, bounds = null, surfaceBounds = null, marketX = null,
+} = {}) {
   const dt = Math.max(0, Math.min(.05, Number(deltaSeconds) || 0));
   const next = { ...dog };
   next.petSeconds = Math.max(0, (dog.petSeconds || 0) - dt);
@@ -67,10 +72,23 @@ export function updateDogActor(dog, player, deltaSeconds, { elevatorX = null, bo
     next.floor = player.floor;
     next.x = player.x - 24;
   }
+  const onSurface = player.floor === SURFACE_FLOOR;
+  const activeBounds = onSurface && surfaceBounds ? surfaceBounds : bounds;
   let goalX = player.x - (player.facing === -1 ? -1 : 1) * FOLLOW_GAP * .75;
+  // Na superfície, mantém Layd no mesmo corredor físico do Presidente, inclusive
+  // quando ele chega à banca do Mercado Sombrio.
+  if (onSurface && Number.isFinite(Number(marketX)) && Math.abs(player.x - marketX) <= 180) {
+    goalX = player.x - (player.facing === -1 ? -1 : 1) * FOLLOW_GAP * .75;
+  }
   if (dog.floor !== player.floor) {
-    if (elevatorX === null) { next.floor = player.floor; next.x = player.x - FOLLOW_GAP; return next; }
-    goalX = elevatorX;
+    if (!Number.isFinite(Number(elevatorX))) {
+      // Fallback para saves antigos: nunca deixar a companheira num andar fantasma.
+      next.floor = player.floor;
+      next.x = player.x - FOLLOW_GAP;
+      next.riding = false;
+      return next;
+    }
+    goalX = Number(elevatorX);
   }
   const distance = goalX - dog.x;
   const away = Math.abs(player.x - dog.x);
@@ -87,13 +105,14 @@ export function updateDogActor(dog, player, deltaSeconds, { elevatorX = null, bo
     const speed = running ? RUN_SPEED : WALK_SPEED * (Math.abs(distance) > 90 ? 1.25 : .85);
     const step = Math.min(Math.abs(distance), speed * dt);
     next.x = dog.x + Math.sign(distance) * step;
-    if (bounds) next.x = Math.max(bounds.min, Math.min(bounds.max, next.x));
+    if (activeBounds) next.x = Math.max(activeBounds.min, Math.min(activeBounds.max, next.x));
     next.facing = Math.sign(distance) || dog.facing;
     next.gait = (dog.gait || 0) + step / STRIDE * (running ? .8 : 1);
     next.speed = step / (dt || 1);
     next.pose = running ? 'run' : 'walk';
-    if (dog.floor !== player.floor && Math.abs(elevatorX - next.x) <= 6) {
+    if (dog.floor !== player.floor && Math.abs(Number(elevatorX) - next.x) <= 8) {
       next.floor = player.floor;
+      next.riding = false;
       next.pose = 'stand';
     }
   } else {

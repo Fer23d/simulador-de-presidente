@@ -49,3 +49,24 @@ test('renders the unlocked chapters as a personal dossier', () => {
   assert.match(markup, /story-book/);
   assert.match(markup, /story-chapter-text/);
 });
+
+test('connects reconstruction milestones to the Story Mode chapters', () => {
+  const state = {
+    ...createGameState('bra'),
+    city: { completedObjectives: ['services', 'community'], result: null },
+  };
+  const marked = checkStoryChapters(state);
+  assert.ok(marked.unlocked_chapters.includes('cap_6_reconstrucao'));
+  assert.ok(marked.unlocked_chapters.includes('cap_7_servicos'));
+  assert.ok(marked.unlocked_chapters.includes('cap_8_comunidade'));
+  assert.equal(marked.unlocked_chapters.includes('cap_9_legado'), false);
+  assert.equal(marked.story_notice, '[ NOVO CAPÍTULO ADICIONADO AO MODO HISTÓRIA ]');
+});
+
+test('preserves Layd\'s arrival as a permanent Story Mode chapter', () => {
+  const state = { ...createGameState('bra'), is_wasteland: true, companion: { adopted: true } };
+  const marked = checkStoryChapters(state);
+  assert.ok(marked.unlocked_chapters.includes('cap_layd'));
+  assert.equal(LORE_CHAPTERS.cap_layd.title, 'CAPÍTULO VI: A Companheira do Ermo');
+  assert.match(LORE_CHAPTERS.cap_layd.text, /Layd/);
+});

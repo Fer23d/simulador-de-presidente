@@ -5,6 +5,8 @@ import {
 } from './shelter_engine.js';
 import { findOilDerrickAt } from './oil_renderer.js';
 import { isFortAt } from './defense_renderer.js';
+import { isMarketAt, MARKET_X } from './market_renderer.js';
+import { hasMarketSuit } from './market.js';
 import { AssetManager, DEFAULT_ASSETS, drawNeedsPanel, getActorPlacement, renderSpriteScene } from './sprite_engine.js';
 import { isLootboxCrateClick } from './lootbox_renderer.js';
 import { Inhabitant } from './inhabitant.js';
@@ -15,9 +17,21 @@ import { normalizeNeeds } from './needs.js';
 import { generateResidentIdentity, resolveResidentIdentity } from './names.js';
 import { advanceWeather, createWeatherState } from './weather.js';
 
-const WALK_SPEED = 170;
-const LIFT_SPEED = 280;
+// Movimento mais responsivo; a simulação continua usando delta time para manter a mesma distância em qualquer FPS.
+const WALK_SPEED = 220;
+const LIFT_SPEED = 360;
 const PLAYER_RADIUS = 14;
+// Andar -1 e a superficie: so se chega la pelo elevador, e so de Traje Antirradiacao.
+export const SURFACE_FLOOR = -1;
+export const SURFACE_GROUND_Y = WORLD_TOP - 30;
+const SURFACE_MAX_X = 1160;
+const MARKET_REACH = 120;
+const MAX_SIMULATION_STEP = 1 / 30;
+const SURFACE_DOG_BOUNDS = Object.freeze({ min: WORLD_LEFT + 20, max: SURFACE_MAX_X - 20 });
+
+function groundYFor(floor) {
+  return floor === SURFACE_FLOOR ? SURFACE_GROUND_Y : cellCenter(floor, 0).y;
+}
 const TRIGGER_RADIUS = 70;
 // No andar da superfície a câmera deixa uma faixa de céu acima do personagem.
 // Assim as lanternas e a cobertura completa do Forte não encostam no HUD.
@@ -40,6 +54,10 @@ export function createRpgPlayer(grid = INITIAL_SHELTER_GRID) {
 export function normalizeRpgPlayer(value, grid) {
   const fallback = createRpgPlayer(grid);
   if (!value || !Number.isInteger(value.floor) || !Number.isFinite(value.x) || !Number.isFinite(value.y)) return fallback;
+  if (value.floor === SURFACE_FLOOR) {
+    return { x: Math.max(WORLD_LEFT + PLAYER_RADIUS, Math.min(SURFACE_MAX_X, value.x)), y: SURFACE_GROUND_Y, floor: SURFACE_FLOOR,
+      vx: 0, vy: 0, facing: value.facing === -1 ? -1 : 1, liftTarget: null, liftHeld: false };
+  }
   const column = Math.floor((value.x - WORLD_LEFT) / SLOT_WIDTH);
   if (!getRoom(grid, value.floor, column)) return fallback;
   return { x: value.x, y: cellCenter(value.floor, column).y, floor: value.floor,
@@ -50,12 +68,18 @@ function playerColumn(player) {
   return Math.floor((player.x - WORLD_LEFT) / SLOT_WIDTH);
 }
 
-export function getElevatorPrompt(player, grid) {
-  if (player.liftTarget !== null || getRoom(grid, player.floor, playerColumn(player))?.type !== 'elevator') return '';
+export function getElevatorPrompt(player, grid, { surface = false, suit = false } = {}) {
+  if (player.liftTarget !== null) return '';
+  if (player.floor === SURFACE_FLOOR) {
+    return Math.abs(player.x - cellCenter(0, 0).x) <= 42 ? '[ S ] DESCER' : '';
+  }
+  if (getRoom(grid, player.floor, playerColumn(player))?.type !== 'elevator') return '';
   if (Math.abs(player.x - cellCenter(player.floor, playerColumn(player)).x) > 42) return '';
   const up = getRoom(grid, player.floor - 1, 0)?.type === 'elevator';
   const down = getRoom(grid, player.floor + 1, 0)?.type === 'elevator';
-  return [up ? '[ W ] SUBIR' : '', down ? '[ S ] DESCER' : ''].filter(Boolean).join('   |   ');
+  const toSurface = surface && player.floor === 0 && playerColumn(player) === 0;
+  const surfaceLabel = !toSurface ? '' : suit ? '[ W ] SUBIR À SUPERFÍCIE' : '[ W ] SUPERFÍCIE: EXIGE TRAJE ANTIRRADIAÇÃO';
+  return [up ? '[ W ] SUBIR' : '', surfaceLabel, down ? '[ S ] DESCER' : ''].filter(Boolean).join('   |   ');
 }
 
 export function findNearbyTrigger(player, grid) {
@@ -136,9 +160,11 @@ export function updatePlayer(player, input, grid, deltaSeconds, oxygenDeprived =
   const next = { ...player };
   next.liftHeld = Boolean(input.up || input.down);
   if (next.liftTarget !== null) {
-    const destination = cellCenter(next.liftTarget, 0).y;
+    const destination = groundYFor(next.liftTarget);
     const distance = destination - next.y;
-    next.y += Math.sign(distance) * Math.min(Math.abs(distance), LIFT_SPEED * movementScale * dt);
+    // O elevador usa um passo maior que o andar: com quadros lentos ele nao deve se arrastar.
+    const liftDt = Math.max(0, Math.min(0.12, Number(deltaSeconds) || 0));
+    next.y += Math.sign(distance) * Math.min(Math.abs(distance), LIFT_SPEED * movementScale * liftDt);
     next.vx = 0;
     next.vy = 0;
     if (next.y === destination) {
@@ -147,7 +173,7 @@ export function updatePlayer(player, input, grid, deltaSeconds, oxygenDeprived =
     }
     return next;
   }
-  const elevator = getElevatorPrompt(next, grid);
+  const elevator = getElevatorPrompt(next, grid, { surface: input.surface, suit: input.suit });
   if (elevator && !player.liftHeld && ((input.up && elevator.includes('SUBIR')) || (input.down && elevator.includes('DESCER')))) {
     next.liftTarget = next.floor + (input.up ? -1 : 1);
     next.x = cellCenter(next.floor, 0).x;
@@ -157,6 +183,12 @@ export function updatePlayer(player, input, grid, deltaSeconds, oxygenDeprived =
   const direction = Number(Boolean(input.right)) - Number(Boolean(input.left));
   next.vx = direction * WALK_SPEED * movementScale;
   if (direction) next.facing = direction;
+  if (next.floor === SURFACE_FLOOR) {
+    next.x = Math.max(WORLD_LEFT + PLAYER_RADIUS, Math.min(SURFACE_MAX_X, next.x + next.vx * dt));
+    next.y = SURFACE_GROUND_Y;
+    next.vy = 0;
+    return next;
+  }
   const proposed = next.x + next.vx * dt;
   const column = Math.floor((proposed - WORLD_LEFT) / SLOT_WIDTH);
   if (getRoom(grid, next.floor, column)) {
@@ -272,7 +304,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   onDetain, onAssetsReady, onEnvironmentChanged, environment = {}, isNight = environment?.isNight ?? false, weather: savedWeather = {},
   oxygenDeprived = false, assetUrls = {}, lootbox = {}, onLootboxClick,
   presidentClass = null, equippedSkin = 'default', currentDay = 1, onDayPassed, mission = null, onMission,
-  onDialogue, onDialogueAdvance, onDialogueClose, oilDerricks = null, oilFeedback = null, onOilDerrick, surfaceFort = null, onFort, companion = false, dog: savedDog = null, onPet } = {}) {
+  onDialogue, onDialogueAdvance, onDialogueClose, oilDerricks = null, oilFeedback = null, onOilDerrick, surfaceFort = null, onFort, companion = false, dog: savedDog = null, onPet, darkMarket = null, onMarket } = {}) {
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
   const assets = new AssetManager({ ...DEFAULT_ASSETS, ...assetUrls });
@@ -298,13 +330,18 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   let weather = createWeatherState(savedWeather);
   const activeGenerators = countActiveGenerators(grid);
   const keys = new Set();
+  const hasSuit = hasMarketSuit(equippedSkin);
+  let farMarketHintUntil = 0;
+  const nearMarket = () => Boolean(darkMarket) && player.floor === SURFACE_FLOOR && player.liftTarget === null && Math.abs(player.x - MARKET_X) <= MARKET_REACH;
   const actors = inhabitants.map((data) => new Inhabitant(data));
   let dog = companion ? (savedDog ?? createDogActor(player)) : null;
 
   function savePlayer() { onPlayerChanged?.({ ...player, vx: 0, vy: 0, liftTarget: null }); }
   function frame(time) {
     if (destroyed) return;
-    const dt = lastTime ? (time - lastTime) / 1000 : 0;
+    // A aba pode atrasar um frame; limitar o passo evita saltos e filas de trabalho.
+    const rawDt = lastTime ? (time - lastTime) / 1000 : 0;
+    const dt = Math.max(0, Math.min(MAX_SIMULATION_STEP, Number.isFinite(rawDt) ? rawDt : 0));
     lastTime = time;
     const previousNight = dayNight.isNight;
     const fullCycleProgress = dayNight.elapsedMs + Math.max(0, dt * 1000);
@@ -328,27 +365,34 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     if (!paused && !buildMode) {
       const previousFloor = player.floor;
       player = updatePlayer(player, { left: keys.has('a') || keys.has('arrowleft'), right: keys.has('d') || keys.has('arrowright'),
-        up: keys.has('w') || keys.has('arrowup'), down: keys.has('s') || keys.has('arrowdown') }, grid, dt, oxygenDeprived);
+        up: keys.has('w') || keys.has('arrowup'), down: keys.has('s') || keys.has('arrowdown'), surface: true, suit: hasSuit }, grid, dt, oxygenDeprived);
       if (player.liftTarget !== null || getRoom(grid, player.floor, playerColumn(player))?.type === 'elevator') cabinFloor = player.floor;
       if (player.floor !== previousFloor) { cabinFloor = player.floor; savePlayer(); }
       if (Math.abs(player.vx) > 0 && time - lastSave > 700) { savePlayer(); lastSave = time; }
       const oxygenMovementDelta = oxygenDeprived ? 0.5 : 1;
-      if (dog) dog = updateDogActor(dog, player, dt, { elevatorX: cellCenter(player.floor, 0).x,
-        bounds: { min: WORLD_LEFT + 20, max: WORLD_LEFT + MAX_COLUMNS * SLOT_WIDTH - 20 } });
+      if (dog) dog = updateDogActor(dog, player, dt, {
+        // O elevador fica na coluna 0 em todos os andares, inclusive na superfície.
+        elevatorX: cellCenter(0, 0).x,
+        bounds: { min: WORLD_LEFT + 20, max: WORLD_LEFT + MAX_COLUMNS * SLOT_WIDTH - 20 },
+        surfaceBounds: SURFACE_DOG_BOUNDS,
+        marketX: darkMarket ? MARKET_X : null,
+      });
       for (const actor of actors) actor.update(dt, getNpcMovementDelta(1, dayNight.isNight, activeGenerators) * oxygenMovementDelta);
       if (time - lastNpcSave > 2500) {
         onInhabitantsChanged?.(actors.map((actor) => actor.snapshot()));
         lastNpcSave = time;
       }
     }
-    const targetX = canvas.width / 2 - player.x;
+    // Com o Mercado Sombrio aberto a camera avanca um pouco a direita para a banca caber na tela.
+    const marketPan = 0;
+    const targetX = canvas.width / 2 - player.x - marketPan;
     const targetY = canvas.height / 2 - player.y
-      + (player.floor === 0 ? Math.min(SURFACE_CAMERA_HEADROOM, canvas.height * .08) : 0);
+      + (player.floor <= 0 ? Math.min(SURFACE_CAMERA_HEADROOM, canvas.height * .08) : 0);
     camera.offset_x += (targetX - camera.offset_x) * Math.min(1, dt * 8);
     camera.offset_y += (targetY - camera.offset_y) * Math.min(1, dt * 8);
     renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants: actors, cabinFloor, time,
       isNight: dayNight.isNight, activeGenerators, oxygenDeprived, lootbox, presidentClass, equippedSkin,
-      weather: weather.type, oilDerricks, oilFeedback, surfaceFort, companion: dog });
+      weather: weather.type, oilDerricks, oilFeedback, surfaceFort, companion: dog, darkMarket });
     const rebel = paused || buildMode ? null : findNearbyRebel(player, grid, actors);
     const nearbyInhabitant = paused || buildMode ? null : trackNearbyInhabitant(player, grid, actors, time);
     const nearbyRoom = nearbyInhabitant && getRoom(grid, nearbyInhabitant.npc.floor, nearbyInhabitant.npc.column);
@@ -363,8 +407,10 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     } else pacificationFeedback = null;
     const roomTrigger = findNearbyTrigger(player, grid);
     const missionHere = mission && roomTrigger && roomTrigger.room.floor === mission.floor && roomTrigger.room.column === mission.column;
-    const hint = paused || buildMode ? '' : rebel?.label || (missionHere ? `[ E ] RESOLVER: ${mission.title ?? 'PROBLEMA'}` : '')
-      || nearbyInhabitant?.label || getElevatorPrompt(player, grid) || roomTrigger?.label || '';
+    const marketPrompt = nearMarket() ? `[ E ] NEGOCIAR COM ${darkMarket.merchant.toUpperCase()}` : '';
+    const farHint = time < farMarketHintUntil ? (hasSuit ? 'SOBE PELO ELEVADOR ATÉ A SUPERFÍCIE PARA NEGOCIAR' : 'A SUPERFÍCIE MATA: EQUIPE O TRAJE ANTIRRADIAÇÃO') : '';
+    const hint = paused || buildMode ? '' : marketPrompt || farHint || rebel?.label || (missionHere ? `[ E ] RESOLVER: ${mission.title ?? 'PROBLEMA'}` : '')
+      || nearbyInhabitant?.label || getElevatorPrompt(player, grid, { surface: true, suit: hasSuit }) || roomTrigger?.label || '';
     if (hint !== lastHint) { lastHint = hint; onHint?.(hint); }
     frameId = requestAnimationFrame(frame);
   }
@@ -405,6 +451,12 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     if (!['a', 'd', 'w', 's', 'e', 'arrowleft', 'arrowright', 'arrowup', 'arrowdown'].includes(key)) return;
     event.preventDefault();
     if (key === 'e' && !event.repeat) {
+      if (nearMarket()) {
+        paused = true;
+        keys.clear();
+        onMarket?.();
+        return;
+      }
       const rebel = findNearbyRebel(player, grid, actors);
       if (rebel) {
         const hasCell = grid.flat().some((room) => room?.type === 'detention');
@@ -458,7 +510,12 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
       const rect = canvas.getBoundingClientRect();
       const slot = findOilDerrickAt((event.clientX - rect.left) * canvas.width / rect.width - camera.offset_x,
         (event.clientY - rect.top) * canvas.height / rect.height - camera.offset_y);
-      if (slot !== null) onOilDerrick?.(slot);
+      const clickX = (event.clientX - rect.left) * canvas.width / rect.width - camera.offset_x;
+      const clickY = (event.clientY - rect.top) * canvas.height / rect.height - camera.offset_y;
+      if (darkMarket && isMarketAt(clickX, clickY)) {
+        if (nearMarket()) { paused = true; keys.clear(); onMarket?.(); } else farMarketHintUntil = performance.now() + 3_000;
+      }
+      else if (slot !== null) onOilDerrick?.(slot);
       else if (isFortAt((event.clientX - rect.left) * canvas.width / rect.width - camera.offset_x,
         (event.clientY - rect.top) * canvas.height / rect.height - camera.offset_y)) onFort?.();
       return;
@@ -479,7 +536,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     const rect = canvas.getBoundingClientRect();
     const worldX = (event.clientX - rect.left) * canvas.width / rect.width - camera.offset_x;
     const worldY = (event.clientY - rect.top) * canvas.height / rect.height - camera.offset_y;
-    const clickable = !buildMode && !paused && (findOilDerrickAt(worldX, worldY) !== null || isFortAt(worldX, worldY));
+    const clickable = !buildMode && !paused && (findOilDerrickAt(worldX, worldY) !== null || isFortAt(worldX, worldY) || (darkMarket && isMarketAt(worldX, worldY)));
     canvas.style.cursor = clickable ? 'pointer' : '';
   }
   canvas.addEventListener('mousemove', hover);

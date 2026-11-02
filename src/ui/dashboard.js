@@ -13,11 +13,12 @@ import { canPromulgarConstituicao } from '../core/constitution.js';
 import { RESOLUTIONS } from '../core/un_assembly.js';
 import { getStoryEvent } from '../core/story_engine.js';
 import { COUNCIL_LEADERS } from '../core/vault_council.js';
-import { LORE_CHAPTERS, STORY_NOTICE } from '../core/story_lore.js';
+import { checkStoryChapters, LORE_CHAPTERS, STORY_NOTICE } from '../core/story_lore.js';
 import { INTERNAL_PROJECTS } from '../core/infrastructure.js';
 import { broadcastShelterSignal, buildShelterRoom, calculateShelterCapacity, equipShelterGuard, findBuildSlots, getRoom, getShelterBuildCost, INITIAL_SHELTER_GRID, repairShelterGenerator, SHELTER_TYPES, upgradeShelterRoom, useShelterMedkit } from '../core/shelter_engine.js';
 import { createRpgBunkerEngine } from '../core/rpg_bunker.js';
 import { adoptLayd, hasLayd } from '../core/companion.js';
+import { canTrade, describeOffer, getStock, hasMarketSuit, isMarketOpen, MARKET_GOODS, tradeAtMarket } from '../core/market.js';
 import { playBark } from '../core/dog_sound.js';
 import { calculateSuppression, canResolveWastelandEvent, detainRebel, dismissExpeditionReport, getWastelandEvent, resolveWastelandEvent, startExpedition } from '../core/game_mechanics.js';
 import { advanceEnvironmentCycle } from '../core/environment.js';
@@ -28,7 +29,7 @@ import { getWeather } from '../core/weather.js';
 import { applyOfflineProgress, dismissOfflineReport } from '../core/offline.js';
 import { arriveAtMission, getMissionReward, getMissionStory, isMissionPending } from '../core/missions.js';
 import { DAYS_PER_MONTH, getVaultDay, getVaultDayOfMonth } from '../core/vault_time.js';
-import { startCity, CITY_ORIGINS } from '../core/city.js';
+import { CITY_OBJECTIVES, getCityObjective, startCity, CITY_ORIGINS } from '../core/city.js';
 import { transicionarParaWasteland } from '../core/wasteland.js';
 import { cityEpilogueView, cityView, createCityController } from './city_ui.js';
 import { awardXp, describeLevelGate, getGameMode, getLevel, getNewLevelEntries } from '../core/levels.js';
@@ -158,6 +159,26 @@ export function oilDerrickLiveView(state, slot, now = Date.now()) {
     : status.upgrading ? '' : '<span class="oil-max">★ NÍVEL MÁXIMO ★</span>';
   const collect = status.stored > 0 ? `<button type="button" class="primary-action" data-action="oil-collect" data-slot="${slot}">[ RECOLHER ${formatNumber.format(status.stored)} BARRIS ]</button>` : '';
   return `${stats}${line}<div class="action-row oil-actions">${collect}${upgrade}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div>`;
+}
+
+// Mercado Sombrio: troca de mercadorias na superficie, so para quem veste o Traje Antirradiacao.
+export function marketView(state, skinId = state.equippedSkin) {
+  const market = state.dark_market;
+  const suited = hasMarketSuit(skinId);
+  const header = `<p class="eyebrow">/// SUPERFÍCIE · MERCADO SOMBRIO ///</p><h2 id="market-title">${escapeHtml(market?.merchant ?? 'Mercador')}</h2>`;
+  if (!isMarketOpen(state)) {
+    return `<section class="bunker-dialog oil-dialog market-dialog" role="dialog" aria-modal="true" aria-labelledby="market-title">${header}<p class="oil-status">&gt; O comboio já foi embora. Ele fica apenas 3 dias por mês e volta no próximo ciclo.</p><div class="action-row oil-actions"><button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div></section>`;
+  }
+  const stock = ['oil', 'food', 'energy', 'oxygen', 'medkits', 'weapons'].map((res) => `<span>${MARKET_GOODS[res].icon} ${formatNumber.format(getStock(state, res))}</span>`).join('');
+  const gate = suited
+    ? '<p class="oil-status is-working">&gt; TRAJE ANTIRRADIAÇÃO ATIVO: você aguenta a superfície. Negocie rápido.</p>'
+    : '<p class="oil-status market-locked">&gt; SEM PROTEÇÃO: a radiação da superfície mata. Equipe o Traje Antirradiação (guarda-roupa) para negociar.</p>';
+  const rows = market.offers.map((offer) => {
+    const text = describeOffer(offer);
+    const check = canTrade(state, offer.id, skinId);
+    return `<div class="market-offer"><span class="market-icon">${text.icon}</span><span class="market-deal"><b>${escapeHtml(text.give)}</b> ➜ <b>${escapeHtml(text.get)}</b><small>restam ${offer.left} trocas</small></span><button type="button" class="${offer.kind === 'sell' ? 'quiet-action' : 'primary-action'}" data-action="market-trade" data-offer="${escapeHtml(offer.id)}" ${check.ok ? '' : `disabled title="${escapeHtml(check.reason)}"`}>[ ${offer.kind === 'sell' ? 'VENDER' : 'COMPRAR'} ]</button></div>`;
+  }).join('');
+  return `<section class="bunker-dialog oil-dialog market-dialog" role="dialog" aria-modal="true" aria-labelledby="market-title">${header}<p class="oil-reserve">🔩 ${formatNumber.format(state.scrap ?? 0)} SUCATAS</p><div class="market-stock">${stock}</div>${gate}<div class="market-offers">${rows}</div><div class="action-row oil-actions"><button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div></section>`;
 }
 
 function fortStatRow(label, value, nextValue = null, max = null) {
@@ -911,7 +932,10 @@ export function storyModeView(state) {
     ? state.unlocked_chapters
     : ['cap_1_origem'];
   const chapters = chapterIds.map((id) => LORE_CHAPTERS[id]).filter(Boolean);
-  return `<section id="tab-modo-historia" class="panel story-manifesto"><div class="panel-heading"><div><p class="eyebrow">Arquivo pessoal // acesso do chefe de Estado</p><h2>&gt; MODO HISTÓRIA</h2></div><span class="country-code">${chapters.length} CAPÍTULO${chapters.length === 1 ? '' : 'S'}</span></div><p class="story-intro">Este é o meu manifesto. Cada capítulo foi desbloqueado por uma decisão que mudou o destino da nação.</p><div id="story-manifesto" class="story-book" aria-live="polite">${chapters.map((chapter, index) => `<article class="story-chapter ${index === chapters.length - 1 ? 'latest' : ''}"><p class="story-chapter-number">/// ARQUIVO ${String(index + 1).padStart(2, '0')} ///</p><h2>${escapeHtml(chapter.title)}</h2><p class="story-chapter-text">${escapeHtml(chapter.text)}</p><p class="story-signature">— O Presidente</p></article>`).join('')}</div></section>`;
+  const city = state.city;
+  const objective = city ? getCityObjective(city) : null;
+  const cityContext = city ? `<div class="story-city-context"><div><span class="story-city-kicker">CAMPANHA DE RECONSTRUÇÃO</span><strong>${escapeHtml(objective.title)}</strong><p>${escapeHtml(objective.text)}</p></div><span class="story-city-progress">${Math.round(objective.progress * 100)}%</span><button type="button" class="quiet-action" data-action="city-return">[ VOLTAR À CIDADE ]</button></div>` : '';
+  return `<section id="tab-modo-historia" class="panel story-manifesto"><div class="panel-heading"><div><p class="eyebrow">Arquivo pessoal // acesso do chefe de Estado</p><h2>&gt; MODO HISTÓRIA</h2></div><span class="country-code">${chapters.length} CAPÍTULO${chapters.length === 1 ? '' : 'S'}</span></div><p class="story-intro">Este é o meu manifesto. Cada capítulo foi desbloqueado por uma decisão que mudou o destino da nação.</p>${cityContext}<div class="story-milestones"><span>${chapters.length}/${Object.keys(LORE_CHAPTERS).length} capítulos recuperados</span><span>${city ? `${city.completedObjectives?.length ?? 0}/${CITY_OBJECTIVES.length} marcos da reconstrução` : 'A próxima página ainda está por escrever'}</span></div><div id="story-manifesto" class="story-book" aria-live="polite">${chapters.map((chapter, index) => `<article class="story-chapter ${index === chapters.length - 1 ? 'latest' : ''}"><p class="story-chapter-number">/// ARQUIVO ${String(index + 1).padStart(2, '0')} ///</p><h2>${escapeHtml(chapter.title)}</h2><p class="story-chapter-text">${escapeHtml(chapter.text)}</p><p class="story-signature">— O Presidente</p></article>`).join('')}</div></section>`;
 }
 
 export function renderNews(state) {
@@ -1433,6 +1457,16 @@ export function mountDashboard(root) {
     requestAnimationFrame(frame);
   }
 
+  function currentSkinId() { return getActiveTrial(skinTrial)?.skinId ?? state.equippedSkin; }
+  function openMarketPanel() {
+    if (!bunkerGeneratorModal) return;
+    closeOilPanel();
+    activeShelterRoom = null;
+    bunkerGeneratorModal.innerHTML = marketView(state, currentSkinId());
+    bunkerGeneratorModal.hidden = false;
+    bunkerController?.pause();
+  }
+
   function openFortPanel() {
     if (!bunkerGeneratorModal) return;
     const wasOpen = fortPanelOpen && !bunkerGeneratorModal.hidden;
@@ -1604,7 +1638,7 @@ export function mountDashboard(root) {
       ['history', '> MODO HISTÓRIA'],
       ['countries', 'Paises'],
     ];
-    const content = state.city ? cityView(state) : state.is_wasteland ? bunkerView(state)
+    const content = activeTab === 'history' ? storyModeView(state) : state.city ? cityView(state) : state.is_wasteland ? bunkerView(state)
       : activeTab === 'budget' ? budgetView(state, projection)
       : activeTab === 'diplomacy' ? diplomacyView(state, diplomacyQuery)
         : activeTab === 'military' ? militaryView(state)
@@ -1612,7 +1646,6 @@ export function mountDashboard(root) {
           : activeTab === 'technology' ? technologyView(state)
             : activeTab === 'projects' ? projectsView(state)
       : activeTab === 'congress' ? congressView(state)
-        : activeTab === 'history' ? storyModeView(state)
         : activeTab === 'countries' ? countriesView(state)
           : overviewView(state, projection);
     const topbarActions = state.is_wasteland
@@ -1631,7 +1664,7 @@ export function mountDashboard(root) {
         getState: () => state,
         onChange: (next, { persist, rerender }) => {
           const previous = state;
-          state = awardXp(previous, next);
+          state = checkStoryChapters(awardXp(previous, next));
           announceLevels(previous, state);
           updateLevelTab();
           if (persist) storageNotice = persistState(state);
@@ -1684,6 +1717,8 @@ export function mountDashboard(root) {
           onOilDerrick: handleOilDerrick,
           surfaceFort: state.surface_fort,
           onFort: openFortPanel,
+          darkMarket: isMarketOpen(state) ? state.dark_market : null,
+          onMarket: openMarketPanel,
           companion: hasLayd(state),
           dog: bunkerSnapshot?.dog ?? null,
           onPet: () => playBark(),
@@ -2102,7 +2137,7 @@ export function mountDashboard(root) {
       return;
     }
     if (event.target.closest('[data-action="start-city"]')) {
-      commit(startCity(state));
+      commit(checkStoryChapters(startCity(state)));
       return;
     }
     if (event.target.closest('[data-action="ending-new-game"]')) {
@@ -2175,6 +2210,12 @@ export function mountDashboard(root) {
       const column = Number(button.dataset.column);
       commit(upgradeShelterRoom(state, floor, column));
       openShelterRoom(getRoom(state.shelter_grid, floor, column));
+      return;
+    }
+    if (action === 'market-trade') {
+      audio.play('click');
+      commit(tradeAtMarket(state, button.dataset.offer, currentSkinId()));
+      openMarketPanel();
       return;
     }
     if (action === 'fort-build' || action === 'fort-upgrade' || action === 'fort-garrison' || action === 'fort-recruit') {
@@ -2312,6 +2353,8 @@ export function mountDashboard(root) {
       return;
     }
     if (action === 'tab') { activeTab = control.dataset.tab; render(); return; }
+    if (action === 'city-story') { activeTab = 'history'; render(); return; }
+    if (action === 'city-return') { activeTab = 'overview'; render(); return; }
     if (action === 'tax') { commit(changeTax(state, control.dataset.tax, Number(control.dataset.delta))); return; }
     if (action === 'slush-fund') { commit(desviarFundosParaCaixa2(state)); return; }
     if (action === 'leader-double') { commit(infiltrarSosiaLider(state, control.dataset.contact)); return; }

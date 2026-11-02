@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { advanceCityDay, analyzeCity, canPlaceAt, CITY_BUILDINGS, CITY_DAYS_PER_YEAR, CITY_GATE, CITY_HEIGHT, CITY_TOTAL_DAYS, CITY_WIDTH,
-  demolishCityBuilding, generateCityGround, getBuildingAt, getCityDate, getCityEpilogue, normalizeCity,
+import { advanceCityDay, analyzeCity, canPlaceAt, CITY_BUILDINGS, CITY_DAYS_PER_YEAR, CITY_GATE, CITY_HEIGHT, CITY_OBJECTIVES, CITY_TOTAL_DAYS, CITY_WIDTH,
+  demolishCityBuilding, generateCityGround, getBuildingAt, getCityDate, getCityEpilogue, getCityObjective, normalizeCity,
   placeCityBuilding, setCitySpeed, startCity } from '../src/core/city.js';
 import { createGameState, hydrateGameState } from '../src/core/game-state.js';
 import { transicionarParaWasteland } from '../src/core/wasteland.js';
@@ -100,6 +100,19 @@ test('demolishing refunds half and the speed control only accepts known speeds',
   assert.equal(setCitySpeed(state, 0).city.speed, 0);
 });
 
+test('reconstruction objectives expose progress and survive normalization', () => {
+  const state = cityState();
+  const objective = getCityObjective(state.city);
+  assert.equal(objective.id, 'corridor');
+  assert.ok(objective.progress >= 0 && objective.progress <= 1);
+  const marked = withCity(state, { completedObjectives: ['corridor'], objectiveId: 'shelter' });
+  assert.equal(getCityObjective(marked.city).id, 'shelter');
+  const loaded = normalizeCity(marked.city);
+  assert.deepEqual(loaded.completedObjectives, ['corridor']);
+  assert.equal(loaded.objectiveId, 'shelter');
+  assert.equal(CITY_OBJECTIVES.length, 5);
+});
+
 test('shortages hurt: no oil darkens the camp and no food or water makes people leave', () => {
   const state = cityState();
   const dark = analyzeCity(withCity(state, { resources: { ...state.city.resources, oil: 0 } }).city);
@@ -196,8 +209,11 @@ test('the city screen has the whole build palette, speed controls, clock and a m
   const html = cityView(state);
   for (const id of Object.keys(CITY_BUILDINGS)) assert.match(html, new RegExp(`data-city-tool="${id}"`), id);
   assert.match(html, /data-city-tool="demolish"/);
+  assert.match(html, /data-action="city-story"/);
   for (const speed of [0, 1, 2, 3]) assert.match(html, new RegExp(`data-city-speed="${speed}"`));
   assert.match(html, /<canvas id="cityCanvas"/);
+  assert.match(html, /data-city-objective/);
+  assert.match(html, /city-objective-progress/);
   assert.match(html, /Nova República/);
   assert.equal(cityClockText(state.city), 'ANO 1 DE 10 · MÊS 1 · DIA 1');
   assert.equal(cityClockText({ day: 400 }), 'ANO 2 DE 10 · MÊS 2 · DIA 11');

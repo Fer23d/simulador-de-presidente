@@ -1,6 +1,7 @@
 import { advanceCityDay, analyzeCity, canPlaceAt, CITY_BUILDINGS, CITY_GATE, CITY_ORIGINS, CITY_SPEED_INTERVAL_MS, CITY_TOTAL_DAYS, CITY_HEIGHT,
   CITY_WIDTH, CITY_YEARS, demolishCityBuilding, FOOD_PER_CITIZEN, getBuildingAt, getCityDate, getCityEpilogue, placeCityBuilding,
-  SCAVENGE_PER_CITIZEN, setCitySpeed, UPKEEP_PER_BUILDING, WATER_PER_CITIZEN } from '../core/city.js';
+  getCityObjective, SCAVENGE_PER_CITIZEN, setCitySpeed, UPKEEP_PER_BUILDING, WATER_PER_CITIZEN } from '../core/city.js';
+import { checkStoryChapters } from '../core/story_lore.js';
 import { CITY_CANVAS_HEIGHT, CITY_CANVAS_WIDTH, CITY_DEFAULT_ZOOM, CITY_TILE, getCityCamera, renderCity } from '../core/city_renderer.js';
 
 const number = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
@@ -21,6 +22,14 @@ function paletteButton(id) {
   return `<button type="button" class="city-tool" data-city-tool="${id}" aria-pressed="false" title="${escapeText(def.text)}"><span class="city-tool-icon" aria-hidden="true">${def.icon}</span><span class="city-tool-name">${escapeText(def.name)}</span><span class="city-tool-cost">${def.cost}</span></button>`;
 }
 
+export function cityObjectiveContents(city, analysis = analyzeCity(city)) {
+  const objective = getCityObjective(city, analysis);
+  const percent = Math.round(objective.progress * 100);
+  const kicker = objective.completed ? 'LINHA DE RECONSTRUÇÃO CONCLUÍDA' : 'ORDEM ATUAL';
+  const status = objective.completed ? 'Todos os marcos principais foram cumpridos.' : `${percent}% concluído · o próximo registro será escrito quando a meta for atingida.`;
+  return `<span class="city-objective-kicker">${kicker}</span><strong>${escapeText(objective.title)}</strong><p>${escapeText(objective.text)}</p><div class="city-objective-progress" role="progressbar" aria-label="Progresso da ordem atual" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div><small>${status}</small>`;
+}
+
 // Casca estatica da tela; o controlador atualiza os numeros e desenha o mapa sem recriar nada.
 export function cityView(state) {
   const city = state.city;
@@ -30,6 +39,7 @@ export function cityView(state) {
       <div><p class="eyebrow">/// RECONSTRUÇÃO ///</p><h2>${escapeText(origin.title)}</h2></div>
       <div class="city-clock" data-city-clock>${cityClockText(city)}</div>
       <div class="city-topbar-controls">
+        <button type="button" class="city-history-button" data-action="city-story">[ DIÁRIO ]</button>
         <div class="city-speeds" role="group" aria-label="Velocidade do tempo">${[0, 1, 2, 3].map((speed) => `<button type="button" class="city-speed" data-city-speed="${speed}" aria-pressed="${city.speed === speed}" aria-label="${speed ? `Velocidade ${speed}` : 'Pausar'}">${SPEED_LABELS[speed]}</button>`).join('')}</div>
         <div class="city-zoom-controls" role="group" aria-label="Zoom do mapa">
           <button type="button" class="city-zoom-button" data-city-zoom="out" aria-label="Diminuir zoom">−</button>
@@ -48,7 +58,7 @@ export function cityView(state) {
       </div>
       <aside class="city-side">
         <div class="city-side-heading"><div><p class="city-side-title">CONSTRUIR</p><small>REDE DE SOBREVIVÊNCIA · SUCATAS</small></div><span class="city-live-dot" title="Sistema online"></span></div>
-        <div class="city-objective"><span class="city-objective-kicker">ORDEM ATUAL</span><strong>Reconstruir o corredor do Vault</strong><p>Ligue serviços à porta, mantenha energia e dê abrigo à próxima geração.</p></div>
+        <div class="city-objective" data-city-objective>${cityObjectiveContents(city)}</div>
         <div class="city-palette">${PALETTE.map(paletteButton).join('')}<button type="button" class="city-tool is-danger" data-city-tool="demolish" aria-pressed="false" title="Demolir e recuperar metade do custo"><span class="city-tool-icon" aria-hidden="true">🧨</span><span class="city-tool-name">Demolir</span><span class="city-tool-cost">50%</span></button></div>
         <div class="city-info" data-city-info></div>
         <div class="city-side-heading city-side-heading--log"><p class="city-side-title">DIÁRIO DE CAMPO</p><small>ÚLTIMOS REGISTOS</small></div>
@@ -116,6 +126,7 @@ export function createCityController(root, { getState, onChange, onSound = () =>
   const hud = root.querySelector('[data-city-hud]');
   const info = root.querySelector('[data-city-info]');
   const logList = root.querySelector('[data-city-log]');
+  const objective = root.querySelector('[data-city-objective]');
   const tip = root.querySelector('[data-city-tip]');
   const readout = root.querySelector('[data-city-readout]');
   const clock = root.querySelector('[data-city-clock]');
@@ -138,6 +149,7 @@ export function createCityController(root, { getState, onChange, onSound = () =>
     analysis = analyzeCity(current);
     hud.innerHTML = cityHudView(current, analysis);
     clock.textContent = cityClockText(current);
+    if (objective) objective.innerHTML = cityObjectiveContents(current, analysis);
     logList.innerHTML = [...current.log].reverse().map((entry) => `<li><small>Dia ${entry.day}</small> ${escapeText(entry.text)}</li>`).join('');
     const message = current.message && current.message !== lastMessage ? current.message : '';
     if (message) lastMessage = current.message;
@@ -157,11 +169,14 @@ export function createCityController(root, { getState, onChange, onSound = () =>
   }
 
   function commit(next, { persist = false, rerender = false } = {}) {
+    const before = getState();
+    const narrativeNext = checkStoryChapters(next);
+    const storyChanged = narrativeNext !== next;
     const now = Date.now();
-    const shouldSave = persist || now - lastSave > 2_500;
+    const shouldSave = persist || storyChanged || now - lastSave > 2_500;
     if (shouldSave) lastSave = now;
-    onChange(next, { persist: shouldSave, rerender });
-    if (!rerender) refresh();
+    onChange(narrativeNext, { persist: shouldSave, rerender: rerender || storyChanged });
+    if (!rerender && !storyChanged && narrativeNext !== before) refresh();
   }
 
   function schedule() {

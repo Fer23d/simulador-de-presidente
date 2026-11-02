@@ -39,6 +39,7 @@ import { createRpgPlayer, normalizeInhabitants, normalizeRpgPlayer } from './rpg
 import { normalizeOilField } from './oil.js';
 import { normalizeCity } from './city.js';
 import { normalizeCompanion } from './companion.js';
+import { normalizeDarkMarket } from './market.js';
 import { createLevelState, estimateLegacyXp, normalizeLevelState } from './levels.js';
 import { normalizeFort, normalizeRaidReport } from './defense.js';
 import { INITIAL_SHELTER_GRID, migrateLegacyPlayer, migrateLegacyRooms, normalizeShelterGrid, normalizeShelterInhabitants } from './shelter_engine.js';
@@ -225,6 +226,7 @@ export function createGameState(countryId = 'bra') {
     level: createLevelState(),
     door_prompt: false,
     companion: null,
+    dark_market: null,
     wasteland_day: 0,
     generator_fuel: false,
     pendingRaid: null,
@@ -1285,6 +1287,7 @@ export function hydrateGameState(serialized) {
       level: normalizeLevelState(parsed.level ?? { xp: estimateLegacyXp(parsed) }),
       door_prompt: parsed.door_prompt === true,
       companion: normalizeCompanion(parsed.companion),
+      dark_market: normalizeDarkMarket(parsed.dark_market),
       wasteland_day: Math.max(0, Math.min(29, Math.floor(Number(parsed.wasteland_day) || 0))),
       pendingRaid: normalizeRaidReport(parsed.pendingRaid),
       raidCooldownUntilTurn: Math.max(0, Math.floor(Number(parsed.raidCooldownUntilTurn) || 0)),

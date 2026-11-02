@@ -26,6 +26,31 @@ export const LORE_CHAPTERS = Object.freeze({
     title: 'CAPÍTULO V: O Deus das Cinzas',
     text: 'O céu ficou branco e depois não ficou nada. A ONU, as fronteiras, as leis viraram pó radioativo. Os elevadores desceram com quem consegui salvar. A porta do Vault fechou com um som que nunca vou esquecer. Lá em cima, o mundo que governei acabou. Aqui embaixo, um menino chamado Tomé me olhou e perguntou: "Foi você que apertou o botão?" O contador marca ANO ZERO.',
   }),
+  cap_layd: Object.freeze({
+    id: 'cap_layd',
+    title: 'CAPÍTULO VI: A Companheira do Ermo',
+    text: 'Durante dias, os soldados da Porta ouviram latidos na chuva ácida. Diziam que era o vento nos canos ou mais uma armadilha dos saqueadores. Na manhã em que decidi ficar, a vigia se abriu e uma cadela magra apareceu diante da escotilha, coberta de ferrugem e poeira. Trazia uma coleira rachada e uma placa de latão com um nome riscado à mão: Layd. Ela não pediu comida nem permissão. Deu três voltas em torno das minhas botas e deitou. Desde então, onde eu caminho, ela caminha. Talvez seja lealdade. Talvez seja apenas a memória de um mundo que ainda sabia confiar em alguém.',
+  }),
+  cap_6_reconstrucao: Object.freeze({
+    id: 'cap_6_reconstrucao',
+    title: 'CAPÍTULO VII: O Primeiro Tijolo',
+    text: 'A primeira estrada não parecia uma estrada. Era cascalho, ferrugem e uma faixa de tinta amarela roubada de um depósito militar. Mesmo assim, quando a Porta do Vault acendeu o sinal verde, as pessoas saíram para vê-la como se fosse uma avenida. Durante anos eu governei mapas. Na superfície, aprendi que uma linha no chão pode ser uma promessa.',
+  }),
+  cap_7_servicos: Object.freeze({
+    id: 'cap_7_servicos',
+    title: 'CAPÍTULO VIII: Três Luzes Verdes',
+    text: 'Comida, água e energia. Três palavras pequenas, três máquinas enormes, três maneiras de uma cidade morrer. Naquela manhã, os painéis ficaram verdes ao mesmo tempo. Helena disse que era infraestrutura. Tomé chamou de milagre. Eu não corrigi nenhum dos dois. Um líder inteligente sabe quando deixar o povo dar nome às próprias vitórias.',
+  }),
+  cap_8_comunidade: Object.freeze({
+    id: 'cap_8_comunidade',
+    title: 'CAPÍTULO IX: A Praça',
+    text: 'A praça ficou cheia sem decreto, sem soldados e sem alto-falantes. Pessoas que nasceram depois da bomba venderam pão, discutiram política e se apaixonaram sob árvores que nunca existiram antes. Pela primeira vez, a cidade não precisava da minha voz para continuar funcionando. Foi o momento mais assustador do meu governo. Também foi o mais próximo de uma vitória.',
+  }),
+  cap_9_legado: Object.freeze({
+    id: 'cap_9_legado',
+    title: 'CAPÍTULO X: O Governo que Me Sobreviveu',
+    text: 'Três anos na superfície e os relatórios já não começam com o meu nome. Começam com o nome da cidade. As crianças aprendem a data da guerra, mas não sabem qual foi a minha facção no Congresso. Talvez esse seja o julgamento final de qualquer governante: descobrir se o mundo continua existindo depois que ele deixa de ser o centro dele.',
+  }),
 });
 
 const STORY_ORDER = Object.freeze([
@@ -34,6 +59,11 @@ const STORY_ORDER = Object.freeze([
   'cap_3_guerra',
   'cap_4_imperio',
   'cap_5_wasteland',
+  'cap_layd',
+  'cap_6_reconstrucao',
+  'cap_7_servicos',
+  'cap_8_comunidade',
+  'cap_9_legado',
 ]);
 
 function hasWarMilestone(state) {
@@ -55,6 +85,11 @@ function isChapterReady(state, chapterId) {
   if (chapterId === 'cap_3_guerra') return hasWarMilestone(state);
   if (chapterId === 'cap_4_imperio') return state.government === 'empire';
   if (chapterId === 'cap_5_wasteland') return state.is_wasteland === true;
+  if (chapterId === 'cap_layd') return state.companion?.adopted === true;
+  if (chapterId === 'cap_6_reconstrucao') return Boolean(state.city);
+  if (chapterId === 'cap_7_servicos') return Boolean(state.city?.completedObjectives?.includes('services'));
+  if (chapterId === 'cap_8_comunidade') return Boolean(state.city?.completedObjectives?.includes('community'));
+  if (chapterId === 'cap_9_legado') return Boolean(state.city?.result || state.city?.completedObjectives?.includes('legacy'));
   return false;
 }
 

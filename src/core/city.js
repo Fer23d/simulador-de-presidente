@@ -27,6 +27,59 @@ export const POPULATION_GOAL = 600;
 export const REVOLT_HAPPINESS = 12;
 export const REVOLT_DAYS = 45;
 
+// A reconstrução agora tem uma linha narrativa própria. Cada objetivo exige
+// uma decisão concreta do jogador e deixa um registro permanente no diário.
+export const CITY_OBJECTIVES = Object.freeze([
+  Object.freeze({
+    id: 'corridor',
+    title: 'Restabelecer o corredor',
+    text: 'Ligue a Porta do Vault ao primeiro bairro. Uma cidade começa quando as pessoas conseguem chegar umas às outras.',
+    check: (_city, analysis) => analysis.roads.size >= 10,
+    progress: (_city, analysis) => Math.min(1, analysis.roads.size / 10),
+    log: 'O corredor do Vault finalmente alcança o bairro. Pela primeira vez, ninguém precisa atravessar o Ermo para buscar água.',
+  }),
+  Object.freeze({
+    id: 'shelter',
+    title: 'Dar teto à próxima geração',
+    text: 'Construa moradias suficientes para que a colônia deixe de ser um acampamento e possa chamar este lugar de casa.',
+    check: (city, analysis) => analysis.capacity >= 96 && city.population >= 70,
+    progress: (city, analysis) => Math.min(1, Math.min(analysis.capacity / 96, city.population / 70)),
+    log: 'As últimas famílias deixaram os corredores do Vault. Há janelas acesas na superfície e crianças que nunca viram um bunker.',
+  }),
+  Object.freeze({
+    id: 'services',
+    title: 'Reacender os serviços vitais',
+    text: 'Comida, água e energia precisam funcionar juntas. Uma cidade sem um desses três serviços apenas adia a próxima crise.',
+    check: (city, analysis) => {
+      const activeTypes = new Set(analysis.active.map((building) => building.type));
+      return activeTypes.has('farm') && activeTypes.has('well') && activeTypes.has('generator')
+        && analysis.powerRatio >= .9 && city.resources.food > 0 && city.resources.water > 0;
+    },
+    progress: (city, analysis) => {
+      const activeTypes = new Set(analysis.active.map((building) => building.type));
+      const modules = ['farm', 'well', 'generator'].filter((type) => activeTypes.has(type)).length / 3;
+      return Math.min(1, modules * .7 + Math.min(1, analysis.powerRatio) * .3);
+    },
+    log: 'Os três sinais verdes acenderam ao mesmo tempo: comida, água e energia. O mundo antigo chamava isso de infraestrutura. Nós chamamos de milagre.',
+  }),
+  Object.freeze({
+    id: 'community',
+    title: 'Criar uma comunidade',
+    text: 'Segurança e conforto valem tanto quanto produção. Faça as pessoas quererem permanecer quando a porta do Vault puder ser aberta.',
+    check: (city) => city.happiness >= 70 && city.population >= 100,
+    progress: (city) => Math.min(1, Math.min(city.happiness / 70, city.population / 100)),
+    log: 'A praça encheu ao anoitecer. Ninguém falou em sobrevivência; falaram em amanhã. Foi assim que a colônia virou cidade.',
+  }),
+  Object.freeze({
+    id: 'legacy',
+    title: 'Deixar um legado',
+    text: 'Resista tempo suficiente para que a reconstrução sobreviva ao seu governo. O objetivo final não é vencer um dia, é criar continuidade.',
+    check: (city) => city.day >= CITY_DAYS_PER_YEAR * 3,
+    progress: (city) => Math.min(1, city.day / (CITY_DAYS_PER_YEAR * 3)),
+    log: 'Três anos se passaram. A cidade já possui histórias que não começaram comigo. Talvez esse seja o primeiro sinal de que ela é realmente livre.',
+  }),
+]);
+
 // kind: servico com raio de cobertura sobre as casas. jobs: vagas. power: consumo. powerOut: geracao.
 export const CITY_BUILDINGS = Object.freeze({
   road: Object.freeze({ id: 'road', name: 'Estrada', icon: '▭', cost: 2, text: 'Liga os prédios à Porta do Vault.' }),
@@ -126,6 +179,8 @@ export function createCity(state, originId) {
     population: Math.max(8, Math.round(clamp(vaultPopulation / 40, 40, 64) * origin.population)),
     happiness: origin.happiness,
     stats: { peakPopulation: 0, happinessSum: 0, happinessDays: 0, lowHappinessDays: 0, built: CAMP.length },
+    objectiveId: CITY_OBJECTIVES[0].id,
+    completedObjectives: [],
     history: [],
     flags: { food: false, water: false, power: false, broke: false },
     log: [{ day: 0, text: `${origin.title}: ${origin.intro}` }],
@@ -152,6 +207,30 @@ export function getCityDate(city) {
 
 export function getBuildingAt(city, x, y) {
   return city?.buildings?.find((building) => building.x === x && building.y === y) ?? null;
+}
+
+export function getCityObjective(city, analysis = analyzeCity(city)) {
+  const completed = new Set(Array.isArray(city?.completedObjectives) ? city.completedObjectives : []);
+  const current = CITY_OBJECTIVES.find((objective) => !completed.has(objective.id));
+  if (!current) return { ...CITY_OBJECTIVES[CITY_OBJECTIVES.length - 1], completed: true, progress: 1 };
+  return {
+    ...current,
+    completed: false,
+    progress: clamp(Number(current.progress(city, analysis)) || 0, 0, 1),
+  };
+}
+
+function advanceCityObjectives(city) {
+  const analysis = analyzeCity(city);
+  const completed = new Set(Array.isArray(city.completedObjectives) ? city.completedObjectives : []);
+  let next = city;
+  for (const objective of CITY_OBJECTIVES) {
+    if (completed.has(objective.id) || !objective.check(next, analysis)) continue;
+    completed.add(objective.id);
+    next = withLog(next, objective.log);
+  }
+  const nextObjective = CITY_OBJECTIVES.find((objective) => !completed.has(objective.id));
+  return { ...next, completedObjectives: [...completed], objectiveId: nextObjective?.id ?? null };
 }
 
 // Tudo que depende de estradas, energia, vagas e cobertura, calculado a partir do estado atual.
@@ -336,6 +415,8 @@ export function advanceCityDay(state) {
     city = withLog(city, `Ano ${getCityDate(city).year}: ${city.population} cidadãos, felicidade ${Math.round(city.happiness)}%.`);
   }
 
+  city = advanceCityObjectives(city);
+
   if (city.population <= 0) city = finish(city, 'collapse', 'Os últimos cidadãos foram embora.');
   else if (city.stats.lowHappinessDays >= REVOLT_DAYS) city = finish(city, 'revolt', 'A cidade se levantou contra o governo.');
   else if (city.day >= CITY_TOTAL_DAYS) city = finish(city, null, `Fim do ano ${CITY_YEARS}: a reconstrução chegou ao fim.`);
@@ -426,6 +507,9 @@ export function normalizeCity(value) {
     stats: { peakPopulation: Math.floor(number(stats.peakPopulation, 0)), happinessSum: number(stats.happinessSum, 0),
       happinessDays: Math.floor(number(stats.happinessDays, 0)), lowHappinessDays: Math.floor(number(stats.lowHappinessDays, 0)),
       built: Math.floor(number(stats.built, buildings.length)) },
+    objectiveId: CITY_OBJECTIVES.some((objective) => objective.id === value.objectiveId) ? value.objectiveId : null,
+    completedObjectives: [...new Set((Array.isArray(value.completedObjectives) ? value.completedObjectives : [])
+      .filter((id) => CITY_OBJECTIVES.some((objective) => objective.id === id)))],
     history: (Array.isArray(value.history) ? value.history : []).slice(-CITY_YEARS * 12).map((entry) => ({
       day: Math.floor(number(entry?.day, 0)), population: Math.floor(number(entry?.population, 0)), happiness: Math.floor(number(entry?.happiness, 0, 0, 100)) })),
     flags: { food: flags.food === true, water: flags.water === true, power: flags.power === true, broke: flags.broke === true },

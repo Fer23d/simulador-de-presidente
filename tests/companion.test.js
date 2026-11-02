@@ -53,6 +53,24 @@ test('Layd uses the elevator to change floors with the player and waits while th
   assert.equal(lifting.x, dog.x);
 });
 
+test('Layd follows the President through the elevator to the surface and the Dark Market', () => {
+  let dog = { ...createDogActor(player({ floor: 0, x: 400 })), x: 410 };
+  const surfacePlayer = player({ floor: -1, x: 990, facing: 1, vx: 0 });
+  const options = {
+    elevatorX: 192,
+    bounds: { min: 80, max: 1_800 },
+    surfaceBounds: { min: 80, max: 1_140 },
+    marketX: 990,
+  };
+  for (let step = 0; step < 120 && dog.floor !== -1; step++) {
+    dog = updateDogActor(dog, surfacePlayer, .05, options);
+  }
+  assert.equal(dog.floor, -1, 'Layd reaches the surface through the elevator');
+  for (let step = 0; step < 100; step++) dog = updateDogActor(dog, surfacePlayer, .05, options);
+  assert.ok(Math.abs(dog.x - 990) < 120, 'Layd follows the President to the market');
+  assert.ok(dog.x >= 80 && dog.x <= 1_140, 'Layd stays inside the surface bounds');
+});
+
 test('petting works only when the dog is close, on the same floor', () => {
   const dog = { ...createDogActor(player()), x: 380 };
   assert.equal(canPetDog(dog, player()), true);
