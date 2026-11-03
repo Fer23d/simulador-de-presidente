@@ -1241,7 +1241,10 @@ export function mountDashboard(root) {
   tutorialCoach.hidden = true;
   document.body.append(tutorialCoach);
   let titleOpen = !localCityPreview;
-  let titleView = localCityPreview ? 'main' : 'boot';
+  // A entrada nova deve abrir diretamente no menu principal. A antiga tela
+  // de carregamento continua disponível para compatibilidade, mas não deve
+  // aparecer antes da tela inicial nem bloquear o primeiro clique do jogador.
+  let titleView = 'main';
   let onboarding = (() => { try { return createOnboarding(JSON.parse(localStorage.getItem(ONBOARDING_KEY) ?? '{}')); } catch { return createOnboarding(); } })();
   const saveOnboarding = () => { try { localStorage.setItem(ONBOARDING_KEY, JSON.stringify(onboarding)); } catch { /* so nesta sessao */ } };
   let afterProfile = 'new';
