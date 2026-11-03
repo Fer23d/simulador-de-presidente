@@ -560,39 +560,13 @@ function drawPaintedCover(ctx, image, width, height, time) {
 export function drawCoverArt(ctx, width, height, time = 0) {
   if (typeof document === 'undefined' || !width || !height) return;
   const painted = getCoverImage();
-  if (painted) {
-    drawPaintedCover(ctx, painted, width, height, time);
+  if (!painted) {
+    // A capa é exclusivamente baseada no asset pintado. Nunca mostrar a
+    // antiga arte procedural enquanto o PNG ainda está a carregar ou falha.
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = '#0a0604';
+    ctx.fillRect(0, 0, width, height);
     return;
   }
-  const key = `${width}x${height}`;
-  let base = staticCache.get(key);
-  if (!base) {
-    staticCache.clear();
-    base = paintStatic(width, height);
-    staticCache.set(key, base);
-  }
-  ctx.drawImage(base, 0, 0);
-  const horizon = height * .66;
-  // Lua verde de cinzas.
-  const moonX = width * .78;
-  const moonY = height * .2;
-  const halo = ctx.createRadialGradient(moonX, moonY, 8, moonX, moonY, 150);
-  halo.addColorStop(0, 'rgba(190, 255, 170, .4)');
-  halo.addColorStop(1, 'rgba(190, 255, 170, 0)');
-  ctx.fillStyle = halo;
-  ctx.fillRect(moonX - 150, moonY - 150, 300, 300);
-  ctx.fillStyle = '#dff5c8';
-  ctx.beginPath();
-  ctx.arc(moonX, moonY, 26, 0, Math.PI * 2);
-  ctx.fill();
-  const radius = Math.min(width, height) * .17;
-  drawVaultDoor(ctx, width * .81, horizon - radius * .15, radius, time);
-  // Os dois, de costas para nos, olhando para a porta.
-  const unit = Math.max(.5, Math.min(width, height) / 560);
-  drawPresident(ctx, width * .11, height * .84, 1.15 * unit);
-  drawLitDog(ctx, width, height, { x: width * .19, y: height * .84, scale: 1.3 * unit, time, doorX: width * .85 });
-  // Neblina rente ao chao.
-  ctx.fillStyle = linear(ctx, 0, height * .8, 0, height, [[0, 'rgba(0, 0, 0, 0)'], [1, 'rgba(0, 0, 0, .55)']]);
-  ctx.fillRect(0, height * .8, width, height * .2);
-  filmFinish(ctx, width, height);
+  drawPaintedCover(ctx, painted, width, height, time);
 }
