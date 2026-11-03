@@ -58,6 +58,7 @@ const citizenImages = new Map();
 let contaminationCache = null;
 const cityVisualCache = new WeakMap();
 const realisticBuildingSprites = new WeakMap();
+const citizenSprites = new WeakMap();
 
 function getCitizenImage(role) {
   if (typeof Image === 'undefined') return null;
@@ -126,6 +127,28 @@ function getRealisticBuildingSprite(type, image) {
   return sprite;
 }
 
+function getCitizenSprite(image, width, height) {
+  if (!image || typeof document === 'undefined') return null;
+  const key = `${Math.round(width)}x${Math.round(height)}`;
+  let sized = citizenSprites.get(image);
+  if (!sized) {
+    sized = new Map();
+    citizenSprites.set(image, sized);
+  }
+  const cached = sized.get(key);
+  if (cached) return cached;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(width));
+  canvas.height = Math.max(1, Math.round(height));
+  const spriteContext = canvas.getContext('2d');
+  spriteContext.imageSmoothingEnabled = true;
+  spriteContext.imageSmoothingQuality = 'high';
+  spriteContext.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const sprite = { canvas, width: canvas.width, height: canvas.height };
+  sized.set(key, sprite);
+  return sprite;
+}
+
 function getContaminationCanvas(ground) {
   if (contaminationCache?.key === ground) return contaminationCache.canvas;
   if (typeof document === 'undefined') return null;
@@ -184,6 +207,56 @@ function getCityVisualCache(city, analysis) {
 // ---------- Terreno (pre-renderizado, so refeito quando a limpeza muda o chao) ----------
 
 let groundCache = null;
+let staticSceneCache = null;
+
+function cityAssetState(city) {
+  const buildingTypes = [...new Set(city.buildings
+    .filter((building) => building.type !== 'road')
+    .map((building) => building.type))].sort();
+  return [
+    Boolean(cityGroundImage?.complete && cityGroundImage.naturalWidth),
+    Boolean(cityRoadImage?.complete && cityRoadImage.naturalWidth),
+    ...buildingTypes.map((type) => Boolean(buildingImages.get(type)?.image?.complete && buildingImages.get(type).image.naturalWidth)),
+  ].map(Boolean).join('');
+}
+
+function getStaticSceneCanvas(city, analysis, visual, language = 'pt-BR') {
+  if (typeof document === 'undefined') return null;
+  const assetState = cityAssetState(city);
+  if (staticSceneCache?.city === city && staticSceneCache.analysis === analysis
+    && staticSceneCache.assetState === assetState && staticSceneCache.language === language) return staticSceneCache.canvas;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = CITY_CANVAS_WIDTH;
+  canvas.height = CITY_CANVAS_HEIGHT;
+  const scene = canvas.getContext('2d');
+  if (!scene) return null;
+  scene.fillStyle = '#24170d';
+  scene.fillRect(0, 0, CITY_CANVAS_WIDTH, CITY_CANVAS_HEIGHT);
+  const ground = getGroundCanvas(city.ground);
+  if (ground) scene.drawImage(ground, 0, 0);
+  const contamination = getContaminationCanvas(city.ground);
+  if (contamination) {
+    scene.save();
+    scene.globalAlpha = .86;
+    scene.drawImage(contamination, 0, 0);
+    scene.restore();
+  }
+  for (const building of visual.roadBuildings) {
+    drawRoad(scene, building.x, building.y, visual.roadSet,
+      analysis.roads.has(building.y * CITY_WIDTH + building.x));
+  }
+  // A mobília fixa e a arquitetura são gravadas uma vez. As partículas e os
+  // habitantes continuam no canvas principal para manter a vida da cena.
+  drawStreetFurniture(scene, city, analysis, 0, visual.roadBuildings);
+  drawGate(scene, 0, language);
+  for (const building of visual.buildings) {
+    drawBuilding(scene, building, analysis.status.get(building.id) ?? { connected: false, efficiency: 0 }, 0);
+  }
+  staticSceneCache = { city, analysis, assetState, language, canvas };
+  return canvas;
+}
+
 function getGroundCanvas(ground) {
   if (groundCache?.key === ground) return groundCache.canvas;
   if (typeof document === 'undefined') return null;
@@ -745,11 +818,13 @@ function drawCitizens(ctx, city, analysis, time, cachedPairs = null) {
     const spriteWidth = sprite?.naturalWidth && sprite?.naturalHeight
       ? spriteHeight * (sprite.naturalWidth / sprite.naturalHeight)
       : 21;
+    const cachedSprite = sprite?.complete && sprite.naturalWidth
+      ? getCitizenSprite(sprite, spriteWidth, spriteHeight) : null;
     const groundY = y + 6;
     ctx.fillStyle = 'rgba(0, 0, 0, .48)';
     ctx.beginPath(); ctx.ellipse(x, groundY, 5.5, 1.7, 0, 0, Math.PI * 2); ctx.fill();
 
-    if (sprite?.complete && sprite.naturalWidth) {
+    if (cachedSprite) {
       // Cada papel tem uma arte própria, com silhueta e equipamento legíveis.
       // A sola é alinhada à rua para que o habitante não pareça flutuar.
       ctx.save();
@@ -761,7 +836,7 @@ function drawCitizens(ctx, city, analysis, time, cachedPairs = null) {
       const horizontalDirection = b.x === a.x || (b.x - a.x) * velocity >= 0 ? 1 : -1;
       ctx.translate(x, groundY + bob);
       ctx.scale(horizontalDirection, 1);
-      ctx.drawImage(sprite, -spriteWidth / 2, -spriteHeight, spriteWidth, spriteHeight);
+      ctx.drawImage(cachedSprite.canvas, -cachedSprite.width / 2, -cachedSprite.height, cachedSprite.width, cachedSprite.height);
       ctx.restore();
     } else {
       // Fallback pequeno e orgânico para ambientes de teste sem Image.
@@ -824,18 +899,14 @@ export function renderCity(ctx, city, analysis, { time = 0, hover = null, tool =
   ctx.save();
   ctx.translate(CITY_CANVAS_WIDTH / 2 - camera.x * zoom, CITY_CANVAS_HEIGHT / 2 - camera.y * zoom);
   ctx.scale(zoom, zoom);
-  const ground = getGroundCanvas(city.ground);
-  if (ground) ctx.drawImage(ground, 0, 0);
-  // A geometria das manchas é estática; apenas a opacidade pulsa. Isso evita
-  // criar CITY_WIDTH*CITY_HEIGHT gradientes radiais a cada frame.
-  const contamination = getContaminationCanvas(city.ground);
-  if (contamination) {
-    ctx.save();
-    ctx.globalAlpha = 0.72 + (Math.sin(time / 650) + 1) * 0.14;
-    ctx.drawImage(contamination, 0, 0);
-    ctx.restore();
+  const visualScene = getCityVisualCache(city, analysis);
+  const staticScene = getStaticSceneCanvas(city, analysis, visualScene, language);
+  if (staticScene) {
+    ctx.drawImage(staticScene, 0, 0);
   } else {
-    // Mantém o fallback de testes/ambientes sem DOM.
+    const ground = getGroundCanvas(city.ground);
+    if (ground) ctx.drawImage(ground, 0, 0);
+    // Fallback para testes e ambientes sem DOM: mantém a aparência anterior.
     const pulse = .035 + (Math.sin(time / 650) + 1) * .03;
     for (let y = 0; y < CITY_HEIGHT; y++) for (let x = 0; x < CITY_WIDTH; x++) {
       if (city.ground[y * CITY_WIDTH + x] !== 'x') continue;
@@ -861,11 +932,13 @@ export function renderCity(ctx, city, analysis, { time = 0, hover = null, tool =
       ctx.fillStyle = 'rgba(110, 255, 200, .16)'; ctx.fillRect(x * CITY_TILE, y * CITY_TILE, CITY_TILE, CITY_TILE);
     }
   }
-  for (const building of visual.roadBuildings) drawRoad(ctx, building.x, building.y, visual.roadSet, analysis.roads.has(building.y * CITY_WIDTH + building.x));
-  drawStreetFurniture(ctx, city, analysis, time, visual.roadBuildings);
-  drawGate(ctx, time, language);
-  for (const building of visual.buildings) {
-    drawBuilding(ctx, building, analysis.status.get(building.id) ?? { connected: false, efficiency: 0 }, time);
+  if (!staticScene) {
+    for (const building of visual.roadBuildings) drawRoad(ctx, building.x, building.y, visual.roadSet, analysis.roads.has(building.y * CITY_WIDTH + building.x));
+    drawStreetFurniture(ctx, city, analysis, time, visual.roadBuildings);
+    drawGate(ctx, time, language);
+    for (const building of visual.buildings) {
+      drawBuilding(ctx, building, analysis.status.get(building.id) ?? { connected: false, efficiency: 0 }, time);
+    }
   }
   drawCitizens(ctx, city, analysis, time, visual.citizenPairs);
   if (hover) {
