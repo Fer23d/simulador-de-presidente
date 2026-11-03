@@ -426,8 +426,9 @@ export function renderRoom(ctx, room, assets, time = 0) {
       drawOrMissing(ctx, atlas, x, y, SLOT_WIDTH, ROOM_HEIGHT,
         atlas ? [0, cellHeight * 2, cellWidth, cellHeight] : null);
     }
-    renderCachedProceduralInterior(ctx, 'life_support', x, y, time, renderLifeSupportDetails);
-    renderRoomAmbientLight(ctx, room, x, y);
+    // A arte pintada já contém as ventoinhas, tubagens e iluminação da sala.
+    // Não desenhe uma segunda camada por cima: além de duplicar os elementos,
+    // isso fazia as ventoinhas parecerem flutuar/animação sobre a imagem realista.
     return;
   }
   const individual = assets.getImage(`room_${room.type}`);

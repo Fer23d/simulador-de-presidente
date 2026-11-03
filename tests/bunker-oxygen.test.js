@@ -172,7 +172,7 @@ test('oxygen deprivation halves direct player and NPC movement deltas', () => {
   assert.equal(deprived.x - player.x, (normal.x - player.x) / 2);
 });
 
-test('oxygen Canvas overlay is pulsed and scoped to source pixels; support-room fans animate', () => {
+test('oxygen Canvas overlay is pulsed and scoped to source pixels; support room keeps only its painted asset layer', () => {
   const calls = [];
   const ctx = {
     canvas: { width: 800, height: 500 },
@@ -189,5 +189,5 @@ test('oxygen Canvas overlay is pulsed and scoped to source pixels; support-room 
   assert.ok(calls.some(([name]) => name === 'restore'));
 
   renderRoom(ctx, { type: 'life_support', floor: 0, column: 2, level: 1 }, { getImage: () => null }, 150);
-  assert.equal(calls.filter(([name]) => name === 'rotate').length, 15);
+  assert.equal(calls.filter(([name]) => name === 'rotate').length, 0);
 });
