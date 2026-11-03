@@ -663,28 +663,20 @@ function drawScaffold(ctx, time) {
 }
 
 // Terreno livre: estacas de topografo com fita, marcacao da laje e placa de obra.
-function drawEmptyPlot(ctx, time, language = 'pt-BR') {
-  ctx.save();
+// A parte parada (sombra, pedregulho, estacas, placa) e pintada uma vez; so a marcacao piscando e as fitas se mexem.
+const plotCache = new Map();
+const PLOT_BOX = Object.freeze({ x: 130, y: 100, w: 260, h: 120 });
+
+function paintPlotStatic(ctx, language) {
   ctx.fillStyle = 'rgba(0, 0, 0, .3)';
   ctx.beginPath(); ctx.ellipse(10, 2, 120, 7, 0, 0, Math.PI * 2); ctx.fill();
   for (let index = 0; index < 150; index++) {
     ctx.fillStyle = hash(index, 1, 4) > .5 ? 'rgba(150, 125, 95, .5)' : 'rgba(40, 30, 20, .5)';
     ctx.fillRect(-100 + hash(index, 2, 4) * 210, 3 - hash(index, 3, 4) * 9, 1.5 + hash(index, 4, 4) * 1.6, 1.2);
   }
-  ctx.setLineDash([8, 6]);
-  ctx.strokeStyle = `rgba(255, 150, 60, ${.5 + Math.sin(time / 300) * .25})`;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(-92, -6, 196, 8);
-  ctx.setLineDash([]);
-  for (const [x, hue] of [[-92, '#e0701c'], [104, '#e0701c'], [6, '#d8c22a']]) {
+  for (const x of [-92, 104, 6]) {
     ctx.fillStyle = linear(ctx, x - 2, 0, x + 2, 0, [[0, '#9a7a52'], [1, '#4a3520']]);
     ctx.fillRect(x - 2, -34, 4, 36);
-    ctx.fillStyle = hue;
-    ctx.beginPath();
-    ctx.moveTo(x + 2, -33);
-    for (let step = 0; step <= 16; step += 2) ctx.lineTo(x + 2 + step, -33 + Math.sin(time / 240 + step / 4 + x) * 2.5);
-    for (let step = 16; step >= 0; step -= 2) ctx.lineTo(x + 2 + step, -26 + Math.sin(time / 240 + step / 4 + x) * 2.5);
-    ctx.fill();
   }
   // Placa de obra em chapa enferrujada.
   for (const x of [-16, 28]) { ctx.fillStyle = '#4a3520'; ctx.fillRect(x - 1.5, -56, 3, 56); }
@@ -697,6 +689,72 @@ function drawEmptyPlot(ctx, time, language = 'pt-BR') {
   ctx.textAlign = 'center';
   ctx.fillText(translateUiText('PERFURE', language), 6, -77);
   ctx.fillText(translateUiText('AQUI', language), 6, -64);
+}
+
+function getPlotSprite(language) {
+  if (typeof document === 'undefined') return null;
+  let sprite = plotCache.get(language);
+  if (!sprite) {
+    const canvas = document.createElement('canvas');
+    canvas.width = PLOT_BOX.w * 2;
+    canvas.height = PLOT_BOX.h * 2;
+    const c = canvas.getContext('2d');
+    if (!c) return null;
+    c.scale(2, 2);
+    c.translate(PLOT_BOX.x, PLOT_BOX.y);
+    paintPlotStatic(c, language);
+    plotCache.set(language, canvas);
+    sprite = canvas;
+  }
+  return sprite;
+}
+
+let plotOutline = null;
+
+// A marcacao tracejada e pintada uma vez; o pisca e so a transparencia ao desenha-la.
+function getPlotOutline() {
+  if (typeof document === 'undefined') return null;
+  if (!plotOutline) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 208 * 2;
+    canvas.height = 20 * 2;
+    const c = canvas.getContext('2d');
+    if (!c) return null;
+    c.scale(2, 2);
+    c.translate(104, 10);
+    c.setLineDash([8, 6]);
+    c.strokeStyle = 'rgb(255, 150, 60)';
+    c.lineWidth = 2;
+    c.strokeRect(-92, -6, 196, 8);
+    plotOutline = canvas;
+  }
+  return plotOutline;
+}
+
+function drawEmptyPlot(ctx, time, language = 'pt-BR') {
+  ctx.save();
+  const sprite = getPlotSprite(language);
+  const outline = getPlotOutline();
+  ctx.globalAlpha = .5 + Math.sin(time / 300) * .25;
+  if (outline) ctx.drawImage(outline, -104, -10, 208, 20);
+  else {
+    ctx.setLineDash([8, 6]);
+    ctx.strokeStyle = 'rgb(255, 150, 60)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-92, -6, 196, 8);
+    ctx.setLineDash([]);
+  }
+  ctx.globalAlpha = 1;
+  if (sprite) ctx.drawImage(sprite, -PLOT_BOX.x, -PLOT_BOX.y, PLOT_BOX.w, PLOT_BOX.h);
+  else paintPlotStatic(ctx, language);
+  for (const [x, hue] of [[-92, '#e0701c'], [104, '#e0701c'], [6, '#d8c22a']]) {
+    ctx.fillStyle = hue;
+    ctx.beginPath();
+    ctx.moveTo(x + 2, -33);
+    for (let step = 0; step <= 16; step += 2) ctx.lineTo(x + 2 + step, -33 + Math.sin(time / 240 + step / 4 + x) * 2.5);
+    for (let step = 16; step >= 0; step -= 2) ctx.lineTo(x + 2 + step, -26 + Math.sin(time / 240 + step / 4 + x) * 2.5);
+    ctx.fill();
+  }
   ctx.restore();
 }
 

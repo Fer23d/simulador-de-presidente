@@ -62,6 +62,49 @@ export const DEFAULT_ASSETS = Object.freeze({
 export const OPTIONAL_ASSETS = Object.freeze(new Set(['room_laboratory', 'room_life_support', 'room_radiation_clinic',
   'layd_sheet', 'dark_market_stall', 'dark_market_merchant', 'cover_art']));
 
+// A arte pintada nova vem em alta resolucao (ate 1900px) mas aparece pequena na tela. Reduzir uma vez ao carregar
+// evita redimensionar milhares de pixels a cada quadro (cada sala grande custava ~2ms de desenho).
+const PRESCALE = Object.freeze({
+  room_laboratory: { width: 700 }, room_life_support: { width: 700 }, room_radiation_clinic: { width: 700 },
+  dark_market_stall: { width: 700 }, dark_market_merchant: { height: 320 }, layd_sheet: { width: 960 },
+  // Arte original: tambem aparece bem menor na tela do que o arquivo. Os fundos viram do tamanho exato em que sao desenhados.
+  bg_sky: { width: 1400, height: 540 }, bg_mountains: { width: 1400, height: 260 }, fg_wasteland: { width: 1600, height: 210 },
+  room_atlas: { width: 1200 }, room_base_empty: { width: 1000 }, plant_prop_1: { width: 700 }, uv_light_prop: { width: 600 },
+  elevator_cabin: { height: 360 }, npc_walk_sheet: { width: 1000 }, character_sheet: { width: 900 },
+});
+
+export function prescaleImage(image, limit) {
+  if (typeof document === 'undefined' || !limit || !image?.width || !image?.height) return image;
+  const scaleX = limit.width ? limit.width / image.width : limit.height / image.height;
+  const scaleY = limit.width && limit.height ? limit.height / image.height : scaleX;
+  if (!(scaleX < 1 || scaleY < 1)) return image;
+  let source = image;
+  let width = image.width;
+  let height = image.height;
+  const targetWidth = Math.max(1, Math.round(image.width * Math.min(1, scaleX)));
+  const targetHeight = Math.max(1, Math.round(image.height * Math.min(1, scaleY)));
+  // Reducao em passos de metade: mantem a nitidez que um unico passo grande perderia.
+  while (width / 2 > targetWidth || height / 2 > targetHeight) {
+    width = Math.max(targetWidth, Math.ceil(width / 2));
+    height = Math.max(targetHeight, Math.ceil(height / 2));
+    const step = document.createElement('canvas');
+    step.width = width;
+    step.height = height;
+    const stepContext = step.getContext('2d');
+    if (!stepContext) return image;
+    stepContext.drawImage(source, 0, 0, width, height);
+    source = step;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const context = canvas.getContext('2d');
+  if (!context) return image;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(source, 0, 0, targetWidth, targetHeight);
+  return canvas;
+}
+
 export class AssetManager {
   constructor(urls = DEFAULT_ASSETS, ImageClass = globalThis.Image) {
     this.urls = { ...urls };
@@ -75,7 +118,7 @@ export class AssetManager {
     await Promise.all(Object.entries(this.urls).map(([key, url]) => new Promise((resolve) => {
       if (!this.ImageClass || !url) { if (!OPTIONAL_ASSETS.has(key)) this.failedKeys.push(key); resolve(); return; }
       const image = new this.ImageClass();
-      image.onload = () => { this.images.set(key, image); resolve(); };
+      image.onload = () => { this.images.set(key, prescaleImage(image, PRESCALE[key])); resolve(); };
       image.onerror = () => { if (!OPTIONAL_ASSETS.has(key)) this.failedKeys.push(key); resolve(); };
       image.src = url;
     })));
@@ -2144,7 +2187,7 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
 
 // Layd acompanha o presidente: mesma regra de chao dos habitantes, tamanho proporcional a um cao de verdade.
 function drawCompanion(ctx, dog, grid, time, humanHeight, player, sheet = null) {
-  warmDogFrames(humanHeight * .31 / DOG_HEIGHT);
+  if (!sheet) warmDogFrames(humanHeight * .31 / DOG_HEIGHT);
   if (dog.riding) {
     const cabin = getActorPlacement({ floor: player.floor, column: 0, type: 'elevator' }, { liftY: player.y });
     drawDog(ctx, { x: dog.x, y: cabin.floorY, facing: dog.facing, scale: humanHeight * .31 / DOG_HEIGHT, pose: 'stand', time, sheet, sick: dog.sick });

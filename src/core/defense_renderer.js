@@ -551,13 +551,11 @@ export function drawFort(ctx, centerX, groundY, { level = 1, turrets = 1, garris
   ctx.restore();
 }
 
-function drawEmptyFortPlot(ctx, centerX, groundY, time, language = 'pt-BR') {
-  ctx.save();
-  ctx.setLineDash([6, 5]);
-  ctx.strokeStyle = `rgba(255, 120, 80, ${.45 + Math.sin(time / 300) * .25})`;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(centerX - 110, groundY - 84, 220, 82);
-  ctx.setLineDash([]);
+// Terreno livre do Forte: os sacos de areia e a placa sao pintados uma vez; so a marcacao piscando se mexe.
+const fortPlotCache = new Map();
+const FORT_PLOT_BOX = Object.freeze({ x: 130, y: 100, w: 260, h: 110 });
+
+function paintFortPlot(ctx, centerX, groundY, language) {
   sandbag(ctx, centerX - 90, groundY - 12, 30, 13, 1);
   sandbag(ctx, centerX - 63, groundY - 12, 30, 13, 2);
   sandbag(ctx, centerX - 77, groundY - 23, 30, 13, 3);
@@ -571,6 +569,61 @@ function drawEmptyFortPlot(ctx, centerX, groundY, time, language = 'pt-BR') {
   ctx.textAlign = 'center';
   ctx.fillText(translateUiText('ERGUER', language), centerX + 30, groundY - 59);
   ctx.fillText(translateUiText('FORTE', language), centerX + 30, groundY - 48);
+}
+
+let fortOutline = null;
+
+function getFortOutline() {
+  if (typeof document === 'undefined') return null;
+  if (!fortOutline) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 232 * 2;
+    canvas.height = 94 * 2;
+    const c = canvas.getContext('2d');
+    if (!c) return null;
+    c.scale(2, 2);
+    c.translate(116, 88);
+    c.setLineDash([6, 5]);
+    c.strokeStyle = 'rgb(255, 120, 80)';
+    c.lineWidth = 2;
+    c.strokeRect(-110, -84, 220, 82);
+    fortOutline = canvas;
+  }
+  return fortOutline;
+}
+
+function drawEmptyFortPlot(ctx, centerX, groundY, time, language = 'pt-BR') {
+  ctx.save();
+  const outline = getFortOutline();
+  ctx.globalAlpha = .45 + Math.sin(time / 300) * .25;
+  if (outline) ctx.drawImage(outline, centerX - 116, groundY - 88 + 0, 232, 94);
+  else {
+    ctx.setLineDash([6, 5]);
+    ctx.strokeStyle = 'rgb(255, 120, 80)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(centerX - 110, groundY - 84, 220, 82);
+    ctx.setLineDash([]);
+  }
+  ctx.globalAlpha = 1;
+  let sprite = null;
+  if (typeof document !== 'undefined') {
+    sprite = fortPlotCache.get(language) ?? null;
+    if (!sprite) {
+      const canvas = document.createElement('canvas');
+      canvas.width = FORT_PLOT_BOX.w * 2;
+      canvas.height = FORT_PLOT_BOX.h * 2;
+      const c = canvas.getContext('2d');
+      if (c) {
+        c.scale(2, 2);
+        c.translate(FORT_PLOT_BOX.x, FORT_PLOT_BOX.y);
+        paintFortPlot(c, 0, 0, language);
+        fortPlotCache.set(language, canvas);
+        sprite = canvas;
+      }
+    }
+  }
+  if (sprite) ctx.drawImage(sprite, centerX - FORT_PLOT_BOX.x, groundY - FORT_PLOT_BOX.y, FORT_PLOT_BOX.w, FORT_PLOT_BOX.h);
+  else paintFortPlot(ctx, centerX, groundY, language);
   ctx.restore();
 }
 

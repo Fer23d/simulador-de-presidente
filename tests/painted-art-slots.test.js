@@ -77,3 +77,12 @@ test('the cover keeps working when the painted cover does not exist', () => {
   const { ctx } = recorder();
   assert.doesNotThrow(() => drawCoverArt(ctx, 800, 600, 10));
 });
+
+test('large art is only shrunk when a canvas is available and never enlarged', async () => {
+  const { prescaleImage } = await import('../src/core/sprite_engine.js');
+  const big = { width: 2000, height: 1000 };
+  assert.equal(prescaleImage(big, { width: 700 }), big, 'without a document the original image is kept');
+  assert.equal(prescaleImage(big, undefined), big);
+  const small = { width: 300, height: 200 };
+  assert.equal(prescaleImage(small, { width: 700 }), small, 'never enlarged');
+});
