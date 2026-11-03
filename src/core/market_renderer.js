@@ -1,5 +1,5 @@
 import { WORLD_TOP } from './shelter_engine.js';
-import { hash, linear } from './art.js';
+import { gradeStructure, hash, linear } from './art.js';
 import { translateUiText } from './i18n.js';
 
 // A banca do Mercado Sombrio fica na superficie, depois do ultimo poco de petroleo.
@@ -234,6 +234,8 @@ function getCache() {
   c.scale(RES, RES);
   c.translate(ORIGIN_X, ORIGIN_Y);
   drawStatic(c);
+  drawMerchant(c, 0);
+  gradeStructure(canvas, 5);
   cache = canvas;
   return cache;
 }
@@ -316,19 +318,31 @@ function drawLantern(ctx, time, night) {
   ctx.restore();
 }
 
-export function renderMarket(ctx, market, { time = 0, night = false, language = 'pt-BR' } = {}) {
+export function renderMarket(ctx, market, { time = 0, night = false, language = 'pt-BR', stallImage = null, merchantImage = null } = {}) {
   if (!market?.open) return;
   ctx.save();
   ctx.translate(MARKET_X, GROUND_Y);
   ctx.scale(SCALE, SCALE);
-  const sprite = getCache();
-  if (sprite) {
+  const painted = stallImage?.width > 0 && stallImage?.height > 0;
+  const sprite = painted ? null : getCache();
+  if (painted) {
+    // Arte pintada: a banca assenta no chao e o mercador (se houver imagem dele) respira atras do balcao.
+    const width = 290;
+    const height = width * stallImage.height / stallImage.width;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(stallImage, -width / 2, -height + 4, width, height);
+    if (merchantImage?.width > 0 && merchantImage?.height > 0) {
+      const merchantHeight = 82 + Math.sin(time / 900) * .8;
+      const merchantWidth = merchantHeight * merchantImage.width / merchantImage.height;
+      ctx.drawImage(merchantImage, -10 - merchantWidth / 2, -30 - merchantHeight, merchantWidth, merchantHeight);
+    }
+  } else if (sprite) {
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(sprite, -ORIGIN_X, -ORIGIN_Y, W, H);
   } else {
     drawStatic(ctx, language);
+    drawMerchant(ctx, time);
   }
-  drawMerchant(ctx, time);
   drawLantern(ctx, time, night);
   ctx.restore();
 }

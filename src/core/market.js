@@ -5,6 +5,8 @@ import { hash } from './art.js';
 export const MARKET_SUIT_SKIN = 'hazmat';
 export const MARKET_TRADES_PER_OFFER = 3;
 export const MARKET_OPEN_DAYS = 3;
+export const MARKET_SELL_MARGIN = 0.72;
+export const MARKET_BUY_MARGIN = 1.32;
 
 // Valor-base de cada mercadoria em sucata, e o lote negociado de cada vez.
 const GOODS = Object.freeze({
@@ -36,12 +38,12 @@ export function rollDarkMarket(turn) {
   for (const res of SELLABLE) {
     const good = GOODS[res];
     offers.push({ id: `sell-${res}`, kind: 'sell', res, amount: good.batch,
-      scrap: Math.max(1, Math.round(good.batch * good.value * .8 * factor(month, `sell-${res}`, .8, 1.3))), left: MARKET_TRADES_PER_OFFER });
+      scrap: Math.max(1, Math.round(good.batch * good.value * MARKET_SELL_MARGIN * factor(month, `sell-${res}`, .8, 1.3))), left: MARKET_TRADES_PER_OFFER });
   }
   for (const res of BUYABLE) {
     const good = GOODS[res];
     offers.push({ id: `buy-${res}`, kind: 'buy', res, amount: good.batch,
-      scrap: Math.max(1, Math.round(good.batch * good.value * 1.3 * factor(month, `buy-${res}`, .8, 1.25))), left: MARKET_TRADES_PER_OFFER });
+      scrap: Math.max(1, Math.round(good.batch * good.value * MARKET_BUY_MARGIN * factor(month, `buy-${res}`, .8, 1.25))), left: MARKET_TRADES_PER_OFFER });
   }
   return { turn: month, open: true, lastOpenDay: MARKET_OPEN_DAYS, merchant: MERCHANTS[month % MERCHANTS.length], offers };
 }

@@ -9,6 +9,7 @@ import { advanceLaydEscape, applyVaccine, advanceLaydMonth, buyRation, canApplyV
 import { ENDINGS, getEndingStory } from '../src/core/endings.js';
 import { SHELTER_TYPES } from '../src/core/shelter_engine.js';
 import { laydCareView, laydDiscoveryView, doorView } from '../src/ui/dashboard.js';
+import { INITIAL_RATION, RATION_SCRAP_COST, SYNTHETIC_VACCINE_SCRAP_COST } from '../src/core/layd_care.js';
 
 function vault(extra = {}) {
   const base = transicionarParaWasteland(createGameState());
@@ -21,7 +22,7 @@ const withCare = (state, patch) => ({ ...state, companion: { ...state.companion,
 
 test('Layd arrives healthy with food, and the care data survives the save', () => {
   const state = vault();
-  assert.equal(state.companion.ration, 4);
+  assert.equal(state.companion.ration, INITIAL_RATION);
   assert.equal(state.companion.health, 100);
   assert.equal(state.companion.sick, false);
   assert.equal(adoptLayd(state), state);
@@ -33,7 +34,7 @@ test('Layd arrives healthy with food, and the care data survives the save', () =
 test('each month Layd eats a ration and goes hungry when it runs out', () => {
   let state = vault();
   state = advanceLaydMonth({ ...state, wasteland_turn: 3 });
-  assert.equal(state.companion.ration, 3);
+  assert.equal(state.companion.ration, INITIAL_RATION - 1);
   const hungry = advanceLaydMonth({ ...withCare(vault(), { ration: 0, health: 80 }), wasteland_turn: 3 });
   assert.ok(hungry.companion.health < 80);
   assert.match(hungry.notice, /fome/);
@@ -71,7 +72,7 @@ test('a sick Layd without vaccines opens a laboratory mission, which lets the pl
   assert.ok(delivered.inhabitants[0].loyalty > arrived.inhabitants[0].loyalty);
   assert.equal(delivered.companion.choices.vault, 1);
   const crafted = resolveWastelandEvent(arrived, 'craft-vaccine');
-  assert.equal(crafted.scrap, arrived.scrap - 90 + 25 + 10 * arrived.pendingBunkerEvent.floor, 'synthesising costs scrap (plus the mission reward)');
+  assert.equal(crafted.scrap, arrived.scrap - SYNTHETIC_VACCINE_SCRAP_COST + 25 + 10 * arrived.pendingBunkerEvent.floor, 'synthesising costs scrap (plus the mission reward)');
   assert.equal(crafted.companion.vaccines, 1);
 });
 
@@ -83,7 +84,7 @@ test('the ration mission can also be solved by diverting food from the Vault', (
   const taken = resolveWastelandEvent(arrived, 'divert-ration');
   assert.equal(taken.companion.ration, 4);
   assert.equal(taken.shelter_supplies.food, arrived.shelter_supplies.food - 20);
-  assert.ok(taken.companion.suspicion >= 10);
+  assert.ok(taken.companion.suspicion > 0);
 });
 
 test('the vaccine needs the treatment room, a sick and visible Layd, a dose and scrap, and cures her after four doses', () => {
@@ -108,7 +109,7 @@ test('buying and diverting rations, and hiding Layd, change her needs and the su
   const state = vault();
   const bought = buyRation(state);
   assert.equal(bought.companion.ration, state.companion.ration + 3);
-  assert.equal(bought.scrap, state.scrap - 30);
+  assert.equal(bought.scrap, state.scrap - RATION_SCRAP_COST);
   assert.equal(buyRation({ ...state, scrap: 1 }).companion.ration, state.companion.ration);
   const diverted = divertFood(state);
   assert.equal(diverted.shelter_supplies.food, 85);

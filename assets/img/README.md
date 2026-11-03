@@ -28,3 +28,19 @@ Initial bitmap art was generated with the built-in image generation tool from
 prompts for a post-apocalyptic landscape, soil texture, nine-room bunker atlas,
 transparent elevator cabin, side-view survivor spritesheets, empty bunker
 room, hydroponic planter, and UV lamp.
+
+## Optional painted art (drop-in)
+
+These files are optional. When a file exists the game uses it; when it is missing the game keeps the
+procedural drawing and does not report a missing texture. Names and layouts are fixed by the code.
+
+- `layd_sheet.png` (1280x1280): Layd, side view facing right, transparent, 4 columns x 4 rows of equal 320px
+  cells with the feet on the same baseline. Row 1 walk (4 frames), row 2 run (4 frames), row 3 stand / sit /
+  sit happy / lying sick, row 4 sick walk (4 frames). Scale comes from the standing frame, so all frames keep one size.
+- `dark_market_stall.png` (1774x887): the Dark Market stall without the merchant, transparent, about 2:1, resting
+  on the ground with a straight lower edge.
+- `dark_market_merchant.png` (1024x1536): the hooded merchant, front view, transparent. Drawn over the stall with
+  a slow breath; the sprite contains no counter so it can be layered cleanly.
+- `room_radiation_clinic.png`, `room_laboratory.png`, `room_life_support.png` (1688x932 each): rooms with the same
+  proportion and lighting contract as one cell of `room_atlas.png`.
+- `cover_art.png` (1920x1080): cover painting with a calm centre and bottom (logo and loading bar sit on top).

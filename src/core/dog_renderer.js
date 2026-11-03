@@ -1,4 +1,4 @@
-import { hash } from './art.js';
+import { gradeStructure, hash } from './art.js';
 
 // Layd: cadela pastor-alema mestica, magra e marcada pelo Ermo. De lado, virada para +x, chao em y = 0.
 // ~52 de altura na cernelha. Cada parte (patas, corpo, cabeca, cauda) e uma silhueta de volumes macios
@@ -125,8 +125,8 @@ function layer(ctx, xf, shape, paint) {
   c.globalCompositeOperation = 'source-atop';
   paint(c);
   c.globalCompositeOperation = 'destination-over';
-  c.fillStyle = '#1b1008';
-  shape(c, .8);
+  c.fillStyle = 'rgba(27, 16, 8, .5)';
+  shape(c, .6);
   c.restore();
   ctx.save();
   ctx.imageSmoothingEnabled = true;
@@ -447,12 +447,86 @@ function collar(ctx, bodyXf, head) {
   ctx.restore();
 }
 
+// Arte pintada: layd_sheet.png tem 4 colunas x 4 linhas, virada para a direita, pes na base de cada celula.
+// Linha 1 anda, linha 2 corre, linha 3 parada (em pe, sentada, sentada feliz, deitada doente), linha 4 anda doente.
+const SHEET_COLS = 4;
+const SHEET_ROWS = 4;
+const sheetBounds = new WeakMap();
+
+function cellBounds(sheet, col, row) {
+  const cw = sheet.width / SHEET_COLS;
+  const ch = sheet.height / SHEET_ROWS;
+  const full = { x: 0, y: 0, w: cw, h: ch };
+  if (typeof document === 'undefined') return full;
+  let cache = sheetBounds.get(sheet);
+  if (!cache) { cache = new Map(); sheetBounds.set(sheet, cache); }
+  const key = row * SHEET_COLS + col;
+  if (cache.has(key)) return cache.get(key);
+  let bounds = full;
+  try {
+    const probe = document.createElement('canvas');
+    probe.width = Math.max(1, Math.floor(cw));
+    probe.height = Math.max(1, Math.floor(ch));
+    const p = probe.getContext('2d');
+    p.drawImage(sheet, col * cw, row * ch, cw, ch, 0, 0, probe.width, probe.height);
+    const data = p.getImageData(0, 0, probe.width, probe.height).data;
+    let minX = probe.width, minY = probe.height, maxX = -1, maxY = -1;
+    for (let y = 0; y < probe.height; y++) {
+      for (let x = 0; x < probe.width; x++) {
+        if (data[(y * probe.width + x) * 4 + 3] > 24) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX >= minX && maxY >= minY) bounds = { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+  } catch { /* arte sem leitura de pixels: usa a celula inteira */ }
+  cache.set(key, bounds);
+  return bounds;
+}
+
+function sheetFrame(pose, gait, happy, sick) {
+  if (pose === 'walk' || pose === 'run') {
+    const frame = Math.floor((((gait / (Math.PI * 2)) % 1) + 1) % 1 * SHEET_COLS) % SHEET_COLS;
+    const row = sick ? 3 : pose === 'run' ? 1 : 0;
+    return { col: frame, row };
+  }
+  if (pose === 'sit') return { col: sick ? 3 : happy ? 2 : 1, row: 2 };
+  return { col: sick ? 3 : 0, row: 2 };
+}
+
+function drawDogSheet(ctx, sheet, { x, y, facing, scale, pose, gait, happy, sick, shadow }) {
+  const { col, row } = sheetFrame(pose, gait, happy, sick);
+  const cw = sheet.width / SHEET_COLS;
+  const ch = sheet.height / SHEET_ROWS;
+  const bounds = cellBounds(sheet, col, row);
+  // A cadela em pe define a escala: todos os quadros usam a mesma proporcao de pixels por unidade.
+  const reference = cellBounds(sheet, 0, 2);
+  const k = DOG_HEIGHT * 1.12 * scale / reference.h;
+  ctx.save();
+  ctx.translate(x, y);
+  if (shadow) {
+    ctx.fillStyle = 'rgba(0, 0, 0, .34)';
+    ctx.beginPath();
+    ctx.ellipse?.(0, 1.5 * scale, Math.max(24, bounds.w * k * .42), 4.4 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.scale(facing, 1);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(sheet, col * cw + bounds.x, row * ch + bounds.y, bounds.w, bounds.h,
+    -(bounds.x + bounds.w / 2 - cw / 2) * k - cw * k / 2 + (cw / 2 - cw / 2), -(ch - bounds.y) * k, bounds.w * k, bounds.h * k);
+  ctx.restore();
+}
+
 // pose: 'stand' | 'walk' | 'run' | 'sit'. gait avanca com a distancia andada.
 // Cada quadro e pintado uma vez (camadas pesadas) e guardado; o jogo so cola a imagem pronta.
 const frameCache = new Map();
 const FRAME_LIMIT = 220;
 
-export function drawDog(ctx, { x = 0, y = 0, facing = 1, scale = 1, pose = 'stand', gait = 0, time = 0, happy = false, shadow = true } = {}) {
+export function drawDog(ctx, { x = 0, y = 0, facing = 1, scale = 1, pose = 'stand', gait = 0, time = 0, happy = false, shadow = true, sheet = null, sick = false } = {}) {
+  if (sheet?.width > 0 && sheet?.height > 0) { drawDogSheet(ctx, sheet, { x, y, facing, scale, pose, gait, happy, sick, shadow }); return; }
   if (typeof document === 'undefined') { paintDog(ctx, { x, y, facing, scale, pose, gait, time, happy, shadow }); return; }
   const moving = pose === 'walk' || pose === 'run';
   const step = moving ? Math.round(((gait / (Math.PI * 2)) % 1 + 1) % 1 * 10) % 10 : 0;
@@ -492,6 +566,7 @@ function getFrame(pose, happy, step, tick, quality) {
     const c = canvas.getContext('2d');
     c.translate(BOX.x * k, BOX.y * k);
     paintDog(c, { scale: k, pose, gait: step / 10 * Math.PI * 2, time: tick * (moving ? 160 : 220), happy, shadow: false });
+    gradeStructure(canvas, 3);
     frame = { canvas, k };
     frameCache.set(key, frame);
   }

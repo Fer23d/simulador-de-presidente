@@ -1,4 +1,4 @@
-import { hash, linear } from './art.js';
+import { gradeStructure, hash, linear } from './art.js';
 import { drawDog } from './dog_renderer.js';
 
 // Capa do jogo: o Vault aberto ao entardecer radioativo, o presidente e Layd de costas, olhando o Ermo.
@@ -57,6 +57,7 @@ function paintStatic(width, height) {
     c.lineTo(x + (hash(i, 6, 9) - .5) * 120, height);
     c.stroke();
   }
+  gradeStructure(canvas, 9);
   return canvas;
 }
 
@@ -469,8 +470,8 @@ function drawLitDog(ctx, width, height, { x, y, scale, time, doorX }) {
   drawDog(c, { x, y, facing: 1, scale, pose: 'stand', time, shadow: true });
   c.globalCompositeOperation = 'source-atop';
   const light = c.createLinearGradient(x - 110 * scale, 0, doorX, 0);
-  light.addColorStop(0, 'rgba(8, 4, 12, .58)');
-  light.addColorStop(.35, 'rgba(40, 14, 8, .25)');
+  light.addColorStop(0, 'rgba(8, 4, 12, .36)');
+  light.addColorStop(.35, 'rgba(40, 14, 8, .16)');
   light.addColorStop(1, 'rgba(255, 150, 60, .22)');
   c.fillStyle = light;
   c.fillRect(0, 0, width, height);
@@ -479,8 +480,62 @@ function drawLitDog(ctx, width, height, { x, y, scale, time, doorX }) {
   ctx.drawImage(dogLayer, 0, 0);
 }
 
+let grainPattern = null;
+
+// Granulado de filme e vinheta: unem o desenho a mesma textura dos cenarios pintados do jogo.
+function filmFinish(ctx, width, height) {
+  if (!grainPattern) {
+    const tile = document.createElement('canvas');
+    tile.width = 192;
+    tile.height = 192;
+    const t = tile.getContext('2d');
+    const image = t.createImageData(192, 192);
+    for (let index = 0; index < image.data.length; index += 4) {
+      const value = 128 + (hash(index / 4 % 192, Math.floor(index / 4 / 192), 3) - .5) * 120;
+      image.data[index] = image.data[index + 1] = image.data[index + 2] = value;
+      image.data[index + 3] = 255;
+    }
+    t.putImageData(image, 0, 0);
+    grainPattern = ctx.createPattern(tile, 'repeat');
+  }
+  ctx.save();
+  ctx.globalCompositeOperation = 'overlay';
+  ctx.globalAlpha = .42;
+  ctx.fillStyle = grainPattern;
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
+  const vignette = ctx.createRadialGradient(width / 2, height * .55, Math.min(width, height) * .25, width / 2, height * .55, Math.max(width, height) * .75);
+  vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  vignette.addColorStop(1, 'rgba(0, 0, 0, .5)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, width, height);
+}
+
+// Capa pintada opcional (assets/img/cover_art.png): se existir, ela substitui o cenario desenhado em codigo.
+let coverImage = null;
+function getCoverImage() {
+  if (coverImage === null && typeof Image === 'function') {
+    coverImage = new Image();
+    coverImage.src = './assets/img/cover_art.png';
+  }
+  return coverImage && coverImage.complete && coverImage.naturalWidth > 0 ? coverImage : null;
+}
+
 export function drawCoverArt(ctx, width, height, time = 0) {
   if (typeof document === 'undefined' || !width || !height) return;
+  const painted = getCoverImage();
+  if (painted) {
+    const scale = Math.max(width / painted.naturalWidth, height / painted.naturalHeight);
+    const w = painted.naturalWidth * scale;
+    const h = painted.naturalHeight * scale;
+    ctx.drawImage(painted, (width - w) / 2, (height - h) / 2, w, h);
+    const glow = ctx.createRadialGradient(width * .5, height * .6, 10, width * .5, height * .6, Math.max(width, height) * .7);
+    glow.addColorStop(0, `rgba(255, 150, 60, ${.05 + Math.sin(time / 700) * .02})`);
+    glow.addColorStop(1, 'rgba(0, 0, 0, .45)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, width, height);
+    return;
+  }
   const key = `${width}x${height}`;
   let base = staticCache.get(key);
   if (!base) {
@@ -511,4 +566,5 @@ export function drawCoverArt(ctx, width, height, time = 0) {
   // Neblina rente ao chao.
   ctx.fillStyle = linear(ctx, 0, height * .8, 0, height, [[0, 'rgba(0, 0, 0, 0)'], [1, 'rgba(0, 0, 0, .55)']]);
   ctx.fillRect(0, height * .8, width, height * .2);
+  filmFinish(ctx, width, height);
 }

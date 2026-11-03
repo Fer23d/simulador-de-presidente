@@ -3,12 +3,20 @@ import { createMissionLocation } from './missions.js';
 
 // A historia de Layd: ela passou tempo demais la fora, adoece depois de um ano e so uma serie de vacinas a salva.
 // Cada vacina e cada racao tirada do Vault custa a confianca do povo, e a desconfianca so cresce ate alguem descobrir.
-export const SICK_AFTER_MONTHS = 12;
+export const SICK_AFTER_MONTHS = 10;
 export const DOSES_NEEDED = 4;
-export const DOSE_SCRAP_COST = 40;
-export const RATION_SCRAP_COST = 30;
+export const DOSE_SCRAP_COST = 25;
+export const RATION_SCRAP_COST = 20;
 export const SUSPICION_LIMIT = 100;
-export const MISSION_GAP_MONTHS = 2;
+export const MISSION_GAP_MONTHS = 4;
+export const SYNTHETIC_VACCINE_SCRAP_COST = 70;
+export const INITIAL_RATION = 8;
+
+const HUNGER_HEALTH_LOSS = 5;
+const VISIBLE_SUSPICION_PER_MONTH = 6;
+const HIDDEN_SUSPICION_PER_MONTH = 3;
+const VACCINE_SUSPICION_GAIN = 4;
+const DIVERTED_FOOD_SUSPICION_GAIN = 10;
 const DIVERT_FOOD = 15;
 const DIVERT_RATIONS = 3;
 
@@ -21,7 +29,7 @@ export const LAYD_EVENTS = Object.freeze([
     description: 'No armário refrigerado do laboratório resta uma dose da vacina contra radiação. A enfermaria do Vault a reservou para um dos habitantes. Layd piorou esta semana: tosse, pelo caindo, as patas tremendo. Ninguém está olhando.',
     options: Object.freeze([
       Object.freeze({ id: 'divert-vaccine', label: '[ DESVIAR A VACINA PARA LAYD ]', effects: Object.freeze({ loyalty: -4 }), layd: Object.freeze({ vaccines: 1, suspicion: 14, choice: 'layd' }) }),
-      Object.freeze({ id: 'craft-vaccine', label: '[ SINTETIZAR UMA DOSE: 90 SUCATAS ]', cost: Object.freeze({ scrap: 90 }), effects: Object.freeze({}), layd: Object.freeze({ vaccines: 1, suspicion: 4, choice: 'layd' }) }),
+      Object.freeze({ id: 'craft-vaccine', label: `[ SINTETIZAR UMA DOSE: ${SYNTHETIC_VACCINE_SCRAP_COST} SUCATAS ]`, cost: Object.freeze({ scrap: SYNTHETIC_VACCINE_SCRAP_COST }), effects: Object.freeze({}), layd: Object.freeze({ vaccines: 1, suspicion: 4, choice: 'layd' }) }),
       Object.freeze({ id: 'deliver-vaccine', label: '[ ENTREGAR À ENFERMARIA DO VAULT ]', effects: Object.freeze({ loyalty: 8 }), layd: Object.freeze({ health: -8, suspicion: -8, choice: 'vault' }) }),
     ]),
   }),
@@ -30,8 +38,8 @@ export const LAYD_EVENTS = Object.freeze([
     title: 'A Ração de Layd',
     description: 'A lata de ração de Layd está vazia. Ela te olha da porta da despensa sem pedir nada, o que é pior. Há comida de sobra nas prateleiras, mas ela tem dono: o povo do Vault, que conta cada lata.',
     options: Object.freeze([
-      Object.freeze({ id: 'divert-ration', label: '[ SEPARAR RAÇÃO DO ESTOQUE ]', effects: Object.freeze({ food: -20, loyalty: -3 }), layd: Object.freeze({ ration: 4, suspicion: 10, choice: 'layd' }) }),
-      Object.freeze({ id: 'trade-ration', label: '[ COMPRAR RAÇÃO: 30 SUCATAS ]', cost: Object.freeze({ scrap: 30 }), effects: Object.freeze({}), layd: Object.freeze({ ration: 3, suspicion: 2, choice: 'layd' }) }),
+      Object.freeze({ id: 'divert-ration', label: '[ SEPARAR RAÇÃO DO ESTOQUE ]', effects: Object.freeze({ food: -20, loyalty: -3 }), layd: Object.freeze({ ration: 4, suspicion: 8, choice: 'layd' }) }),
+      Object.freeze({ id: 'trade-ration', label: `[ COMPRAR RAÇÃO: ${RATION_SCRAP_COST} SUCATAS ]`, cost: Object.freeze({ scrap: RATION_SCRAP_COST }), effects: Object.freeze({}), layd: Object.freeze({ ration: 3, suspicion: 2, choice: 'layd' }) }),
       Object.freeze({ id: 'share-ration', label: '[ DEIXAR A COMIDA PARA O POVO ]', effects: Object.freeze({ food: 20, loyalty: 6 }), layd: Object.freeze({ health: -10, suspicion: -4, choice: 'vault' }) }),
     ]),
   }),
@@ -92,7 +100,7 @@ export function applyVaccine(state, inClinic) {
   const cured = doses >= DOSES_NEEDED;
   let next = {
     ...patchCompanion(state, { vaccines: c.vaccines - 1, doses, lastDoseTurn: turn, health: cured ? 100 : clamp(c.health + 15, 0, 100),
-      suspicion: clamp(c.suspicion + 3, 0, 100), ...(cured ? { sick: false, cured: true } : {}) }),
+      suspicion: clamp(c.suspicion + VACCINE_SUSPICION_GAIN, 0, SUSPICION_LIMIT), ...(cured ? { sick: false, cured: true } : {}) }),
     scrap: (Number(state.scrap) || 0) - DOSE_SCRAP_COST,
   };
   next = { ...next, notice: cured
@@ -113,7 +121,7 @@ export function divertFood(state) {
   const food = Number(state.shelter_supplies?.food) || 0;
   if (food < DIVERT_FOOD) return { ...state, notice: 'Não há comida para desviar.' };
   const c = state.companion;
-  const next = { ...patchCompanion(state, { ration: clamp(c.ration + DIVERT_RATIONS, 0, 99), suspicion: clamp(c.suspicion + 6, 0, 100),
+  const next = { ...patchCompanion(state, { ration: clamp(c.ration + DIVERT_RATIONS, 0, 99), suspicion: clamp(c.suspicion + DIVERTED_FOOD_SUSPICION_GAIN, 0, SUSPICION_LIMIT),
     choices: { ...c.choices, layd: c.choices.layd + 1 } }),
   shelter_supplies: { ...state.shelter_supplies, food: food - DIVERT_FOOD } };
   return { ...shiftLoyalty(next, -2), notice: `Você escondeu ${DIVERT_FOOD} rações do estoque. Alguém contou as latas.` };
@@ -137,7 +145,7 @@ export function applyLaydEvent(previous, next, optionId) {
   const choices = patch.choice ? { ...c.choices, [patch.choice]: c.choices[patch.choice] + 1 } : c.choices;
   return patchCompanion(next, {
     ration: clamp(c.ration + (patch.ration ?? 0), 0, 99), vaccines: clamp(c.vaccines + (patch.vaccines ?? 0), 0, 99),
-    health: clamp(c.health + (patch.health ?? 0), 0, 100), suspicion: clamp(c.suspicion + (patch.suspicion ?? 0), 0, 100), choices,
+    health: clamp(c.health + (patch.health ?? 0), 0, 100), suspicion: clamp(c.suspicion + (patch.suspicion ?? 0), 0, SUSPICION_LIMIT), choices,
   });
 }
 
@@ -149,7 +157,7 @@ export function advanceLaydMonth(state) {
   const notes = [];
   let story = null;
   if (c.ration > 0) c.ration -= 1;
-  else { c.health -= 10; notes.push('> LAYD: passou fome este mês.'); }
+  else { c.health -= HUNGER_HEALTH_LOSS; notes.push('> LAYD: passou fome este mês.'); }
   if (!c.sick && !c.cured && turn - c.since >= SICK_AFTER_MONTHS) {
     c.sick = true;
     c.health = Math.min(c.health, 70);
@@ -159,7 +167,7 @@ export function advanceLaydMonth(state) {
     const dosedRecently = c.lastDoseTurn >= 0 && turn - c.lastDoseTurn <= 1;
     c.health += dosedRecently ? 3 : -6;
     if (!dosedRecently) notes.push('> LAYD: os sintomas pioram sem tratamento.');
-    c.suspicion += c.hidden ? 2 : 5;
+    c.suspicion += c.hidden ? HIDDEN_SUSPICION_PER_MONTH : VISIBLE_SUSPICION_PER_MONTH;
   } else {
     c.suspicion -= 2;
     if (c.ration > 0) c.health += 4;

@@ -35,7 +35,7 @@ export const PRESIDENT_SKINS = Object.freeze([
   skin({ id: 'business', name: 'Terno Pré-Guerra', cost: 6_000, rarity: 'common',
     filter: 'grayscale(.85) contrast(1.15)', tint: { blend: 'color', colors: ['#2b3a6b', '#1b2238'], alpha: .85 },
     accessory: 'tie', description: 'O último terno engomado do mundo. Ainda cheira a poder.' }),
-  skin({ id: 'hazmat', name: 'Traje Antirradiação', cost: 8_000, rarity: 'common',
+  skin({ id: 'hazmat', name: 'Traje Antirradiação', cost: 250, rarity: 'common',
     filter: 'grayscale(1) brightness(1.45) contrast(.9)', tint: { blend: 'multiply', colors: ['#ffe11a', '#f2b705'], alpha: 1 },
     pattern: 'hazmat', accessory: 'hazmat_hood',
     description: 'Macacão de borracha amarela selado, capuz com visor, respirador, fita de vedação e botas pretas. A radiação que se vire.' }),

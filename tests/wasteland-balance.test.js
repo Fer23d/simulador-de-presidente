@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGameState, hydrateGameState } from '../src/core/game-state.js';
-import { advanceWastelandMonth, transicionarParaWasteland } from '../src/core/wasteland.js';
+import { advanceWastelandMonth, SCRAP_BASE_MONTHLY_INCOME, transicionarParaWasteland } from '../src/core/wasteland.js';
 import { canResolveWastelandEvent, getWastelandEvent, resolveWastelandEvent } from '../src/core/game_mechanics.js';
 import { arriveAtMission } from '../src/core/missions.js';
 import { buildShelterRoom, repairShelterGenerator } from '../src/core/shelter_engine.js';
@@ -76,14 +76,14 @@ test('the single rebellion roll is 20 percent and a rebel only damages five scra
   const rebel = advanceWastelandMonth({ ...prepared, randomSeed: 1972,
     shelter_supplies: { food: 0, energy: 0 }, inhabitants: [target, ...others] });
   assert.equal(rebel.inhabitants[0].currentState, 'rebel');
-  assert.equal(rebel.scrap, prepared.scrap + 25 - 5);
+  assert.equal(rebel.scrap, prepared.scrap + SCRAP_BASE_MONTHLY_INCOME - 5);
 
   const next = advanceWastelandMonth({
     ...rebel,
     pendingExpeditionReports: [],
     shelter_supplies: { food: 100, energy: 100 },
   });
-  assert.equal(next.scrap, rebel.scrap + 25 - 5);
+  assert.equal(next.scrap, rebel.scrap + SCRAP_BASE_MONTHLY_INCOME - 5);
 });
 
 test('every third Wasteland month blocks further advancement until the dilemma is resolved', () => {

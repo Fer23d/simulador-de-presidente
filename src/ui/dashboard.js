@@ -1962,6 +1962,7 @@ export function mountDashboard(root) {
           darkMarket: isMarketOpen(state) ? state.dark_market : null,
           onMarket: openMarketPanel,
           companion: isLaydVisible(state),
+          laydSick: Boolean(state.companion?.sick),
           dog: bunkerSnapshot?.dog ?? null,
           onPet: () => playBark(),
           onPlayerChanged: (player) => {

@@ -12,6 +12,7 @@ const STRIDE = 13;
 const PET_RANGE = 80;
 const PET_SECONDS = 2.6;
 const SURFACE_FLOOR = -1;
+const INITIAL_RATION = 8;
 
 // Layd esta com o jogador enquanto estiver viva e nao tiver sido entregue ao Vault.
 export function hasLayd(state) {
@@ -25,7 +26,7 @@ export function isLaydVisible(state) {
 }
 
 export function createLaydCare(since = 0) {
-  return { status: 'ok', ration: 4, health: 100, sick: false, cured: false, doses: 0, vaccines: 0, lastDoseTurn: -1,
+  return { status: 'ok', ration: INITIAL_RATION, health: 100, sick: false, cured: false, doses: 0, vaccines: 0, lastDoseTurn: -1,
     hidden: false, suspicion: 0, choices: { layd: 0, vault: 0 }, lastMissionTurn: -1, since };
 }
 

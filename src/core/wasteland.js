@@ -22,6 +22,9 @@ import { createVaultCouncil, getNextCouncilEvent, getCouncilModifiers, isCouncil
 
 const VAULT_CASH_COST = 500_000_000_000;
 const VAULT_STEEL_COST = 50_000;
+export const SCRAP_BASE_MONTHLY_INCOME = 60;
+export const SCRAP_PER_GENERATOR_WORK_UNIT = 30;
+export const SCRAP_PER_OFFICE_LEVEL = 10;
 
 const FACTIONS = Object.freeze([
   { id: 'mutant-horde', name: 'Horda Mutante do Norte', relation: -60, militaryPower: 46 },
@@ -248,7 +251,8 @@ function advanceVaultMonth(state, dayIndex = 0) {
     energy: Math.min(getRoomStorageCapacity(grid, 'energy'), Math.max(0, (Number(state.shelter_supplies?.energy) || 0) + dayShare(energyProduction - energyConsumption, dayIndex))),
     oxygen: Math.min(oxygenCapacity, Math.max(0, (Number(state.shelter_supplies?.oxygen) || 0) + dayShare(oxygenProduction - oxygenConsumption, dayIndex))),
   };
-  const scrapGain = dayShare(25 + generatorWorkUnits * 15 + offices * 5, dayIndex);
+  const scrapGain = dayShare(SCRAP_BASE_MONTHLY_INCOME
+    + generatorWorkUnits * SCRAP_PER_GENERATOR_WORK_UNIT + offices * SCRAP_PER_OFFICE_LEVEL, dayIndex);
   const scienceGain = dayShare(scienceProduction, dayIndex);
   // Dia comum: so os recursos e o ar mudam. Necessidades, populacao, clima e eventos esperam o fechamento do mes.
   if (dayIndex && dayIndex < DAYS_PER_MONTH) {

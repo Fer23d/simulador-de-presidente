@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGameState, hydrateGameState, transicionarParaWasteland } from '../src/core/game-state.js';
 import { bunkerView } from '../src/ui/dashboard.js';
-import { advanceWastelandMonth } from '../src/core/wasteland.js';
+import { advanceWastelandMonth, SCRAP_BASE_MONTHLY_INCOME, SCRAP_PER_GENERATOR_WORK_UNIT } from '../src/core/wasteland.js';
 import {
   INITIAL_SHELTER_GRID,
   Inhabitant,
@@ -130,15 +130,15 @@ test('cliques convertem coordenadas da camara para a sala correta', () => {
 test('gerador precisa de reparo; upgrades geram beneficios persistentes', () => {
   const wasteland = transicionarParaWasteland(createGameState('bra'));
   const built = buildShelterRoom(wasteland, 'generator', 0, 2);
-  assert.equal(advanceWastelandMonth(built).scrap, built.scrap + 25);
+  assert.equal(advanceWastelandMonth(built).scrap, built.scrap + SCRAP_BASE_MONTHLY_INCOME);
   const repaired = repairShelterGenerator(built, 0, 2);
   assert.equal(repaired.scrap, built.scrap - 25);
-  assert.equal(advanceWastelandMonth(repaired).scrap, repaired.scrap + 40);
+  assert.equal(advanceWastelandMonth(repaired).scrap, repaired.scrap + SCRAP_BASE_MONTHLY_INCOME + SCRAP_PER_GENERATOR_WORK_UNIT);
   const readyToUpgrade = { ...repaired, scrap: 330 };
   const upgraded = upgradeShelterRoom(readyToUpgrade, 0, 2);
   assert.equal(getRoom(upgraded.shelter_grid, 0, 2).level, 2);
   assert.equal(upgraded.scrap, 0);
-  assert.equal(advanceWastelandMonth(upgraded).scrap, 55);
+  assert.equal(advanceWastelandMonth(upgraded).scrap, SCRAP_BASE_MONTHLY_INCOME + SCRAP_PER_GENERATOR_WORK_UNIT * 2);
 });
 
 test('saves antigos migram para a grelha lateral sem perder salas', () => {

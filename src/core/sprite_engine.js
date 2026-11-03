@@ -3,6 +3,7 @@ import { renderLootboxOverlay } from './lootbox_renderer.js';
 import { renderOilField, renderOilFieldOverlay } from './oil_renderer.js';
 import { renderFort, renderFortOverlay } from './defense_renderer.js';
 import { DOG_HEIGHT, drawDog, warmDogFrames } from './dog_renderer.js';
+import { gradeStructure } from './art.js';
 import { renderMarket, renderMarketOverlay } from './market_renderer.js';
 import { getPresidentClass, getSkin } from './player_state.js';
 import { hasReliableNightPower } from './environment.js';
@@ -50,7 +51,16 @@ export const DEFAULT_ASSETS = Object.freeze({
   // Forte externo em alta fidelidade; a guarnição continua renderizada por cima.
   surface_fort: './assets/img/surface_fort.png',
   loot_crate: './assets/img/loot_crate.svg',
+  // Arte pintada opcional: quando o arquivo existe ele substitui o desenho em codigo; sem ele o jogo usa o desenho.
+  layd_sheet: './assets/img/layd_sheet.png',
+  dark_market_stall: './assets/img/dark_market_stall.png',
+  dark_market_merchant: './assets/img/dark_market_merchant.png',
+  room_radiation_clinic: './assets/img/room_radiation_clinic.png',
+  cover_art: './assets/img/cover_art.png',
 });
+
+export const OPTIONAL_ASSETS = Object.freeze(new Set(['room_laboratory', 'room_life_support', 'room_radiation_clinic',
+  'layd_sheet', 'dark_market_stall', 'dark_market_merchant', 'cover_art']));
 
 export class AssetManager {
   constructor(urls = DEFAULT_ASSETS, ImageClass = globalThis.Image) {
@@ -63,10 +73,10 @@ export class AssetManager {
   async preload() {
     this.failedKeys = [];
     await Promise.all(Object.entries(this.urls).map(([key, url]) => new Promise((resolve) => {
-      if (!this.ImageClass || !url) { this.failedKeys.push(key); resolve(); return; }
+      if (!this.ImageClass || !url) { if (!OPTIONAL_ASSETS.has(key)) this.failedKeys.push(key); resolve(); return; }
       const image = new this.ImageClass();
       image.onload = () => { this.images.set(key, image); resolve(); };
-      image.onerror = () => { this.failedKeys.push(key); resolve(); };
+      image.onerror = () => { if (!OPTIONAL_ASSETS.has(key)) this.failedKeys.push(key); resolve(); };
       image.src = url;
     })));
     return this;
@@ -312,6 +322,7 @@ function renderCachedProceduralInterior(ctx, key, x, y, time, draw) {
     }
     buffer.clearRect(0, 0, SLOT_WIDTH, ROOM_HEIGHT);
     draw(buffer, 0, 0, frame * 100);
+    gradeStructure(canvas, frame % 7);
     cached = { canvas, frame };
     proceduralRoomFrameCache.set(key, cached);
   }
@@ -369,7 +380,7 @@ export function renderRoom(ctx, room, assets, time = 0) {
     drawOrMissing(ctx, atlas, x, y, SLOT_WIDTH, ROOM_HEIGHT,
       atlas ? [column * cellWidth, row * cellHeight, cellWidth, cellHeight] : null);
   }
-  if (room.type === 'radiation_clinic') renderCachedProceduralInterior(ctx, 'radiation_clinic', x, y, time, renderRadiationClinicDetails);
+  if (room.type === 'radiation_clinic' && !individual) renderCachedProceduralInterior(ctx, 'radiation_clinic', x, y, time, renderRadiationClinicDetails);
   renderRoomAmbientLight(ctx, room, x, y);
 }
 
@@ -2032,7 +2043,7 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
       soldierImage: assets.getImage('npc_walk_sheet'), fortImage: assets.getImage('surface_fort') });
     renderOilField(ctx, oilDerricks, { time, now: oilNow, language });
   }
-  if (darkMarket && surfaceVisible) renderMarket(ctx, darkMarket, { time, night: isNight, language });
+  if (darkMarket && surfaceVisible) renderMarket(ctx, darkMarket, { stallImage: assets.getImage('dark_market_stall'), merchantImage: assets.getImage('dark_market_merchant'), time, night: isNight, language });
   const atlas = assets.getImage('room_atlas');
   for (let floor = 0; floor < grid.length; floor++) {
     for (let column = 0; column < grid[floor].length; column++) {
@@ -2105,7 +2116,7 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
   const playerY = placement.floorY;
   drawPresident(ctx, { ...player, y: playerY, role: 'president' }, assets,
     { presidentClass, equippedSkin, time, placement });
-  if (companion) drawCompanion(ctx, companion, grid, time, placement.height, player);
+  if (companion) drawCompanion(ctx, companion, grid, time, placement.height, player, assets.getImage('layd_sheet'));
   for (const room of grid.flat()) {
     if (!room) continue;
     const x = WORLD_LEFT + room.column * SLOT_WIDTH;
@@ -2132,18 +2143,18 @@ export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitan
 }
 
 // Layd acompanha o presidente: mesma regra de chao dos habitantes, tamanho proporcional a um cao de verdade.
-function drawCompanion(ctx, dog, grid, time, humanHeight, player) {
+function drawCompanion(ctx, dog, grid, time, humanHeight, player, sheet = null) {
   warmDogFrames(humanHeight * .31 / DOG_HEIGHT);
   if (dog.riding) {
     const cabin = getActorPlacement({ floor: player.floor, column: 0, type: 'elevator' }, { liftY: player.y });
-    drawDog(ctx, { x: dog.x, y: cabin.floorY, facing: dog.facing, scale: humanHeight * .31 / DOG_HEIGHT, pose: 'stand', time });
+    drawDog(ctx, { x: dog.x, y: cabin.floorY, facing: dog.facing, scale: humanHeight * .31 / DOG_HEIGHT, pose: 'stand', time, sheet, sick: dog.sick });
     return;
   }
   const column = Math.max(0, Math.min((grid[dog.floor]?.length ?? 1) - 1, Math.floor((dog.x - WORLD_LEFT) / SLOT_WIDTH)));
   const room = grid[dog.floor]?.[column] ?? { floor: dog.floor, column, type: 'vault' };
   const placement = getActorPlacement(room);
   drawDog(ctx, { x: dog.x, y: placement.floorY, facing: dog.facing, scale: humanHeight * .31 / DOG_HEIGHT,
-    pose: dog.pose, gait: dog.gait, time, happy: dog.petSeconds > 0 });
+    pose: dog.pose, gait: dog.gait, time, happy: dog.petSeconds > 0, sheet, sick: dog.sick });
 }
 
 function steelGradient(ctx, x0, y0, x1, y1, fallback) {

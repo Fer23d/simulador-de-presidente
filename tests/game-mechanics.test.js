@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGameState } from '../src/core/game-state.js';
-import { advanceWastelandMonth, transicionarParaWasteland } from '../src/core/wasteland.js';
+import { advanceWastelandMonth, SCRAP_BASE_MONTHLY_INCOME, transicionarParaWasteland } from '../src/core/wasteland.js';
 import { buildShelterRoom } from '../src/core/shelter_engine.js';
 import { advanceMonthlyGameMechanics, arrestNPC, calculateSuppression, calculateSuppressedChance, detainRebel, dismissExpeditionReport, getWastelandEvent, releaseNPC, resolveWastelandEvent, startExpedition } from '../src/core/game_mechanics.js';
 import { arriveAtMission } from '../src/core/missions.js';
@@ -42,7 +42,7 @@ test('a successful expedition returns after three turns and pauses for loot coll
 
   assert.equal(state.inhabitants[0].is_on_expedition, false);
   assert.equal(state.inhabitants[0].expedition_timer, 0);
-  assert.equal(state.scrap, 325);
+  assert.equal(state.scrap, wastelandState().scrap + SCRAP_BASE_MONTHLY_INCOME * 3);
   assert.equal(state.technology.points, 0);
   assert.equal(state.pendingLoot, true);
   assert.equal(state.currentLoot.length, 3);
@@ -129,7 +129,7 @@ test('zero food or energy reduces loyalty gradually without an automatic rebelli
 
   assert.equal(result.inhabitants[0].loyalty, 20);
   assert.notEqual(result.inhabitants[0].currentState, 'rebel');
-  assert.equal(result.scrap, state.scrap + 25);
+  assert.equal(result.scrap, state.scrap + SCRAP_BASE_MONTHLY_INCOME);
 });
 
 test('three operational generators prevent nighttime rebellion and sabotage odds from doubling', () => {
@@ -218,7 +218,7 @@ test('a rebel can be detained only after building a detention cell and then stop
   assert.equal(prisoner.currentState, 'idle');
   assert.equal(prisoner.floor, 0);
   assert.equal(prisoner.column, 2);
-  assert.equal(nextMonth.scrap, detained.scrap + 25);
+  assert.equal(nextMonth.scrap, detained.scrap + SCRAP_BASE_MONTHLY_INCOME);
 });
 
 test('arrest remembers the workplace and frees its production assignment', () => {
