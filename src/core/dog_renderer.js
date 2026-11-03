@@ -487,6 +487,15 @@ function cellBounds(sheet, col, row) {
   return bounds;
 }
 
+function rowBottom(sheet, row) {
+  let bottom = 0;
+  for (let col = 0; col < SHEET_COLS; col++) {
+    const bounds = cellBounds(sheet, col, row);
+    bottom = Math.max(bottom, bounds.y + bounds.h);
+  }
+  return bottom;
+}
+
 function sheetFrame(pose, gait, happy, sick) {
   if (pose === 'walk' || pose === 'run') {
     const frame = Math.floor((((gait / (Math.PI * 2)) % 1) + 1) % 1 * SHEET_COLS) % SHEET_COLS;
@@ -504,7 +513,7 @@ function drawDogSheet(ctx, sheet, { x, y, facing, scale, pose, gait, happy, sick
   const bounds = cellBounds(sheet, col, row);
   // A cadela em pe define a escala: todos os quadros usam a mesma proporcao de pixels por unidade.
   const reference = cellBounds(sheet, 0, 2);
-  const k = DOG_HEIGHT * 1.12 * scale / reference.h;
+  const k = DOG_HEIGHT * 1.5 * scale / reference.h;
   ctx.save();
   ctx.translate(x, y);
   if (shadow) {
@@ -515,8 +524,10 @@ function drawDogSheet(ctx, sheet, { x, y, facing, scale, pose, gait, happy, sick
   }
   ctx.scale(facing, 1);
   ctx.imageSmoothingEnabled = true;
+  // Os pes ficam na linha mais baixa da propria fileira (nao na borda da celula) e o corpo na coluna do centro da celula.
+  const base = rowBottom(sheet, row);
   ctx.drawImage(sheet, col * cw + bounds.x, row * ch + bounds.y, bounds.w, bounds.h,
-    -(bounds.x + bounds.w / 2 - cw / 2) * k - cw * k / 2 + (cw / 2 - cw / 2), -(ch - bounds.y) * k, bounds.w * k, bounds.h * k);
+    (bounds.x - cw / 2) * k, (bounds.y - base) * k, bounds.w * k, bounds.h * k);
   ctx.restore();
 }
 

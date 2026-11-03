@@ -14,7 +14,7 @@ const RES = 2;
 let cache = null;
 
 export function getMarketRect() {
-  return { x: MARKET_X - 118 * SCALE, y: GROUND_Y - 124 * SCALE, width: 236 * SCALE, height: 132 * SCALE, centerX: MARKET_X, groundY: GROUND_Y };
+  return { x: MARKET_X - 145 * SCALE, y: GROUND_Y - 145 * SCALE, width: 290 * SCALE, height: 145 * SCALE, centerX: MARKET_X, groundY: GROUND_Y };
 }
 
 export function isMarketAt(worldX, worldY) {
@@ -285,6 +285,25 @@ function drawMerchant(ctx, time) {
   ctx.restore();
 }
 
+// Com a banca pintada, a lanterna e os potes ja estao na imagem: so o brilho respira por cima.
+function drawPaintedGlow(ctx, time, night) {
+  const flicker = .85 + Math.sin(time / 80) * .08 + Math.sin(time / 31) * .05;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const radius = (night ? 120 : 64) * flicker;
+  const lamp = ctx.createRadialGradient(70, -62, 2, 70, -62, radius);
+  lamp.addColorStop(0, `rgba(255, 170, 70, ${night ? .5 : .22})`);
+  lamp.addColorStop(1, 'rgba(255, 120, 40, 0)');
+  ctx.fillStyle = lamp;
+  ctx.fillRect(70 - radius, -62 - radius, radius * 2, radius * 2);
+  const jar = ctx.createRadialGradient(-45, -92, 1, -45, -92, 44);
+  jar.addColorStop(0, `rgba(120, 255, 110, ${(night ? .35 : .14) * (.8 + Math.sin(time / 500) * .2)})`);
+  jar.addColorStop(1, 'rgba(120, 255, 110, 0)');
+  ctx.fillStyle = jar;
+  ctx.fillRect(-95, -140, 100, 100);
+  ctx.restore();
+}
+
 function drawLantern(ctx, time, night) {
   const x = -60;
   const y = -86;
@@ -332,9 +351,9 @@ export function renderMarket(ctx, market, { time = 0, night = false, language = 
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(stallImage, -width / 2, -height + 4, width, height);
     if (merchantImage?.width > 0 && merchantImage?.height > 0) {
-      const merchantHeight = 82 + Math.sin(time / 900) * .8;
+      const merchantHeight = 104 + Math.sin(time / 900) * .8;
       const merchantWidth = merchantHeight * merchantImage.width / merchantImage.height;
-      ctx.drawImage(merchantImage, -10 - merchantWidth / 2, -30 - merchantHeight, merchantWidth, merchantHeight);
+      ctx.drawImage(merchantImage, -176 - merchantWidth / 2, 3 - merchantHeight, merchantWidth, merchantHeight);
     }
   } else if (sprite) {
     ctx.imageSmoothingEnabled = true;
@@ -343,7 +362,7 @@ export function renderMarket(ctx, market, { time = 0, night = false, language = 
     drawStatic(ctx, language);
     drawMerchant(ctx, time);
   }
-  drawLantern(ctx, time, night);
+  if (painted) drawPaintedGlow(ctx, time, night); else drawLantern(ctx, time, night);
   ctx.restore();
 }
 
