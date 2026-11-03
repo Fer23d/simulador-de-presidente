@@ -13,6 +13,10 @@ const SPEED_LABELS = Object.freeze({ 0: '⏸', 1: '▶', 2: '▶▶', 3: '▶▶
 const CITY_ZOOM_MIN = 1.25;
 const CITY_ZOOM_MAX = 2.8;
 const CITY_ZOOM_STEP = 0.15;
+// A cidade é uma cena de estratégia, não um jogo de ação. Trinta frames por
+// segundo preservam poeira, luzes e cidadãos animados, mas cortam pela metade
+// o custo do Canvas quando a simulação está aberta.
+const CITY_RENDER_INTERVAL_MS = 1000 / 30;
 
 export function cityClockText(city) {
   const date = getCityDate(city);
@@ -141,6 +145,7 @@ export function createCityController(root, { getState, onChange, onSound = () =>
   let destroyed = false;
   let lastSave = 0;
   let lastMessage = '';
+  let lastFrameTime = -Infinity;
   let zoom = CITY_DEFAULT_ZOOM;
   let camera = getCityCamera(zoom);
 
@@ -278,9 +283,12 @@ export function createCityController(root, { getState, onChange, onSound = () =>
 
   function frame(time) {
     if (destroyed) return;
-    const current = city();
-    const canPlace = hover && tool && tool !== 'demolish' ? canPlaceAt(current, tool, hover.x, hover.y).ok : true;
-    renderCity(ctx, current, analysis, { time, hover, tool, canPlace, zoom, camera, language });
+    if (time - lastFrameTime >= CITY_RENDER_INTERVAL_MS) {
+      const current = city();
+      const canPlace = hover && tool && tool !== 'demolish' ? canPlaceAt(current, tool, hover.x, hover.y).ok : true;
+      renderCity(ctx, current, analysis, { time, hover, tool, canPlace, zoom, camera, language });
+      lastFrameTime = time;
+    }
     frameId = requestAnimationFrame(frame);
   }
 
