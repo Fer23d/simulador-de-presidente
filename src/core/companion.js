@@ -75,7 +75,7 @@ export function canPetDog(dog, player) {
 export function updateDogActor(dog, player, deltaSeconds, {
   elevatorX = null, bounds = null, surfaceBounds = null, marketX = null,
 } = {}) {
-  const dt = Math.max(0, Math.min(.05, Number(deltaSeconds) || 0));
+  const dt = Math.max(0, Math.min(.1, Number(deltaSeconds) || 0));
   const next = { ...dog };
   next.petSeconds = Math.max(0, (dog.petSeconds || 0) - dt);
   if (player.liftTarget !== null && player.liftTarget !== undefined) {

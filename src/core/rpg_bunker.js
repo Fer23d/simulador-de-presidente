@@ -27,7 +27,7 @@ export const SURFACE_FLOOR = -1;
 export const SURFACE_GROUND_Y = WORLD_TOP - 30;
 const SURFACE_MAX_X = 1160;
 const MARKET_REACH = 120;
-const MAX_SIMULATION_STEP = 1 / 30;
+const MAX_SIMULATION_STEP = 0.1;
 const SURFACE_DOG_BOUNDS = Object.freeze({ min: WORLD_LEFT + 20, max: SURFACE_MAX_X - 20 });
 
 function groundYFor(floor) {
@@ -157,7 +157,7 @@ export function findNearbyRebel(player, grid, inhabitants = [], language = 'pt-B
 }
 
 export function updatePlayer(player, input, grid, deltaSeconds, oxygenDeprived = false) {
-  const dt = Math.max(0, Math.min(0.05, Number(deltaSeconds) || 0));
+  const dt = Math.max(0, Math.min(0.1, Number(deltaSeconds) || 0));
   const movementScale = oxygenDeprived ? 0.5 : 1;
   const next = { ...player };
   next.liftHeld = Boolean(input.up || input.down);
@@ -340,8 +340,13 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   let dog = companion ? (savedDog ?? createDogActor(player)) : null;
 
   function savePlayer() { onPlayerChanged?.({ ...player, vx: 0, vy: 0, liftTarget: null }); }
+  // F3 mostra quadros por segundo e quanto custa desenhar: serve para diagnosticar lentidao em qualquer computador.
+  let perfOn = false;
+  let perfFps = 60;
+  let perfDrawMs = 0;
   function frame(time) {
     if (destroyed) return;
+    const frameStart = performance.now();
     // A aba pode atrasar um frame; limitar o passo evita saltos e filas de trabalho.
     const rawDt = lastTime ? (time - lastTime) / 1000 : 0;
     const dt = Math.max(0, Math.min(MAX_SIMULATION_STEP, Number.isFinite(rawDt) ? rawDt : 0));
@@ -404,6 +409,17 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
     }
+    if (perfOn) {
+      perfDrawMs += (performance.now() - frameStart - perfDrawMs) * .1;
+      if (dt > 0) perfFps += (1 / dt - perfFps) * .1;
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 0, 0, .65)';
+      ctx.fillRect(6, 6, 238, 22);
+      ctx.fillStyle = perfFps < 30 ? '#ff7a5a' : '#8dff9a';
+      ctx.font = 'bold 12px monospace';
+      ctx.fillText('FPS ' + Math.round(perfFps) + '  ·  DESENHO ' + perfDrawMs.toFixed(1) + ' ms  ·  F3', 12, 21);
+      ctx.restore();
+    }
     const rebel = paused || buildMode ? null : findNearbyRebel(player, grid, actors, language);
     const nearbyInhabitant = paused || buildMode ? null : trackNearbyInhabitant(player, grid, actors, time);
     const nearbyRoom = nearbyInhabitant && getRoom(grid, nearbyInhabitant.npc.floor, nearbyInhabitant.npc.column);
@@ -452,6 +468,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   }
   function keydown(event) {
     const key = event.key.toLowerCase();
+    if (key === 'f3' && !editable()) { perfOn = !perfOn; event.preventDefault(); return; }
     if (dialogueNpc) {
       if (key === 'e' || key === ' ' || key === 'spacebar') {
         event.preventDefault();

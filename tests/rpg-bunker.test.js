@@ -216,3 +216,16 @@ test('daily dialogue cooldown persists with the game save', () => {
   assert.equal(restored.inhabitants[0].lastTalkedDay, 8);
   assert.equal(restored.inhabitants[0].revoltChance, 5);
 });
+
+test('walking speed stays real-time even when the game runs at 10 FPS', () => {
+  const grid = expandedGrid();
+  const start = createRpgPlayer(grid);
+  const distance = (frames, dt) => {
+    let player = { ...start };
+    for (let index = 0; index < frames; index++) player = updatePlayer(player, { right: true }, grid, dt);
+    return player.x - start.x;
+  };
+  const sixty = distance(60, 1 / 60);
+  assert.ok(Math.abs(distance(20, 1 / 20) - sixty) < 0.5, '20 FPS covers the same distance per second');
+  assert.ok(Math.abs(distance(10, 1 / 10) - sixty) < 0.5, '10 FPS covers the same distance per second');
+});
