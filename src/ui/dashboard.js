@@ -55,9 +55,8 @@ import { DIALOGUE_CHAR_INTERVAL_MS, isDialogueTextComplete, renderDialogueView }
 import { equipSkin, getPresidentClassModifiers, getSkin, isSkinAvailableForClass, isSkinRequirementMet, PRESIDENT_CLASSES, PRESIDENT_SKINS, purchaseSkin, SKIN_RARITIES, startGame } from '../core/player_state.js';
 import { createEntitlements, getActiveTrial, startSkinTrial } from '../core/store.js';
 import { AssetManager, DEFAULT_ASSETS, drawSkinPreview } from '../core/sprite_engine.js';
-import { createOnboarding, getBootTips, getStoryScenes, guessLanguage, MIN_BOOT_MS, onboardingText, ONBOARDING_KEY } from '../core/onboarding.js';
-import { drawCoverArt } from '../core/cover_art.js';
-import { bootScreenView, profileOnboardingView, storyOnboardingView } from './onboarding_ui.js';
+import { createOnboarding, getStoryScenes, guessLanguage, onboardingText, ONBOARDING_KEY } from '../core/onboarding.js';
+import { profileOnboardingView, storyOnboardingView } from './onboarding_ui.js';
 import {
   advanceMonth,
   advanceDay,
@@ -1247,12 +1246,16 @@ export function mountDashboard(root) {
   let titleView = 'main';
   let onboarding = (() => { try { return createOnboarding(JSON.parse(localStorage.getItem(ONBOARDING_KEY) ?? '{}')); } catch { return createOnboarding(); } })();
   const saveOnboarding = () => { try { localStorage.setItem(ONBOARDING_KEY, JSON.stringify(onboarding)); } catch { /* so nesta sessao */ } };
+  if (!onboarding.profileDone && typeof navigator !== 'undefined') {
+    const language = guessLanguage(navigator.language);
+    if (language !== state.playerProfile?.language) {
+      state = updatePlayerProfile(state, { language });
+      persistState(state);
+    }
+  }
   let afterProfile = 'new';
   let storyIndex = 0;
   let storyReplay = false;
-  let bootStarted = false;
-  let bootReady = false;
-  let coverFrame = null;
   const uiLanguage = () => state.playerProfile?.language ?? 'pt-BR';
   let titleAshFrame = null;
   const titleScreen = document.createElement('div');
@@ -1320,11 +1323,7 @@ export function mountDashboard(root) {
     titleScreen.dataset.view = titleView;
     const language = uiLanguage();
     const settings = audio.settings ?? {};
-    if (titleView === 'boot') {
-      if (viewChanged) titleScreen.innerHTML = bootScreenView({ language, tip: getBootTips(language)[0], progress: 0, ready: bootReady });
-      if (!bootStarted) startBoot();
-      if (viewChanged) animateCover();
-    } else if (titleView === 'profile') {
+    if (titleView === 'profile') {
       titleScreen.innerHTML = profileOnboardingView({ language, name: state.playerProfile?.name ?? '', volume: settings.volume ?? .7, muted: Boolean(settings.muted),
         tutorialEnabled: tutorial.enabled, backAction: afterProfile === 'continue' ? '' : 'main' });
     } else if (titleView === 'story') {
@@ -1343,75 +1342,6 @@ export function mountDashboard(root) {
     syncAudioMood();
     updateTutorial();
     root.querySelector('button, canvas')?.focus();
-  }
-
-  // Capa: a arte do Vault anima enquanto os recursos carregam; no fim, qualquer tecla abre o menu.
-  function animateCover() {
-    const canvas = titleScreen.querySelector('.cover-art');
-    if (!canvas || typeof requestAnimationFrame !== 'function') return;
-    if (coverFrame !== null) cancelAnimationFrame(coverFrame);
-    const ctx = canvas.getContext('2d');
-    const frame = (time) => {
-      if (!titleOpen || titleView !== 'boot' || !canvas.isConnected) { coverFrame = null; return; }
-      const width = Math.min(1280, canvas.clientWidth || 960);
-      const height = Math.round(width * (canvas.clientHeight || 600) / (canvas.clientWidth || 960));
-      if (canvas.width !== width) canvas.width = width;
-      if (canvas.height !== height) canvas.height = height;
-      drawCoverArt(ctx, width, height, time);
-      coverFrame = requestAnimationFrame(frame);
-    };
-    coverFrame = requestAnimationFrame(frame);
-  }
-
-  function startBoot() {
-    bootStarted = true;
-    // Primeira vez: sugere o idioma do navegador antes de mostrar qualquer texto.
-    if (!onboarding.profileDone && typeof navigator !== 'undefined') {
-      const guess = guessLanguage(navigator.language);
-      if (guess !== uiLanguage()) commit(updatePlayerProfile(state, { language: guess }));
-    }
-    const language = uiLanguage();
-    const tips = getBootTips(language);
-    const urls = Object.values(DEFAULT_ASSETS);
-    let loaded = 0;
-    const started = performance.now();
-    const settle = () => { loaded += 1; };
-    if (typeof Image === 'function') {
-      for (const url of urls) {
-        const image = new Image();
-        image.onload = settle;
-        image.onerror = settle;
-        image.src = url;
-      }
-    } else loaded = urls.length;
-    const tick = () => {
-      const bar = titleScreen.querySelector('[data-boot-fill]');
-      if (titleView !== 'boot') return;
-      const elapsed = performance.now() - started;
-      const real = urls.length ? loaded / urls.length : 1;
-      const progress = Math.min(real, elapsed / MIN_BOOT_MS);
-      const percent = Math.round(progress * 100);
-      if (bar) bar.style.width = percent + '%';
-      const label = titleScreen.querySelector('[data-boot-label]');
-      const number = titleScreen.querySelector('[data-boot-percent]');
-      const tip = titleScreen.querySelector('[data-boot-tip]');
-      if (number) number.textContent = percent + '%';
-      if (tip) tip.textContent = tips[Math.floor(elapsed / 1400) % tips.length];
-      if (progress >= 1) {
-        bootReady = true;
-        if (label) label.textContent = onboardingText(language, 'ready');
-        titleScreen.querySelector('.title-boot')?.setAttribute('data-boot-ready', '1');
-        return;
-      }
-      window.setTimeout(tick, 60);
-    };
-    tick();
-  }
-
-  function leaveBoot() {
-    if (titleView !== 'boot' || !bootReady) return;
-    titleView = 'main';
-    renderTitle();
   }
 
   function startNewGame() {
@@ -1438,7 +1368,6 @@ export function mountDashboard(root) {
   }
 
   titleScreen.addEventListener('click', (event) => {
-    if (titleView === 'boot') { leaveBoot(); return; }
     const action = event.target.closest('[data-title-action]')?.dataset.titleAction;
     if (!action) return;
     if (action === 'continue') {
@@ -1515,10 +1444,6 @@ export function mountDashboard(root) {
   });
 
   document.addEventListener('keydown', (event) => {
-    if (titleOpen && titleView === 'boot') {
-      if (!['Shift', 'Control', 'Alt', 'Meta', 'Tab'].includes(event.key)) leaveBoot();
-      return;
-    }
     if (titleOpen && titleView === 'story' && event.key === 'Escape') { finishStory(); return; }
     if (titleOpen && ['options', 'credits', 'confirm-new'].includes(titleView) && event.key === 'Escape') {
       titleView = 'main';
