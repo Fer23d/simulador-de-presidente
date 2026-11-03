@@ -564,8 +564,6 @@ export function drawCoverArt(ctx, width, height, time = 0) {
     // A capa é exclusivamente baseada no asset pintado. Nunca mostrar a
     // antiga arte procedural enquanto o PNG ainda está a carregar ou falha.
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = '#0a0604';
-    ctx.fillRect(0, 0, width, height);
     return;
   }
   drawPaintedCover(ctx, painted, width, height, time);

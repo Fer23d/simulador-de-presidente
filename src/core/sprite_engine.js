@@ -114,18 +114,36 @@ export class AssetManager {
   }
 
   async preload() {
+    if (this.preloadPromise) return this.preloadPromise;
     this.failedKeys = [];
-    await Promise.all(Object.entries(this.urls).map(([key, url]) => new Promise((resolve) => {
+    this.preloadPromise = Promise.all(Object.entries(this.urls).map(([key, url]) => new Promise((resolve) => {
       if (!this.ImageClass || !url) { if (!OPTIONAL_ASSETS.has(key)) this.failedKeys.push(key); resolve(); return; }
       const image = new this.ImageClass();
       image.onload = () => { this.images.set(key, prescaleImage(image, PRESCALE[key])); resolve(); };
       image.onerror = () => { if (!OPTIONAL_ASSETS.has(key)) this.failedKeys.push(key); resolve(); };
       image.src = url;
     })));
+    await this.preloadPromise;
     return this;
   }
 
   getImage(key) { return this.images.get(key) ?? null; }
+}
+
+// O dashboard recria o controlador do Vault quando um modal ou uma ação muda
+// o estado. Reutilizar o mesmo preload evita baixar e reduzir dezenas de PNGs
+// novamente a cada clique.
+const SHARED_ASSET_MANAGERS = new Map();
+
+export function getSharedAssetManager(urls = DEFAULT_ASSETS) {
+  const manifest = Object.entries(urls).sort(([a], [b]) => a.localeCompare(b));
+  const key = JSON.stringify(manifest);
+  let manager = SHARED_ASSET_MANAGERS.get(key);
+  if (!manager) {
+    manager = new AssetManager(urls);
+    SHARED_ASSET_MANAGERS.set(key, manager);
+  }
+  return manager;
 }
 
 function drawOrMissing(ctx, image, x, y, width, height, crop = null) {

@@ -21,6 +21,7 @@
 * { box-sizing: border-box; }
 html { background: var(--void); }
 body { min-width: 320px; margin: 0; background: var(--void); color: var(--phosphor); font-size: 16px; text-shadow: 0 0 5px rgba(141, 255, 174, .33); }
+#app:empty { min-height: 100vh; background: url('./img/cover_art.png') center / cover no-repeat; }
 body::selection { background: var(--phosphor); color: var(--void); text-shadow: none; }
 .wasteland-mode { --void: #120b06; --screen: #21130a; --panel: #2a180b; --line: #8a4d1f; --line-hot: #ff9d3d; --phosphor: #ffb347; --cyan: #ffd27a; --amber: #ff7a18; --danger: #ff3d21; --muted: #c17b45; --quiet: #75401f; --shadow: #050201; background: var(--void); color: var(--phosphor); text-shadow: 0 0 5px rgba(255, 157, 61, .42); }
 .wasteland-mode .brand-mark { border-color: var(--phosphor); color: var(--phosphor); box-shadow: 4px 4px 0 var(--shadow), inset 0 0 12px rgba(255, 157, 61, .24); }
@@ -159,7 +160,7 @@ body.theme-wasteland .sidebar { background: var(--screen); }
 .oil-upgrade small { font-size: 12px; opacity: .85; }
 .oil-max { align-self: center; color: #ffb000; font: 11px 'Press Start 2P', monospace; }
 @media (max-width: 560px) { .oil-header { grid-template-columns: 1fr; justify-items: center; text-align: center; } }
-.title-screen { position: fixed; z-index: 10050; inset: 0; display: grid; place-items: center; padding: 24px 16px; overflow: auto; background: radial-gradient(ellipse at 50% 38%, rgba(255, 128, 0, .2), transparent 58%), linear-gradient(#0d0703, #030201 70%); color: #ffcf7a; font-family: 'Share Tech Mono', monospace; }
+.title-screen { position: fixed; z-index: 10050; inset: 0; display: grid; place-items: center; padding: 24px 16px; overflow: auto; background: url('./img/cover_art.png') center / cover no-repeat; color: #ffcf7a; font-family: 'Share Tech Mono', monospace; }
 .title-screen::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(transparent 0 3px, rgba(0, 0, 0, .28) 3px 4px); }
 .title-ash { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .title-content { position: relative; z-index: 1; display: grid; justify-items: center; gap: 14px; width: min(520px, 100%); text-align: center; }
@@ -938,7 +939,7 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 
 /* Entrada: capa, carregamento, perfil e historia */
 .title-boot { place-items: end center; padding-bottom: 6vh; }
-.cover-art { position: absolute; inset: 0; width: 100%; height: 100%; }
+.cover-art { position: absolute; inset: 0; width: 100%; height: 100%; background: transparent; }
 .boot-content { width: min(560px, 100%); }
 .boot-loader { display: grid; gap: 8px; width: 100%; margin-top: 8px; }
 .boot-label { display: flex; justify-content: space-between; font-size: 12px; letter-spacing: .12em; }

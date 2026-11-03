@@ -1170,14 +1170,18 @@ export function mountDashboard(root) {
   };
   let state = localCityPreview ? createLocalCityPreview() : loadState();
   const persistState = (nextState) => localCityPreview ? '' : saveState(nextState);
+  // A interface principal é recriada por estado. Traduzimos somente os blocos
+  // que acabaram de ser renderizados; observar o body inteiro fazia cada troca
+  // de texto disparar outra varredura completa e deixava o modo Presidente lento.
   const localizeDocument = () => {
-    if (typeof document !== 'undefined' && document.body) translateDom(document.body, getUiLanguage(state));
+    if (typeof document === 'undefined' || !document.body) return;
+    const language = getUiLanguage(state);
+    // O catálogo já nasce em português. Evite varrer o DOM inteiro no idioma
+    // padrão a cada mês, clique ou atualização de modal.
+    if (language === 'pt-BR') return;
+    translateDom(root, language);
+    document.body.querySelectorAll('[role="presentation"]').forEach((modal) => translateDom(modal, language));
   };
-  const translationObserver = typeof MutationObserver !== 'undefined' && typeof document !== 'undefined' && document.body
-    ? new MutationObserver(() => localizeDocument()) : null;
-  // Traduzimos novos blocos DOM, mas não observamos cada caractere: isso evita
-  // que o efeito de máquina de escrever do diálogo provoque trabalho por frame.
-  translationObserver?.observe(document.body, { childList: true, subtree: true });
   let activeTab = 'overview';
   let storageNotice = '';
   let diplomacyQuery = '';
@@ -1901,7 +1905,6 @@ export function mountDashboard(root) {
       ${state.notice === STORY_NOTICE ? `<p class="storage-notice story-notification" role="status">${STORY_NOTICE}</p>` : ''}
       <section class="content-area">${content}</section>${renderNews(state)}
     </section></div>`;
-    localizeDocument();
     if (state.city) {
       cityController = createCityController(root, {
         getState: () => state,
@@ -2143,6 +2146,7 @@ export function mountDashboard(root) {
       if (historyLog) historyLog.scrollTop = historyLog.scrollHeight;
     }
     if (activeTab === 'diplomacy') filterDiplomacyRows(root, diplomacyQuery);
+    localizeDocument();
   }
 
   function startFalloutCinematicIfNeeded() {

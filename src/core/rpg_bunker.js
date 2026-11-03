@@ -7,7 +7,7 @@ import { findOilDerrickAt } from './oil_renderer.js';
 import { isFortAt } from './defense_renderer.js';
 import { isMarketAt, MARKET_X } from './market_renderer.js';
 import { hasMarketSuit } from './market.js';
-import { AssetManager, DEFAULT_ASSETS, drawNeedsPanel, getActorPlacement, renderSpriteScene } from './sprite_engine.js';
+import { DEFAULT_ASSETS, drawNeedsPanel, getActorPlacement, getSharedAssetManager, renderSpriteScene } from './sprite_engine.js';
 import { isLootboxCrateClick } from './lootbox_renderer.js';
 import { Inhabitant } from './inhabitant.js';
 import { canPetDog, createDogActor, petDog, updateDogActor } from './companion.js';
@@ -309,7 +309,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   onDialogue, onDialogueAdvance, onDialogueClose, oilDerricks = null, oilFeedback = null, onOilDerrick, surfaceFort = null, onFort, companion = false, dog: savedDog = null, onPet, darkMarket = null, onMarket, escape = null, onEscape, playerName = '', language = 'pt-BR', laydSick = false } = {}) {
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
-  const assets = new AssetManager({ ...DEFAULT_ASSETS, ...assetUrls });
+  const assets = getSharedAssetManager({ ...DEFAULT_ASSETS, ...assetUrls });
   let player = normalizeRpgPlayer(savedPlayer, grid);
   let cabinFloor = Number.isInteger(savedCabinFloor) && getRoom(grid, savedCabinFloor, 0)?.type === 'elevator'
     ? savedCabinFloor : player.floor;
