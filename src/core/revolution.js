@@ -9,24 +9,24 @@ function targetForAbsorption(state, targetId) {
 export function decretarRevolucaoSocialista(state) {
   const factions = state.factions ?? {};
   if (state.regime?.gameOver) return { ...state, notice: 'A partida foi encerrada.' };
-  if (state.regime?.type === 'communist_dictatorship') return { ...state, notice: 'A revolucao socialista ja foi decretada.' };
+  if (state.regime?.type === 'communist_dictatorship') return { ...state, notice: 'A revolucao socialista já foi decretada.' };
   if (!(factions.trabalhadores > 80 && factions.militares > 60 && factions.elite < 40)) {
-    return { ...state, notice: 'Revolucao exige trabalhadores acima de 80, militares acima de 60 e elite abaixo de 40.' };
+    return { ...state, notice: 'Revolução exige trabalhadores acima de 80, militares acima de 60 e elite abaixo de 40.' };
   }
   return {
     ...state,
     country: { ...state.country, nome: socialistName(state.country.nome) },
     factions: { ...factions, elite: 0 },
     regime: { ...state.regime, type: 'communist_dictatorship', electionsSuspended: true, coupRisk: 0, revolutionRisk: 0 },
-    notice: 'Revolucao Socialista decretada: a Uniao foi fundada.',
+    notice: 'Revolução Socialista decretada: a Uniao foi fundada.',
   };
 }
 
 export function absorverPaisParaUniao(state, targetId) {
   if (state.regime?.type !== 'communist_dictatorship') return { ...state, notice: 'Somente a Uniao Socialista pode absorver paises aliados.' };
   const target = targetForAbsorption(state, targetId);
-  if (!target) return { ...state, notice: 'Pais nao encontrado ou indisponivel para absorcao.' };
-  if (!(target.relation > 80 || target.puppet)) return { ...state, notice: 'Absorcao exige relacao acima de 80 ou um governo fantoche.' };
+  if (!target) return { ...state, notice: 'País não encontrado ou indisponível para absorção.' };
+  if (!(target.relation > 80 || target.puppet)) return { ...state, notice: 'Absorção exige relacao acima de 80 ou um governo fantoche.' };
   const population = Number(target.population ?? target.populacao_base) || 0;
   const area = Number(target.area_km2) || 0;
   const gdp = Number(target.pib_base) || 0;

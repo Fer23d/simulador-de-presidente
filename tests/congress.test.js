@@ -64,6 +64,6 @@ test('forecasts votes from current blocs and popularity', () => {
 
 test('publishes at least fifteen categorized congressional laws', () => {
   assert.ok(LAWS.length >= 15);
-  assert.deepEqual(new Set(LAWS.map((law) => law.category)), new Set(['Economia', 'Sociedade', 'Seguranca', 'Ambiente']));
+  assert.deepEqual(new Set(LAWS.map((law) => law.category)), new Set(['Economia', 'Sociedade', 'Segurança', 'Ambiente']));
   assert.ok(LAWS.some((law) => law.id === 'oil-nationalization'));
 });

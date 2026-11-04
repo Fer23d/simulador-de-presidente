@@ -971,3 +971,13 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .market-rep .oil-stars span { opacity: .3; }
 .market-rep .oil-stars span.is-on { opacity: 1; color: #f4d36e; }
 .market-offer.is-special { border-color: rgba(120, 255, 140, .45); background: rgba(10, 30, 14, .5); }
+
+/* Inflacao no Orcamento */
+.inflation-panel { grid-column: 1 / -1; }
+.inflation-chart { width: 100%; height: auto; max-height: 180px; margin: 6px 0 10px; display: block; }
+.inflation-guide { stroke: currentColor; stroke-opacity: .15; stroke-width: 1; }
+.inflation-axis { fill: currentColor; fill-opacity: .55; font-size: 9px; }
+.inflation-target { stroke: var(--phosphor); stroke-width: 1; stroke-dasharray: 4 3; }
+.inflation-line { fill: none; stroke: var(--amber); stroke-width: 2; stroke-linejoin: round; }
+.inflation-area { fill: var(--amber); fill-opacity: .14; stroke: none; }
+.inflation-dot { fill: var(--amber); }

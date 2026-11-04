@@ -17,7 +17,7 @@ export function verificarSedeGlobal(state) {
 }
 
 export function candidatarJogosMundiais(state) {
-  if (!state.pendingGlobalBid) return { ...state, notice: 'Nenhuma candidatura global esta aberta.' };
+  if (!state.pendingGlobalBid) return { ...state, notice: 'Nenhuma candidatura global está aberta.' };
   if ((Number(state.economy.cash) || 0) < GLOBAL_GAMES_COST) return { ...state, notice: 'Caixa insuficiente para a candidatura aos Jogos Mundiais.' };
   const globalLeaderGdp = Math.max(state.economy.gdp, ...state.geopolitics.contacts.filter((contact) => !contact.destruido).map((contact) => Number(contact.pib_base) || 0));
   const economicScore = (Number(state.economy.gdp) || 0) / Math.max(1, globalLeaderGdp);
@@ -25,7 +25,7 @@ export function candidatarJogosMundiais(state) {
   const random = nextRandom(state.randomSeed);
   const economy = { ...state.economy, cash: state.economy.cash - GLOBAL_GAMES_COST };
   if (random.value >= chance) {
-    return { ...state, economy, randomSeed: random.seed, pendingGlobalBid: null, notice: 'A candidatura aos Jogos Mundiais foi derrotada na votacao internacional.' };
+    return { ...state, economy, randomSeed: random.seed, pendingGlobalBid: null, notice: 'A candidatura aos Jogos Mundiais foi derrotada na votação internacional.' };
   }
   const monthCounter = Number(state.monthCounter) || 0;
   return {

@@ -12,7 +12,7 @@ import { bunkerView, missionObjectiveView, renderStoryCard } from '../src/ui/das
 function vaultWithRooms() {
   let state = { ...transicionarParaWasteland(createGameState('bra')), scrap: 5_000, randomSeed: 3,
     president_selection_pending: false, presidentClass: 'worker' };
-  // Energia primeiro: sem gerador funcionando as estufas nao cabem no orcamento de energia do Vault.
+  // Energia primeiro: sem gerador funcionando as estufas não cabem no orçamento de energia do Vault.
   state = repairShelterGenerator(buildShelterRoom(state, 'generator', 0, 2), 0, 2);
   state = buildShelterRoom(state, 'greenhouse', 0, 3);
   state = buildShelterRoom(state, 'elevator', 1, 0);

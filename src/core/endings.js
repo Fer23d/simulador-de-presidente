@@ -2,7 +2,7 @@ import { getSurfaceMap, getExplorationPercent } from './surface_map.js';
 import { getLeaderName } from './player_profile.js';
 import { DOOR_REQUIRED_LEVEL, getLevel } from './levels.js';
 
-// Capitulo X — A Porta: depois de alguns anos no Vault a superficie volta a ser habitavel e o jogador
+// Capitulo X — A Porta: depois de alguns anos no Vault a superficie volta a ser habitável e o jogador
 // escolhe como sair. Cada final exige um historico (fase presidencial + governo do Vault) e vira um trofeu.
 export const DOOR_OPENS_AT_MONTH = 36;
 const PLAYER_LAUNCH_REASONS = new Set(['ataque-nuclear', 'mao-morta']);
@@ -62,7 +62,7 @@ export function getEndingOptions(state) {
   return options;
 }
 
-// Se a colonia perdeu a confianca, nao ha escolha: ela decide pelo Presidente.
+// Se a colonia perdeu a confiança, não ha escolha: ela decide pelo Presidente.
 export function getForcedEnding(state) {
   return averageLoyalty(state) < 25 ? ENDINGS.exile : null;
 }
@@ -75,7 +75,7 @@ export function chooseEnding(state, endingId) {
   return { ...state, ending: { id: option.id, month: Number(state.wasteland_turn) || 0 } };
 }
 
-// O destino de Layd depende da saude com que ela chega a Porta.
+// O destino de Layd depende da saúde com que ela chega a Porta.
 function laydFlightLine(state) {
   const care = state?.companion ?? {};
   const health = Number(care.health) || 0;
@@ -85,7 +85,7 @@ function laydFlightLine(state) {
   return 'Layd, saudável, farejou o vento e escolheu o caminho. Você a seguiu.';
 }
 
-// O que acontece com quem ficou, medido pela lealdade que o Vault ainda tinha por voce.
+// O que acontece com quem ficou, medido pela lealdade que o Vault ainda tinha por você.
 function vaultFateLine(state) {
   const loyalty = averageLoyalty(state);
   if (loyalty >= 60) return 'No Vault, a comida continuou rendendo e ninguém trancou a suíte presidencial: as pessoas deixaram a porta aberta, caso um dia vocês voltassem.';

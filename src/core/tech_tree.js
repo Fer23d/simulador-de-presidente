@@ -21,14 +21,14 @@ export function calculateMilitaryResearchPoints(economy = {}, budget = {}) {
 
 export function pesquisarTecnologia(state, techId) {
   const technology = getMilitaryTechnology(techId);
-  if (!technology) return { ...state, notice: 'Projeto militar nao encontrado.' };
+  if (!technology) return { ...state, notice: 'Projeto militar não encontrado.' };
 
   const unlocked = Array.isArray(state.unlocked_techs) ? state.unlocked_techs : [];
-  if (unlocked.includes(techId)) return { ...state, notice: `${technology.title} ja foi concluido.` };
+  if (unlocked.includes(techId)) return { ...state, notice: `${technology.title} já foi concluido.` };
 
   const missingRequirements = technology.requires.filter((requiredId) => !unlocked.includes(requiredId));
   if (missingRequirements.length > 0) {
-    return { ...state, notice: `${technology.title} possui dependencia militar pendente.` };
+    return { ...state, notice: `${technology.title} possui dependência militar pendente.` };
   }
 
   const points = Math.max(0, Number(state.military_research_points) || 0);

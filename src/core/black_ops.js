@@ -23,10 +23,10 @@ function reduceTarget(target) {
 /** Infects an NPC through a covert operation. It never changes war or DEFCON state. */
 export function injetarVirusSintetico(state, alvoId) {
   const target = state.geopolitics?.contacts?.find((contact) => contact.id === alvoId && !contact.destruido && !contact.anexado && !contact.wasteland);
-  if (!target) return { ...state, notice: 'Alvo biologico invalido.' };
-  if (!hasBioengineering(state)) return { ...state, notice: 'A operacao exige [ ENGENHARIA PATOGÉNICA (VÍRUS) ].' };
-  if (target.bio_infected) return { ...state, notice: `${target.name} ja esta sob infeccao biologica.` };
-  if ((Number(state.economy?.cash) || 0) < VIRUS_CASH_COST) return { ...state, notice: 'Caixa insuficiente para a operacao biologica.' };
+  if (!target) return { ...state, notice: 'Alvo biológico inválido.' };
+  if (!hasBioengineering(state)) return { ...state, notice: 'A operação exige [ ENGENHARIA PATOGÉNICA (VÍRUS) ].' };
+  if (target.bio_infected) return { ...state, notice: `${target.name} já está sob infecção biológica.` };
+  if ((Number(state.economy?.cash) || 0) < VIRUS_CASH_COST) return { ...state, notice: 'Caixa insuficiente para a operação biológica.' };
   if ((Number(state.country?.rare_earths) || 0) < VIRUS_RARE_EARTH_COST) return { ...state, notice: 'Terras raras insuficientes para sintetizar o agente.' };
 
   return {
@@ -39,7 +39,7 @@ export function injetarVirusSintetico(state, alvoId) {
         ? { ...contact, bio_infected: true, bio_timer: VIRUS_DURATION_MONTHS }
         : contact),
     },
-    notice: `Operacao silenciosa iniciada em ${target.name}.`,
+    notice: `Operação silenciosa iniciada em ${target.name}.`,
   };
 }
 
@@ -63,16 +63,16 @@ export function orquestrarFalsaBandeira(state, alvoId) {
     country: { ...state.country, populacao: population, populacao_base: population, pib_base: gdpBase },
     factions,
     double_agent_active: state.double_agent_active ? false : state.double_agent_active,
-    notice: `Falsa Bandeira orquestrada. A opiniao publica exige guerra contra ${target.name}.`,
+    notice: `Falsa Bandeira orquestrada. A opinião pública exige guerra contra ${target.name}.`,
   };
 }
 
 export function infiltrarSosia(state, alvoId) {
   const target = state.geopolitics?.contacts?.find((contact) => contact.id === alvoId
     && !contact.destruido && !contact.anexado && !contact.wasteland);
-  if (!target) return { ...state, notice: 'Alvo para sosia invalido.' };
+  if (!target) return { ...state, notice: 'Alvo para sosia inválido.' };
   if (String(target.tipo_governo ?? '').toLowerCase().includes('democr')) {
-    return { ...state, notice: 'Sosias so podem infiltrar regimes nao democraticos.' };
+    return { ...state, notice: 'Sosias so podem infiltrar regimes não democráticos.' };
   }
   if ((Number(state.economy?.cash) || 0) < LEADER_DOUBLE_CASH_COST) return { ...state, notice: 'Caixa insuficiente para infiltrar o sosia.' };
   if ((Number(state.technology?.points) || 0) < LEADER_DOUBLE_RESEARCH_COST) return { ...state, notice: 'Pontos de Pesquisa insuficientes para criar o sosia.' };

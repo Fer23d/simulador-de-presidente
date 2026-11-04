@@ -36,7 +36,7 @@ test('a presidential suite is a buildable room with its own capacity and is avai
   assert.equal(built.scrap, 758);
 });
 
-test('construcao desconta sucata, exige suporte e nao altera o estado anterior', () => {
+test('construção desconta sucata, exige suporte e não altera o estado anterior', () => {
   const state = { is_wasteland: true, scrap: 200, shelter_grid: INITIAL_SHELTER_GRID };
   const built = buildShelterRoom(state, 'dormitory', 0, 2);
   assert.equal(built.scrap, 112);
@@ -61,7 +61,7 @@ test('elevador liga andares e habitantes percorrem uma rota real', () => {
   assert.equal(inhabitant.column, 1);
 });
 
-test('arrastar desloca a camara; clique curto seleciona habitante e slot de construcao', () => {
+test('arrastar desloca a camara; clique curto seleciona habitante e slot de construção', () => {
   const listeners = new Map();
   const ctx = new Proxy({}, { get(target, key) {
     if (key in target) return target[key];
@@ -187,7 +187,7 @@ test('canvas level indicator draws five active and inactive pips', () => {
   assert.equal(fills.filter((pip) => pip.color === '#343c3a').length, 2);
 });
 
-test('destinos e posicoes dos habitantes sobrevivem ao save e entradas invalidas sao descartadas', () => {
+test('destinos e posicoes dos habitantes sobrevivem ao save e entradas inválidas sao descartadas', () => {
   const state = buildShelterRoom(transicionarParaWasteland(createGameState('bra')), 'dormitory', 0, 2);
   const saved = { id: 'president', floor: 0, column: 1, x: 410, y: 303, facing: 1, route: [{ floor: 0, column: 2 }] };
   const restored = hydrateGameState(JSON.stringify({ ...state, shelter_inhabitants: [saved, { id: '<bad>', x: Infinity }] }));

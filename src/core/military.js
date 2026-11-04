@@ -124,7 +124,7 @@ export function recrutarSoldado(military, economy, amount = 5_000, resources = {
   const steelCost = Math.ceil(soldiers / 100);
   const cash = Number(economy?.cash) || 0;
   if (cash < cost) return { ok: false, reason: 'Caixa insuficiente para recrutamento.', military, economy };
-  if (available(resources, 'steel') < steelCost) return { ok: false, reason: 'Aco insuficiente para recrutamento.', military, economy, resources };
+  if (available(resources, 'steel') < steelCost) return { ok: false, reason: 'Aço insuficiente para recrutamento.', military, economy, resources };
 
   const normalized = normalizeMilitary(military);
   return {
@@ -142,7 +142,7 @@ function comprarUnidade(military, economy, branch, field, amount, unit, resource
   const cash = Number(economy?.cash) || 0;
   if (cash < totalCost) return { ok: false, reason: `Caixa insuficiente para ${unit.label.toLowerCase()}.`, military, economy };
   const steelCost = quantity * unit.steel;
-  if (available(resources, 'steel') < steelCost) return { ok: false, reason: `Aco insuficiente para ${unit.label.toLowerCase()}.`, military, economy, resources };
+  if (available(resources, 'steel') < steelCost) return { ok: false, reason: `Aço insuficiente para ${unit.label.toLowerCase()}.`, military, economy, resources };
   const normalized = normalizeMilitary(military);
   return {
     ok: true,
@@ -169,13 +169,13 @@ export function comprarEquipamento(military, economy, kind, resources = {}) {
   if (kind === 'tanks') return comprarBlindados(military, economy, 1, resources);
   if (kind === 'jets') return comprarCacas(military, economy, 1, resources);
   if (kind === 'ships') return comprarNavios(military, economy, 1, resources);
-  return { ok: false, reason: 'Equipamento invalido.', military, economy };
+  return { ok: false, reason: 'Equipamento inválido.', military, economy };
 }
 
 export function fundNuclearProject(military, economy, kind, amount, resources = {}) {
   const cost = Number(amount);
   if (!['civil', 'military'].includes(kind) || !Number.isFinite(cost) || cost <= 0) {
-    return { ok: false, reason: 'Projeto nuclear invalido.', military, economy };
+    return { ok: false, reason: 'Projeto nuclear inválido.', military, economy };
   }
   if (economy.cash < cost) return { ok: false, reason: 'Caixa insuficiente para o projeto.', military, economy };
   const uraniumCost = Math.ceil(cost / 100_000_000);
@@ -255,7 +255,7 @@ export function evaluateRegime(regime, economy, military, geopolitics, seed, fac
     const gameOver = random.value < revolutionRisk;
     return {
       seed: random.seed,
-      event: gameOver ? 'Revolucao popular derrubou o governo.' : null,
+      event: gameOver ? 'Revolução popular derrubou o governo.' : null,
       regime: { ...regime, coupRisk: 0, revolutionRisk, gameOver, outcome: gameOver ? 'revolucao-popular' : null, electionsSuspended: true },
     };
   }

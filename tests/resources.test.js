@@ -38,7 +38,7 @@ test('military purchases require and consume steel while nuclear projects consum
 
   assert.equal(tanks.ok, false);
   assert.equal(nuclear.ok, false);
-  assert.match(tanks.reason, /aco/i);
+  assert.match(tanks.reason, /aço/i);
   assert.match(nuclear.reason, /uranio/i);
 });
 

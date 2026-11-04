@@ -26,25 +26,25 @@ export function sortearCapturaAgente(state) {
     ...state,
     randomSeed: random.seed,
     pendingInterrogation: { phase: 'choice', prisonerId: 847 },
-    notice: 'Prisioneiro #847 adquirido. Iniciando interrogatorio.',
+    notice: 'Prisioneiro #847 adquirido. Iniciando interrogatório.',
   };
 }
 
 export function resolverInterrogatorio(state, method) {
   const operation = METHODS[method];
-  if (state.pendingInterrogation?.phase !== 'choice' || !operation) return { ...state, notice: 'Metodo de interrogatorio invalido.' };
+  if (state.pendingInterrogation?.phase !== 'choice' || !operation) return { ...state, notice: 'Metodo de interrogatório inválido.' };
   if ((Number(state.economy?.cash) || 0) < operation.cost) return { ...state, notice: 'Caixa insuficiente para subornar o agente.' };
   const random = nextRandom(state.randomSeed);
   const economy = operation.cost > 0 ? { ...state.economy, cash: state.economy.cash - operation.cost } : state.economy;
   if (random.value >= operation.chance) {
-    return { ...state, economy, randomSeed: random.seed, pendingInterrogation: null, notice: 'O agente resistiu ao interrogatorio.' };
+    return { ...state, economy, randomSeed: random.seed, pendingInterrogation: null, notice: 'O agente resistiu ao interrogatório.' };
   }
   return {
     ...state,
     economy,
     randomSeed: random.seed,
     pendingInterrogation: { ...state.pendingInterrogation, phase: 'reward' },
-    notice: 'O agente quebrou. Selecione a exploracao da informacao.',
+    notice: 'O agente quebrou. Selecione a exploração da informação.',
   };
 }
 
@@ -52,7 +52,7 @@ export function escolherInterrogatorio(state, action) {
   const method = { soro: 'truth-serum', tortura: 'psychological-pressure' }[action];
   if (action === 'suborno') {
     const cost = 1_000_000_000;
-    if (state.pendingInterrogation?.phase !== 'choice') return { ...state, notice: 'Nenhum interrogatorio aguarda escolha.' };
+    if (state.pendingInterrogation?.phase !== 'choice') return { ...state, notice: 'Nenhum interrogatório aguarda escolha.' };
     if ((Number(state.economy?.cash) || 0) < cost) return { ...state, notice: 'Caixa insuficiente para subornar o agente.' };
     return {
       ...state,
@@ -62,7 +62,7 @@ export function escolherInterrogatorio(state, action) {
       notice: 'Suborno aceito. Agente estrangeiro convertido em agente duplo.',
     };
   }
-  if (!method) return { ...state, notice: 'Acao de interrogatorio invalida.' };
+  if (!method) return { ...state, notice: 'Ação de interrogatório inválida.' };
   const resolved = resolverInterrogatorio(state, method);
   return resolved.pendingInterrogation?.phase === 'reward'
     ? reivindicarInterrogatorio(resolved, 'extract-secrets')
@@ -70,7 +70,7 @@ export function escolherInterrogatorio(state, action) {
 }
 
 export function reivindicarInterrogatorio(state, reward) {
-  if (state.pendingInterrogation?.phase !== 'reward') return { ...state, notice: 'Nenhuma recompensa de interrogatorio esta disponivel.' };
+  if (state.pendingInterrogation?.phase !== 'reward') return { ...state, notice: 'Nenhuma recompensa de interrogatório está disponível.' };
   if (reward === 'extract-secrets') {
     return {
       ...state,
@@ -82,5 +82,5 @@ export function reivindicarInterrogatorio(state, reward) {
   if (reward === 'turn-double-agent') {
     return { ...state, double_agent_active: true, pendingInterrogation: null, notice: 'Agente estrangeiro convertido em agente duplo.' };
   }
-  return { ...state, notice: 'Recompensa de interrogatorio invalida.' };
+  return { ...state, notice: 'Recompensa de interrogatório inválida.' };
 }

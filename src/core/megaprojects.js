@@ -31,18 +31,18 @@ function wasteContact(contact) {
 
 export function iniciarProjetoMaoMorta(state) {
   const deadHand = state.megaprojects?.deadHand;
-  if (state.dead_hand_active || deadHand?.remainingMonths > 0) return { ...state, notice: 'A Rede Mao Morta ja esta em construcao ou ativa.' };
+  if (state.dead_hand_active || deadHand?.remainingMonths > 0) return { ...state, notice: 'A Rede Mão Morta já está em construção ou ativa.' };
   if (!state.unlocked_techs?.includes('dead_hand')) return { ...state, notice: 'O projeto exige [ I.A. MÃO MORTA ].' };
-  if ((Number(state.economy?.cash) || 0) < DEAD_HAND_CASH_COST) return { ...state, notice: 'Caixa insuficiente para a Rede Mao Morta.' };
-  if ((Number(state.technology?.points) || 0) < DEAD_HAND_RESEARCH_COST) return { ...state, notice: 'Pontos de Pesquisa insuficientes para a Rede Mao Morta.' };
-  if ((Number(state.country?.uranium) || 0) < DEAD_HAND_URANIUM_COST) return { ...state, notice: 'Uranio insuficiente para a Rede Mao Morta.' };
+  if ((Number(state.economy?.cash) || 0) < DEAD_HAND_CASH_COST) return { ...state, notice: 'Caixa insuficiente para a Rede Mão Morta.' };
+  if ((Number(state.technology?.points) || 0) < DEAD_HAND_RESEARCH_COST) return { ...state, notice: 'Pontos de Pesquisa insuficientes para a Rede Mão Morta.' };
+  if ((Number(state.country?.uranium) || 0) < DEAD_HAND_URANIUM_COST) return { ...state, notice: 'Uranio insuficiente para a Rede Mão Morta.' };
   return {
     ...state,
     economy: { ...state.economy, cash: state.economy.cash - DEAD_HAND_CASH_COST },
     technology: { ...state.technology, points: state.technology.points - DEAD_HAND_RESEARCH_COST },
     country: { ...state.country, uranium: state.country.uranium - DEAD_HAND_URANIUM_COST },
     megaprojects: { ...(state.megaprojects ?? {}), deadHand: { remainingMonths: DEAD_HAND_DURATION, uraniumReserve: DEAD_HAND_URANIUM_COST } },
-    notice: 'Rede Mao Morta iniciada: conclusao prevista em doze meses.',
+    notice: 'Rede Mão Morta iniciada: conclusão prevista em doze meses.',
   };
 }
 
@@ -56,7 +56,7 @@ export function processarMegaprojetos(state) {
     ...state,
     dead_hand_active: true,
     megaprojects: { ...state.megaprojects, deadHand: { ...state.megaprojects.deadHand, remainingMonths: 0, completed: true } },
-    notice: 'Rede Mao Morta ativa: os silos respondem a perda do governo.',
+    notice: 'Rede Mão Morta ativa: os silos respondem a perda do governo.',
   };
 }
 
@@ -83,6 +83,6 @@ export function interceptarGameOverComMaoMorta(state) {
     geopolitics: { ...state.geopolitics, contacts },
     megaprojects: { ...state.megaprojects, deadHand: { ...state.megaprojects?.deadHand, uraniumReserve: reserveRemaining } },
     regime: { ...state.regime, gameOver: true, outcome: 'mao-morta' },
-    notice: 'DIRETRIZ OMEGA EXECUTADA: destruicao mutua assegurada.',
+    notice: 'DIRETRIZ OMEGA EXECUTADA: destruição mutua assegurada.',
   };
 }

@@ -1,6 +1,6 @@
 import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countries.js';
 import { getVoteForecast } from '../core/congress.js';
-import { BUDGET_LIMITS, projectBudget } from '../core/economy.js';
+import { BUDGET_LIMITS, NEUTRAL_INTEREST_RATE, projectBudget, summarizeInflation } from '../core/economy.js';
 import { LAWS } from '../core/laws.js';
 import { TECHNOLOGIES } from '../core/technology.js';
 import { MILITARY_TECHNOLOGIES } from '../core/tech_tree.js';
@@ -133,12 +133,12 @@ import {
 const STORAGE_KEY = 'simulador-presidente-state-v1';
 // A enciclopedia fica fora do save da partida para sobreviver a uma Nova Partida.
 const ENCYCLOPEDIA_KEY = 'simulador-presidente-enciclopedia-v1';
-// Direitos de uso da Loja do Vault (skins premium); tambem ficam fora do save da partida.
+// Direitos de uso da Loja do Vault (skins premium); também ficam fora do save da partida.
 const STORE_KEY = 'simulador-presidente-loja-v1';
-// Finais ja vistos (trofeus), guardados na conta para sobreviver a Nova Partida.
+// Finais já vistos (trofeus), guardados na conta para sobreviver a Nova Partida.
 const TROPHIES_KEY = 'simulador-presidente-trofeus-v1';
 const AUDIO_KEY = 'simulador-presidente-audio-v1';
-// O progresso do tutorial fica fora do save: quem ja aprendeu nao repete a cada Nova Partida.
+// O progresso do tutorial fica fora do save: quem já aprendeu não repete a cada Nova Partida.
 const TUTORIAL_KEY = 'simulador-presidente-tutorial-v1';
 
 function oilStatRow(label, value, max, nextValue = null, unit = '') {
@@ -170,7 +170,7 @@ export function oilDerrickLiveView(state, slot, now = Date.now()) {
   return `${stats}${line}<div class="action-row oil-actions">${collect}${upgrade}<button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div>`;
 }
 
-// Cuidados com Layd: saude, racao, vacinas e a desconfianca do povo do Vault.
+// Cuidados com Layd: saúde, ração, vacinas e a desconfianca do povo do Vault.
 export function laydCareView(state, inClinic = false) {
   const status = getLaydStatus(state);
   if (!status || status.phase === 'dead' || status.phase === 'gone') return '';
@@ -193,8 +193,8 @@ export function laydDiscoveryView(state) {
   return `<section class="door-dialog" role="dialog" aria-modal="true" aria-labelledby="layd-discovery-title"><p class="story-classification">/// A DESCOBERTA ///</p><h2 id="layd-discovery-title">ELES SABEM</h2><p class="door-intro">Era para ser uma noite comum. Uma voz bateu na porta da suíte, depois outra, depois dezenas. Alguém tinha contado as latas, alguém tinha contado as ampolas, e todos tinham contado as mentiras. Layd, atrás das suas pernas, não rosnou. Do corredor vem uma única pergunta: "Você escolheu ela em vez de nós?"</p><div class="door-choices"><button type="button" class="door-choice" data-action="layd-flee"><span class="door-choice-icon">🚪</span><strong>[ PEGAR LAYD E FUGIR PELA PORTA ]</strong><small>O Vault te perde. Você e ela abrem a Porta e vão embora para o Ermo.</small></button><button type="button" class="door-choice" data-action="layd-surrender"><span class="door-choice-icon">🐕</span><strong>[ ENTREGAR LAYD AO VAULT ]</strong><small>O povo te perdoa e você continua no comando. Layd é levada embora.${health}</small></button></div></section>`;
 }
 
-// Mercado Sombrio: troca de mercadorias na superficie, so para quem veste o Traje Antirradiacao.
-// Reputacao com o comboio: estrelas, desconto e o que o proximo nivel libera.
+// Mercado Sombrio: troca de mercadorias na superficie, so para quem veste o Traje Antirradiação.
+// Reputação com o comboio: estrelas, desconto e o que o próximo nivel libera.
 export function marketReputationView(state) {
   const rep = Math.max(0, Math.min(100, Number(state.market_rep) || 0));
   const tier = getMarketTier(rep);
@@ -227,7 +227,7 @@ function fortStatRow(label, value, nextValue = null, max = null) {
   return oilStatRow(label, value, max ?? value, nextValue);
 }
 
-// Parte viva do painel do Forte: obra, guarnicao e ameaca mudam enquanto ele esta aberto.
+// Parte viva do painel do Forte: obra, guarnição e ameaca mudam enquanto ele está aberto.
 export function fortLiveView(state, now = Date.now()) {
   const status = getFortStatus(state.surface_fort, now);
   const army = getArmySoldiers(state);
@@ -418,7 +418,7 @@ function saveEncyclopedia(encyclopedia) {
   try {
     localStorage.setItem(ENCYCLOPEDIA_KEY, JSON.stringify(encyclopedia));
   } catch {
-    // Sem armazenamento local, as descobertas valem so nesta sessao.
+    // Sem armazenamento local, as descobertas valem so nesta sessão.
   }
 }
 
@@ -468,7 +468,7 @@ function saveState(state) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, lastSeenAt: Date.now() }));
     return '';
   } catch {
-    return 'Partida ativa somente nesta sessao.';
+    return 'Partida ativa somente nesta sessão.';
   }
 }
 
@@ -492,56 +492,103 @@ function overviewView(state, projection) {
   const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid) || Boolean(state.pendingFinalDilemma) || Boolean(state.pendingInterrogation) || Boolean(state.pendingStory) || Boolean(state.pendingBriefing) || Boolean(state.pendingAllianceInvocation) || Boolean(state.pendingHostileAlert) || Boolean(state.wasteland_cinematic_pending) || Boolean(state.wasteland_cinematic_ready);
   return `<section class="view-grid overview-grid">
     <section class="panel agenda-panel">
-      <div class="panel-heading"><div><p class="eyebrow">Agenda presidencial</p><h2>Proximo movimento</h2></div><span class="status-dot"></span></div>
+      <div class="panel-heading"><div><p class="eyebrow">Agenda presidencial</p><h2>Próximo movimento</h2></div><span class="status-dot"></span></div>
       <p class="notice">${state.notice}</p>
       <div class="agenda-stats">
         <div><span>Saldo mensal</span><strong class="${budgetTone}">${formatMoney(projection.monthlyBalance)}</strong></div>
         <div><span>Maioria exigida</span><strong>${Math.floor(state.congress.totalSeats / 2) + 1} votos</strong></div>
         <div><span>Lei Trabalhista</span><strong>${state.laws.laborReform.approved ? 'Aprovada' : state.laws.laborReform.voteCompleted ? 'Rejeitada' : 'Pendente'}</strong></div>
-        <div><span>Forca corporativa</span><strong>${Number(state.megacorp_power || 0).toFixed(0)} / 100</strong></div>
+        <div><span>Força corporativa</span><strong>${Number(state.megacorp_power || 0).toFixed(0)} / 100</strong></div>
       </div>
-      <button type="button" class="primary-action" data-action="advance" ${treatyPending ? 'disabled' : ''}>${state.is_wasteland ? '[ AVANÇAR 1 DIA (ANO ZERO PÓS-BOMBA) ]' : 'Avancar mes'} <span aria-hidden="true">→</span></button>
+      <button type="button" class="primary-action" data-action="advance" ${treatyPending ? 'disabled' : ''}>${state.is_wasteland ? '[ AVANÇAR 1 DIA (ANO ZERO PÓS-BOMBA) ]' : 'Avançar mês'} <span aria-hidden="true">→</span></button>
     </section>
     <section class="panel country-panel">
-      <div class="panel-heading"><div><p class="eyebrow">Nacao</p><h2>${state.country.nome}</h2></div><span class="country-code">${state.country.id.toUpperCase()}</span></div>
+      <div class="panel-heading"><div><p class="eyebrow">Nação</p><h2>${state.country.nome}</h2></div><span class="country-code">${state.country.id.toUpperCase()}</span></div>
       <dl class="country-facts">
-        <div><dt>Populacao</dt><dd>${formatNumber.format(state.country.populacao_base)}</dd></div>
-        <div><dt>Area</dt><dd>${formatNumber.format(state.country.area_km2)} km²</dd></div>
+        <div><dt>População</dt><dd>${formatNumber.format(state.country.populacao_base)}</dd></div>
+        <div><dt>Área</dt><dd>${formatNumber.format(state.country.area_km2)} km²</dd></div>
         <div><dt>Bioma</dt><dd>${state.country.bioma_dominante}</dd></div>
         <div><dt>Governo</dt><dd>${state.country.tipo_governo}</dd></div>
       </dl>
     </section>
     <section class="panel history-panel">
-      <div class="panel-heading"><div><p class="eyebrow">Diario nacional</p><h2>Eventos recentes</h2></div></div>
+      <div class="panel-heading"><div><p class="eyebrow">Diário nacional</p><h2>Eventos recentes</h2></div></div>
       <ol class="history-list">${state.history.length ? state.history.map((entry) => `<li><span>${entry.type === 'vote' ? 'Congresso' : 'Economia'}</span>${entry.message}</li>`).join('') : '<li><span>Gabinete</span>Nenhum evento registrado.</li>'}</ol>
     </section>
   </section>`;
 }
 
+const INFLATION_LEVEL_LABEL = Object.freeze({ low: 'Deflação / estagnação', healthy: 'Controlada', high: 'Alta', hyper: 'Hiperinflação' });
+const INFLATION_TREND_LABEL = Object.freeze({ up: '▲ subindo', down: '▼ caindo', stable: '■ estável' });
+
+// Gráfico de linha em SVG: um ponto por mês, até 60 meses. Faixa de 0 ao maior valor (minimo 10%).
+export function inflationChart(history) {
+  const points = history.length > 1 ? history : [history[0] ?? 0, history[0] ?? 0];
+  const width = 320;
+  const height = 120;
+  const pad = 6;
+  const top = Math.max(0.1, Math.ceil(Math.max(...points) * 20) / 20);
+  const x = (index) => pad + (index / (points.length - 1)) * (width - pad * 2);
+  const y = (value) => height - pad - (value / top) * (height - pad * 2);
+  const line = points.map((value, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)} ${y(value).toFixed(1)}`).join(' ');
+  const area = `${line} L${x(points.length - 1).toFixed(1)} ${height - pad} L${x(0).toFixed(1)} ${height - pad} Z`;
+  const guides = [0, .5, 1].map((fraction) => {
+    const level = top * fraction;
+    return `<line x1="${pad}" x2="${width - pad}" y1="${y(level).toFixed(1)}" y2="${y(level).toFixed(1)}" class="inflation-guide"></line><text x="${pad + 2}" y="${(y(level) - 3).toFixed(1)}" class="inflation-axis">${formatPercent(level, 0)}</text>`;
+  }).join('');
+  const target = y(0.04);
+  return `<svg class="inflation-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Inflação mensal dos últimos ${points.length} meses">${guides}<line x1="${pad}" x2="${width - pad}" y1="${target.toFixed(1)}" y2="${target.toFixed(1)}" class="inflation-target"></line><path d="${area}" class="inflation-area"></path><path d="${line}" class="inflation-line"></path><circle cx="${x(points.length - 1).toFixed(1)}" cy="${y(points[points.length - 1]).toFixed(1)}" r="3.5" class="inflation-dot"></circle></svg>`;
+}
+
+// Servico da divida em fracao do PIB mensal, ja corrigido pelos juros (juros altos = divida mais cara).
+function normalizedDebtShare(budget) {
+  const interest = Math.min(0.3, Math.max(0, Number(budget.interestRate ?? NEUTRAL_INTEREST_RATE)));
+  return Math.max(0, Number(budget.debtService) || 0) * (interest / NEUTRAL_INTEREST_RATE);
+}
+
+function inflationPanel(state) {
+  const summary = summarizeInflation(state.economy);
+  const tone = summary.level === 'high' || summary.level === 'hyper' ? 'negative' : summary.level === 'healthy' ? 'positive' : '';
+  const interest = Number(state.budget.interestRate ?? NEUTRAL_INTEREST_RATE);
+  return `<section class="panel inflation-panel">
+      <div class="panel-heading"><div><p class="eyebrow">Banco central</p><h2>Inflação</h2></div><span class="country-code ${tone}">${formatPercent(summary.current, 1)} ao mês</span></div>
+      ${inflationChart(summary.history)}
+      <div class="ledger-row"><span>Situação</span><strong class="${tone}">${INFLATION_LEVEL_LABEL[summary.level]} · ${INFLATION_TREND_LABEL[summary.trend]}</strong></div>
+      <div class="ledger-row"><span>Pico registrado</span><strong>${formatPercent(summary.peak, 1)}</strong></div>
+      <div class="ledger-row"><span>Meta (linha tracejada)</span><strong>4,0%</strong></div>
+      ${rangeControl('Taxa básica de juros', 'interestRate', interest, BUDGET_LIMITS.interestRate.minimum, BUDGET_LIMITS.interestRate.maximum)}
+      <p class="notice">Juros altos seguram os preços, mas esfriam o crescimento, encolhem a arrecadação e encarecem a dívida. Déficits, o rombo fiscal e a comida cara empurram a inflação para cima.</p>
+    </section>`;
+}
+
 export function budgetView(state, projection) {
   return `<section class="view-grid budget-grid">
     <section class="panel budget-controls">
-      <div class="panel-heading"><div><p class="eyebrow">Arrecadacao</p><h2>Politica tributaria</h2></div></div>
+      <div class="panel-heading"><div><p class="eyebrow">Arrecadação</p><h2>Política tributária</h2></div></div>
       ${rangeControl('Imposto de renda', 'incomeTaxRate', state.budget.incomeTaxRate, BUDGET_LIMITS.incomeTaxRate.minimum, BUDGET_LIMITS.incomeTaxRate.maximum)}
       ${rangeControl('IVA', 'vatRate', state.budget.vatRate, BUDGET_LIMITS.vatRate.minimum, BUDGET_LIMITS.vatRate.maximum)}
-      ${rangeControl('Saude', 'healthSpend', state.budget.healthSpend, BUDGET_LIMITS.healthSpend.minimum, BUDGET_LIMITS.healthSpend.maximum)}
-      ${rangeControl('Educacao', 'educationSpend', state.budget.educationSpend, BUDGET_LIMITS.educationSpend.minimum, BUDGET_LIMITS.educationSpend.maximum)}
+      ${rangeControl('Saúde', 'healthSpend', state.budget.healthSpend, BUDGET_LIMITS.healthSpend.minimum, BUDGET_LIMITS.healthSpend.maximum)}
+      ${rangeControl('Educação', 'educationSpend', state.budget.educationSpend, BUDGET_LIMITS.educationSpend.minimum, BUDGET_LIMITS.educationSpend.maximum)}
       ${rangeControl('Infraestrutura', 'infrastructureSpend', state.budget.infrastructureSpend, BUDGET_LIMITS.infrastructureSpend.minimum, BUDGET_LIMITS.infrastructureSpend.maximum)}
-      ${rangeControl('Ciencia e Tecnologia', 'scienceSpend', state.budget.scienceSpend, BUDGET_LIMITS.scienceSpend.minimum, BUDGET_LIMITS.scienceSpend.maximum)}
+      ${rangeControl('Ciência e Tecnologia', 'scienceSpend', state.budget.scienceSpend, BUDGET_LIMITS.scienceSpend.minimum, BUDGET_LIMITS.scienceSpend.maximum)}
       ${rangeControl('Defesa', 'defenseSpend', state.budget.defenseSpend, BUDGET_LIMITS.defenseSpend.minimum, BUDGET_LIMITS.defenseSpend.maximum)}
       <div class="budget-summary"><span>Carga configurada</span><strong>${formatPercent(state.budget.incomeTaxRate + state.budget.vatRate, 0)}</strong></div>
     </section>
     <section class="panel projection-panel">
-      <div class="panel-heading"><div><p class="eyebrow">Projecao mensal</p><h2>Resultado fiscal</h2></div></div>
+      <div class="panel-heading"><div><p class="eyebrow">Projeção mensal</p><h2>Resultado fiscal</h2></div></div>
       <div class="ledger-row"><span>Imposto de renda</span><strong>${formatMoney(projection.incomeTax)}</strong></div>
       <div class="ledger-row"><span>IVA</span><strong>${formatMoney(projection.vat)}</strong></div>
-      <div class="ledger-row"><span>Despesa publica</span><strong>${formatMoney(projection.expenses)}</strong></div>
-      <div class="ledger-row total"><span>${projection.monthlyBalance >= 0 ? 'Superavit' : 'Deficit'}</span><strong class="${projection.monthlyBalance >= 0 ? 'positive' : 'negative'}">${formatMoney(projection.monthlyBalance)}</strong></div>
-      <div class="ledger-row"><span>Forca corporativa</span><strong class="${Number(state.megacorp_power || 0) > 80 ? 'negative' : ''}">${Number(state.megacorp_power || 0).toFixed(0)} / 100</strong></div>
-      <button type="button" class="quiet-action danger-action" data-action="nationalize-megacorps" ${Number(state.megacorp_power || 0) > 0 ? '' : 'disabled'}>Estatizar Megacorporacoes</button>
+      <div class="ledger-row"><span>Despesa pública</span><strong>${formatMoney(projection.expenses)}</strong></div>
+      <div class="ledger-row total"><span>${projection.monthlyBalance >= 0 ? 'Superávit' : 'Déficit'}</span><strong class="${projection.monthlyBalance >= 0 ? 'positive' : 'negative'}">${formatMoney(projection.monthlyBalance)}</strong></div>
+      <div class="ledger-row"><span>Força corporativa</span><strong class="${Number(state.megacorp_power || 0) > 80 ? 'negative' : ''}">${Number(state.megacorp_power || 0).toFixed(0)} / 100</strong></div>
+      <button type="button" class="quiet-action danger-action" data-action="nationalize-megacorps" ${Number(state.megacorp_power || 0) > 0 ? '' : 'disabled'}>Estatizar Megacorporações</button>
+      <div class="ledger-row"><span>Custo dos juros da dívida</span><strong>${formatMoney(projection.monthlyGdp * normalizedDebtShare(state.budget))}</strong></div>
+      <div class="ledger-row"><span>Rombo fiscal escondido</span><strong class="${Number(state.economy.fiscalHole) > 0 ? 'negative' : ''}">${formatMoney(state.economy.fiscalHole || 0)}</strong></div>
+      ${Number(state.economy.fiscalHole) > 0 ? `<p class="notice">Desvios deixam um rombo nas contas: ele cobra ${formatMoney(projection.fiscalHoleCost || 0)} por mês (cresce com os juros) e pressiona a inflação.</p>` : ''}
       <div class="ledger-row"><span>Caixa 2</span><strong>${formatMoney(state.slush_fund || 0)}</strong></div>
       <button type="button" class="quiet-action danger-action" data-action="slush-fund">Desviar Fundos para as Ilhas Cayman</button>
     </section>
+    ${inflationPanel(state)}
   </section>`;
 }
 
@@ -550,12 +597,12 @@ export function renderCongress(state) {
     const lawState = state.laws[law.stateKey] ?? { approved: false, voteCompleted: false };
     const approved = lawState.approved;
     const completed = lawState.voteCompleted;
-    return `<article class="law-row"><div><strong>${law.title}</strong><span>${law.description}</span></div><span class="bill-state ${approved ? 'approved' : completed ? 'rejected' : ''}">${approved ? 'Aprovada' : completed ? 'Rejeitada' : 'Em pauta'}</span><button type="button" class="quiet-action" data-action="open-law-vote" data-law="${law.id}" ${completed ? 'disabled' : ''}>${completed ? 'Encerrada' : 'Colocar em votacao'}</button></article>`;
+    return `<article class="law-row"><div><strong>${law.title}</strong><span>${law.description}</span></div><span class="bill-state ${approved ? 'approved' : completed ? 'rejected' : ''}">${approved ? 'Aprovada' : completed ? 'Rejeitada' : 'Em pauta'}</span><button type="button" class="quiet-action" data-action="open-law-vote" data-law="${law.id}" ${completed ? 'disabled' : ''}>${completed ? 'Encerrada' : 'Colocar em votação'}</button></article>`;
   }).join('');
 }
 
 export function congressView(state) {
-  if (state.regime.type === 'dictatorship') return `<section class="panel"><p class="eyebrow">Instituicoes</p><h2>Congresso suspenso</h2><p class="notice">Leis sao aprovadas por decreto enquanto durar o estado de sitio.</p></section>`;
+  if (state.regime.type === 'dictatorship') return `<section class="panel"><p class="eyebrow">Instituições</p><h2>Congresso suspenso</h2><p class="notice">Leis sao aprovadas por decreto enquanto durar o estado de sitio.</p></section>`;
   const forecast = getVoteForecast({
     ...state.congress,
     blocs: state.congress.blocs.map((bloc) => ({
@@ -572,8 +619,8 @@ export function congressView(state) {
   return `<section class="view-grid congress-grid">
     <section class="panel bill-panel"><div class="panel-heading"><div><p class="eyebrow">Projetos de lei</p><h2>Pauta do Congresso</h2></div></div><div id="lista-leis" class="law-list">${renderCongress(state)}</div><div class="vote-meter"><div class="meter-track"><span style="width:${percentage((forecast.votesFor / forecast.requiredVotes) * 100)}%"></span></div><strong>${forecast.votesFor} / ${forecast.requiredVotes} votos estimados</strong></div></section>
     <section class="panel bloc-panel">
-      <div class="panel-heading"><div><p class="eyebrow">Bancadas</p><h2>Articulacao</h2></div></div>
-      <div class="bloc-list">${state.congress.blocs.map((bloc) => `<article class="bloc-row"><div><strong>${bloc.label}</strong><span>${bloc.seats} assentos</span></div><button type="button" class="quiet-action" data-action="negotiate" data-bloc="${bloc.id}" ${bloc.negotiated ? 'disabled' : ''}>${bloc.negotiated ? 'Apoio obtido' : `Negociar ${formatMoney(bloc.negotiationCost)}`}</button></article>`).join('')}</div><div class="ledger-row"><span>Elite / Trabalhadores</span><strong>${elite} / ${workers}</strong></div><div class="ledger-row"><span>Militares / Religiosos</span><strong>${military} / ${religious}</strong></div><button type="button" class="quiet-action danger-action" data-action="socialist-revolution" ${revolutionReady ? '' : 'disabled'}>Decretar Revolucao Socialista</button><button type="button" class="quiet-action constitution-action" data-action="constitution-open" ${constitutionReady ? '' : 'disabled'}>Promulgar Nova Constituicao</button>
+      <div class="panel-heading"><div><p class="eyebrow">Bancadas</p><h2>Articulação</h2></div></div>
+      <div class="bloc-list">${state.congress.blocs.map((bloc) => `<article class="bloc-row"><div><strong>${bloc.label}</strong><span>${bloc.seats} assentos</span></div><button type="button" class="quiet-action" data-action="negotiate" data-bloc="${bloc.id}" ${bloc.negotiated ? 'disabled' : ''}>${bloc.negotiated ? 'Apoio obtido' : `Negociar ${formatMoney(bloc.negotiationCost)}`}</button></article>`).join('')}</div><div class="ledger-row"><span>Elite / Trabalhadores</span><strong>${elite} / ${workers}</strong></div><div class="ledger-row"><span>Militares / Religiosos</span><strong>${military} / ${religious}</strong></div><button type="button" class="quiet-action danger-action" data-action="socialist-revolution" ${revolutionReady ? '' : 'disabled'}>Decretar Revolução Socialista</button><button type="button" class="quiet-action constitution-action" data-action="constitution-open" ${constitutionReady ? '' : 'disabled'}>Promulgar Nova Constituicao</button>
     </section>
   </section>`;
 }
@@ -584,18 +631,18 @@ function legacyDiplomacyView(state) {
   const selected = createCountryProfile(getCountryById(selectedId) ?? getCountryById(state.country.id));
   const annexed = new Set(state.geopolitics.annexedCountryIds ?? []);
   const mapCountry = (id, label, path) => `<path d="${path}" class="map-country ${selected.id === id ? 'selected' : ''} ${annexed.has(id) ? 'annexed' : ''}" ${annexed.has(id) ? '' : `data-action="map-country" data-country="${id}" role="button" tabindex="0" aria-label="Selecionar ${label}"`}></path>`;
-  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Painel mundial</p><h2>Diplomacia e Mapa</h2></div><span class="country-code ${onuTone}">ONU ${state.geopolitics.onuScore}/100</span></div><div class="onu-meter"><div><span>Reputacao global</span><strong class="${onuTone}">${state.geopolitics.internationalSanctions ? 'Sancoes internacionais ativas' : 'Sem sancoes internacionais'}</strong></div><div class="meter-track"><span style="width:${state.geopolitics.onuScore}%"></span></div></div><div class="map-layout"><svg class="world-map" viewBox="0 0 800 360" aria-label="Mapa mundial simplificado de teste"><path class="map-ocean" d="M0 0H800V360H0Z"></path>${mapCountry('usa', 'Estados Unidos', 'M105 92h126l35 32-23 48-98 6-46-38z')}${mapCountry('bra', 'Brasil', 'M270 191l71-12 47 48-19 84-65 7-44-61z')}${mapCountry('rus', 'Rússia', 'M420 64h235l65 35-38 47-174-2-88-39z')}${mapCountry('chn', 'China', 'M570 164l93-6 56 43-37 62-92 3-42-55z')}<text x="142" y="132">EUA</text><text x="312" y="245">BR</text><text x="545" y="105">RÚSSIA</text><text x="615" y="214">CHINA</text></svg><aside class="map-selection"><p class="eyebrow">Nacao selecionada</p><h3>${selected.nome} ${nuclearBadge(selected)}</h3><div class="ledger-row"><span>Area</span><strong>${formatNumber.format(selected.area_km2)} km²</strong></div><div class="ledger-row"><span>Populacao</span><strong>${formatNumber.format(selected.populacao_base)}</strong></div><div class="ledger-row"><span>Governo</span><strong>${selected.tipo_governo}</strong></div></aside></div><div class="bloc-list">${state.geopolitics.contacts.map((contact) => `<article class="bloc-row ${contact.anexado ? 'annexed-contact' : ''}"><div><strong>${contact.name} ${nuclearBadge(contact)}</strong><span>${contact.anexado ? 'Territorio anexado' : `Relacao ${formatRelation(contact.relation)} | Poder ${contact.militaryPower.toFixed(0)} | ${contact.atWar ? 'Em guerra' : contact.alliance ? 'Aliado' : contact.tradeTreaty ? 'Acordo comercial' : 'Sem tratado'}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.anexado || contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comercio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${contact.anexado || contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Alianca</button><button type="button" class="quiet-action" data-action="sabotage" data-contact="${contact.id}" ${contact.anexado || contact.atWar ? 'disabled' : ''}>Sabotar</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.anexado || contact.atWar ? 'disabled' : ''}>Guerra</button></div></article>`).join('')}</div></section>`;
+  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Painel mundial</p><h2>Diplomacia e Mapa</h2></div><span class="country-code ${onuTone}">ONU ${state.geopolitics.onuScore}/100</span></div><div class="onu-meter"><div><span>Reputação global</span><strong class="${onuTone}">${state.geopolitics.internationalSanctions ? 'Sanções internacionais ativas' : 'Sem sanções internacionais'}</strong></div><div class="meter-track"><span style="width:${state.geopolitics.onuScore}%"></span></div></div><div class="map-layout"><svg class="world-map" viewBox="0 0 800 360" aria-label="Mapa mundial simplificado de teste"><path class="map-ocean" d="M0 0H800V360H0Z"></path>${mapCountry('usa', 'Estados Unidos', 'M105 92h126l35 32-23 48-98 6-46-38z')}${mapCountry('bra', 'Brasil', 'M270 191l71-12 47 48-19 84-65 7-44-61z')}${mapCountry('rus', 'Rússia', 'M420 64h235l65 35-38 47-174-2-88-39z')}${mapCountry('chn', 'China', 'M570 164l93-6 56 43-37 62-92 3-42-55z')}<text x="142" y="132">EUA</text><text x="312" y="245">BR</text><text x="545" y="105">RÚSSIA</text><text x="615" y="214">CHINA</text></svg><aside class="map-selection"><p class="eyebrow">Nação selecionada</p><h3>${selected.nome} ${nuclearBadge(selected)}</h3><div class="ledger-row"><span>Área</span><strong>${formatNumber.format(selected.area_km2)} km²</strong></div><div class="ledger-row"><span>População</span><strong>${formatNumber.format(selected.populacao_base)}</strong></div><div class="ledger-row"><span>Governo</span><strong>${selected.tipo_governo}</strong></div></aside></div><div class="bloc-list">${state.geopolitics.contacts.map((contact) => `<article class="bloc-row ${contact.anexado ? 'annexed-contact' : ''}"><div><strong>${contact.name} ${nuclearBadge(contact)}</strong><span>${contact.anexado ? 'Território anexado' : `Relação ${formatRelation(contact.relation)} | Poder ${contact.militaryPower.toFixed(0)} | ${contact.atWar ? 'Em guerra' : contact.alliance ? 'Aliado' : contact.tradeTreaty ? 'Acordo comercial' : 'Sem tratado'}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.anexado || contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comércio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${contact.anexado || contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Aliança</button><button type="button" class="quiet-action" data-action="sabotage" data-contact="${contact.id}" ${contact.anexado || contact.atWar ? 'disabled' : ''}>Sabotar</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.anexado || contact.atWar ? 'disabled' : ''}>Guerra</button></div></article>`).join('')}</div></section>`;
 }
 
 function riskDiplomacyView(state) {
   const onuTone = state.geopolitics.onuScore < 25 ? 'negative' : state.geopolitics.onuScore >= 60 ? 'positive' : '';
   const arsenal = Math.max(0, Number(state.military.armasNucleares) || 0);
-  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Painel mundial</p><h2>Diplomacia de risco</h2></div><span class="country-code ${onuTone}">ONU ${state.geopolitics.onuScore}/100</span></div><div class="onu-meter"><div><span>Reputacao global</span><strong class="${onuTone}">${state.geopolitics.internationalSanctions ? 'Sancoes internacionais ativas' : 'Sem sancoes internacionais'}</strong></div><div class="meter-track"><span style="width:${state.geopolitics.onuScore}%"></span></div></div><div class="bloc-list">${state.geopolitics.contacts.map((contact) => { const nuclearReady = contact.atWar && arsenal > 0 && !contact.anexado; return `<article class="bloc-row ${contact.anexado ? 'annexed-contact' : ''}"><div><strong>${contact.name} ${nuclearBadge(contact)}</strong><span>${contact.anexado ? 'Territorio anexado' : `Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | Populacao ${formatNumber.format(contact.population || 0)}${contact.sancionado_por_jogador ? ' | Sancionado' : ''}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.anexado || contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comercio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${contact.anexado || contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Alianca</button><button type="button" class="quiet-action" data-action="sanction" data-contact="${contact.id}" ${contact.anexado || contact.sancionado_por_jogador ? 'disabled' : ''}>Impor sancao</button><button type="button" class="quiet-action" data-action="ultimatum" data-contact="${contact.id}" ${contact.anexado ? 'disabled' : ''}>Exigir anexacao</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.anexado || contact.atWar ? 'disabled' : ''}>Guerra</button>${nuclearReady ? `<button type="button" class="quiet-action nuclear-action" data-action="nuclear-strike" data-contact="${contact.id}">Ataque nuclear</button>` : ''}</div></article>`; }).join('')}</div></section>`;
+  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Painel mundial</p><h2>Diplomacia de risco</h2></div><span class="country-code ${onuTone}">ONU ${state.geopolitics.onuScore}/100</span></div><div class="onu-meter"><div><span>Reputação global</span><strong class="${onuTone}">${state.geopolitics.internationalSanctions ? 'Sanções internacionais ativas' : 'Sem sanções internacionais'}</strong></div><div class="meter-track"><span style="width:${state.geopolitics.onuScore}%"></span></div></div><div class="bloc-list">${state.geopolitics.contacts.map((contact) => { const nuclearReady = contact.atWar && arsenal > 0 && !contact.anexado; return `<article class="bloc-row ${contact.anexado ? 'annexed-contact' : ''}"><div><strong>${contact.name} ${nuclearBadge(contact)}</strong><span>${contact.anexado ? 'Território anexado' : `Relação ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | População ${formatNumber.format(contact.population || 0)}${contact.sancionado_por_jogador ? ' | Sancionado' : ''}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.anexado || contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comércio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${contact.anexado || contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Aliança</button><button type="button" class="quiet-action" data-action="sanction" data-contact="${contact.id}" ${contact.anexado || contact.sancionado_por_jogador ? 'disabled' : ''}>Impor sanção</button><button type="button" class="quiet-action" data-action="ultimatum" data-contact="${contact.id}" ${contact.anexado ? 'disabled' : ''}>Exigir anexação</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.anexado || contact.atWar ? 'disabled' : ''}>Guerra</button>${nuclearReady ? `<button type="button" class="quiet-action nuclear-action" data-action="nuclear-strike" data-contact="${contact.id}">Ataque nuclear</button>` : ''}</div></article>`; }).join('')}</div></section>`;
 }
 
 export function diplomacyView(state, searchQuery = '') {
   if (state.is_wasteland) {
-    return `<section class="panel wasteland-diplomacy"><div class="panel-heading"><div><p class="eyebrow">Superficie devastada</p><h2>Faccoes do Ermo</h2></div><span class="country-code">SUCATA ${formatNumber.format(state.scrap ?? 0)}</span></div><p class="notice">A diplomacia antiga morreu. Envie batedores, negocie com os sobreviventes e defenda o Vault.</p><div class="diplomacy-list">${(state.geopolitics.contacts ?? []).map((contact) => `<article class="bloc-row"><div><strong>${escapeHtml(contact.name)}</strong><span>Relacao ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)}</span></div><button type="button" class="quiet-action" data-action="wasteland-scout" data-contact="${contact.id}" ${state.scrap >= 25 ? '' : 'disabled'}>[ ENVIAR BATEDORES ]</button></article>`).join('')}</div></section>`;
+    return `<section class="panel wasteland-diplomacy"><div class="panel-heading"><div><p class="eyebrow">Superficie devastada</p><h2>Facções do Ermo</h2></div><span class="country-code">SUCATA ${formatNumber.format(state.scrap ?? 0)}</span></div><p class="notice">A diplomacia antiga morreu. Envie batedores, negocie com os sobreviventes e defenda o Vault.</p><div class="diplomacy-list">${(state.geopolitics.contacts ?? []).map((contact) => `<article class="bloc-row"><div><strong>${escapeHtml(contact.name)}</strong><span>Relação ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)}</span></div><button type="button" class="quiet-action" data-action="wasteland-scout" data-contact="${contact.id}" ${state.scrap >= 25 ? '' : 'disabled'}>[ ENVIAR BATEDORES ]</button></article>`).join('')}</div></section>`;
   }
   const treaty = state.geopolitics.peaceTreaty;
   const target = treaty && state.geopolitics.contacts.find((contact) => contact.id === treaty.targetId);
@@ -651,17 +698,17 @@ export function renderHostileAlert(state) {
 export function projectsView(state) {
   if (state.is_wasteland) {
     const buildings = state.wastelandBuildings ?? {};
-    return `<section class="panel projects-panel wasteland-projects"><div class="panel-heading"><div><p class="eyebrow">Ano Zero Pos-Bomba</p><h2>Economia de Sucata</h2></div><span class="country-code">SUCATA ${formatNumber.format(state.scrap ?? 0)}</span></div><p class="notice">A superficie morreu. O Vault agora mede o tempo em filtros, geradores e invasoes.</p><div class="internal-metrics"><span>POPULACAO ${formatNumber.format(state.country.populacao_base)}</span><span>PURIFICADORES ${buildings.waterPurifiers ?? 0}</span><span>GERADORES ${buildings.geothermalGenerators ?? 0}</span></div><article class="project-row"><div><strong>Purificador de Agua</strong><span>Custo: 50 sucatas | Mantem o Vault vivo.</span></div><button type="button" class="primary-action" data-action="wasteland-project" data-project="water-purifier" ${state.scrap >= 50 ? '' : 'disabled'}>[ CONSTRUIR ]</button></article><article class="project-row"><div><strong>Gerador Geotermico</strong><span>Custo: 100 sucatas | Alimenta as portas de metal.</span></div><button type="button" class="primary-action" data-action="wasteland-project" data-project="geothermal-generator" ${state.scrap >= 100 ? '' : 'disabled'}>[ CONSTRUIR ]</button></article></section>`;
+    return `<section class="panel projects-panel wasteland-projects"><div class="panel-heading"><div><p class="eyebrow">Ano Zero Pos-Bomba</p><h2>Economia de Sucata</h2></div><span class="country-code">SUCATA ${formatNumber.format(state.scrap ?? 0)}</span></div><p class="notice">A superficie morreu. O Vault agora mede o tempo em filtros, geradores e invasões.</p><div class="internal-metrics"><span>POPULACAO ${formatNumber.format(state.country.populacao_base)}</span><span>PURIFICADORES ${buildings.waterPurifiers ?? 0}</span><span>GERADORES ${buildings.geothermalGenerators ?? 0}</span></div><article class="project-row"><div><strong>Purificador de Agua</strong><span>Custo: 50 sucatas | Mantem o Vault vivo.</span></div><button type="button" class="primary-action" data-action="wasteland-project" data-project="water-purifier" ${state.scrap >= 50 ? '' : 'disabled'}>[ CONSTRUIR ]</button></article><article class="project-row"><div><strong>Gerador Geotérmico</strong><span>Custo: 100 sucatas | Alimenta as portas de metal.</span></div><button type="button" class="primary-action" data-action="wasteland-project" data-project="geothermal-generator" ${state.scrap >= 100 ? '' : 'disabled'}>[ CONSTRUIR ]</button></article></section>`;
   }
   const automated = Boolean(state.country.industry_automated);
   const canAutomate = state.economy.cash >= 200_000_000_000 && state.technology.points >= 250;
   const deadHand = state.megaprojects?.deadHand;
   const deadHandUnlocked = state.unlocked_techs?.includes('dead_hand');
   const deadHandReady = deadHandUnlocked && state.economy.cash >= 1_000_000_000_000 && state.technology.points >= 1_000 && state.country.uranium >= 250;
-  const deadHandLabel = state.dead_hand_active ? 'Rede ativa: retaliacao automatica armada.' : deadHand?.remainingMonths > 0 ? `Construcao em curso: ${deadHand.remainingMonths} meses.` : 'Custo: R$ 1 tri, 1.000 PP e 250 uranio. Prazo: 12 meses.';
-  const deadHandProject = deadHandUnlocked ? `<article class="project-row ${state.dead_hand_active ? 'completed' : ''}"><div><strong>Construir Rede Mao Morta (IA)</strong><span>${deadHandLabel}</span></div><button type="button" class="quiet-action danger-action" data-action="dead-hand-project" ${state.dead_hand_active || deadHand?.remainingMonths > 0 || !deadHandReady ? 'disabled' : ''}>${state.dead_hand_active ? 'Rede ativa' : deadHand?.remainingMonths > 0 ? 'Em construcao' : 'Iniciar Rede'}</button></article>` : '';
+  const deadHandLabel = state.dead_hand_active ? 'Rede ativa: retaliação automática armada.' : deadHand?.remainingMonths > 0 ? `Construção em curso: ${deadHand.remainingMonths} meses.` : 'Custo: R$ 1 tri, 1.000 PP e 250 uranio. Prazo: 12 meses.';
+  const deadHandProject = deadHandUnlocked ? `<article class="project-row ${state.dead_hand_active ? 'completed' : ''}"><div><strong>Construir Rede Mão Morta (IA)</strong><span>${deadHandLabel}</span></div><button type="button" class="quiet-action danger-action" data-action="dead-hand-project" ${state.dead_hand_active || deadHand?.remainingMonths > 0 || !deadHandReady ? 'disabled' : ''}>${state.dead_hand_active ? 'Rede ativa' : deadHand?.remainingMonths > 0 ? 'Em construção' : 'Iniciar Rede'}</button></article>` : '';
   const vaultReady = state.economy.cash >= 500_000_000_000 && state.country.steel >= 50_000;
-  const vaultProject = `<article class="project-row ${state.vault_built ? 'completed' : ''}"><div><strong>MEGA-VAULT DE CONTENCAO</strong><span>${state.vault_built ? 'Bunker operacional: a civilizacao ainda pode sobreviver.' : 'Custo: R$ 500 bi e 50.000 aco. Protege contra o colapso nuclear global.'}</span></div><button type="button" class="${state.vault_built ? 'quiet-action' : 'danger-action'}" data-action="mega-vault" ${state.vault_built || !vaultReady ? 'disabled' : ''}>${state.vault_built ? 'Vault operacional' : '[ CONSTRUIR VAULT ]'}</button></article>`;
+  const vaultProject = `<article class="project-row ${state.vault_built ? 'completed' : ''}"><div><strong>MEGA-VAULT DE CONTENCAO</strong><span>${state.vault_built ? 'Bunker operacional: a civilização ainda pode sobreviver.' : 'Custo: R$ 500 bi e 50.000 aço. Protege contra o colapso nuclear global.'}</span></div><button type="button" class="${state.vault_built ? 'quiet-action' : 'danger-action'}" data-action="mega-vault" ${state.vault_built || !vaultReady ? 'disabled' : ''}>${state.vault_built ? 'Vault operacional' : '[ CONSTRUIR VAULT ]'}</button></article>`;
   const internalMaintenance = calculateInternalMaintenance(state);
   const internalProjects = INTERNAL_PROJECTS.map((project) => {
     const count = Number(state[project.target]?.[project.field]) || 0;
@@ -671,7 +718,7 @@ export function projectsView(state) {
   const infrastructure = state.infrastructure ?? {};
   const health = state.health ?? {};
   const industry = state.industry ?? {};
-  return `<section class="panel projects-panel"><div class="panel-heading"><div><p class="eyebrow">Capacidade nacional</p><h2>Projetos Internos</h2></div><span class="country-code">ACO ${formatNumber.format(state.country.steel)}</span></div><div class="internal-metrics"><span>AMBIENTE ${Number(state.environment_health ?? 100).toFixed(0)}%</span><span>MANUTENCAO ${formatMoney(internalMaintenance)}/mes</span><span>ESTRADAS ${infrastructure.roads ?? 0} | FERROVIAS ${infrastructure.railways ?? 0} | AEROPORTOS ${infrastructure.airports ?? 0}</span><span>HOSPITAIS ${health.hospitals ?? 0} | CLINICAS ${health.clinics ?? 0}</span><span>FABRICAS ${industry.factories ?? 0} | USINAS ${industry.power_plants ?? 0}</span></div>${internalProjects}<article class="project-row ${automated ? 'completed' : ''}"><div><strong>Automatizar Parque Industrial</strong><span>${automated ? 'Industria 4.0 ativa: +3.000 aco por mes e pressao constante sobre trabalhadores.' : 'Custo: R$ 200 bi e 250 PP. Triplica a producao mensal de aco.'}</span></div><button type="button" class="${automated ? 'quiet-action' : 'primary-action'}" data-action="automate-industry" ${automated || !canAutomate ? 'disabled' : ''}>${automated ? 'Automatizado' : 'Automatizar'}</button></article>${vaultProject}${deadHandProject}</section>`;
+  return `<section class="panel projects-panel"><div class="panel-heading"><div><p class="eyebrow">Capacidade nacional</p><h2>Projetos Internos</h2></div><span class="country-code">ACO ${formatNumber.format(state.country.steel)}</span></div><div class="internal-metrics"><span>AMBIENTE ${Number(state.environment_health ?? 100).toFixed(0)}%</span><span>MANUTENCAO ${formatMoney(internalMaintenance)}/mês</span><span>ESTRADAS ${infrastructure.roads ?? 0} | FERROVIAS ${infrastructure.railways ?? 0} | AEROPORTOS ${infrastructure.airports ?? 0}</span><span>HOSPITAIS ${health.hospitals ?? 0} | CLINICAS ${health.clinics ?? 0}</span><span>FABRICAS ${industry.factories ?? 0} | USINAS ${industry.power_plants ?? 0}</span></div>${internalProjects}<article class="project-row ${automated ? 'completed' : ''}"><div><strong>Automatizar Parque Industrial</strong><span>${automated ? 'Indústria 4.0 ativa: +3.000 aço por mês e pressão constante sobre trabalhadores.' : 'Custo: R$ 200 bi e 250 PP. Triplica a produção mensal de aço.'}</span></div><button type="button" class="${automated ? 'quiet-action' : 'primary-action'}" data-action="automate-industry" ${automated || !canAutomate ? 'disabled' : ''}>${automated ? 'Automatizado' : 'Automatizar'}</button></article>${vaultProject}${deadHandProject}</section>`;
 }
 
 export function bunkerView(state) {
@@ -770,7 +817,7 @@ function wardrobeCard(state, skin, { discovered, entitled, trial, now }) {
   if (owned) {
     actions = `<button type="button" class="quiet-action" data-action="skin-equip" data-skin="${skin.id}" ${equipped ? 'disabled' : ''}>${equipped ? '[ EQUIPADA ]' : '[ EQUIPAR ]'}</button>`;
   } else if (skin.levelReward) {
-    // Exclusiva da trilha: nao se compra; da para experimentar e ver quanto falta para o nivel.
+    // Exclusiva da trilha: não se compra; da para experimentar e ver quanto falta para o nivel.
     const trialLabel = trying ? `[ PROVANDO · ${formatTrialClock(trial.endsAt - now)} ]` : '[ 👁 EXPERIMENTAR 2 MIN ]';
     const missing = Math.max(0, skin.levelReward - getLevel(state));
     actions = `<button type="button" class="primary-action" data-action="skin-trial" data-skin="${skin.id}" ${trying ? 'disabled' : ''}>${trialLabel}</button><button type="button" class="quiet-action wardrobe-store-button" disabled>[ 🔒 NÍVEL ${skin.levelReward}${missing ? ` · FALTAM ${missing}` : ''} ]</button>`;
@@ -788,7 +835,7 @@ function wardrobeCard(state, skin, { discovered, entitled, trial, now }) {
   return `<article class="wardrobe-skin wardrobe-skin--${skin.rarity}${equipped ? ' wardrobe-skin--equipped' : ''}${trying ? ' wardrobe-skin--trying' : ''}${skin.premium ? ' wardrobe-skin--premium' : ''}${skin.levelReward ? ' wardrobe-skin--trail' : ''}" style="--rarity-color:${rarity.color}"><div class="wardrobe-preview"><canvas width="120" height="150" data-skin-preview="${skin.id}" aria-label="Prévia: ${escapeHtml(skin.name)}"></canvas></div><div class="wardrobe-badges">${badges}</div><h3>${escapeHtml(skin.name)}</h3><p class="wardrobe-description">${escapeHtml(skin.description)}</p>${lock}${price}<div class="wardrobe-actions">${actions}</div></article>`;
 }
 
-// discovered: entradas da enciclopedia; entitled: skins premium da conta; trial: provador ativo nesta sessao.
+// discovered: entradas da enciclopedia; entitled: skins premium da conta; trial: provador ativo nesta sessão.
 export function renderWardrobeView(state, { discovered = [], entitled = [], trial = null, now = Date.now() } = {}) {
   const scrap = Math.max(0, Number(state.scrap) || 0);
   const profile = PRESIDENT_CLASSES.find((item) => item.id === state.presidentClass);
@@ -930,7 +977,7 @@ function legacyMilitaryView(state) {
   const military = { soldiers: 0, equipmentMultiplier: 1, nuclear: {}, ...state.military };
   const nuclear = { civilProgress: 0, militaryProgress: 0, ...military.nuclear };
   const canCoup = state.regime.type === 'democracy' && military.support >= 85 && state.budget.defenseSpend >= 0.06;
-  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Forcas Armadas</p><h2>Poder ${Number(military.power || 0).toFixed(0)}</h2><p class="notice">${state.notice}</p><div class="ledger-row"><span>Soldados</span><strong>${formatNumber.format(military.soldiers)}</strong></div><div class="ledger-row"><span>Equipamento</span><strong>x${Number(military.equipmentMultiplier).toFixed(2)}</strong></div><div class="ledger-row"><span>Apoio militar</span><strong>${Number(military.support || 0).toFixed(0)}%</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="recruit">Recrutar Soldados</button><button type="button" class="quiet-action" data-action="equipment" data-kind="tanks">Comprar Blindados</button><button type="button" class="quiet-action" data-action="equipment" data-kind="jets">Comprar Cacas</button></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section><section class="panel"><p class="eyebrow">Programa nuclear</p><h2>Projetos especiais</h2><div class="ledger-row"><span>Energia civil</span><strong>${Number(nuclear.civilProgress).toFixed(0)}%</strong></div><div class="ledger-row"><span>Dissuasao militar</span><strong>${Number(nuclear.militaryProgress).toFixed(0)}%</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="nuclear" data-kind="civil" data-amount="5000000000">Energia 5 bi</button><button type="button" class="quiet-action" data-action="nuclear" data-kind="military" data-amount="5000000000">Dissuasao 5 bi</button></div></section></section>`;
+  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Forcas Armadas</p><h2>Poder ${Number(military.power || 0).toFixed(0)}</h2><p class="notice">${state.notice}</p><div class="ledger-row"><span>Soldados</span><strong>${formatNumber.format(military.soldiers)}</strong></div><div class="ledger-row"><span>Equipamento</span><strong>x${Number(military.equipmentMultiplier).toFixed(2)}</strong></div><div class="ledger-row"><span>Apoio militar</span><strong>${Number(military.support || 0).toFixed(0)}%</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="recruit">Recrutar Soldados</button><button type="button" class="quiet-action" data-action="equipment" data-kind="tanks">Comprar Blindados</button><button type="button" class="quiet-action" data-action="equipment" data-kind="jets">Comprar Cacas</button></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section><section class="panel"><p class="eyebrow">Programa nuclear</p><h2>Projetos especiais</h2><div class="ledger-row"><span>Energia civil</span><strong>${Number(nuclear.civilProgress).toFixed(0)}%</strong></div><div class="ledger-row"><span>Dissuasão militar</span><strong>${Number(nuclear.militaryProgress).toFixed(0)}%</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="nuclear" data-kind="civil" data-amount="5000000000">Energia 5 bi</button><button type="button" class="quiet-action" data-action="nuclear" data-kind="military" data-amount="5000000000">Dissuasão 5 bi</button></div></section></section>`;
 }
 
 export function renderMilitaryResearchProjects(state) {
@@ -940,7 +987,7 @@ export function renderMilitaryResearchProjects(state) {
     const completed = unlocked.has(technology.id);
     const dependenciesMet = technology.requires.every((requiredId) => unlocked.has(requiredId));
     const affordable = points >= technology.cost;
-    const requirements = technology.requires.length ? `Requer: ${technology.requires.join(', ')}` : 'Sem dependencia';
+    const requirements = technology.requires.length ? `Requer: ${technology.requires.join(', ')}` : 'Sem dependência';
     const status = completed ? 'CONCLUÍDO' : !dependenciesMet ? 'DEPENDENCIA PENDENTE' : !affordable ? 'PP INSUFICIENTES' : 'PRONTO PARA INICIAR';
     return `<article class="military-tech-row ${completed ? 'completed' : ''}"><div><strong>${technology.title}</strong><span>Custo: ${formatNumber.format(technology.cost)} PP | ${requirements}</span><em>${status}</em></div><button type="button" class="${completed ? 'quiet-action' : 'primary-action'}" data-action="military-research" data-technology="${technology.id}" ${completed || !dependenciesMet || !affordable ? 'disabled' : ''}>${completed ? '[ CONCLUÍDO ]' : '[ INICIAR PROJETO ]'}</button></article>`;
   }).join('')}</div></section>`;
@@ -954,17 +1001,17 @@ export function militaryView(state) {
   const nuclear = military.nuclear ?? {};
   const maintenance = calculateMilitaryMaintenance(military, state.military_tech_level);
   const canCoup = state.regime.type === 'democracy' && military.support >= 85 && state.budget.defenseSpend >= 0.06;
-  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Tríade militar</p><h2>Poder total ${Number(military.power || 0).toFixed(1)}</h2><p class="notice">${state.notice}</p><div class="branch-list"><article class="branch-row"><div><strong>Exercito</strong><span>${formatNumber.format(exercito.soldados)} soldados | ${formatNumber.format(exercito.blindados)} blindados</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="recruit">Recrutar soldados</button><button type="button" class="quiet-action" data-action="buy-tank">Comprar blindado</button></div></article><article class="branch-row"><div><strong>Marinha</strong><span>${formatNumber.format(marinha.navios)} navios operacionais</span></div><button type="button" class="quiet-action" data-action="buy-ship">Comprar navio</button></article><article class="branch-row"><div><strong>Aeronautica</strong><span>${formatNumber.format(aeronautica.cacas)} cacas operacionais</span></div><button type="button" class="quiet-action" data-action="buy-jet">Comprar caca</button></article></div><div class="ledger-row"><span>Apoio militar</span><strong>${Number(military.support || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>CUSTO DE MANUTENÇÃO MENSAL</span><strong>${formatMoney(maintenance)}</strong></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section><section class="panel"><p class="eyebrow">Arsenal estrategico</p><h2>Programa nuclear</h2><div class="ledger-row"><span>Energia civil</span><strong>${Number(nuclear.civilProgress || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Dissuasao militar</span><strong>${Number(nuclear.militaryProgress || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Armas nucleares</span><strong>${Number(military.armasNucleares || 0)}</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="nuclear" data-kind="civil" data-amount="5000000000">Energia 5 bi</button><button type="button" class="quiet-action" data-action="nuclear" data-kind="military" data-amount="5000000000">Dissuasao 5 bi</button></div></section>${renderMilitaryResearchProjects(state)}</section>`;
+  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Tríade militar</p><h2>Poder total ${Number(military.power || 0).toFixed(1)}</h2><p class="notice">${state.notice}</p><div class="branch-list"><article class="branch-row"><div><strong>Exercito</strong><span>${formatNumber.format(exercito.soldados)} soldados | ${formatNumber.format(exercito.blindados)} blindados</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="recruit">Recrutar soldados</button><button type="button" class="quiet-action" data-action="buy-tank">Comprar blindado</button></div></article><article class="branch-row"><div><strong>Marinha</strong><span>${formatNumber.format(marinha.navios)} navios operacionais</span></div><button type="button" class="quiet-action" data-action="buy-ship">Comprar navio</button></article><article class="branch-row"><div><strong>Aeronáutica</strong><span>${formatNumber.format(aeronautica.cacas)} cacas operacionais</span></div><button type="button" class="quiet-action" data-action="buy-jet">Comprar caca</button></article></div><div class="ledger-row"><span>Apoio militar</span><strong>${Number(military.support || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>CUSTO DE MANUTENÇÃO MENSAL</span><strong>${formatMoney(maintenance)}</strong></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section><section class="panel"><p class="eyebrow">Arsenal estratégico</p><h2>Programa nuclear</h2><div class="ledger-row"><span>Energia civil</span><strong>${Number(nuclear.civilProgress || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Dissuasão militar</span><strong>${Number(nuclear.militaryProgress || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Armas nucleares</span><strong>${Number(military.armasNucleares || 0)}</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="nuclear" data-kind="civil" data-amount="5000000000">Energia 5 bi</button><button type="button" class="quiet-action" data-action="nuclear" data-kind="military" data-amount="5000000000">Dissuasão 5 bi</button></div></section>${renderMilitaryResearchProjects(state)}</section>`;
 }
 
 function cabinetView(state) {
   const coupAvailable = state.government === 'republic' && state.economy.cash >= 500_000_000_000;
   const governmentCard = state.government === 'republic'
-    ? `<article class="minister-row coup-row"><div><strong>Auto-Golpe de Estado</strong><span>Abandona a Republica por um Imperio Nacional ou Sindicato Corporativo.</span></div><button type="button" class="danger-action" data-action="auto-coup-open" ${coupAvailable ? '' : 'disabled'}>[ EXECUTAR AUTO-GOLPE (R$ 500 BI) ]</button></article>`
-    : `<article class="minister-row completed"><div><strong>${state.title}</strong><span>Regime ativo: ${state.government === 'empire' ? 'hostilidade imperial crescente' : 'tributacao corporativa duplicada'}.</span></div></article>`;
+    ? `<article class="minister-row coup-row"><div><strong>Auto-Golpe de Estado</strong><span>Abandona a República por um Império Nacional ou Sindicato Corporativo.</span></div><button type="button" class="danger-action" data-action="auto-coup-open" ${coupAvailable ? '' : 'disabled'}>[ EXECUTAR AUTO-GOLPE (R$ 500 BI) ]</button></article>`
+    : `<article class="minister-row completed"><div><strong>${state.title}</strong><span>Regime ativo: ${state.government === 'empire' ? 'hostilidade imperial crescente' : 'tributação corporativa duplicada'}.</span></div></article>`;
   return `<section class="panel cabinet-panel"><div class="panel-heading"><div><p class="eyebrow">Equipe de governo</p><h2>Gabinete de Ministros</h2></div></div><div class="minister-list">${governmentCard}${MINISTERS.map((minister) => {
     const active = Boolean(state.ministers?.[minister.id]);
-    return `<article class="minister-row"><div><strong>${minister.title}</strong><span>${minister.description}</span></div>${active ? `<button type="button" class="quiet-action" data-action="minister-dismiss" data-minister="${minister.id}">Demitir (+3 aprovacao)</button>` : `<button type="button" class="quiet-action" data-action="minister-hire" data-minister="${minister.id}">Contratar ${formatMoney(minister.cost)}</button>`}</article>`;
+    return `<article class="minister-row"><div><strong>${minister.title}</strong><span>${minister.description}</span></div>${active ? `<button type="button" class="quiet-action" data-action="minister-dismiss" data-minister="${minister.id}">Demitir (+3 aprovação)</button>` : `<button type="button" class="quiet-action" data-action="minister-hire" data-minister="${minister.id}">Contratar ${formatMoney(minister.cost)}</button>`}</article>`;
   }).join('')}</div></section>`;
 }
 
@@ -972,11 +1019,11 @@ function renderGovernmentModal(state) {
   if (!state.pendingGovernmentChoice) return '';
   return `<section class="modal-arcade-dialog" role="dialog" aria-modal="true" aria-labelledby="government-choice-title"><p class="modal-arcade-header">/// AUTO-GOLPE: NOVA ORDEM ///</p><h2 id="government-choice-title">ESCOLHA O DONO DO ESTADO</h2><pre class="ascii-constitution">A REPUBLICA FOI SILENCIADA.
 O CAIXA PAGOU PELA MUDANCA.
-ESCOLHA O REGIME QUE SOBREVIVERA.</pre><div class="constitution-options"><button type="button" class="constitution-choice" data-action="government-select" data-government="empire">[ IMPERIO NACIONAL ]<span>Exercito brutal. ONU ignorada. O mundo se torna hostil.</span></button><button type="button" class="constitution-choice" data-action="government-select" data-government="corporate">[ SINDICATO CORPORATIVO ]<span>Impostos em dobro. Se o caixa quebrar, vem a aquisicao hostil.</span></button></div></section>`;
+ESCOLHA O REGIME QUE SOBREVIVERA.</pre><div class="constitution-options"><button type="button" class="constitution-choice" data-action="government-select" data-government="empire">[ IMPERIO NACIONAL ]<span>Exercito brutal. ONU ignorada. O mundo se torna hostil.</span></button><button type="button" class="constitution-choice" data-action="government-select" data-government="corporate">[ SINDICATO CORPORATIVO ]<span>Impostos em dobro. Se o caixa quebrar, vem a aquisição hostil.</span></button></div></section>`;
 }
 
 function technologyView(state) {
-  return `<section class="panel technology-panel"><div class="panel-heading"><div><p class="eyebrow">Inovacao nacional</p><h2>Tecnologia</h2></div><span class="country-code">${state.technology.points} PP</span></div><div class="technology-list">${TECHNOLOGIES.map((technology) => {
+  return `<section class="panel technology-panel"><div class="panel-heading"><div><p class="eyebrow">Inovação nacional</p><h2>Tecnologia</h2></div><span class="country-code">${state.technology.points} PP</span></div><div class="technology-list">${TECHNOLOGIES.map((technology) => {
     const unlocked = state.technology.unlocked.includes(technology.id);
     const affordable = state.technology.points >= technology.cost;
     return `<article class="technology-card ${unlocked ? 'unlocked' : ''}"><p class="eyebrow">${technology.branch}</p><h3>${technology.title}</h3><p>${technology.description}</p><div><span>${technology.cost} PP</span><button type="button" class="quiet-action" data-action="research" data-technology="${technology.id}" ${unlocked || !affordable ? 'disabled' : ''}>${unlocked ? 'Concluida' : 'Pesquisar'}</button></div></article>`;
@@ -985,7 +1032,7 @@ function technologyView(state) {
 
 function countriesView(state) {
   const selection = COUNTRIES.slice().sort((left, right) => left.nome.localeCompare(right.nome, 'pt-BR'));
-  return `<section class="panel countries-panel"><div class="panel-heading"><div><p class="eyebrow">Banco mundial</p><h2>200 nacoes jogaveis</h2></div><span class="country-code">${selection.length}</span></div><div class="country-table"><div class="country-table-head"><span>Pais</span><span>Area territorial</span><span></span></div>${selection.map((country) => `<div class="country-row ${country.id === state.country.id ? 'selected' : ''}"><span><strong>${country.nome}</strong><small>${country.id.toUpperCase()}</small></span><span>${formatNumber.format(country.area_km2)} km²</span><button type="button" class="quiet-action" data-action="country" data-country="${country.id}">Governar</button></div>`).join('')}</div></section>`;
+  return `<section class="panel countries-panel"><div class="panel-heading"><div><p class="eyebrow">Banco mundial</p><h2>200 nações jogáveis</h2></div><span class="country-code">${selection.length}</span></div><div class="country-table"><div class="country-table-head"><span>País</span><span>Área territorial</span><span></span></div>${selection.map((country) => `<div class="country-row ${country.id === state.country.id ? 'selected' : ''}"><span><strong>${country.nome}</strong><small>${country.id.toUpperCase()}</small></span><span>${formatNumber.format(country.area_km2)} km²</span><button type="button" class="quiet-action" data-action="country" data-country="${country.id}">Governar</button></div>`).join('')}</div></section>`;
 }
 
 export function historyView(state) {
@@ -1011,7 +1058,7 @@ export function storyModeView(state) {
 
 export function renderNews(state) {
   const news = (state.news ?? []).slice(0, 5);
-  return `<aside class="news-feed" aria-label="Giro de Noticias"><div class="panel-heading"><div><p class="eyebrow">Giro de Noticias</p><h2>Ultimas manchetes</h2></div></div><ol>${news.length ? news.map((item) => `<li><span>${MONTHS[(item.calendar?.month ?? 1) - 1]} ${item.calendar?.year ?? ''}</span>${item.text}</li>`).join('') : '<li><span>Agora</span>O gabinete aguarda a primeira decisao.</li>'}</ol></aside>`;
+  return `<aside class="news-feed" aria-label="Giro de Noticias"><div class="panel-heading"><div><p class="eyebrow">Giro de Noticias</p><h2>Ultimas manchetes</h2></div></div><ol>${news.length ? news.map((item) => `<li><span>${MONTHS[(item.calendar?.month ?? 1) - 1]} ${item.calendar?.year ?? ''}</span>${item.text}</li>`).join('') : '<li><span>Agora</span>O gabinete aguarda a primeira decisão.</li>'}</ol></aside>`;
 }
 
 export function renderPeaceTreaty(state) {
@@ -1021,10 +1068,10 @@ export function renderPeaceTreaty(state) {
     : null;
   if (!target) return '';
   return `<section class="peace-dialog" role="dialog" aria-modal="true" aria-labelledby="tratado-titulo">
-    <p class="eyebrow">Tratado de Paz Obrigatorio</p>
+    <p class="eyebrow">Tratado de Paz Obrigatório</p>
     <h2 id="tratado-titulo">${target.name} foi derrotado</h2>
-    <p class="notice">Decida o destino do territorio antes de encerrar outro mes.</p>
-    <div class="action-row"><button type="button" class="quiet-action danger-action" data-action="ui-annex">Anexar</button><button type="button" class="primary-action" data-action="ui-loot">Saquear Tesouro</button><button type="button" class="quiet-action" data-action="ui-puppet">Instalar Fantoche</button><button type="button" class="quiet-action" data-action="ui-demilitarize">Desmilitarizar</button><button type="button" class="quiet-action" data-action="ui-reparations">Reparacoes</button></div>
+    <p class="notice">Decida o destino do território antes de encerrar outro mês.</p>
+    <div class="action-row"><button type="button" class="quiet-action danger-action" data-action="ui-annex">Anexar</button><button type="button" class="primary-action" data-action="ui-loot">Saquear Tesouro</button><button type="button" class="quiet-action" data-action="ui-puppet">Instalar Fantoche</button><button type="button" class="quiet-action" data-action="ui-demilitarize">Desmilitarizar</button><button type="button" class="quiet-action" data-action="ui-reparations">Reparações</button></div>
   </section>`;
 }
 
@@ -1038,12 +1085,12 @@ export function renderUnAssembly(state) {
   const pending = state.pendingUnVote;
   const resolution = RESOLUTIONS.find((item) => item.id === pending?.resolutionId);
   if (!resolution) return '';
-  return `<section class="peace-dialog un-dialog" role="dialog" aria-modal="true" aria-labelledby="onu-titulo"><p class="eyebrow">Assembleia Geral da ONU</p><h2 id="onu-titulo">${resolution.title}</h2><p class="notice">${resolution.description}</p><p class="notice">O Secretario da ONU chamou a votacao. Registre a posicao do seu governo.</p><div class="action-row"><button type="button" class="primary-action" data-action="un-vote" data-vote="yes">Votar SIM</button><button type="button" class="quiet-action danger-action" data-action="un-vote" data-vote="no">Votar NAO</button><button type="button" class="quiet-action" data-action="un-vote" data-vote="abstain">ABSTER</button></div></section>`;
+  return `<section class="peace-dialog un-dialog" role="dialog" aria-modal="true" aria-labelledby="onu-titulo"><p class="eyebrow">Assembleia Geral da ONU</p><h2 id="onu-titulo">${resolution.title}</h2><p class="notice">${resolution.description}</p><p class="notice">O Secretário da ONU chamou a votação. Registre a posição do seu governo.</p><div class="action-row"><button type="button" class="primary-action" data-action="un-vote" data-vote="yes">Votar SIM</button><button type="button" class="quiet-action danger-action" data-action="un-vote" data-vote="no">Votar NAO</button><button type="button" class="quiet-action" data-action="un-vote" data-vote="abstain">ABSTER</button></div></section>`;
 }
 
 export function renderSoftPower(state) {
   if (!state.pendingGlobalBid) return '';
-  return `<section class="peace-dialog soft-power-dialog" role="dialog" aria-modal="true" aria-labelledby="jogos-titulo"><p class="eyebrow">Diplomacia Cultural</p><h2 id="jogos-titulo">Candidatura para os Jogos Mundiais</h2><p class="notice">A ONU abriu a selecao da proxima sede. A candidatura custa R$ 50 bi; vencer garante turismo por 12 meses e reputacao ONU de 100 por 36 meses.</p><div class="action-row"><button type="button" class="primary-action" data-action="global-games-bid">Candidatar R$ 50 bi</button><button type="button" class="quiet-action" data-action="global-games-decline">Recusar</button></div></section>`;
+  return `<section class="peace-dialog soft-power-dialog" role="dialog" aria-modal="true" aria-labelledby="jogos-titulo"><p class="eyebrow">Diplomacia Cultural</p><h2 id="jogos-titulo">Candidatura para os Jogos Mundiais</h2><p class="notice">A ONU abriu a seleção da próxima sede. A candidatura custa R$ 50 bi; vencer garante turismo por 12 meses e reputação ONU de 100 por 36 meses.</p><div class="action-row"><button type="button" class="primary-action" data-action="global-games-bid">Candidatar R$ 50 bi</button><button type="button" class="quiet-action" data-action="global-games-decline">Recusar</button></div></section>`;
 }
 
 export function renderStoryCard(state) {
@@ -1097,7 +1144,7 @@ export function renderPresidentialBriefing(state) {
 
 // Capitulo X: a Porta (escolha do final) e o epilogo com a galeria de finais descobertos.
 export function doorView(state, trophies = createTrophies()) {
-  // Com a cidade em andamento a porta ja foi cruzada: so o resultado final volta a cobrir a tela.
+  // Com a cidade em andamento a porta já foi cruzada: so o resultado final volta a cobrir a tela.
   if (state.city) return state.city.result ? cityEpilogueView(state) : '';
   if (state.ending) return epilogueView(state, trophies);
   if (state.pendingLaydDiscovery) return laydDiscoveryView(state);
@@ -1121,7 +1168,7 @@ function epilogueView(state, trophies) {
   return `<section class="door-dialog epilogue" role="dialog" aria-modal="true" aria-labelledby="ending-title"><p class="story-classification">/// FIM · ${Math.floor((Number(state.ending.month) || 0) / 12)} ANOS NO VAULT · ${population} SOBREVIVENTES ///</p><div class="ending-icon" aria-hidden="true">${ending.icon}</div><h2 id="ending-title">${escapeHtml(ending.title.toUpperCase())}</h2><p class="story-typewriter ending-story">${escapeHtml(getEndingStory(state, ending.id))}</p><blockquote class="ending-epigraph">“${escapeHtml(ending.epigraph)}”</blockquote><p class="ending-gallery-label">FINAIS DESCOBERTOS · ${found.size}/${Object.keys(ENDINGS).length}</p><div class="ending-gallery">${gallery}</div><div class="action-row">${CITY_ORIGINS[ending.id] ? '<button type="button" class="wasteland-command-button" data-action="start-city">[ RECONSTRUIR O MUNDO ]</button>' : ''}<button type="button" class="${CITY_ORIGINS[ending.id] ? 'quiet-action' : 'wasteland-command-button'}" data-action="ending-new-game">[ NOVA PARTIDA ]</button></div></section>`;
 }
 
-// Historia de abertura em cenas; sem indice, mostra a ultima (o alerta de comando).
+// História de abertura em cenas; sem indice, mostra a ultima (o alerta de comando).
 export function renderWastelandCinematic(state, { scene } = {}) {
   if (!state.is_wasteland || !state.wasteland_cinematic_ready) return '';
   const scenes = getIntroScenes(state);
@@ -1160,7 +1207,7 @@ export function triggerNuclearFallout({ onThemeChange, onComplete } = {}) {
 
 export function mountDashboard(root) {
   if (!root) {
-    throw new Error('Elemento raiz do dashboard nao encontrado.');
+    throw new Error('Elemento raiz do dashboard não encontrado.');
   }
   const localCityPreview = typeof window !== 'undefined'
     && ['localhost', '127.0.0.1'].includes(window.location.hostname)
@@ -1229,7 +1276,7 @@ export function mountDashboard(root) {
   soundControl.className = 'sound-control';
   soundControl.innerHTML = soundControlView(audio.settings);
   document.body.append(soundControl);
-  const saveAudio = (settings) => { try { localStorage.setItem(AUDIO_KEY, JSON.stringify(settings)); } catch { /* so nesta sessao */ } };
+  const saveAudio = (settings) => { try { localStorage.setItem(AUDIO_KEY, JSON.stringify(settings)); } catch { /* so nesta sessão */ } };
   soundControl.addEventListener('click', (event) => {
     if (!event.target.closest('[data-sound-toggle]')) return;
     const settings = audio.setSettings({ muted: !audio.settings.muted });
@@ -1242,7 +1289,7 @@ export function mountDashboard(root) {
     const toggle = soundControl.querySelector('[data-sound-toggle]');
     if (toggle) { toggle.textContent = '🔊'; toggle.setAttribute('aria-pressed', 'false'); }
   });
-  // Navegadores so liberam audio apos um gesto; cada clique de botao tambem faz o "tique" da interface.
+  // Navegadores so liberam audio apos um gesto; cada clique de botão também faz o "tique" da interface.
   document.addEventListener('pointerdown', () => audio.unlock(), { capture: true });
   document.addEventListener('keydown', () => audio.unlock(), { capture: true });
   document.addEventListener('click', (event) => {
@@ -1251,7 +1298,7 @@ export function mountDashboard(root) {
   }, { capture: true });
   const hadSave = (() => { try { return localStorage.getItem(STORAGE_KEY) !== null; } catch { return false; } })();
   let tutorial = (() => { try { return createTutorial(JSON.parse(localStorage.getItem(TUTORIAL_KEY) ?? '{}')); } catch { return createTutorial(); } })();
-  const saveTutorial = () => { try { localStorage.setItem(TUTORIAL_KEY, JSON.stringify(tutorial)); } catch { /* so nesta sessao */ } };
+  const saveTutorial = () => { try { localStorage.setItem(TUTORIAL_KEY, JSON.stringify(tutorial)); } catch { /* so nesta sessão */ } };
   const tutorialCoach = document.createElement('aside');
   tutorialCoach.className = 'tutorial-coach';
   tutorialCoach.setAttribute('aria-live', 'polite');
@@ -1262,7 +1309,7 @@ export function mountDashboard(root) {
   // depois que os assets terminam de carregar e o jogador confirma a entrada.
   let titleView = localCityPreview ? 'main' : 'boot';
   let onboarding = (() => { try { return createOnboarding(JSON.parse(localStorage.getItem(ONBOARDING_KEY) ?? '{}')); } catch { return createOnboarding(); } })();
-  const saveOnboarding = () => { try { localStorage.setItem(ONBOARDING_KEY, JSON.stringify(onboarding)); } catch { /* so nesta sessao */ } };
+  const saveOnboarding = () => { try { localStorage.setItem(ONBOARDING_KEY, JSON.stringify(onboarding)); } catch { /* so nesta sessão */ } };
   if (!onboarding.profileDone && typeof navigator !== 'undefined') {
     const language = guessLanguage(navigator.language);
     if (language !== state.playerProfile?.language) {
@@ -1745,7 +1792,7 @@ export function mountDashboard(root) {
     }
   }
 
-  // O relatorio do ataque toca a batalha uma vez; re-renderizar o Vault nao a reinicia.
+  // O relatório do ataque toca a batalha uma vez; re-renderizar o Vault não a reinicia.
   function syncRaidModal() {
     if (!raidModal) return;
     const report = state.pendingRaid;
@@ -1804,7 +1851,7 @@ export function mountDashboard(root) {
     }
   }
 
-  // Toque no poco: com petroleo pronto ele e recolhido na hora; senao abre o painel de gestao.
+  // Toque no poco: com petróleo pronto ele e recolhido na hora; senão abre o painel de gestão.
   function handleOilDerrick(slot) {
     const status = getDerrickStatus(normalizeOilField(state.oil_derricks)[slot]);
     if (status?.ready) {
@@ -2168,7 +2215,7 @@ export function mountDashboard(root) {
     falloutCinematicStarted = true;
     audio.play('boom');
     triggerNuclearFallout({
-      onComplete: () => commit({ ...state, wasteland_cinematic_pending: false, wasteland_cinematic_ready: true, notice: 'Os portoes do Vault estao selados. Assuma o comando.' }),
+      onComplete: () => commit({ ...state, wasteland_cinematic_pending: false, wasteland_cinematic_ready: true, notice: 'Os portões do Vault estão selados. Assuma o comando.' }),
     });
   }
 
@@ -2399,7 +2446,7 @@ export function mountDashboard(root) {
       const next = chooseEnding(state, choice.dataset.ending);
       if (next.ending) {
         trophies = recordTrophy(trophies, next.ending.id);
-        try { localStorage.setItem(TROPHIES_KEY, JSON.stringify(trophies)); } catch { /* sem armazenamento: trofeu so nesta sessao */ }
+        try { localStorage.setItem(TROPHIES_KEY, JSON.stringify(trophies)); } catch { /* sem armazenamento: trofeu so nesta sessão */ }
       }
       commit(next);
       return;

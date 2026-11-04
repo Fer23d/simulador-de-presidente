@@ -17,7 +17,7 @@ test('corporate lobby automatically blocks environmental and wealth tax laws abo
   const result = voteLaw({ ...state, megacorp_power: 81 }, 'environmental-protection');
 
   assert.equal(result.laws.environmentalProtection.voteCompleted, true);
-  assert.match(result.notice, /lobby das Megacorporacoes/);
+  assert.match(result.notice, /lobby das Megacorporações/);
 });
 
 test('nationalization resets corporate power but can trigger an elite coup', () => {

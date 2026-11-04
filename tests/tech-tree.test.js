@@ -48,5 +48,5 @@ test('rejects invalid, unaffordable, duplicate, and unmet dependency projects', 
   assert.equal(insufficient.military_research_points, 999);
   assert.match(insufficient.notice, /insuficiente/i);
   assert.equal(missing.military_research_points, state.military_research_points);
-  assert.match(missing.notice, /nao encontrado/i);
+  assert.match(missing.notice, /não encontrado/i);
 });

@@ -10,7 +10,7 @@ export function canPromulgarConstituicao(state) {
 }
 
 export function promulgarConstituicao(state, pillar) {
-  if (!CONSTITUTIONS.has(pillar)) return { ...state, notice: 'Pilar constitucional invalido.' };
+  if (!CONSTITUTIONS.has(pillar)) return { ...state, notice: 'Pilar constitucional inválido.' };
   if (!canPromulgarConstituicao(state)) return { ...state, notice: 'A Constituicao exige elite ou militares com apoio total.' };
 
   if (pillar === 'stratocratic') {
@@ -22,7 +22,7 @@ export function promulgarConstituicao(state, pillar) {
         constitution: pillar,
         stratocraticInflationFloor: Math.min(0.8, (Number(state.economy.inflation) || 0) * 2),
       },
-      notice: 'Nova Constituicao promulgada: Estado Estratocratico.',
+      notice: 'Nova Constituicao promulgada: Estado Estratocrático.',
     };
   }
   if (pillar === 'technocratic') {
@@ -32,7 +32,7 @@ export function promulgarConstituicao(state, pillar) {
     ...state,
     regime: { ...state.regime, type: 'theocratic_state', constitution: pillar, stabilityLocked: true },
     factions: cloneWithout(state.factions, ['elite', 'trabalhadores']),
-    notice: 'Nova Constituicao promulgada: Estado Teocratico.',
+    notice: 'Nova Constituicao promulgada: Estado Teocrático.',
   };
 }
 

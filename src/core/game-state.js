@@ -1,6 +1,6 @@
 import { createCongress, negotiateSupport, voteOnLaw } from './congress.js';
 import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countries.js';
-import { DEFAULT_BUDGET, advanceEconomy, clampTaxRate, setBudgetRate } from './economy.js';
+import { DEFAULT_BUDGET, advanceEconomy, clampBudgetRate, clampTaxRate, normalizeInflationHistory, setBudgetRate } from './economy.js';
 import { advanceGeopolitics, anexarPais as annexTreatyTarget, alterarNotaONU as changeOnuScore, aplicarReparacoes as applyReparationsTreaty, createGeopolitics, criarLiga as createLeagueState, desmilitarizarPais as demilitarizeTreatyTarget, declareWar, estabelecerFantoche as establishPuppet, exigirAnexacao as demandAnnexation, getGeopoliticalModifiers, insultarNacao as insultNation, importarRecursos as importResources, imporSancao as imposeSanction, interceptArticle5 as detectArticle5, inviteToLeague as inviteLeagueMember, isLegitimateDefenseTarget, processarAgressaoIA, proposeAlliance as formAlliance, proposeTradeTreaty, respondArticle5 as respondArticle5State, sabotar as sabotageCountry, saquearTesouro as lootTreatyTarget } from './geopolitics.js';
 import { advanceMilitary, applyNuclearCompletion, calculateMilitaryMaintenance, canAutogolpe, comprarBlindados, comprarCacas, comprarEquipamento, comprarNavios, createMilitary, createRegime, evaluateRegime, fundNuclearProject, getPoderTotal, normalizeMilitary, recrutarSoldado as recruitSoldiers } from './military.js';
 import { aggregateActiveLawEffects, LAWS, LAW_LABOR_REFORM } from './laws.js';
@@ -77,15 +77,23 @@ function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+// Hostilidades de outros paises (modo Presidente): chance mensal por pais hostil, carencia inicial e intervalo minimo.
+export const HOSTILITY_MONTHLY_CHANCE = 0.008;
+export const HOSTILITY_GRACE_MONTHS = 12;
+export const HOSTILITY_COOLDOWN_MONTHS = 8;
+
 function countrySeed(id) {
   return [...id].reduce((total, character) => total + character.charCodeAt(0), 0);
 }
 
 function createEconomy(country) {
   const seed = countrySeed(country.id);
+  const inflation = 0.035 + ((seed % 40) / 1_000);
   return {
     gdp: country.pib_base,
-    inflation: 0.035 + ((seed % 40) / 1_000),
+    inflation,
+    fiscalHole: 0,
+    inflationHistory: [inflation],
     unemployment: 0.05 + ((seed % 80) / 1_000),
     cash: Math.round(country.pib_base * 0.06),
   };
@@ -128,7 +136,7 @@ function interceptDeadHandGameOver(state) {
   const result = interceptarGameOverComMaoMorta(state);
   if (result.dead_hand_triggered && state.vault_built) return enterWasteland(result, 'mao-morta');
   return result.dead_hand_triggered && !state.dead_hand_triggered
-    ? addNews(syncWorld(result), 'Diretriz Omega executada: os silos da Mao Morta lancaram contra todos os alvos.')
+    ? addNews(syncWorld(result), 'Diretriz Omega executada: os silos da Mão Morta lancaram contra todos os alvos.')
     : result;
 }
 
@@ -146,7 +154,7 @@ function resolverFinalDeJogo(state) {
   if (isEscapeEligible(state)) {
     const result = interceptarFinalCaixa2(state);
     return result.escape_ending_triggered && !state.escape_ending_triggered
-      ? addNews(result, 'O pais caiu, mas o helicoptero privado decolou.')
+      ? addNews(result, 'O país caiu, mas o helicoptero privado decolou.')
       : result;
   }
   return interceptDeadHandGameOver(state);
@@ -325,7 +333,7 @@ export function createGameState(countryId = 'bra', playerProfile = {}) {
     seen_stories: [],
     pendingStory: false,
     currentStory: null,
-    notice: 'Gabinete iniciado. O primeiro mes de governo comeca agora.',
+    notice: 'Gabinete iniciado. O primeiro mês de governo comeca agora.',
   };
 }
 
@@ -352,13 +360,13 @@ export function updatePlayerProfile(state, patch = {}) {
 export function setBudget(state, budgetKey, value) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const budget = setBudgetRate(state.budget, budgetKey, value);
-  if (budget === state.budget) return { ...state, notice: 'Controle orcamentario invalido.' };
-  return { ...state, budget, notice: 'Orcamento atualizado.' };
+  if (budget === state.budget) return { ...state, notice: 'Controle orçamentário inválido.' };
+  return { ...state, budget, notice: 'Orçamento atualizado.' };
 }
 
 export function desviarFundosParaCaixa2(state) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
-  if (state.pendingFinalDilemma) return { ...state, notice: 'Resolva o dilema final antes de executar novas acoes.' };
+  if (state.pendingFinalDilemma) return { ...state, notice: 'Resolva o dilema final antes de executar novas ações.' };
   const result = desviarFundos(state);
   return result.slush_fund !== state.slush_fund
     ? checkStoryChapters(checkStoryEvents(registrarEventoHistorico(addNews(result, `Caixa 2 atualizado: R$ ${result.slush_fund.toLocaleString('pt-BR')}.`), 'corrupcao', 'Fundos foram desviados para uma conta offshore.')))
@@ -366,17 +374,17 @@ export function desviarFundosParaCaixa2(state) {
 }
 
 export function fugirEmSilencio(state) {
-  if (!state.pendingFinalDilemma) return { ...state, notice: 'Nenhum dilema final aguarda decisao.' };
+  if (!state.pendingFinalDilemma) return { ...state, notice: 'Nenhum dilema final aguarda decisão.' };
   return interceptarFinalCaixa2({ ...state, pendingFinalDilemma: false });
 }
 
 export function afundarComONavio(state) {
-  if (!state.pendingFinalDilemma) return { ...state, notice: 'Nenhum dilema final aguarda decisao.' };
+  if (!state.pendingFinalDilemma) return { ...state, notice: 'Nenhum dilema final aguarda decisão.' };
   return interceptDeadHandGameOver({ ...state, pendingFinalDilemma: false });
 }
 
 export function destruirDoHelicoptero(state) {
-  if (!state.pendingFinalDilemma) return { ...state, notice: 'Nenhum dilema final aguarda decisao.' };
+  if (!state.pendingFinalDilemma) return { ...state, notice: 'Nenhum dilema final aguarda decisão.' };
   const retaliation = interceptDeadHandGameOver({ ...state, pendingFinalDilemma: false });
   return interceptarFinalCaixa2(retaliation);
 }
@@ -465,9 +473,9 @@ export function startWar(state, contactId) {
   const notice = legitimateDefense
     ? (state.government === 'empire'
       ? `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'} por decreto imperial.`
-      : `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'} sob alegacao de legitima defesa.`)
+      : `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'} sob alegação de legítima defesa.`)
     : `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'}.`;
-  return checkStoryChapters(registrarEventoHistorico(addNews(syncWorld({ ...next, geopolitics, notice }), notice), 'guerra', `Declarada guerra contra ${target?.name ?? 'um alvo estrangeiro'}. O mundo sustem a respiracao.`));
+  return checkStoryChapters(registrarEventoHistorico(addNews(syncWorld({ ...next, geopolitics, notice }), notice), 'guerra', `Declarada guerra contra ${target?.name ?? 'um alvo estrangeiro'}. O mundo sustem a respiração.`));
 }
 
 export function declararGuerra(state, contactId) {
@@ -491,7 +499,7 @@ export function insultarNacao(state, contactId) {
     factions,
     notice: result.retaliation
       ? `O insulto saiu caro: ${result.target.name} declarou guerra contra nos.`
-      : `${result.target.name} foi insultado. A crise diplomatica continua em aberto.`,
+      : `${result.target.name} foi insultado. A crise diplomática continua em aberto.`,
     pendingHostileAlert: result.retaliation && !result.nuclearRetaliation
       ? { type: 'war', targetId: result.target.id, targetName: result.target.name, dismissed: false }
       : null,
@@ -500,7 +508,7 @@ export function insultarNacao(state, contactId) {
     const nuclearState = {
       ...next,
       global_defcon: 1,
-      notice: `${result.target.name} respondeu ao insulto com retaliacao nuclear.`,
+      notice: `${result.target.name} respondeu ao insulto com retaliação nuclear.`,
     };
     if (state.vault_built) return checkStoryChapters({ ...enterWasteland(nuclearState, 'retaliacao-nuclear-insulto'), global_defcon: 1, pendingHostileAlert: null });
     return resolverFinalDeJogo({
@@ -660,7 +668,7 @@ export function resolveEvent(state, optionId) {
 }
 
 export function votarNaONU(state, vote) {
-  if (!state.pendingUnVote) return { ...state, notice: 'Nenhuma votacao da ONU aguarda resposta.' };
+  if (!state.pendingUnVote) return { ...state, notice: 'Nenhuma votação da ONU aguarda resposta.' };
   const result = registrarVotoONU(state, vote);
   return addNews(syncWorld(result), result.notice);
 }
@@ -693,7 +701,7 @@ export function anexarPais(state, contactId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const targetId = contactId ?? state.geopolitics.peaceTreaty?.targetId;
   const contact = state.geopolitics.contacts.find((item) => item.id === targetId);
-  if (!contact || contact.destruido || contact.anexado || contact.militaryPower > 0) return { ...state, notice: 'Anexacao exige a derrota total do alvo.' };
+  if (!contact || contact.destruido || contact.anexado || contact.militaryPower > 0) return { ...state, notice: 'Anexação exige a derrota total do alvo.' };
   const prepared = state.geopolitics.peaceTreaty?.targetId === targetId
     ? state
     : { ...state, geopolitics: { ...state.geopolitics, peaceTreaty: { targetId, status: 'pending' } } };
@@ -715,7 +723,7 @@ export function resolvePeaceTreaty(state, contactId, choice) {
   if (choice === 'puppet') return consumeLegitimacy(syncWorld(establishPuppet(state)));
   if (choice === 'demilitarize') return consumeLegitimacy(syncWorld(demilitarizeTreatyTarget(state)));
   if (choice === 'reparations') return consumeLegitimacy(syncWorld(applyReparationsTreaty(state)));
-  return { ...state, notice: 'Termo de tratado invalido.' };
+  return { ...state, notice: 'Termo de tratado inválido.' };
 }
 
 export function exigirAnexacao(state, contactId) {
@@ -730,7 +738,7 @@ export function exigirAnexacao(state, contactId) {
     ...state,
     geopolitics: legitimateDefense ? result.geopolitics : changeOnuScore(result.geopolitics, -18),
     randomSeed: result.seed,
-    notice: legitimateDefense ? `${result.reason} A ONU reconheceu a alegacao de legitima defesa.` : result.reason,
+    notice: legitimateDefense ? `${result.reason} A ONU reconheceu a alegação de legítima defesa.` : result.reason,
   });
 }
 
@@ -764,7 +772,7 @@ export function lancarAtaqueNuclear(state, contactId) {
     ...state,
     military: normalizeMilitary({ ...state.military, armasNucleares: arsenal - 1, nuclear: { ...state.military.nuclear, arsenal: Math.max(0, arsenal - 1) } }),
     geopolitics: { ...state.geopolitics, contacts, onuScore: 0, internationalSanctions: true, sanctionSeverity: 1 },
-    notice: `Ataque nuclear contra ${contact.name}: reputacao na ONU colapsou.`,
+    notice: `Ataque nuclear contra ${contact.name}: reputação na ONU colapsou.`,
   });
   return state.vault_built ? enterWasteland(result, 'ataque-nuclear') : result;
 }
@@ -777,14 +785,14 @@ export function canAutorizarAniquilacaoNuclear(state) {
 
 export function autorizarAniquilacaoNuclear(state, contactId, authorizationCode) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
-  if (authorizationCode !== 'KABOOM') return { ...state, notice: 'Codigo de autorizacao invalido.' };
+  if (authorizationCode !== 'KABOOM') return { ...state, notice: 'Código de autorização inválido.' };
   if (!canAutorizarAniquilacaoNuclear(state)) {
     return { ...state, notice: 'Codigos nucleares exigem uranio, arma nuclear e [ ENRIQUECIMENTO DE URÂNIO ].' };
   }
 
   const target = state.geopolitics.contacts.find((contact) => contact.id === contactId);
   if (!target?.atWar || target.wasteland) {
-    return { ...state, notice: 'Aniquilacao nuclear exige um alvo em guerra ativa.' };
+    return { ...state, notice: 'Aniquilação nuclear exige um alvo em guerra ativa.' };
   }
 
   const contacts = state.geopolitics.contacts.map((contact) => contact.id === contactId
@@ -810,8 +818,8 @@ export function autorizarAniquilacaoNuclear(state, contactId, authorizationCode)
     defconPeacefulMonths: 0,
     nuclearSanctionsPending: true,
     onuReputationPermanentlyZero: true,
-    notice: `${target.name} foi reduzido a uma zona de aniquilacao nuclear.`,
-  }), `${target.name} foi reduzido a uma zona de aniquilacao nuclear.`);
+    notice: `${target.name} foi reduzido a uma zona de aniquilação nuclear.`,
+  }), `${target.name} foi reduzido a uma zona de aniquilação nuclear.`);
   return state.vault_built ? enterWasteland(result, 'ataque-nuclear') : result;
 }
 
@@ -870,7 +878,7 @@ export function negotiate(state, blocId) {
 export function voteLaw(state, lawId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const law = LAWS.find((item) => item.id === lawId);
-  if (!law) return { ...state, notice: 'Projeto de lei nao encontrado.' };
+  if (!law) return { ...state, notice: 'Projeto de lei não encontrado.' };
   if (state.regime?.type === 'dictatorship') {
     const notice = `${law.title} aprovada por decreto.`;
     return registrarEventoHistorico(addNews(syncWorld({
@@ -883,11 +891,11 @@ export function voteLaw(state, lawId) {
   }
   const lawState = state.laws[law.stateKey] ?? { approved: false, voteCompleted: false };
   if (lawState.voteCompleted) {
-    return { ...state, notice: `${law.title} ja foi votada nesta legislatura.` };
+    return { ...state, notice: `${law.title} já foi votada nesta legislatura.` };
   }
 
   if (isLobbyBlocked(law, state.megacorp_power)) {
-    const notice = 'Acao bloqueada: O lobby das Megacorporacoes comprou os votos.';
+    const notice = 'Ação bloqueada: O lobby das Megacorporações comprou os votos.';
     return addNews({
       ...state,
       laws: { ...state.laws, [law.stateKey]: { approved: false, voteCompleted: true } },
@@ -922,7 +930,7 @@ export function voteLaborLaw(state) {
   return voteLaw(state, LAW_LABOR_REFORM.id);
 }
 
-// No Vault o botao de avancar move so um dia; fora dele continua sendo o mes da presidencia.
+// No Vault o botão de avancar move so um dia; fora dele continua sendo o mês da presidência.
 export function advanceDay(state, days = 1) {
   if (!state.is_wasteland) return advanceMonth(state);
   if (state.regime?.gameOver) return resolverFinalDeJogo({ ...state, notice: 'A partida foi encerrada.' });
@@ -932,17 +940,17 @@ export function advanceDay(state, days = 1) {
 
 export function advanceMonth(state) {
   if (state.regime?.gameOver) return resolverFinalDeJogo({ ...state, notice: 'A partida foi encerrada.' });
-  if (state.pendingHostileAlert) return { ...state, notice: 'Reconheca o alerta militar antes de avancar o mes.' };
-  if (state.wasteland_cinematic_ready) return { ...state, notice: 'Assuma o comando do Vault antes de avancar o mes.' };
+  if (state.pendingHostileAlert) return { ...state, notice: 'Reconheca o alerta militar antes de avancar o mês.' };
+  if (state.wasteland_cinematic_ready) return { ...state, notice: 'Assuma o comando do Vault antes de avancar o mês.' };
   if (state.is_wasteland) return advanceWastelandMonth(state);
-  if (state.geopolitics.peaceTreaty?.status === 'pending') return { ...state, notice: 'Resolva o Tratado de Paz antes de avancar o mes.' };
-  if (state.pendingEvent) return { ...state, notice: 'Resolva a crise nacional antes de avancar o mes.' };
-  if (state.pendingUnVote) return { ...state, notice: 'Registre seu voto na Assembleia da ONU antes de avancar o mes.' };
-  if (state.pendingGlobalBid) return { ...state, notice: 'Decida a candidatura aos Jogos Mundiais antes de avancar o mes.' };
-  if (state.pendingInterrogation) return { ...state, notice: 'Resolva o interrogatorio antes de avancar o mes.' };
-  if (state.pendingStory) return { ...state, notice: 'Leia o dossie confidencial antes de avancar o mes.' };
-  if (state.pendingBriefing) return { ...state, notice: 'Resolva o briefing presidencial antes de avancar o mes.' };
-  if (state.pendingAllianceInvocation) return { ...state, notice: 'Decida se a alianca sera defendida antes de avancar o mes.' };
+  if (state.geopolitics.peaceTreaty?.status === 'pending') return { ...state, notice: 'Resolva o Tratado de Paz antes de avancar o mês.' };
+  if (state.pendingEvent) return { ...state, notice: 'Resolva a crise nacional antes de avancar o mês.' };
+  if (state.pendingUnVote) return { ...state, notice: 'Registre seu voto na Assembleia da ONU antes de avancar o mês.' };
+  if (state.pendingGlobalBid) return { ...state, notice: 'Decida a candidatura aos Jogos Mundiais antes de avancar o mês.' };
+  if (state.pendingInterrogation) return { ...state, notice: 'Resolva o interrogatório antes de avancar o mês.' };
+  if (state.pendingStory) return { ...state, notice: 'Leia o dossie confidencial antes de avancar o mês.' };
+  if (state.pendingBriefing) return { ...state, notice: 'Resolva o briefing presidencial antes de avancar o mês.' };
+  if (state.pendingAllianceInvocation) return { ...state, notice: 'Decida se a alianca sera defendida antes de avancar o mês.' };
   state = advanceGovernment(state);
   if (state.nuclearSanctionsPending) {
     state = {
@@ -1026,7 +1034,7 @@ export function advanceMonth(state) {
     : evaluateRegime(state.regime, constitutionalState.economy, constitutionalState.military, geopoliticalMonth.geopolitics, geopoliticalMonth.seed, constitutionalState.factions);
   const month = state.calendar.month === 12 ? 1 : state.calendar.month + 1;
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
-  const notice = stability.event ?? internalProjectState.notice ?? `Mes encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superavit' : 'com deficit'}.`;
+  const notice = stability.event ?? internalProjectState.notice ?? `mês encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superávit' : 'com déficit'}.`;
 
   const completedState = syncWorld({
     ...state,
@@ -1066,10 +1074,20 @@ export function advanceMonth(state) {
   const resolvedState = aplicarEfeitosSoftPower(processarMigracoes(aplicarResolucoes(processarInfeccoesBiologicas(advanceCyberWarfare(megaprojectState)))));
   const bioAlert = Boolean(resolvedState.country?.bio_infected) || Boolean(completedState.country?.bio_infected);
   const withNews = bioAlert
-    ? addNews(addNews(syncWorld(resolvedState), notice), 'Alerta sanitario: o pais esta sob ataque biologico silencioso.')
+    ? addNews(addNews(syncWorld(resolvedState), notice), 'Alerta sanitario: o país está sob ataque biológico silencioso.')
     : addNews(syncWorld(resolvedState), notice);
   const defconState = applyDefconEconomicShock(advanceDefcon(withNews));
-  const hostileState = processarAgressaoIA(defconState);
+  // Ritmo das hostilidades: sem guerras nos primeiros 12 meses, no maximo uma nova declaracao a cada 8 meses e nenhuma
+  // enquanto o pais ja se defende de outra. Ataque nuclear em DEFCON 1 segue valendo sempre.
+  const hostileMonth = Number(defconState.monthCounter) || 0;
+  const alreadyDefending = defconState.geopolitics.contacts.some((contact) => contact.atWar && contact.defensiveWar);
+  const hostilityAllowed = hostileMonth >= HOSTILITY_GRACE_MONTHS
+    && hostileMonth - (Number(defconState.lastHostileMonth) || -HOSTILITY_COOLDOWN_MONTHS) >= HOSTILITY_COOLDOWN_MONTHS
+    && !alreadyDefending;
+  const aggression = processarAgressaoIA(defconState, hostilityAllowed ? HOSTILITY_MONTHLY_CHANCE : 0);
+  const hostileState = aggression.pendingHostileAlert && aggression.pendingHostileAlert !== defconState.pendingHostileAlert
+    ? { ...aggression, lastHostileMonth: hostileMonth }
+    : aggression;
   if (hostileState.pendingHostileAlert?.type === 'nuclear') {
     const nuclearCollapse = { ...hostileState, global_defcon: 1, notice: `Ataque nuclear recebido de ${hostileState.pendingHostileAlert.targetName}.` };
     if (nuclearCollapse.vault_built) return checkStoryChapters(enterWasteland(nuclearCollapse, 'ataque-nuclear-inimigo'));
@@ -1085,7 +1103,7 @@ export function advanceMonth(state) {
         ...defconState,
         defcon_one_triggered: true,
         regime: { ...defconState.regime, gameOver: true, outcome: 'aniquilacao-nuclear', electionsSuspended: true },
-        notice: 'DEFCON 1: a destruicao global encerrou a civilizacao.',
+        notice: 'DEFCON 1: a destruição global encerrou a civilização.',
       };
     return checkStoryChapters(checkStoryEvents(defconCollapse));
   }
@@ -1171,6 +1189,7 @@ export function hydrateGameState(serialized) {
         ...base.budget,
         incomeTaxRate: clampTaxRate(parsed.budget?.incomeTaxRate ?? base.budget.incomeTaxRate),
         vatRate: clampTaxRate(parsed.budget?.vatRate ?? base.budget.vatRate),
+        interestRate: clampBudgetRate('interestRate', parsed.budget?.interestRate ?? base.budget.interestRate),
         healthSpend: Number.isFinite(Number(parsed.budget?.healthSpend)) ? Math.max(0, Number(parsed.budget.healthSpend)) : base.budget.healthSpend,
         educationSpend: Number.isFinite(Number(parsed.budget?.educationSpend)) ? Math.max(0, Number(parsed.budget.educationSpend)) : base.budget.educationSpend,
         infrastructureSpend: Number.isFinite(Number(parsed.budget?.infrastructureSpend)) ? Math.max(0, Number(parsed.budget.infrastructureSpend)) : base.budget.infrastructureSpend,
@@ -1196,13 +1215,15 @@ export function hydrateGameState(serialized) {
         ...base.economy,
         gdp: countryIsWasteland ? 0 : Math.max(1, Number(economy.gdp) || base.economy.gdp),
         inflation: clamp(Number(economy.inflation) || 0, 0, 0.8),
+        fiscalHole: Math.max(0, Number(economy.fiscalHole) || 0),
+        inflationHistory: normalizeInflationHistory(economy.inflationHistory, clamp(Number(economy.inflation) || 0, 0, 0.8)),
         unemployment: clamp(Number(economy.unemployment) || base.economy.unemployment, 0.02, 0.45),
         cash: Number.isFinite(Number(economy.cash)) ? Number(economy.cash) : base.economy.cash,
       },
       geopolitics: parsed.version >= 2 && Array.isArray(parsed.geopolitics?.contacts) ? {
         ...base.geopolitics,
         ...parsed.geopolitics,
-        // No Vault os contatos sao as faccoes do Ermo, nao os paises; saves antigos que as perderam recebem as originais.
+        // No Vault os contatos sao as facções do Ermo, não os paises; saves antigos que as perderam recebem as originais.
         contacts: parsed.is_wasteland ? hydrateWastelandContacts(parsed.geopolitics.contacts) : base.geopolitics.contacts.map((baseContact) => ({
           ...baseContact,
           ...(parsed.geopolitics.contacts.find((savedContact) => savedContact?.id === baseContact.id) ?? {}),
@@ -1388,6 +1409,7 @@ export function hydrateGameState(serialized) {
       dead_hand_triggered: Boolean(parsed.dead_hand_triggered),
       slush_fund: Math.max(0, Number(parsed.slush_fund) || 0),
       slushFundTransfersThisMonth: Math.max(0, Math.floor(Number(parsed.slushFundTransfersThisMonth) || 0)),
+      lastHostileMonth: Number.isFinite(Number(parsed.lastHostileMonth)) ? Number(parsed.lastHostileMonth) : null,
       escape_ending_triggered: Boolean(parsed.escape_ending_triggered),
       pendingFinalDilemma: Boolean(parsed.pendingFinalDilemma),
       double_agent_active: Boolean(parsed.double_agent_active),

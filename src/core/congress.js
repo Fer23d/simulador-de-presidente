@@ -55,10 +55,10 @@ export function getVoteForecast(congress, factions) {
 export function negotiateSupport(congress, economy, blocId, factions) {
   const bloc = congress.blocs.find((candidate) => candidate.id === blocId);
   if (!bloc || bloc.negotiated) {
-    return { ok: false, reason: 'Bloco indisponivel para nova negociacao.', congress, economy };
+    return { ok: false, reason: 'Bloco indisponível para nova negociação.', congress, economy };
   }
   if (economy.cash < bloc.negotiationCost) {
-    return { ok: false, reason: 'Caixa insuficiente para a negociacao.', congress, economy };
+    return { ok: false, reason: 'Caixa insuficiente para a negociação.', congress, economy };
   }
 
   const updatedBloc = {

@@ -10,7 +10,7 @@ function seedFor(probability) {
   for (let seed = 1; seed < 100_000; seed += 1) {
     if (nextRandom(seed).value < probability) return seed;
   }
-  throw new Error('seed deterministica nao encontrada');
+  throw new Error('seed deterministica não encontrada');
 }
 
 test('marks exactly the nine real nuclear powers in the country seed', () => {

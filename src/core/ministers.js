@@ -1,5 +1,5 @@
 const MINISTER_DEFINITIONS = Object.freeze({
-  economy: Object.freeze({ id: 'economy', title: 'Ministro da Economia', cost: 4_000_000_000, description: '+5% de arrecadacao mensal.', taxRevenueModifier: 0.05 }),
+  economy: Object.freeze({ id: 'economy', title: 'Ministro da Economia', cost: 4_000_000_000, description: '+5% de arrecadação mensal.', taxRevenueModifier: 0.05 }),
   defense: Object.freeze({ id: 'defense', title: 'Ministro da Defesa', cost: 5_000_000_000, description: '+20% de capacidade de recrutamento.', recruitmentMultiplier: 1.2 }),
 });
 
@@ -21,8 +21,8 @@ export function getMinisterModifiers(ministers = {}) {
 
 export function hireMinister(ministers, economy, ministerId) {
   const definition = MINISTER_DEFINITIONS[ministerId];
-  if (!definition) return { ok: false, reason: 'Ministro nao encontrado.', ministers, economy };
-  if (ministers?.[ministerId]) return { ok: false, reason: 'Este ministro ja esta no gabinete.', ministers, economy };
+  if (!definition) return { ok: false, reason: 'Ministro não encontrado.', ministers, economy };
+  if (ministers?.[ministerId]) return { ok: false, reason: 'Este ministro já está no gabinete.', ministers, economy };
   if ((Number(economy?.cash) || 0) < definition.cost) return { ok: false, reason: 'Caixa insuficiente para contratar este ministro.', ministers, economy };
   return {
     ok: true,
@@ -34,10 +34,10 @@ export function hireMinister(ministers, economy, ministerId) {
 
 export function dismissMinister(ministers, economy, ministerId) {
   const definition = MINISTER_DEFINITIONS[ministerId];
-  if (!definition || !ministers?.[ministerId]) return { ok: false, reason: 'Nao ha ministro ativo nesta pasta.', ministers, economy };
+  if (!definition || !ministers?.[ministerId]) return { ok: false, reason: 'Não ha ministro ativo nesta pasta.', ministers, economy };
   return {
     ok: true,
-    reason: `${definition.title} foi demitido; a opiniao publica reagiu positivamente.`,
+    reason: `${definition.title} foi demitido; a opinião pública reagiu positivamente.`,
     ministers: { ...createMinisters(), ...ministers, [ministerId]: null },
     economy: (() => {
       const { popularity: _legacyPopularity, ...cleanEconomy } = economy;

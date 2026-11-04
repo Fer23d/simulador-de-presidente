@@ -3,7 +3,7 @@ import { adjustFactions } from './factions.js';
 export const EVENTS = Object.freeze([
   Object.freeze({
     id: 'corruption-scandal',
-    title: 'Escandalo de Corrupcao',
+    title: 'Escândalo de Corrupção',
     description: 'Documentos ligam membros do governo a contratos suspeitos.',
     options: Object.freeze([
       Object.freeze({ id: 'protect', label: 'Proteger ministro', effects: { cash: -2_000_000_000, popularity: -3, onu: -2 } }),
@@ -22,10 +22,10 @@ export const EVENTS = Object.freeze([
   Object.freeze({
     id: 'energy-strike',
     title: 'Greve no Setor de Energia',
-    description: 'O abastecimento nacional pode sofrer interrupcoes.',
+    description: 'O abastecimento nacional pode sofrer interrupções.',
     options: Object.freeze([
       Object.freeze({ id: 'negotiate-unions', label: 'Negociar com sindicatos', effects: { cash: -1_500_000_000, popularity: 1 } }),
-      Object.freeze({ id: 'enforce-operation', label: 'Forcar operacao', effects: { popularity: -3, onu: -1 } }),
+      Object.freeze({ id: 'enforce-operation', label: 'Forçar operação', effects: { popularity: -3, onu: -1 } }),
     ]),
   }),
 ]);
@@ -38,7 +38,7 @@ function nextRandom(seed) {
   return { seed: nextSeed, value: nextSeed / 4_294_967_296 };
 }
 
-export function rollMonthlyEvent(seed, probability = 0.1) {
+export function rollMonthlyEvent(seed, probability = 0.06) {
   const first = nextRandom(seed);
   if (first.value >= probability) return { event: null, seed: first.seed };
   const pick = nextRandom(first.seed);
@@ -48,7 +48,7 @@ export function rollMonthlyEvent(seed, probability = 0.1) {
 export function applyEventOption(state, optionId) {
   const event = state.pendingEvent;
   const option = event?.options?.find((candidate) => candidate.id === optionId);
-  if (!option) return { ...state, notice: 'Opcao de crise invalida.' };
+  if (!option) return { ...state, notice: 'Opção de crise inválida.' };
   const effects = option.effects ?? {};
   const onuScore = clamp((Number(state.geopolitics.onuScore) || 0) + (Number(effects.onu) || 0), 0, 100);
   return {

@@ -11,13 +11,13 @@ export function canExecuteAutoCoup(state) {
 }
 
 export function openAutoCoup(state) {
-  if (!canExecuteAutoCoup(state)) return reject(state, 'O Auto-Golpe exige uma Republica estavel e R$ 500 bi em caixa.');
+  if (!canExecuteAutoCoup(state)) return reject(state, 'O Auto-Golpe exige uma República estável e R$ 500 bi em caixa.');
   return { ...state, pendingGovernmentChoice: true, notice: 'Escolha quem governara depois do Auto-Golpe.' };
 }
 
 export function resolveAutoCoup(state, government) {
-  if (!state.pendingGovernmentChoice) return reject(state, 'Nenhum Auto-Golpe aguarda decisao.');
-  if (!['empire', 'corporate'].includes(government)) return reject(state, 'Regime de destino invalido.');
+  if (!state.pendingGovernmentChoice) return reject(state, 'Nenhum Auto-Golpe aguarda decisão.');
+  if (!['empire', 'corporate'].includes(government)) return reject(state, 'Regime de destino inválido.');
   const cash = (Number(state.economy?.cash) || 0) - AUTO_COUP_COST;
   const base = {
     ...state,
@@ -33,7 +33,7 @@ export function resolveAutoCoup(state, government) {
       revolutionRisk: government === 'empire' ? 0.02 : state.regime.revolutionRisk,
     },
     notice: government === 'empire'
-      ? 'Auto-Golpe concluido: nasceu o Imperio Nacional.'
+      ? 'Auto-Golpe concluido: nasceu o Império Nacional.'
       : 'Auto-Golpe concluido: o Estado agora responde ao CEO Estatal.',
   };
   if (government === 'empire') {
@@ -72,6 +72,6 @@ export function resolveCorporateDefault(state) {
   return {
     ...state,
     regime: { ...state.regime, gameOver: true, outcome: 'aquisicao-hostil', electionsSuspended: true },
-    notice: 'Aquisicao hostil: o caixa corporativo negativo comprou o governo inteiro.',
+    notice: 'Aquisição hostil: o caixa corporativo negativo comprou o governo inteiro.',
   };
 }

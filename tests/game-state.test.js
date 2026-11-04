@@ -114,7 +114,7 @@ test('chronicles completed civilian research', () => {
   const result = researchTechnology(state, 'ai-logistics');
 
   assert.equal(result.history_log.at(-1).type, 'tecnologia');
-  assert.match(result.history_log.at(-1).text, /IA Logistica/);
+  assert.match(result.history_log.at(-1).text, /IA Logística/);
 });
 
 test('forms a player alliance and grants a shared GDP growth bonus', () => {

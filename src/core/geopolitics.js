@@ -71,9 +71,9 @@ export function alterarNotaONU(geopolitics, value) {
 
 export function sabotar(geopolitics, contactId, economy, seed, options = {}) {
   const contact = geopolitics.contacts.find((item) => item.id === contactId);
-  if (!contact) return { ok: false, reason: 'Pais nao encontrado.', geopolitics, economy, seed };
+  if (!contact) return { ok: false, reason: 'País não encontrado.', geopolitics, economy, seed };
   const cost = Math.max(500_000_000, economy.gdp * 0.0005);
-  if (economy.cash < cost) return { ok: false, reason: 'Caixa insuficiente para a operacao.', geopolitics, economy, seed };
+  if (economy.cash < cost) return { ok: false, reason: 'Caixa insuficiente para a operação.', geopolitics, economy, seed };
   const random = nextRandom(seed);
   const discovered = options.guaranteedSuccess ? false : random.value < 0.45;
   const updated = updateContact(geopolitics, contactId, (item) => discovered
@@ -82,7 +82,7 @@ export function sabotar(geopolitics, contactId, economy, seed, options = {}) {
   return {
     ok: true,
     discovered,
-    reason: discovered ? 'Sabotagem descoberta: crise diplomatica instalada.' : 'Sabotagem executada sem atribuicao publica.',
+    reason: discovered ? 'Sabotagem descoberta: crise diplomática instalada.' : 'Sabotagem executada sem atribuição pública.',
     geopolitics: alterarNotaONU(updated, discovered ? -22 : -4),
     economy: { ...economy, cash: economy.cash - cost },
     seed: random.seed,
@@ -99,11 +99,11 @@ export function importarRecursos(geopolitics, economy, country, contactId, resou
   const quantity = Math.max(1, Math.floor(Number(amount) || 0));
   const price = RESOURCE_PRICES[resource];
   const contact = geopolitics.contacts.find((item) => item.id === contactId && !item.destruido && !item.anexado);
-  if (!price || !contact) return { ok: false, reason: 'Recurso ou pais fornecedor invalido.', geopolitics, economy, country };
-  if (contact.atWar || contact.relation <= 20) return { ok: false, reason: 'Importacao exige paz e relacao diplomatica acima de 20.', geopolitics, economy, country };
-  if ((Number(contact[resource]) || 0) < quantity) return { ok: false, reason: `${contact.name} nao possui estoque suficiente.`, geopolitics, economy, country };
+  if (!price || !contact) return { ok: false, reason: 'Recurso ou país fornecedor inválido.', geopolitics, economy, country };
+  if (contact.atWar || contact.relation <= 20) return { ok: false, reason: 'Importação exige paz e relacao diplomática acima de 20.', geopolitics, economy, country };
+  if ((Number(contact[resource]) || 0) < quantity) return { ok: false, reason: `${contact.name} não possui estoque suficiente.`, geopolitics, economy, country };
   const cost = quantity * price;
-  if ((Number(economy.cash) || 0) < cost) return { ok: false, reason: 'Caixa insuficiente para a importacao.', geopolitics, economy, country };
+  if ((Number(economy.cash) || 0) < cost) return { ok: false, reason: 'Caixa insuficiente para a importação.', geopolitics, economy, country };
   return {
     ok: true,
     reason: `${quantity.toLocaleString('pt-BR')} unidades de ${resource} importadas de ${contact.name}.`,
@@ -118,10 +118,10 @@ export function importarRecursos(geopolitics, economy, country, contactId, resou
 
 export function proposeTradeTreaty(geopolitics, contactId) {
   const contact = geopolitics.contacts.find((item) => item.id === contactId);
-  if (!contact) return rejected(geopolitics, 'Pais nao encontrado.');
-  if (contact.atWar) return rejected(geopolitics, 'Nao e possivel negociar durante uma guerra.');
-  if (contact.relation <= 30) return rejected(geopolitics, 'Relacao diplomatica insuficiente para o acordo comercial.');
-  if (contact.tradeTreaty) return rejected(geopolitics, 'Acordo comercial ja esta em vigor.');
+  if (!contact) return rejected(geopolitics, 'País não encontrado.');
+  if (contact.atWar) return rejected(geopolitics, 'Não e possível negociar durante uma guerra.');
+  if (contact.relation <= 30) return rejected(geopolitics, 'Relação diplomática insuficiente para o acordo comercial.');
+  if (contact.tradeTreaty) return rejected(geopolitics, 'Acordo comercial já está em vigor.');
   return {
     ok: true,
     reason: `Acordo comercial firmado com ${contact.name}.`,
@@ -134,22 +134,22 @@ export function proposeTradeTreaty(geopolitics, contactId) {
 
 export function proposeAlliance(geopolitics, contactId) {
   const contact = geopolitics.contacts.find((item) => item.id === contactId);
-  if (!contact) return rejected(geopolitics, 'Pais nao encontrado.');
-  if (contact.atWar) return rejected(geopolitics, 'Nao e possivel formar alianca durante uma guerra.');
+  if (!contact) return rejected(geopolitics, 'País não encontrado.');
+  if (contact.atWar) return rejected(geopolitics, 'Não e possível formar alianca durante uma guerra.');
   if (contact.relation < 50) return rejected(geopolitics, 'A aliança exige relação diplomática de ao menos 50.');
-  if (contact.alliance) return rejected(geopolitics, 'Alianca ja esta em vigor.');
+  if (contact.alliance) return rejected(geopolitics, 'Aliança já está em vigor.');
   return {
     ok: true,
-    reason: `Alianca defensiva firmada com ${contact.name}.`,
+    reason: `Aliança defensiva firmada com ${contact.name}.`,
     geopolitics: updateContact(geopolitics, contactId, (item) => ({ ...item, alliance: true, relation: clamp(item.relation + 6, -100, 100) })),
   };
 }
 
 export function declareWar(geopolitics, contactId, attackerId = 'player') {
   const contact = geopolitics.contacts.find((item) => item.id === contactId);
-  if (!contact) return rejected(geopolitics, 'Pais nao encontrado.');
-  if (contact.anexado) return rejected(geopolitics, 'Este territorio ja foi anexado.');
-  if (contact.atWar) return rejected(geopolitics, 'Conflito ja esta em curso.');
+  if (!contact) return rejected(geopolitics, 'País não encontrado.');
+  if (contact.anexado) return rejected(geopolitics, 'Este território já foi anexado.');
+  if (contact.atWar) return rejected(geopolitics, 'Conflito já está em curso.');
   return {
     ok: true,
     reason: `Guerra declarada contra ${contact.name}.`,
@@ -160,9 +160,9 @@ export function declareWar(geopolitics, contactId, attackerId = 'player') {
 export function insultarNacao(geopolitics, contactId, seed) {
   const target = geopolitics.contacts.find((contact) => contact.id === contactId);
   if (!target || target.destruido || target.anexado || target.wasteland) {
-    return { ok: false, reason: 'Nacao invalida para provocacao diplomatica.', geopolitics, seed };
+    return { ok: false, reason: 'Nação inválida para provocação diplomática.', geopolitics, seed };
   }
-  if (target.atWar) return { ok: false, reason: 'Nao se insulta uma nacao ja em guerra; o conflito ja fala por si.', geopolitics, seed };
+  if (target.atWar) return { ok: false, reason: 'Não se insulta uma nacao já em guerra; o conflito já fala por si.', geopolitics, seed };
   const random = nextRandom(seed);
   const relation = clamp((Number(target.relation) || 0) - 30, -100, 100);
   const retaliation = relation < 15 && random.value < 0.5;
@@ -212,8 +212,9 @@ export function processarAgressaoIA(state, probability = 0.03) {
         relation: -100,
       };
     }
-    const attacks = random.value < probability;
+    const attacks = !firstAttack && random.value < probability;
     random = nextRandom(random.seed);
+    // No maximo uma declaracao de guerra por mes: antes varios paises podiam atacar no mesmo turno.
     if (!attacks) return contact;
     if (!firstAttack) firstAttack = contact;
     return {
@@ -274,9 +275,9 @@ export function interceptArticle5(state) {
 
 export function respondArticle5(state, decision) {
   const pending = state.pendingAllianceInvocation;
-  if (!pending) return { ...state, notice: 'Nao existe uma invocacao do Artigo 5 pendente.' };
+  if (!pending) return { ...state, notice: 'Não existe uma invocação do Artigo 5 pendente.' };
   const ally = state.geopolitics.contacts.find((contact) => contact.id === pending.allyId);
-  if (!ally) return { ...state, pendingAllianceInvocation: null, notice: 'O aliado nao esta mais disponivel.' };
+  if (!ally) return { ...state, pendingAllianceInvocation: null, notice: 'O aliado não está mais disponível.' };
   const attackerIsPlayer = pending.attackerId === state.country?.id || pending.attackerId === 'player';
 
   if (decision === 'verbal-condemnation') {
@@ -291,12 +292,12 @@ export function respondArticle5(state, decision) {
       geopolitics,
       player_alliance: (state.player_alliance ?? []).filter((id) => id !== ally.id),
       pendingAllianceInvocation: null,
-      notice: `O governo abandonou ${ally.name}. A alianca foi rompida e a ONU registrou a traicao.`,
+      notice: `O governo abandonou ${ally.name}. A alianca foi rompida e a ONU registrou a traição.`,
     };
   }
 
   if (decision !== 'send-troops' && decision !== 'fulfill-duty') {
-    return { ...state, notice: 'Resposta do Artigo 5 invalida.' };
+    return { ...state, notice: 'Resposta do Artigo 5 inválida.' };
   }
 
   const troopCost = Math.max(1_000, Math.floor((Number(state.military?.exercito?.soldados) || 0) * 0.05));
@@ -325,7 +326,7 @@ export function respondArticle5(state, decision) {
       ? `A ordem de guerra contra ${ally.name} foi revertida pela alianca.`
       : decision === 'send-troops'
       ? `Tropas e caixa enviados para defender ${ally.name}. Guerra aberta contra ${pending.attackerName}.`
-      : `${ally.name} foi defendido. O governo cumpre o dever sem mobilizacao adicional.`,
+      : `${ally.name} foi defendido. O governo cumpre o dever sem mobilização adicional.`,
   };
 }
 
@@ -335,7 +336,7 @@ export function isLegitimateDefenseTarget(state, targetId) {
 
 export function exigirAnexacao(geopolitics, contactId, playerPower, seed) {
   const contact = geopolitics.contacts.find((item) => item.id === contactId);
-  if (!contact || contact.anexado) return { ok: false, accepted: false, reason: 'Pais nao encontrado ou ja anexado.', geopolitics, seed };
+  if (!contact || contact.anexado) return { ok: false, accepted: false, reason: 'País não encontrado ou já anexado.', geopolitics, seed };
   const ratio = Number(playerPower) / Math.max(1, Number(contact.militaryPower) || 1);
   if (ratio < 5) return { ok: false, accepted: false, reason: 'Ultimato exige poder militar cinco vezes superior ao alvo.', geopolitics, seed };
   const random = nextRandom(seed);
@@ -344,7 +345,7 @@ export function exigirAnexacao(geopolitics, contactId, playerPower, seed) {
     return {
       ok: true,
       accepted: true,
-      reason: `${contact.name} aceitou a anexacao sob ultimato.`,
+      reason: `${contact.name} aceitou a anexação sob ultimato.`,
       geopolitics: updateContact(geopolitics, contactId, (item) => ({ ...item, militaryPower: 0 })),
       seed: random.seed,
     };
@@ -354,21 +355,21 @@ export function exigirAnexacao(geopolitics, contactId, playerPower, seed) {
 }
 
 export function imporSancao(geopolitics, contactId, playerGdp) {
-  if (Number(playerGdp) < 1_000_000_000_000) return rejected(geopolitics, 'Sancoes exigem um PIB de ao menos R$ 1 tri.');
+  if (Number(playerGdp) < 1_000_000_000_000) return rejected(geopolitics, 'Sanções exigem um PIB de ao menos R$ 1 tri.');
   const contact = geopolitics.contacts.find((item) => item.id === contactId);
-  if (!contact || contact.anexado) return rejected(geopolitics, 'Pais nao encontrado ou ja anexado.');
-  if (contact.sancionado_por_jogador) return rejected(geopolitics, 'Sancoes ja estao ativas contra este alvo.');
+  if (!contact || contact.anexado) return rejected(geopolitics, 'País não encontrado ou já anexado.');
+  if (contact.sancionado_por_jogador) return rejected(geopolitics, 'Sanções já estão ativas contra este alvo.');
   return {
     ok: true,
-    reason: `Sancoes impostas a ${contact.name}; seu crescimento economico foi comprometido.`,
+    reason: `Sanções impostas a ${contact.name}; seu crescimento econômico foi comprometido.`,
     geopolitics: updateContact(geopolitics, contactId, (item) => ({ ...item, sancionado_por_jogador: true, growthModifier: -0.03, relation: -100 })),
   };
 }
 
 export function createLeague(geopolitics, playerId, economy, name) {
   const cost = 25_000_000_000;
-  if (geopolitics.league) return { ok: false, reason: 'Uma liga global ja existe.', geopolitics, economy };
-  if (geopolitics.onuScore < 40) return { ok: false, reason: 'A criacao da liga exige reputacao ONU de ao menos 40.', geopolitics, economy };
+  if (geopolitics.league) return { ok: false, reason: 'Uma liga global já existe.', geopolitics, economy };
+  if (geopolitics.onuScore < 40) return { ok: false, reason: 'A criação da liga exige reputação ONU de ao menos 40.', geopolitics, economy };
   if ((Number(economy.cash) || 0) < cost) return { ok: false, reason: 'Caixa insuficiente para criar a liga.', geopolitics, economy };
   return {
     ok: true,
@@ -399,7 +400,7 @@ export function checarFimDeGuerra(state, alvoId) {
 
 export function anexarPais(state) {
   const target = treatyTarget(state);
-  if (!target || Number(target.militaryPower) > 0) return { ...state, notice: 'Anexacao exige um tratado de paz pendente com alvo derrotado.' };
+  if (!target || Number(target.militaryPower) > 0) return { ...state, notice: 'Anexação exige um tratado de paz pendente com alvo derrotado.' };
   const population = (Number(state.country.populacao) || Number(state.country.populacao_base) || 0) + (Number(target.populacao_base) || Number(target.population) || 0);
   const area = (Number(state.country.area_km2) || 0) + (Number(target.area_km2) || 0);
   const gdp = (Number(state.country.pib_base) || 0) + (Number(target.pib_base) || 0);
@@ -432,7 +433,7 @@ export function anexarPais(state) {
     military,
     geopolitics,
     notice: isLegitimateDefenseTarget(state, target.id) || defensiveVictory
-      ? `${target.name} foi anexado sob alegacao de legitima defesa.`
+      ? `${target.name} foi anexado sob alegação de legítima defesa.`
       : `${target.name} foi anexado; a ONU condenou a medida.`,
   };
 }
@@ -469,7 +470,7 @@ export function estabelecerFantoche(state) {
 
 export function desmilitarizarPais(state) {
   const target = treatyTarget(state);
-  if (!target || Number(target.militaryPower) > 0) return { ...state, notice: 'Desmilitarizacao exige tratado pendente com alvo derrotado.' };
+  if (!target || Number(target.militaryPower) > 0) return { ...state, notice: 'Desmilitarização exige tratado pendente com alvo derrotado.' };
   return {
     ...state,
     geopolitics: {
@@ -485,7 +486,7 @@ export function desmilitarizarPais(state) {
 
 export function aplicarReparacoes(state) {
   const target = treatyTarget(state);
-  if (!target || Number(target.militaryPower) > 0) return { ...state, notice: 'Reparacoes exigem tratado pendente com alvo derrotado.' };
+  if (!target || Number(target.militaryPower) > 0) return { ...state, notice: 'Reparações exigem tratado pendente com alvo derrotado.' };
   return {
     ...state,
     geopolitics: {
@@ -495,7 +496,7 @@ export function aplicarReparacoes(state) {
         ? { ...contact, atWar: false, relation: -100, warReparations: { rate: 0.15, remainingMonths: 120 } }
         : contact),
     },
-    notice: `${target.name} pagara 15% da arrecadacao estimada por 120 meses.`,
+    notice: `${target.name} pagara 15% da arrecadação estimada por 120 meses.`,
   };
 }
 
@@ -507,9 +508,9 @@ export function criarLiga(state, nome = 'Liga Global') {
 export function inviteToLeague(geopolitics, contactId) {
   const contact = geopolitics.contacts.find((item) => item.id === contactId);
   const league = geopolitics.league;
-  if (!league || !contact || contact.destruido) return rejected(geopolitics, 'Liga ou pais convidado invalido.');
-  if (contact.relation <= 80) return rejected(geopolitics, 'Convite exige relacao diplomatica acima de 80.');
-  if (league.memberIds.includes(contactId)) return rejected(geopolitics, 'Pais ja participa da liga.');
+  if (!league || !contact || contact.destruido) return rejected(geopolitics, 'Liga ou país convidado inválido.');
+  if (contact.relation <= 80) return rejected(geopolitics, 'Convite exige relacao diplomática acima de 80.');
+  if (league.memberIds.includes(contactId)) return rejected(geopolitics, 'País já participa da liga.');
   return { ok: true, reason: `${contact.name} entrou na ${league.name}.`, geopolitics: { ...geopolitics, league: { ...league, memberIds: [...league.memberIds, contactId] } } };
 }
 
@@ -554,7 +555,7 @@ export function advanceGeopolitics(geopolitics, military, economy, seed) {
     const won = playerScore >= updated.militaryPower;
     militaryPowerLoss += won ? 0.8 : 2.4;
     factionDelta += won ? 0.45 : -0.8;
-    events.push(won ? `Vitoria taticas contra ${updated.name}.` : `Reves militar contra ${updated.name}.`);
+    events.push(won ? `Vitoria táticas contra ${updated.name}.` : `Reves militar contra ${updated.name}.`);
     if (!won) return { ...updated, relation: -100 };
     const damage = Math.max(2, Math.round((playerScore / Math.max(1, updated.militaryPower)) * 4));
     const militaryPower = Math.max(0, updated.militaryPower - damage);

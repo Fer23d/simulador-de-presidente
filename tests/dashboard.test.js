@@ -48,7 +48,7 @@ test('renders dynamic law rows and a blocking peace treaty dialog', async () => 
   };
 
   assert.match(renderCongress(state), /data-action="open-law-vote"/);
-  assert.match(renderPeaceTreaty(treatyState), /Tratado de Paz Obrigatorio/);
+  assert.match(renderPeaceTreaty(treatyState), /Tratado de Paz Obrigatório/);
 });
 
 test('renders a searchable and scrollable full diplomacy list', async () => {
@@ -99,7 +99,7 @@ test('renders the news feed and a blocking crisis dialog', async () => {
   const state = { news: [{ text: 'Mercados reagem.', calendar: { month: 1, year: 2026 } }], pendingEvent: EVENTS[0] };
 
   assert.match(renderNews(state), /Giro de Noticias/);
-  assert.match(renderCrisis(state), /Escandalo de Corrupcao/);
+  assert.match(renderCrisis(state), /Escândalo de Corrupção/);
 });
 
 test('renders a blocking confidential story dossier', async () => {
@@ -177,8 +177,8 @@ test('renders false flag, unlocked Dead Hand project, and the terminal overlay',
   const unlocked = { ...state, unlocked_techs: ['dead_hand'] };
 
   assert.match(diplomacyView(state, 'argentina'), /Orquestrar Falsa Bandeira/);
-  assert.doesNotMatch(projectsView(state), /Construir Rede Mao Morta/);
-  assert.match(projectsView(unlocked), /Construir Rede Mao Morta/);
+  assert.doesNotMatch(projectsView(state), /Construir Rede Mão Morta/);
+  assert.match(projectsView(unlocked), /Construir Rede Mão Morta/);
   assert.match(renderDeadHandTerminal({ dead_hand_triggered: true }), /DIRETRIZ ÔMEGA/);
 });
 
@@ -233,5 +233,5 @@ test('renders the global games bid dialog and corporate nationalization control'
   const state = createGameState('bra');
 
   assert.match(renderSoftPower({ ...state, pendingGlobalBid: { status: 'pending' } }), /Jogos Mundiais/);
-  assert.match(budgetView({ ...state, megacorp_power: 15 }, projectBudget(state.economy, state.budget)), /Estatizar Megacorporacoes/);
+  assert.match(budgetView({ ...state, megacorp_power: 15 }, projectBudget(state.economy, state.budget)), /Estatizar Megacorporações/);
 });

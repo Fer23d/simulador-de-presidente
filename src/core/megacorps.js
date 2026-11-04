@@ -19,7 +19,7 @@ export function isLobbyBlocked(law, power) {
 }
 
 export function estatizarMegacorporacoes(state) {
-  if ((Number(state.megacorp_power) || 0) <= 0) return { ...state, notice: 'Nao ha megacorporacoes dominantes para estatizar.' };
+  if ((Number(state.megacorp_power) || 0) <= 0) return { ...state, notice: 'Não ha megacorporações dominantes para estatizar.' };
   const random = nextRandom(state.randomSeed);
   const eliteCoup = random.value < 0.3;
   return {
@@ -27,6 +27,6 @@ export function estatizarMegacorporacoes(state) {
     megacorp_power: 0,
     randomSeed: random.seed,
     regime: eliteCoup ? { ...state.regime, gameOver: true, endReason: 'Golpe financiado pela elite corporativa.' } : state.regime,
-    notice: eliteCoup ? 'Golpe de Estado: a elite corporativa financiou a queda do governo.' : 'Megacorporacoes estatizadas. O poder corporativo foi dissolvido.',
+    notice: eliteCoup ? 'Golpe de Estado: a elite corporativa financiou a queda do governo.' : 'Megacorporações estatizadas. O poder corporativo foi dissolvido.',
   };
 }
