@@ -443,7 +443,6 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
       ctx.restore();
     }
     if (perfOn) {
-      perfDrawMs += (performance.now() - frameStart - perfDrawMs) * .1;
       if (dt > 0) perfFps += (1 / dt - perfFps) * .1;
       startPerfProbes();
       ctx.save();
@@ -476,6 +475,8 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     const hint = paused || buildMode ? '' : escapeHint || marketPrompt || farHint || rebel?.label || (missionHere ? `[ E ] RESOLVER: ${mission.title ?? 'PROBLEMA'}` : '')
       || nearbyInhabitant?.label || getElevatorPrompt(player, grid, { surface: true, suit: hasSuit }) || roomTrigger?.label || '';
     if (hint !== lastHint) { lastHint = hint; onHint?.(hint); }
+    // Tempo de TODO o quadro (atualizar, desenhar e calcular avisos), nao so ate o desenho.
+    perfDrawMs += (performance.now() - frameStart - perfDrawMs) * .1;
     frameId = requestAnimationFrame(frame);
   }
 

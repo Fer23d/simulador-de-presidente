@@ -121,3 +121,14 @@ test('low quality weather is a flat tint with no particles, strokes or bolts', a
     assert.equal(calls.fill + calls.stroke, 0, `${weather}: no particles`);
   }
 });
+
+test('translated UI text is memoized so per-frame labels cost nothing after the first call', async () => {
+  const { translateUiText } = await import('../src/core/i18n.js');
+  const text = '[ E ] GERIR DORMITÓRIO';
+  const first = translateUiText(text, 'en');
+  assert.equal(translateUiText(text, 'en'), first, 'same input, same output');
+  assert.notEqual(translateUiText(text, 'es'), first, 'each language has its own entry');
+  const start = performance.now();
+  for (let index = 0; index < 5_000; index++) translateUiText(text, 'en');
+  assert.ok(performance.now() - start < 100, 'five thousand cached calls are practically free');
+});

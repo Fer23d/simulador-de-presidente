@@ -573,12 +573,27 @@ function replaceLexicalWords(value, language) {
   });
 }
 
-export function translateUiText(value, language) {
+const TRANSLATION_MEMO = new Map();
+const TRANSLATION_MEMO_LIMIT = 4000;
+
+function translateUiTextUncached(value, language) {
   const locale = normalizeLanguage(language);
   let result = replaceSafeWords(replaceKnownVariants(value), 'pt-BR');
   result = replaceVariants(result, LOCALE_TARGETS[locale] ?? new Map());
   result = replaceSafeWords(result, locale);
   return replaceLexicalWords(result, locale);
+}
+
+export function translateUiText(value, language) {
+  if (typeof value !== 'string') return translateUiTextUncached(value, language);
+  const key = `${language}\u0000${value}`;
+  const cached = TRANSLATION_MEMO.get(key);
+  if (cached !== undefined) return cached;
+  const result = translateUiTextUncached(value, language);
+  // Textos com numeros que mudam (cronometros) geram entradas novas: o limite evita crescer sem fim.
+  if (TRANSLATION_MEMO.size >= TRANSLATION_MEMO_LIMIT) TRANSLATION_MEMO.clear();
+  TRANSLATION_MEMO.set(key, result);
+  return result;
 }
 
 const TRANSLATION_SKIP_SELECTOR = 'script, style, .story-typewriter, .ending-story, .dialogue-text, [data-story-content]';
