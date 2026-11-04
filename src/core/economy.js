@@ -159,7 +159,7 @@ export function advanceEconomy(economy, budget, lawEffects = {}, modifiers = {})
       + (deficitPressure * 0.012)
       - 0.0008
       - (healthEffect * 0.01)
-      - (interestGap * 0.012)
+      - (interestGap * 0.03)
       - (taxPressure * 0.004)
       + Math.min(0.012, (Math.max(0, Number(economy.fiscalHole) || 0) / Math.max(1, economy.gdp)) * 0.6)
       + (lawEffects.inflationModifier ?? 0)

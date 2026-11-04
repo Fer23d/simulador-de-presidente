@@ -78,7 +78,7 @@ function clamp(value, minimum, maximum) {
 }
 
 // Hostilidades de outros paises (modo Presidente): chance mensal por pais hostil, carencia inicial e intervalo minimo.
-export const HOSTILITY_MONTHLY_CHANCE = 0.008;
+export const HOSTILITY_MONTHLY_CHANCE = 0.0008;
 export const HOSTILITY_GRACE_MONTHS = 12;
 export const HOSTILITY_COOLDOWN_MONTHS = 8;
 
@@ -125,6 +125,22 @@ function isGameOver(state) {
 
 function syncWorld(state) {
   return { ...state, world: state.geopolitics?.contacts ?? state.world ?? [] };
+}
+
+// Avisos quando a inflacao cruza faixas (subindo) ou volta a faixa segura (caindo).
+const INFLATION_ALERTS = Object.freeze([
+  { level: 0.2, up: 'Hiperinflação: os preços saíram do controle e os trabalhadores vão às ruas.', down: 'A inflação saiu da faixa de hiperinflação, mas segue alta.' },
+  { level: 0.08, up: 'A inflação passou de 8% ao mês: salários perdem valor e os trabalhadores se queixam.', down: 'A inflação voltou abaixo de 8% ao mês.' },
+]);
+
+export function inflationThresholdMessage(before, after) {
+  const from = Number(before) || 0;
+  const to = Number(after) || 0;
+  for (const alert of INFLATION_ALERTS) {
+    if (from < alert.level && to >= alert.level) return alert.up;
+    if (from >= alert.level && to < alert.level) return alert.down;
+  }
+  return null;
 }
 
 export function addNews(state, text) {
@@ -1076,7 +1092,8 @@ export function advanceMonth(state) {
   const withNews = bioAlert
     ? addNews(addNews(syncWorld(resolvedState), notice), 'Alerta sanitario: o país está sob ataque biológico silencioso.')
     : addNews(syncWorld(resolvedState), notice);
-  const defconState = applyDefconEconomicShock(advanceDefcon(withNews));
+  const inflationAlert = inflationThresholdMessage(state.economy.inflation, completedState.economy.inflation);
+  const defconState = applyDefconEconomicShock(advanceDefcon(inflationAlert ? addNews(withNews, inflationAlert) : withNews));
   // Ritmo das hostilidades: sem guerras nos primeiros 12 meses, no maximo uma nova declaracao a cada 8 meses e nenhuma
   // enquanto o pais ja se defende de outra. Ataque nuclear em DEFCON 1 segue valendo sempre.
   const hostileMonth = Number(defconState.monthCounter) || 0;

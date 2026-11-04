@@ -33,7 +33,7 @@ export function sortearCapturaAgente(state) {
 export function resolverInterrogatorio(state, method) {
   const operation = METHODS[method];
   if (state.pendingInterrogation?.phase !== 'choice' || !operation) return { ...state, notice: 'Metodo de interrogatório inválido.' };
-  if ((Number(state.economy?.cash) || 0) < operation.cost) return { ...state, notice: 'Caixa insuficiente para subornar o agente.' };
+  if (operation.cost > 0 && (Number(state.economy?.cash) || 0) < operation.cost) return { ...state, notice: 'Caixa insuficiente para subornar o agente.' };
   const random = nextRandom(state.randomSeed);
   const economy = operation.cost > 0 ? { ...state.economy, cash: state.economy.cash - operation.cost } : state.economy;
   if (random.value >= operation.chance) {

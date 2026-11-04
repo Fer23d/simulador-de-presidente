@@ -27,3 +27,11 @@ test('guerra recem declarada impoe intervalo antes da proxima', () => {
   const next = advanceMonth({ ...state, monthCounter: 40, geopolitics: { ...state.geopolitics, contacts } });
   assert.equal(next.geopolitics.contacts.filter((contact) => contact.atWar && contact.defensiveWar).length, 1);
 });
+
+test('interrogatorio gratuito pode ser resolvido mesmo com o caixa negativo', async () => {
+  const { escolherInterrogatorio } = await import('../src/core/interrogation.js');
+  const base = createGameState();
+  const state = { ...base, economy: { ...base.economy, cash: -5_000_000_000 }, pendingInterrogation: { phase: 'choice', prisonerId: 847 } };
+  const result = escolherInterrogatorio(state, 'soro');
+  assert.notEqual(result.pendingInterrogation?.phase, 'choice', 'nao pode travar o avanço do mes');
+});

@@ -77,3 +77,16 @@ test('Orcamento exibe o rombo fiscal escondido', () => {
   const state = { ...base, economy: { ...base.economy, fiscalHole: 5_000_000_000 } };
   assert.match(budgetView(state, projectBudget(state.economy, state.budget)), /Rombo fiscal escondido/);
 });
+
+test('inflacao alta corroi o apoio dos trabalhadores e gera avisos nas faixas', async () => {
+  const { advanceFactions } = await import('../src/core/factions.js');
+  const { inflationThresholdMessage } = await import('../src/core/game-state.js');
+  const factions = { elite: 50, trabalhadores: 50, militares: 50, religiosos: 50 };
+  const calm = advanceFactions(factions, { gdp: 1 }, { gdp: 1, inflation: 0.04, unemployment: 0.06 }, DEFAULT_BUDGET);
+  const high = advanceFactions(factions, { gdp: 1 }, { gdp: 1, inflation: 0.25, unemployment: 0.06 }, DEFAULT_BUDGET);
+  assert.ok(high.trabalhadores < calm.trabalhadores - 3);
+  assert.match(inflationThresholdMessage(0.07, 0.09), /8%/);
+  assert.match(inflationThresholdMessage(0.15, 0.22), /Hiperinfla/);
+  assert.match(inflationThresholdMessage(0.09, 0.07), /voltou abaixo/);
+  assert.equal(inflationThresholdMessage(0.05, 0.06), null);
+});

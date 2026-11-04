@@ -39,9 +39,11 @@ export function advanceFactions(factions, beforeEconomy, economy, budget, effect
   const totalTax = (Number(budget.incomeTaxRate) || 0) + (Number(budget.vatRate) || 0);
   const growth = ((Number(economy.gdp) || 0) / Math.max(1, Number(beforeEconomy.gdp) || 1)) - 1;
   const legacyOpinion = (Number(effects.popularityModifier) || 0) + (Number(modifiers.popularityModifier) || 0);
+  const inflation = Number(economy.inflation) || 0;
   return adjustFactions(normalized, {
-    elite: (growth * 160) - (Math.max(0, totalTax - 0.3) * 22) + (legacyOpinion * 0.25),
-    trabalhadores: (growth * 80) - ((Number(economy.inflation) || 0) * 9) - ((Number(economy.unemployment) || 0) * 7) + ((Number(budget.socialSpend) || 0) * 20) + (legacyOpinion * 0.65),
+    elite: (growth * 160) - (Math.max(0, totalTax - 0.3) * 22) - (Math.max(0, inflation - 0.15) * 10) + (legacyOpinion * 0.25),
+    // Acima de 8% ao mes a inflacao corroi o salario: o desgaste dos trabalhadores cresce rapido.
+    trabalhadores: (growth * 80) - (inflation * 9) - (Math.max(0, inflation - 0.08) * 30) - ((Number(economy.unemployment) || 0) * 7) + ((Number(budget.socialSpend) || 0) * 20) + (legacyOpinion * 0.65),
     militares: ((Number(budget.defenseSpend) || 0) * 22) + (Number(effects.militarySupportModifier) || 0) + (legacyOpinion * 0.15),
     religiosos: ((Number(budget.securitySpend) || 0) * 14) + ((Number(budget.socialSpend) || 0) * 8) + (legacyOpinion * 0.35),
   });
