@@ -86,3 +86,24 @@ test('large art is only shrunk when a canvas is available and never enlarged', a
   const small = { width: 300, height: 200 };
   assert.equal(prescaleImage(small, { width: 700 }), small, 'never enlarged');
 });
+
+test('storm animations stay cheap: few draw calls, no full-screen multiply and no shadow blur', async () => {
+  const { renderWeather } = await import('../src/core/sprite_engine.js');
+  for (const weather of ['dust', 'acid_rain', 'radstorm']) {
+    const sets = [];
+    const calls = { fill: 0, stroke: 0, fillRect: 0 };
+    const ctx = new Proxy({ canvas: { width: 960, height: 600 } }, {
+      get: (target, name) => {
+        if (name in target) return target[name];
+        if (name === 'createLinearGradient' || name === 'createRadialGradient') return () => ({ addColorStop() {} });
+        return (...args) => { if (name in calls) calls[name] += 1; return args; };
+      },
+      set: (target, name, value) => { sets.push([name, value]); return true; },
+    });
+    renderWeather(ctx, { offset_x: 0 }, 300, 4_100, weather);
+    assert.ok(!sets.some(([name, value]) => name === 'shadowBlur' && value > 0), `${weather}: no shadow blur`);
+    assert.ok(!sets.some(([name, value]) => name === 'globalCompositeOperation' && value === 'multiply'), `${weather}: no multiply`);
+    assert.ok(calls.fill + calls.stroke <= 12, `${weather}: batched particles (${calls.fill} fills, ${calls.stroke} strokes)`);
+    assert.ok(calls.fillRect <= 30, `${weather}: no per-particle rectangles (${calls.fillRect})`);
+  }
+});

@@ -256,7 +256,10 @@ const WEATHER_PARTICLES = Object.freeze(Array.from({ length: 140 }, (_, index) =
   return Object.freeze({ x: hash(1), y: hash(2), speed: .6 + hash(3) * .8, size: hash(4) });
 }));
 
-function renderWeather(ctx, camera, boundary, time, weather) {
+const DUST_BUCKETS = Object.freeze([[], [], []].map((bucket, index) => WEATHER_PARTICLES.filter((particle) => (particle.size < .34 ? 0 : particle.size < .67 ? 1 : 2) === index)));
+const DUST_COLORS = Object.freeze(['rgba(208, 136, 70, .26)', 'rgba(220, 148, 70, .38)', 'rgba(232, 160, 70, .52)']);
+
+export function renderWeather(ctx, camera, boundary, time, weather) {
   const width = ctx.canvas.width;
   const height = Math.min(boundary, ctx.canvas.height);
   if (height <= 0) return;
@@ -275,12 +278,17 @@ function renderWeather(ctx, camera, boundary, time, weather) {
       ctx.fillStyle = haze;
       ctx.fillRect(0, 0, width, height);
     }
-    for (const particle of WEATHER_PARTICLES) {
-      const x = ((particle.x * (width + 80) + time * .45 * particle.speed + drift) % (width + 80) + width + 80) % (width + 80) - 40;
-      const y = particle.y * height + Math.sin(time / 300 + particle.x * 20) * 3;
-      ctx.fillStyle = `rgba(${200 + Math.round(particle.size * 40)}, ${128 + Math.round(particle.size * 40)}, 70, ${.2 + particle.size * .35})`;
-      ctx.fillRect(x, y, 3 + particle.size * 9, 1 + Math.round(particle.size * 1.4));
-    }
+    // Tres faixas de tamanho: cada faixa e um unico caminho preenchido de uma vez (antes eram 140 preenchimentos).
+    DUST_BUCKETS.forEach((bucket, index) => {
+      ctx.fillStyle = DUST_COLORS[index];
+      ctx.beginPath();
+      for (const particle of bucket) {
+        const x = ((particle.x * (width + 80) + time * .45 * particle.speed + drift) % (width + 80) + width + 80) % (width + 80) - 40;
+        const y = particle.y * height + Math.sin(time / 300 + particle.x * 20) * 3;
+        ctx.rect(x, y, 3 + particle.size * 9, 1 + Math.round(particle.size * 1.4));
+      }
+      ctx.fill();
+    });
   } else if (weather === 'acid_rain') {
     ctx.fillStyle = 'rgba(58, 104, 52, .26)';
     ctx.fillRect(0, 0, width, height);
@@ -301,10 +309,9 @@ function renderWeather(ctx, camera, boundary, time, weather) {
       ctx.fillRect(x, height - 7, 14, 2);
     }
   } else if (weather === 'radstorm') {
-    ctx.globalCompositeOperation = 'multiply';
-    ctx.fillStyle = '#6fae74';
+    // Um tom verde escuro por cima (parecido com o multiply de antes, mas sem a mistura cara em tela cheia).
+    ctx.fillStyle = 'rgba(38, 86, 52, .46)';
     ctx.fillRect(0, 0, width, height);
-    ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = 'rgba(80, 255, 130, .1)';
     ctx.fillRect(0, 0, width, height);
     const strike = Math.floor(time / 4_200);
@@ -313,24 +320,28 @@ function renderWeather(ctx, camera, boundary, time, weather) {
       ctx.fillRect(0, 0, width, height);
       const hash = (seed) => ((Math.sin((strike + seed) * 12.9898) * 43758.5453) % 1 + 1) % 1;
       let boltX = width * (.15 + hash(1) * .7);
-      ctx.strokeStyle = '#e9ffe9';
-      ctx.lineWidth = 2;
-      ctx.shadowColor = '#6dff9a';
-      ctx.shadowBlur = 12;
+      // O brilho do raio e um traco largo e transparente por baixo do traco fino (shadowBlur custava caro a cada quadro).
       ctx.beginPath();
       ctx.moveTo(boltX, 0);
       for (let segment = 1; segment <= 7; segment++) {
         boltX += (hash(segment + 2) - .5) * 46;
         ctx.lineTo(boltX, height * .62 * segment / 7);
       }
+      ctx.strokeStyle = 'rgba(109, 255, 154, .35)';
+      ctx.lineWidth = 7;
+      ctx.stroke();
+      ctx.strokeStyle = '#e9ffe9';
+      ctx.lineWidth = 2;
       ctx.stroke();
     }
     ctx.fillStyle = 'rgba(160, 255, 170, .5)';
+    ctx.beginPath();
     for (const particle of WEATHER_PARTICLES.slice(0, 50)) {
       const y = (particle.y * height + time * .08 * particle.speed) % height;
       const x = ((particle.x * width + Math.sin(time / 900 + particle.size * 6) * 12 + drift) % width + width) % width;
-      ctx.fillRect(x, y, 2, 2);
+      ctx.rect(x, y, 2, 2);
     }
+    ctx.fill();
   }
   ctx.restore();
 }
