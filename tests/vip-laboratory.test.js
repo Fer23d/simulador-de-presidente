@@ -42,6 +42,7 @@ test('laboratory is buildable, staffed as a research room, and produces science'
 test('level four and five upgrades require scrap and science and debit both atomically', () => {
   const grid = INITIAL_SHELTER_GRID.map((row) => [...row]);
   grid[0][2] = { id: 'laboratory-0-2', type: 'laboratory', floor: 0, column: 2, level: 3 };
+  grid[0][3] = { id: 'generator-0-3', type: 'generator', floor: 0, column: 3, level: 5, operational: true };
   const noScience = { ...createVault(), shelter_grid: grid, scrap: 1650, science: 499 };
   assert.deepEqual(getRoomUpgradeCosts(grid[0][2]), { scrap: 1650, science: 500 });
   assert.equal(upgradeShelterRoom(noScience, 0, 2).shelter_grid[0][2].level, 3);

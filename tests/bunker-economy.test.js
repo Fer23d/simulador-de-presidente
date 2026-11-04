@@ -92,7 +92,7 @@ test('monthly production respects worker output and discards supplies above stor
     inhabitants: inhabitants.map((npc) => npc.id === 'worker-0-3' ? { ...npc, loyalty: 30 } : npc),
     shelter_supplies: { ...state.shelter_supplies, energy: 0 },
   });
-  assert.equal(lowMorale.shelter_supplies.energy, 143);
+  assert.equal(lowMorale.shelter_supplies.energy, 198);
 });
 
 test('room management view shows workers, current and projected production, upgrade cost and max level', () => {

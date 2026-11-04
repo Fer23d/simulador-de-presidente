@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildShelterRoom, broadcastShelterSignal, cellCenter, equipShelterGuard, INITIAL_SHELTER_GRID, useShelterMedkit } from '../src/core/shelter_engine.js';
+import { buildShelterRoom, broadcastShelterSignal, cellCenter, equipShelterGuard, INITIAL_SHELTER_GRID, repairShelterGenerator, useShelterMedkit } from '../src/core/shelter_engine.js';
 import { createInitialInhabitants, createRpgPlayer, findNearbyTrigger, getElevatorCabinGroundY,
   getElevatorPrompt, getElevatorShaftBounds, normalizeInhabitants, updatePlayer } from '../src/core/rpg_bunker.js';
 import { createGameState, hydrateGameState } from '../src/core/game-state.js';
@@ -148,6 +148,7 @@ test('first dialogue input reveals all text and the second closes, resuming the 
 
 test('new functional rooms can be constructed and produce resources', () => {
   let state = { is_wasteland: true, scrap: 2000, shelter_grid: INITIAL_SHELTER_GRID };
+  state = repairShelterGenerator(buildShelterRoom(state, 'generator', 0, 2), 0, 2);
   for (const type of ['arsenal', 'medical', 'radio', 'office']) {
     const before = state.scrap;
     state = buildShelterRoom(state, type, 0, state.shelter_grid[0].filter(Boolean).length);
@@ -163,6 +164,7 @@ test('room interactions consume supplies immutably', () => {
   let state = { is_wasteland: true, scrap: 1000, shelter_grid: INITIAL_SHELTER_GRID,
     shelter_supplies: { weapons: 1, medkits: 1 }, shelter_guards: 0,
     shelter_radiation: 30, country: { populacao: 3000, populacao_base: 3000 } };
+  state = repairShelterGenerator(buildShelterRoom(state, 'generator', 0, 2), 0, 2);
   for (const type of ['arsenal', 'medical', 'radio']) {
     state = buildShelterRoom(state, type, 0, state.shelter_grid[0].filter(Boolean).length);
   }

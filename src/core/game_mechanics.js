@@ -7,6 +7,7 @@ import { normalizeNeeds } from './needs.js';
 import { getWeather } from './weather.js';
 import { getMissionReward, isMissionPending } from './missions.js';
 import { applyLaydEvent, getLaydEvent } from './layd_care.js';
+import { getLightingGenerators } from './power.js';
 import { getSector, getSectorExpedition, getSurfaceMap, isSectorSelectable, revealSector } from './surface_map.js';
 import { getCouncilEvent, getCouncilModifiers, resolveCouncilChoice } from './vault_council.js';
 
@@ -207,7 +208,7 @@ export function startExpedition(state, inhabitantId, destination = null) {
 
 export function advanceMonthlyGameMechanics(state) {
   let randomSeed = Number(state.randomSeed) || 1;
-  const activeGenerators = countActiveGenerators(state.shelter_grid ?? state.bunker_rooms);
+  const activeGenerators = state.shelter_grid ? getLightingGenerators(state) : countActiveGenerators(state.bunker_rooms);
   const { suppressionFactor } = calculateSuppression(state);
   const reports = [...(state.pendingExpeditionReports ?? [])];
   const inhabitants = [];

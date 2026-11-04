@@ -101,7 +101,7 @@ test('monthly oxygen balance stores reserve, detects production deficit, and cha
   assert.equal(supported.oxygen_deprived, false);
   assert.equal(supported.oxygen_shortage_turns, 0);
   assert.equal(supported.shelter_supplies.oxygen, 385);
-  assert.equal(supported.shelter_supplies.energy, 88);
+  assert.equal(supported.shelter_supplies.energy, 143);
 
   const deficient = advanceWastelandMonth({
     ...base,

@@ -1,4 +1,5 @@
-import { advanceEnvironmentCycle, countActiveGenerators, createEnvironmentState, FULL_CYCLE_MS, hasReliableNightPower } from './environment.js';
+import { advanceEnvironmentCycle, createEnvironmentState, FULL_CYCLE_MS, hasReliableNightPower } from './environment.js';
+import { getLightingGenerators } from './power.js';
 import { advanceWeather, createWeatherState, WEATHER_TYPES } from './weather.js';
 import { advanceInhabitantNeeds, countDormitoryBeds, getCriticalNeeds, NEED_ICONS } from './needs.js';
 import { getRoomStorageCapacity } from './bunker_economy.js';
@@ -77,7 +78,7 @@ export function applyOfflineProgress(state, now = Date.now()) {
   for (let tick = 0; tick < needsTicks; tick++) {
     inhabitants = advanceInhabitantNeeds(inhabitants, {
       fed: supplies.food > 0, beds: countDormitoryBeds(grid),
-      darkNights: !hasReliableNightPower(countActiveGenerators(grid)),
+      darkNights: !hasReliableNightPower(getLightingGenerators({ ...state, shelter_grid: grid })),
     });
   }
   const present = inhabitants.filter((npc) => !npc.is_on_expedition);

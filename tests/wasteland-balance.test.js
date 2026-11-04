@@ -38,7 +38,7 @@ test('low morale halves assigned greenhouse and generator output while inhabitan
 
   const next = advanceWastelandMonth(state);
   assert.equal(next.shelter_supplies.food, 144);
-  assert.equal(next.shelter_supplies.energy, 142);
+  assert.equal(next.shelter_supplies.energy, 167);
   assert.equal(next.inhabitants.find((npc) => npc.id === 'worker-0-2').currentState, 'idle');
   assert.equal(next.inhabitants.find((npc) => npc.id === 'worker-0-2').loyalty, 30);
 });

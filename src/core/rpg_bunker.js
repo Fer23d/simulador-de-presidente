@@ -306,7 +306,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   onDetain, onAssetsReady, onEnvironmentChanged, environment = {}, isNight = environment?.isNight ?? false, weather: savedWeather = {},
   oxygenDeprived = false, assetUrls = {}, lootbox = {}, onLootboxClick,
   presidentClass = null, equippedSkin = 'default', currentDay = 1, onDayPassed, mission = null, onMission,
-  onDialogue, onDialogueAdvance, onDialogueClose, oilDerricks = null, oilFeedback = null, onOilDerrick, surfaceFort = null, onFort, companion = false, dog: savedDog = null, onPet, darkMarket = null, onMarket, escape = null, onEscape, playerName = '', language = 'pt-BR', laydSick = false } = {}) {
+  onDialogue, onDialogueAdvance, onDialogueClose, oilDerricks = null, oilFeedback = null, onOilDerrick, surfaceFort = null, onFort, companion = false, dog: savedDog = null, onPet, darkMarket = null, onMarket, escape = null, onEscape, playerName = '', language = 'pt-BR', laydSick = false, lightingGenerators = null } = {}) {
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
   const assets = getSharedAssetManager({ ...DEFAULT_ASSETS, ...assetUrls });
@@ -330,7 +330,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   let lastHint = '';
   let dayNight = createEnvironmentState({ ...environment, isNight });
   let weather = createWeatherState(savedWeather);
-  const activeGenerators = countActiveGenerators(grid);
+  const activeGenerators = Number.isFinite(lightingGenerators) ? lightingGenerators : countActiveGenerators(grid);
   const keys = new Set();
   const hasSuit = hasMarketSuit(equippedSkin);
   let farMarketHintUntil = 0;

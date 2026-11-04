@@ -2,6 +2,7 @@ import { getDepthAdjustedScrapCost, getRoomUpgradeCosts, ROOM_MAX_LEVEL } from '
 import { getPresidentClassModifiers } from './player_state.js';
 import { normalizeNeeds } from './needs.js';
 import { generateResidentIdentity } from './names.js';
+import { checkRoomPower } from './power.js';
 
 export const SLOT_WIDTH = 264;
 export const ROOM_HEIGHT = 146;
@@ -134,6 +135,8 @@ export function buildShelterRoom(state, type, floor, column) {
   }
   const buildCost = getShelterBuildCost(type, floor, state.presidentClass);
   if ((Number(state.scrap) || 0) < buildCost) return { ...state, notice: 'Sucata insuficiente.' };
+  const power = checkRoomPower(state, type);
+  if (!power.ok) return { ...state, notice: power.reason };
   const grid = state.shelter_grid.map((row) => [...row]);
   const roles = { generator: 'engineer', greenhouse: 'scientist', laboratory: 'scientist', medical: 'medic', radiation_clinic: 'medic', arsenal: 'guard', radio: 'engineer', office: 'resident' };
   const hasWorker = Array.isArray(state.inhabitants) && !['elevator', 'detention', 'life_support', 'presidential_suite'].includes(type);
@@ -175,6 +178,8 @@ export function upgradeShelterRoom(state, floor, column) {
   }
   if ((Number(state.scrap) || 0) < costs.scrap) return { ...state, notice: 'Sucata insuficiente para melhorar a sala.' };
   if ((Number(state.science) || 0) < costs.science) return { ...state, notice: 'Ciência insuficiente para melhorar a sala.' };
+  const power = checkRoomPower(state, room.type, { upgrade: true });
+  if (!power.ok) return { ...state, notice: power.reason };
   const grid = state.shelter_grid.map((row) => [...row]);
   grid[floor][column] = { ...room, level: room.level + 1 };
   return { ...state, scrap: state.scrap - costs.scrap, science: (Number(state.science) || 0) - costs.science,

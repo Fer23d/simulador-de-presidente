@@ -5,15 +5,16 @@ import {
 } from '../src/core/missions.js';
 import { createGameState, hydrateGameState } from '../src/core/game-state.js';
 import { advanceWastelandMonth, transicionarParaWasteland } from '../src/core/wasteland.js';
-import { buildShelterRoom } from '../src/core/shelter_engine.js';
+import { buildShelterRoom, repairShelterGenerator } from '../src/core/shelter_engine.js';
 import { resolveWastelandEvent } from '../src/core/game_mechanics.js';
 import { bunkerView, missionObjectiveView, renderStoryCard } from '../src/ui/dashboard.js';
 
 function vaultWithRooms() {
   let state = { ...transicionarParaWasteland(createGameState('bra')), scrap: 5_000, randomSeed: 3,
     president_selection_pending: false, presidentClass: 'worker' };
-  state = buildShelterRoom(state, 'greenhouse', 0, 2);
-  state = buildShelterRoom(state, 'generator', 0, 3);
+  // Energia primeiro: sem gerador funcionando as estufas nao cabem no orcamento de energia do Vault.
+  state = repairShelterGenerator(buildShelterRoom(state, 'generator', 0, 2), 0, 2);
+  state = buildShelterRoom(state, 'greenhouse', 0, 3);
   state = buildShelterRoom(state, 'elevator', 1, 0);
   state = buildShelterRoom(state, 'greenhouse', 1, 1);
   return state;

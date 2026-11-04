@@ -5,6 +5,7 @@ import { getNeedsProductivityMultiplier } from './needs.js';
 export const ROOM_MAX_LEVEL = 5;
 
 const OUTPUT_BY_LEVEL = Object.freeze([100, 250, 400, 550, 700]);
+export const GENERATOR_OUTPUT_BY_LEVEL = OUTPUT_BY_LEVEL;
 const UPGRADE_COST_BY_TARGET_LEVEL = Object.freeze({
   2: Object.freeze({ scrap: 300, science: 0 }),
   3: Object.freeze({ scrap: 800, science: 0 }),

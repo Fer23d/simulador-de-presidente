@@ -22,7 +22,7 @@ import { broadcastShelterSignal, buildShelterRoom, calculateShelterCapacity, equ
 import { createRpgBunkerEngine } from '../core/rpg_bunker.js';
 import { adoptLayd, hasLayd, isLaydVisible } from '../core/companion.js';
 import { advanceLaydEscape, ESCAPE_STAGES, applyVaccine, buyRation, divertFood, DOSE_SCRAP_COST, getLaydStatus, RATION_SCRAP_COST, resolveLaydDiscovery, SUSPICION_LIMIT, toggleHideLayd } from '../core/layd_care.js';
-import { canTrade, describeOffer, getStock, hasMarketSuit, isMarketOpen, MARKET_GOODS, tradeAtMarket } from '../core/market.js';
+import { canTrade, describeOffer, getMarketTier, getStock, hasMarketSuit, isMarketOpen, MARKET_GOODS, MARKET_PRICE_STEP, tradeAtMarket } from '../core/market.js';
 import { playBark } from '../core/dog_sound.js';
 import { calculateSuppression, canResolveWastelandEvent, detainRebel, dismissExpeditionReport, getWastelandEvent, resolveWastelandEvent, startExpedition } from '../core/game_mechanics.js';
 import { advanceEnvironmentCycle } from '../core/environment.js';
@@ -40,6 +40,7 @@ import { awardXp, describeLevelGate, getGameMode, getLevel, getNewLevelEntries }
 import { levelTabView, levelToastParts, levelTrackView } from './level_ui.js';
 import { DOOR_OPENS_AT_MONTH } from '../core/endings.js';
 import { getGeneratorFuelPlan, getOilSaleOffer, sellOil, toggleGeneratorFuel } from '../core/oil_economy.js';
+import { checkRoomPower, getLightingGenerators, getPowerBudget, ROOM_ENERGY_DRAW } from '../core/power.js';
 import { buildOilDerrick, collectOil, formatDuration, getDerrickBuildCost, getDerrickStatus, normalizeOilField, OIL_LEVELS, OIL_MAX_LEVEL, upgradeOilDerrick } from '../core/oil.js';
 import { drawOilDerrickPreview } from '../core/oil_renderer.js';
 import { assignGarrison, buildFort, dismissRaid, FORT_LEVELS, FORT_MAX_LEVEL, getArmySoldiers, getFortStatus, getThreatEstimate, RECRUIT_BATCH, RECRUIT_COST, recruitSoldiers, upgradeFort } from '../core/defense.js';
@@ -193,6 +194,16 @@ export function laydDiscoveryView(state) {
 }
 
 // Mercado Sombrio: troca de mercadorias na superficie, so para quem veste o Traje Antirradiacao.
+// Reputacao com o comboio: estrelas, desconto e o que o proximo nivel libera.
+export function marketReputationView(state) {
+  const rep = Math.max(0, Math.min(100, Number(state.market_rep) || 0));
+  const tier = getMarketTier(rep);
+  const stars = Array.from({ length: 4 }, (_, index) => `<span class="${index < tier ? 'is-on' : ''}">★</span>`).join('');
+  const discount = Math.round(MARKET_PRICE_STEP * tier * 100);
+  const next = tier >= 4 ? 'Reputação máxima.' : tier === 0 ? 'Nível 1 libera combustível refinado.' : tier === 2 ? 'Nível 3 libera a reforma de gerador.' : 'Cada troca aumenta a reputação.';
+  return `<p class="market-rep" data-market-rep><span class="oil-stars">${stars}</span> REPUTAÇÃO COM O COMBOIO: NÍVEL ${tier} · ${discount ? `${discount}% de vantagem nos preços` : 'sem vantagem ainda'} · ${next}</p>`;
+}
+
 export function marketView(state, skinId = state.equippedSkin) {
   const market = state.dark_market;
   const suited = hasMarketSuit(skinId);
@@ -205,11 +216,11 @@ export function marketView(state, skinId = state.equippedSkin) {
     ? '<p class="oil-status is-working">&gt; TRAJE ANTIRRADIAÇÃO ATIVO: você aguenta a superfície. Negocie rápido.</p>'
     : '<p class="oil-status market-locked">&gt; SEM PROTEÇÃO: a radiação da superfície mata. Equipe o Traje Antirradiação (guarda-roupa) para negociar.</p>';
   const rows = market.offers.map((offer) => {
-    const text = describeOffer(offer);
+    const text = describeOffer(offer, state.market_rep);
     const check = canTrade(state, offer.id, skinId);
-    return `<div class="market-offer"><span class="market-icon">${text.icon}</span><span class="market-deal"><b>${escapeHtml(text.give)}</b> ➜ <b>${escapeHtml(text.get)}</b><small>restam ${offer.left} trocas</small></span><button type="button" class="${offer.kind === 'sell' ? 'quiet-action' : 'primary-action'}" data-action="market-trade" data-offer="${escapeHtml(offer.id)}" ${check.ok ? '' : `disabled title="${escapeHtml(check.reason)}"`}>[ ${offer.kind === 'sell' ? 'VENDER' : 'COMPRAR'} ]</button></div>`;
+    return `<div class="market-offer${offer.kind === 'special' ? ' is-special' : ''}"><span class="market-icon">${text.icon}</span><span class="market-deal"><b>${escapeHtml(text.give)}</b> ➜ <b>${escapeHtml(text.get)}</b><small>restam ${offer.left} trocas</small></span><button type="button" class="${offer.kind === 'sell' ? 'quiet-action' : 'primary-action'}" data-action="market-trade" data-offer="${escapeHtml(offer.id)}" ${check.ok ? '' : `disabled title="${escapeHtml(check.reason)}"`}>[ ${offer.kind === 'sell' ? 'VENDER' : 'COMPRAR'} ]</button></div>`;
   }).join('');
-  return `<section class="bunker-dialog oil-dialog market-dialog" role="dialog" aria-modal="true" aria-labelledby="market-title">${header}<p class="oil-reserve">🔩 ${formatNumber.format(state.scrap ?? 0)} SUCATAS</p><div class="market-stock">${stock}</div>${gate}<div class="market-offers">${rows}</div><div class="action-row oil-actions"><button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div></section>`;
+  return `<section class="bunker-dialog oil-dialog market-dialog" role="dialog" aria-modal="true" aria-labelledby="market-title">${header}<p class="oil-reserve">🔩 ${formatNumber.format(state.scrap ?? 0)} SUCATAS</p><div class="market-stock">${stock}</div>${marketReputationView(state)}${gate}<div class="market-offers">${rows}</div><div class="action-row oil-actions"><button type="button" class="quiet-action" data-action="close-bunker-modal">[ VOLTAR AO VAULT ]</button></div></section>`;
 }
 
 function fortStatRow(label, value, nextValue = null, max = null) {
@@ -263,7 +274,9 @@ export function raidReportView(report) {
 export function generatorFuelView(state) {
   const plan = getGeneratorFuelPlan(state);
   const status = !plan.enabled ? 'DESLIGADO' : plan.funded ? 'LIGADO · +50% ENERGIA' : 'LIGADO · SEM PETRÓLEO';
-  return `<div class="oil-use"><p class="oil-use-title">🛢 ABASTECIMENTO COM PETRÓLEO: <strong class="${plan.active ? 'is-on' : ''}">${status}</strong></p><p class="oil-use-text">Queima ${formatNumber.format(plan.cost)} barris por mês nos ${plan.generators} geradores ativos. Você tem ${formatNumber.format(state.oil ?? 0)}.</p><button type="button" class="quiet-action" data-action="generator-fuel-toggle">[ ${plan.enabled ? 'DESLIGAR' : 'LIGAR'} ABASTECIMENTO ]</button></div>`;
+  const power = getPowerBudget(state);
+  const lighting = power.lit ? `💡 VAULT ILUMINADO À NOITE (${power.lightingGenerators} geradores equivalentes)` : `🌑 VAULT ESCURO À NOITE (${power.lightingGenerators} de ${power.lightThreshold} geradores equivalentes: dois geradores com petróleo bastam)`;
+  return `<div class="oil-use"><p class="oil-use-title">🛢 ABASTECIMENTO COM PETRÓLEO: <strong class="${plan.active ? 'is-on' : ''}">${status}</strong></p><p class="oil-use-text power-line ${power.lit ? 'is-lit' : 'is-dark'}">${lighting}</p><p class="oil-use-text">⚡ ENERGIA: ${formatNumber.format(power.capacity)} de capacidade · ${formatNumber.format(power.draw)} em uso · <strong class="${power.free < 0 ? 'is-low' : ''}">${formatNumber.format(power.free)} livres por mês</strong>. Cada sala nova gasta energia.</p><p class="oil-use-text">Queima ${formatNumber.format(plan.cost)} barris por mês nos ${plan.generators} geradores ativos. Você tem ${formatNumber.format(state.oil ?? 0)}${plan.cost > 0 ? ` (dura cerca de ${formatNumber.format(Math.floor((Number(state.oil) || 0) / (plan.cost / 30)))} dias)` : ""}.</p><button type="button" class="quiet-action" data-action="generator-fuel-toggle">[ ${plan.enabled ? 'DESLIGAR' : 'LIGAR'} ABASTECIMENTO ]</button></div>`;
 }
 
 export function oilTradeView(state) {
@@ -678,7 +691,7 @@ export function bunkerView(state) {
   return `<section class="bunker-chamber">
     <div class="bunker-header"><div><p class="eyebrow">/// CORTE TRANSVERSAL / SETOR VAULT ///</p><h2>Colónia Subterrânea</h2><p class="vault-clock" data-vault-clock>DIA ${getVaultDay(state)} · MÊS ${(Number(state.wasteland_turn) || 0) + 1}${(Number(state.wasteland_turn) || 0) + 1 <= DOOR_OPENS_AT_MONTH ? ` DE ${DOOR_OPENS_AT_MONTH}` : ''}${isDoorOpen(state) ? ' · 🚪 PORTA PRONTA' : describeLevelGate(state) ? ` · PORTA: NV ${describeLevelGate(state).required}` : ''}<span class="vault-clock-bar" aria-hidden="true"><span style="width:${Math.round(getVaultDayOfMonth(state) / DAYS_PER_MONTH * 100)}%"></span></span></p>${state.layd_escape ? `<p class="layd-escape-banner" role="alert">🚨 A FUGA · ${escapeHtml(ESCAPE_STAGES[state.layd_escape.stage].objective)}</p>` : ''}</div><div class="bunker-header-actions">${lootNotice}<button type="button" class="primary-action" data-action="advance" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 1 DIA ]</button><button type="button" class="quiet-action" data-action="advance-days" data-days="3" ${turnBlocked ? 'disabled' : ''}>[ AVANÇAR 3 DIAS ]</button>${isDoorOpen(state) && !state.ending ? '<button type="button" class="primary-action door-ready-button" data-action="open-door">[ 🚪 PORTA DO VAULT ]</button>' : ''}<button type="button" class="quiet-action bunker-build-toggle" data-action="shelter-build-mode" aria-pressed="false">[ EXPANDIR VAULT ]</button><button type="button" class="quiet-action" data-action="open-encyclopedia">[ 📖 ENCICLOPÉDIA ]</button>${hasLayd(state) ? `<button type="button" class="quiet-action layd-button ${state.companion.sick ? 'is-sick' : ''}" data-action="open-layd">[ 🐕 LAYD${state.companion.sick ? ' · DOENTE' : ''} ]</button>` : ''}</div></div>
     <div class="bunker-hud"><span>SUCATA ${formatNumber.format(state.scrap ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'scrap'))}</span><span class="oil-resource">🛢 PETRÓLEO ${formatNumber.format(state.oil ?? 0)}</span><span>🪖 SOLDADOS ${formatNumber.format(getArmySoldiers(state))}</span><span>🛡 DEFESA ${formatNumber.format(getFortStatus(state.surface_fort)?.defense ?? 0)}</span><span>CIÊNCIA ${formatNumber.format(state.science ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'science'))}</span><span>COMIDA ${formatNumber.format(state.shelter_supplies?.food ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'food'))}</span><span>ENERGIA ${formatNumber.format(state.shelter_supplies?.energy ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'energy'))}</span><span class="oxygen-resource ${state.oxygen_deprived ? 'oxygen-deprived' : ''}" aria-label="Oxigênio ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} de ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ', produção insuficiente' : ''}">💨 O₂ ${formatNumber.format(state.shelter_supplies?.oxygen ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'oxygen'))}${state.oxygen_deprived ? ' · ALERTA' : ''}</span><span>SALAS ${rooms.length}</span><span>CAPACIDADE ${formatNumber.format(calculateShelterCapacity(grid))}</span><span>ARMAS ${formatNumber.format(state.shelter_supplies?.weapons ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'weapons'))}</span><span>GUARDAS ${formatNumber.format(state.shelter_guards ?? 0)}</span><span>CURATIVOS ${formatNumber.format(state.shelter_supplies?.medkits ?? 0)} / ${formatNumber.format(getRoomStorageCapacity(grid, 'medkits'))}</span><span>RADIAÇÃO ${formatNumber.format(state.shelter_radiation ?? 0)}%</span></div>
-    <div class="bunker-build-controls" hidden aria-label="Módulos de construção">${modules.map(([id, module]) => { const cost = getShelterBuildCost(id, 0, state.presidentClass); return `<button type="button" class="bunker-module-button" data-action="shelter-module" data-module="${id}" aria-pressed="${id === 'dormitory'}" ${state.scrap < cost ? 'disabled' : ''}>${module.name}<small>${formatNumber.format(cost)} sucatas${buildCostMultiplier < 1 ? ' · DESCONTO DO OPERÁRIO' : ''}</small></button>`; }).join('')}<div class="bunker-slot-controls"><label for="shelter-build-slot">Setor livre</label><select id="shelter-build-slot" class="bunker-build-slot"></select><button type="button" class="primary-action" data-action="shelter-place">[ CONSTRUIR ]</button></div></div>
+    <div class="bunker-build-controls" hidden aria-label="Módulos de construção">${modules.map(([id, module]) => { const cost = getShelterBuildCost(id, 0, state.presidentClass); return `<button type="button" class="bunker-module-button" data-action="shelter-module" data-module="${id}" aria-pressed="${id === 'dormitory'}" ${state.scrap < cost ? 'disabled' : ''}>${module.name}<small>${formatNumber.format(cost)} sucatas${ROOM_ENERGY_DRAW[id] ? ` · ⚡${ROOM_ENERGY_DRAW[id]}/mês` : id === 'generator' ? ' · PRODUZ ENERGIA' : ''}${buildCostMultiplier < 1 ? ' · DESCONTO DO OPERÁRIO' : ''}</small></button>`; }).join('')}<div class="bunker-slot-controls"><label for="shelter-build-slot">Setor livre</label><select id="shelter-build-slot" class="bunker-build-slot"></select><button type="button" class="primary-action" data-action="shelter-place">[ CONSTRUIR ]</button></div></div>
     <div class="bunker-stage"><canvas id="shelterCanvas" class="bunker-canvas" width="960" height="600" tabindex="0" aria-label="Bunker lateral. A e D movem o Presidente, W e S operam o elevador, E interage. Na construção, clique num setor livre."></canvas>${bunkerEnvironmentHudView(state.environment, state.isNight, state.inhabitants, state.shelter_guards, state.presidentClass, state.weather)}${missionObjectiveView(state)}<div class="bunker-tooltip" data-bunker-tooltip role="status" hidden></div>${renderDialogueView(null)}</div>
      <div class="bunker-foot"><div><p class="bunker-status" data-shelter-status role="status">PRESIDENTE EM PATRULHA · ${escapeHtml(getPlayerDisplayName(state).toUpperCase())}</p><p class="bunker-notice ${/SINAL DO EXPLORADOR|ALERTA CRÍTICO|ASFIXIA|oxigênio insuficiente/i.test(state.notice ?? '') ? 'danger' : ''}" role="status">${escapeHtml(state.notice ?? '')}</p></div><div class="shelter-room-controls"><label for="shelter-room-select">Setor</label><select id="shelter-room-select" class="bunker-build-slot">${rooms.map((room) => `<option value="${room.floor}:${room.column}">${SHELTER_TYPES[room.type].name} · A${room.floor + 1} S${room.column}</option>`).join('')}</select><button type="button" class="quiet-action" data-action="shelter-open-room">[ GERIR SALA ]</button></div></div>
   </section>`;
@@ -1969,6 +1982,7 @@ export function mountDashboard(root) {
           onMarket: openMarketPanel,
           companion: isLaydVisible(state),
           laydSick: Boolean(state.companion?.sick),
+          lightingGenerators: getLightingGenerators(state),
           dog: bunkerSnapshot?.dog ?? null,
           onPet: () => playBark(),
           onPlayerChanged: (player) => {

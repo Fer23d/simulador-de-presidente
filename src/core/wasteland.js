@@ -11,6 +11,8 @@ import { createMissionLocation } from './missions.js';
 import { normalizeOilField } from './oil.js';
 import { rollSurfaceRaid } from './defense.js';
 import { rollDarkMarket } from './market.js';
+import { hasLayd } from './companion.js';
+import { BASE_POWER, getLightingGenerators, getRoomsEnergyDraw } from './power.js';
 import { advanceLaydMonth } from './layd_care.js';
 import { getGeneratorFuelPlan } from './oil_economy.js';
 import { DAYS_PER_MONTH, dayShare, getVaultDayOfMonth } from './vault_time.js';
@@ -215,7 +217,7 @@ function advanceVaultMonth(state, dayIndex = 0) {
   const generators = rooms.filter((room) => room.type === 'generator' && room.operational);
   const councilModifiers = getCouncilModifiers(state.vaultCouncil);
   const energyProduction = Math.round(generators.reduce((total, room) =>
-    total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0) * getGeneratorFuelPlan(state, dayIndex).multiplier * councilModifiers.generatorMultiplier);
+    total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0) * getGeneratorFuelPlan(state, dayIndex).multiplier * councilModifiers.generatorMultiplier) + BASE_POWER;
   const foodProduction = activeGreenhouses.reduce((total, room) =>
     total + (getRoomEconomyProfile(state, room)?.production.amount ?? 0), 0);
   const oxygenProduction = getLifeSupportOxygenProduction(grid);
@@ -233,14 +235,14 @@ function advanceVaultMonth(state, dayIndex = 0) {
   const offices = countLevels('office');
   const population = Math.min(calculateShelterCapacity(grid), state.country.populacao_base + greenhouseWorkUnits * 5 + medical * 2 + radio * 3);
   const foodConsumption = getBunkerFoodConsumption(state, population);
-  const energyConsumption = getBunkerEnergyConsumption(state, population) + getLifeSupportEnergyMaintenance(grid);
+  const energyConsumption = getBunkerEnergyConsumption(state, population) + getLifeSupportEnergyMaintenance(grid) + getRoomsEnergyDraw(grid);
   const oxygenConsumption = Math.ceil(getBunkerOxygenConsumption(state, grid) * weather.oxygenMultiplier);
   const oxygenCapacity = getRoomStorageCapacity(grid, 'oxygen');
   const oxygenDeficit = oxygenProduction < oxygenConsumption;
   const fed = (Number(state.shelter_supplies?.food) || 0) + foodProduction >= foodConsumption;
   const beds = countDormitoryBeds(grid);
   const inhabitantsWithNeeds = advanceInhabitantNeeds(state.inhabitants ?? [], {
-    fed, beds, darkNights: !hasReliableNightPower(countActiveGenerators(grid)), stormPenalty: weather.moralePenalty,
+    fed, beds, darkNights: !hasReliableNightPower(getLightingGenerators(state)), stormPenalty: weather.moralePenalty,
   });
   const presentCount = inhabitantsWithNeeds.filter((inhabitant) => !inhabitant.is_on_expedition).length;
   // Em dias, cada recurso recebe so a parte do dia (dayShare); sem dayIndex e o mes inteiro, como antes.
@@ -280,7 +282,7 @@ function advanceVaultMonth(state, dayIndex = 0) {
     wasteland_turn: wastelandMonthCounter,
     wasteland_day: 0,
     wastelandMonthCounter,
-    dark_market: rollDarkMarket(wastelandMonthCounter),
+    dark_market: rollDarkMarket(wastelandMonthCounter, { rep: state.market_rep, layd: hasLayd(state) }),
     wastelandEventCursor: Math.max(0, Math.floor(Number(state.wastelandEventCursor) || 0)) % WASTELAND_EVENTS.length,
     shelter_grid: nextGrid,
     ...(Array.isArray(state.inhabitants) ? { inhabitants: inhabitantsWithNeeds } : {}),
