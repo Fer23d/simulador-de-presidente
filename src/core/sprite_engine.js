@@ -162,14 +162,14 @@ function drawRepeatingLayer(ctx, image, parallaxX, y, width, height) {
   for (let x = start; x < ctx.canvas.width; x += width) drawOrMissing(ctx, image, x, y, width, height);
 }
 
-function renderSurface(ctx, camera, assets, { isNight = false, time = 0, weather = 'clear' } = {}) {
+function renderSurface(ctx, camera, assets, { isNight = false, time = 0, weather = 'clear', lowQuality = false } = {}) {
   const boundary = SURFACE_Y + camera.offset_y;
   if (boundary <= 0) return;
   drawRepeatingLayer(ctx, assets.getImage('bg_sky'), camera.offset_x * .08, boundary - 520, 1400, 540);
   drawRepeatingLayer(ctx, assets.getImage('bg_mountains'), camera.offset_x * .2, boundary - 230, 1400, 260);
   drawRepeatingLayer(ctx, assets.getImage('fg_wasteland'), camera.offset_x, boundary - 180, 1600, 210);
   if (isNight) renderNightSurface(ctx, camera, boundary, time, { overcast: weather !== 'clear' });
-  if (weather !== 'clear') renderWeather(ctx, camera, boundary, time, weather);
+  if (weather !== 'clear') renderWeather(ctx, camera, boundary, time, weather, lowQuality);
 }
 
 // Superficie noturna radioativa: tinta azul-violeta, estrelas cintilantes, lua esverdeada e fogueiras.
@@ -259,10 +259,19 @@ const WEATHER_PARTICLES = Object.freeze(Array.from({ length: 140 }, (_, index) =
 const DUST_BUCKETS = Object.freeze([[], [], []].map((bucket, index) => WEATHER_PARTICLES.filter((particle) => (particle.size < .34 ? 0 : particle.size < .67 ? 1 : 2) === index)));
 const DUST_COLORS = Object.freeze(['rgba(208, 136, 70, .26)', 'rgba(220, 148, 70, .38)', 'rgba(232, 160, 70, .52)']);
 
-export function renderWeather(ctx, camera, boundary, time, weather) {
+// Qualidade baixa (ativada sozinha quando o jogo roda abaixo de ~24 quadros por segundo): o clima vira so uma
+// tinta por cima do ceu, sem particulas, raios nem poças, para nao pesar em computadores mais fracos.
+const WEATHER_TINTS = Object.freeze({ dust: 'rgba(168, 98, 42, .5)', acid_rain: 'rgba(58, 104, 52, .3)', radstorm: 'rgba(38, 86, 52, .5)' });
+
+export function renderWeather(ctx, camera, boundary, time, weather, low = false) {
   const width = ctx.canvas.width;
   const height = Math.min(boundary, ctx.canvas.height);
   if (height <= 0) return;
+  if (low) {
+    ctx.fillStyle = WEATHER_TINTS[weather] ?? 'rgba(0, 0, 0, 0)';
+    ctx.fillRect(0, 0, width, height);
+    return;
+  }
   ctx.save();
   ctx.beginPath();
   ctx.rect?.(0, 0, width, height);
@@ -2105,8 +2114,8 @@ export function applyOxygenDeprivationOverlay(ctx, width, height, oxygenDeprived
 
 export function renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants = [], cabinFloor = player.floor,
   time = 0, isNight = false, activeGenerators = 0, oxygenDeprived = false, lootbox = {},
-  presidentClass = null, equippedSkin = 'default', weather = 'clear', oilDerricks = null, oilNow = Date.now(), oilFeedback = null, surfaceFort = undefined, companion = null, darkMarket = null, language = 'pt-BR' }) {
-  renderSurface(ctx, camera, assets, { isNight, time, weather });
+  presidentClass = null, equippedSkin = 'default', weather = 'clear', oilDerricks = null, oilNow = Date.now(), oilFeedback = null, surfaceFort = undefined, companion = null, darkMarket = null, language = 'pt-BR', lowQuality = false }) {
+  renderSurface(ctx, camera, assets, { isNight, time, weather, lowQuality });
   renderDirt(ctx, camera, assets);
   ctx.save();
   ctx.translate(camera.offset_x, camera.offset_y);

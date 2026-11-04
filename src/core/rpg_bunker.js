@@ -344,6 +344,34 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
   let perfOn = false;
   let perfFps = 60;
   let perfDrawMs = 0;
+  // Qualidade automatica: se o jogo fica abaixo de 24 quadros por segundo por 3 s, os efeitos de clima ficam simples;
+  // volta ao normal depois de 6 s acima de 45.
+  let lowQuality = false;
+  let slowSeconds = 0;
+  let fastSeconds = 0;
+  // Sondas do F3: separam "o desenho e pesado" de "a pagina esta ocupada com outra coisa" ou "a placa de video segura os quadros".
+  const perfProbe = { longMs: 0, lag: 0, nodes: 0, started: false };
+  function startPerfProbes() {
+    if (perfProbe.started || typeof PerformanceObserver === 'undefined') return;
+    perfProbe.started = true;
+    const longTasks = [];
+    try {
+      new PerformanceObserver((list) => { for (const entry of list.getEntries()) longTasks.push([performance.now(), entry.duration]); }).observe({ entryTypes: ['longtask'] });
+    } catch { /* navegador sem longtask */ }
+    const tick = () => {
+      if (destroyed) return;
+      const expected = performance.now() + 250;
+      setTimeout(() => {
+        const now = performance.now();
+        perfProbe.lag += (Math.max(0, now - expected) - perfProbe.lag) * .3;
+        while (longTasks.length && now - longTasks[0][0] > 1_000) longTasks.shift();
+        perfProbe.longMs = longTasks.reduce((total, [, duration]) => total + duration, 0);
+        perfProbe.nodes = globalThis.document ? globalThis.document.getElementsByTagName('*').length : 0;
+        tick();
+      }, 250);
+    };
+    tick();
+  }
   function frame(time) {
     if (destroyed) return;
     const frameStart = performance.now();
@@ -351,6 +379,11 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     const rawDt = lastTime ? (time - lastTime) / 1000 : 0;
     const dt = Math.max(0, Math.min(MAX_SIMULATION_STEP, Number.isFinite(rawDt) ? rawDt : 0));
     lastTime = time;
+    if (dt > 0) {
+      if (1 / dt < 24) { slowSeconds += dt; fastSeconds = 0; } else if (1 / dt > 45) { fastSeconds += dt; slowSeconds = Math.max(0, slowSeconds - dt); }
+      if (!lowQuality && slowSeconds > 3) { lowQuality = true; fastSeconds = 0; }
+      else if (lowQuality && fastSeconds > 6) { lowQuality = false; slowSeconds = 0; }
+    }
     const previousNight = dayNight.isNight;
     const fullCycleProgress = dayNight.elapsedMs + Math.max(0, dt * 1000);
     const daysPassed = Math.floor(fullCycleProgress / FULL_CYCLE_MS);
@@ -400,7 +433,7 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     camera.offset_y += (targetY - camera.offset_y) * Math.min(1, dt * 8);
     renderSpriteScene(ctx, { grid, player, camera, assets, inhabitants: actors, cabinFloor, time, language,
       isNight: dayNight.isNight, activeGenerators, oxygenDeprived, lootbox, presidentClass, equippedSkin,
-      weather: weather.type, oilDerricks, oilFeedback, surfaceFort, companion: dog ? { ...dog, sick: laydSick } : null, darkMarket });
+      weather: weather.type, oilDerricks, oilFeedback, surfaceFort, companion: dog ? { ...dog, sick: laydSick } : null, darkMarket, lowQuality });
     if (escape) {
       // Alarme: o Vault inteiro esta acordado e atras de voce.
       ctx.save();
@@ -412,12 +445,15 @@ export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, pla
     if (perfOn) {
       perfDrawMs += (performance.now() - frameStart - perfDrawMs) * .1;
       if (dt > 0) perfFps += (1 / dt - perfFps) * .1;
+      startPerfProbes();
       ctx.save();
       ctx.fillStyle = 'rgba(0, 0, 0, .65)';
-      ctx.fillRect(6, 6, 238, 22);
+      ctx.fillRect(6, 6, 420, 40);
       ctx.fillStyle = perfFps < 30 ? '#ff7a5a' : '#8dff9a';
       ctx.font = 'bold 12px monospace';
-      ctx.fillText('FPS ' + Math.round(perfFps) + '  ·  DESENHO ' + perfDrawMs.toFixed(1) + ' ms  ·  F3', 12, 21);
+      ctx.fillText('FPS ' + Math.round(perfFps) + '  ·  DESENHO ' + perfDrawMs.toFixed(1) + ' ms' + (lowQuality ? '  ·  EFEITOS SIMPLES' : '') + '  ·  F3', 12, 21);
+      ctx.fillStyle = '#d8d0b0';
+      ctx.fillText('TAREFAS LONGAS ' + Math.round(perfProbe.longMs) + ' ms/s  ·  ATRASO DO RELÓGIO ' + Math.round(perfProbe.lag) + ' ms  ·  PÁGINA ' + perfProbe.nodes, 12, 38);
       ctx.restore();
     }
     const rebel = paused || buildMode ? null : findNearbyRebel(player, grid, actors, language);

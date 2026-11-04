@@ -107,3 +107,17 @@ test('storm animations stay cheap: few draw calls, no full-screen multiply and n
     assert.ok(calls.fillRect <= 30, `${weather}: no per-particle rectangles (${calls.fillRect})`);
   }
 });
+
+test('low quality weather is a flat tint with no particles, strokes or bolts', async () => {
+  const { renderWeather } = await import('../src/core/sprite_engine.js');
+  for (const weather of ['dust', 'acid_rain', 'radstorm']) {
+    const calls = { fillRect: 0, fill: 0, stroke: 0 };
+    const ctx = new Proxy({ canvas: { width: 960, height: 600 } }, {
+      get: (target, name) => (name in target ? target[name] : (name === 'createLinearGradient' ? () => ({ addColorStop() {} }) : (...args) => { if (name in calls) calls[name] += 1; return args; })),
+      set: () => true,
+    });
+    renderWeather(ctx, { offset_x: 0 }, 300, 4_100, weather, true);
+    assert.equal(calls.fillRect, 1, `${weather}: a single tint`);
+    assert.equal(calls.fill + calls.stroke, 0, `${weather}: no particles`);
+  }
+});
