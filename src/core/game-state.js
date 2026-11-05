@@ -2,14 +2,14 @@ import { createCongress, negotiateSupport, voteOnLaw } from './congress.js';
 import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countries.js';
 import { DEFAULT_BUDGET, advanceEconomy, clampBudgetRate, clampTaxRate, normalizeInflationHistory, setBudgetRate } from './economy.js';
 import { advanceGeopolitics, anexarPais as annexTreatyTarget, alterarNotaONU as changeOnuScore, aplicarReparacoes as applyReparationsTreaty, createGeopolitics, criarLiga as createLeagueState, desmilitarizarPais as demilitarizeTreatyTarget, declareWar, estabelecerFantoche as establishPuppet, exigirAnexacao as demandAnnexation, getGeopoliticalModifiers, insultarNacao as insultNation, importarRecursos as importResources, imporSancao as imposeSanction, interceptArticle5 as detectArticle5, inviteToLeague as inviteLeagueMember, isLegitimateDefenseTarget, processarAgressaoIA, proposeAlliance as formAlliance, proposeTradeTreaty, respondArticle5 as respondArticle5State, sabotar as sabotageCountry, saquearTesouro as lootTreatyTarget } from './geopolitics.js';
-import { advanceMilitary, applyNuclearCompletion, calculateMilitaryMaintenance, canAutogolpe, comprarBlindados, comprarCacas, comprarEquipamento, comprarNavios, createMilitary, createRegime, evaluateRegime, fundNuclearProject, getPoderTotal, normalizeMilitary, recrutarSoldado as recruitSoldiers } from './military.js';
+import { advanceMilitary, advanceUnrest, unrestStageMessage, applyNuclearCompletion, calculateMilitaryMaintenance, canAutogolpe, comprarBlindados, comprarCacas, comprarEquipamento, comprarNavios, createMilitary, createRegime, evaluateRegime, fundNuclearProject, getPoderTotal, normalizeMilitary, recrutarSoldado as recruitSoldiers } from './military.js';
 import { aggregateActiveLawEffects, LAWS, LAW_LABOR_REFORM } from './laws.js';
 import { advanceTechnology, createTechnology, getTechnologyModifiers, purchaseTechnology } from './technology.js';
 import { calculateMilitaryResearchPoints, getMilitaryTechnology, pesquisarTecnologia } from './tech_tree.js';
 import { getTraitModifiers } from './traits.js';
 import { EVENTS, applyEventOption, rollMonthlyEvent } from './events.js';
 import { createMinisters, dismissMinister as dismissCabinetMinister, getMinisterModifiers, hireMinister as hireCabinetMinister } from './ministers.js';
-import { advanceFactions, createFactions, getFactionModifiers, getFactionSupport, normalizeFactions } from './factions.js';
+import { adjustFactions, advanceFactions, createFactions, getFactionModifiers, getFactionSupport, normalizeFactions } from './factions.js';
 import { absorverPaisParaUniao as absorbIntoUnion, decretarRevolucaoSocialista as decreeSocialistRevolution } from './revolution.js';
 import { financiarRebeldes as fundRebels } from './espionage.js';
 import { aplicarResolucoes, registrarVotoONU, verificarAssembleia } from './un_assembly.js';
@@ -1045,9 +1045,15 @@ export function advanceMonth(state) {
     factions: infrastructureState.factions,
     technology,
   });
+  // Tensao social: protestos e crise politica corroem trabalhadores e militares antes de um golpe.
+  const unrest = advanceUnrest(state.regime?.unrest, constitutionalState.economy, constitutionalState.factions);
+  const unrestAlert = unrestStageMessage(state.regime?.unrest, unrest);
+  const pressuredFactions = unrest >= 30
+    ? adjustFactions(constitutionalState.factions, { trabalhadores: unrest >= 60 ? -3 : -1.5, militares: unrest >= 60 ? -1.5 : 0 })
+    : constitutionalState.factions;
   const stability = state.regime?.stabilityLocked
-    ? { regime: { ...state.regime, coupRisk: 0, revolutionRisk: 0, gameOver: false, outcome: null }, seed: geopoliticalMonth.seed, event: null }
-    : evaluateRegime(state.regime, constitutionalState.economy, constitutionalState.military, geopoliticalMonth.geopolitics, geopoliticalMonth.seed, constitutionalState.factions);
+    ? { regime: { ...state.regime, coupRisk: 0, revolutionRisk: 0, unrest: 0, gameOver: false, outcome: null }, seed: geopoliticalMonth.seed, event: null }
+    : evaluateRegime({ ...state.regime, unrest }, constitutionalState.economy, constitutionalState.military, geopoliticalMonth.geopolitics, geopoliticalMonth.seed, pressuredFactions);
   const month = state.calendar.month === 12 ? 1 : state.calendar.month + 1;
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? internalProjectState.notice ?? `mês encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superávit' : 'com déficit'}.`;
@@ -1058,7 +1064,7 @@ export function advanceMonth(state) {
     geopolitics: geopoliticalMonth.geopolitics,
     military: normalizeMilitary(constitutionalState.military),
     country: infrastructureState.country,
-    factions: constitutionalState.factions,
+    factions: pressuredFactions,
     technology: constitutionalState.technology,
     infrastructure: internalProjectState.infrastructure,
     health: internalProjectState.health,
@@ -1093,7 +1099,8 @@ export function advanceMonth(state) {
     ? addNews(addNews(syncWorld(resolvedState), notice), 'Alerta sanitario: o país está sob ataque biológico silencioso.')
     : addNews(syncWorld(resolvedState), notice);
   const inflationAlert = inflationThresholdMessage(state.economy.inflation, completedState.economy.inflation);
-  const defconState = applyDefconEconomicShock(advanceDefcon(inflationAlert ? addNews(withNews, inflationAlert) : withNews));
+  const withAlerts = [inflationAlert, unrestAlert].reduce((current, alert) => (alert ? addNews(current, alert) : current), withNews);
+  const defconState = applyDefconEconomicShock(advanceDefcon(withAlerts));
   // Ritmo das hostilidades: sem guerras nos primeiros 12 meses, no maximo uma nova declaracao a cada 8 meses e nenhuma
   // enquanto o pais ja se defende de outra. Ataque nuclear em DEFCON 1 segue valendo sempre.
   const hostileMonth = Number(defconState.monthCounter) || 0;

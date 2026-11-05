@@ -226,7 +226,39 @@ export function canAutogolpe(regime, military) {
 }
 
 export function createRegime() {
-  return { type: 'democracy', coupRisk: 0, revolutionRisk: 0, electionsSuspended: false, gameOver: false, outcome: null };
+  return { type: 'democracy', coupRisk: 0, revolutionRisk: 0, unrest: 0, electionsSuspended: false, gameOver: false, outcome: null };
+}
+
+export const UNREST_STAGES = Object.freeze([
+  { level: 80, label: 'Colapso político', up: 'Os quartéis ouvem as ruas: um golpe militar é possível a qualquer momento.' },
+  { level: 60, label: 'Crise política', up: 'A crise política se aprofunda: greves gerais e perda de apoio nas Forças Armadas.' },
+  { level: 30, label: 'Protestos', up: 'Protestos tomam as ruas por causa da economia.' },
+]);
+
+// Tensao social (0 a 100): sobe com caixa negativo, inflacao alta, desemprego e rombo fiscal; cai devagar quando a economia respira.
+export function advanceUnrest(previous, economy, factions = {}) {
+  const inflation = Number(economy.inflation) || 0;
+  const unemployment = Number(economy.unemployment) || 0;
+  const workers = Number(factions.trabalhadores);
+  let pressure = 0;
+  const discontent = Number.isFinite(workers) && workers < 60;
+  // Caixa negativo so alimenta a revolta quando o povo ja esta descontente (o orcamento inicial ja nasce deficitario).
+  if ((Number(economy.cash) || 0) < 0 && discontent) pressure += 1.5;
+  if (inflation > 0.08) pressure += (inflation - 0.08) * 50;
+  if (unemployment > 0.12) pressure += (unemployment - 0.12) * 40;
+  if (Number.isFinite(workers) && workers < 45) pressure += (45 - workers) * 0.15;
+  if ((Number(economy.fiscalHole) || 0) / Math.max(1, Number(economy.gdp) || 1) > 0.01) pressure += 1.5;
+  return clamp((Number(previous) || 0) + (pressure > 0 ? pressure : -2), 0, 100);
+}
+
+export function unrestStageMessage(before, after) {
+  const from = Number(before) || 0;
+  const to = Number(after) || 0;
+  for (const stage of UNREST_STAGES) {
+    if (from < stage.level && to >= stage.level) return stage.up;
+  }
+  if (from >= 30 && to < 30) return 'As ruas se acalmaram: os protestos perderam força.';
+  return null;
 }
 
 export function evaluateRegime(regime, economy, military, geopolitics, seed, factions = {}) {
@@ -260,13 +292,15 @@ export function evaluateRegime(regime, economy, military, geopolitics, seed, fac
     };
   }
   const severeCrisis = (Number(factions.trabalhadores) || 50) <= 10 && economy.cash < 0;
-  const coupRisk = severeCrisis
+  const unrest = Number(regime.unrest) || 0;
+  const unrestCoup = unrest >= 80 ? clamp(0.04 + ((unrest - 80) * 0.012) + (atWar * 0.05), 0, 0.5) : 0;
+  const coupRisk = Math.max(severeCrisis
     ? clamp(0.22 + (atWar * 0.12) + (Math.max(0, military.support - 60) * 0.006), 0, 0.8)
-    : 0;
-  const gameOver = severeCrisis && random.value < coupRisk;
+    : 0, unrestCoup);
+  const gameOver = coupRisk > 0 && random.value < coupRisk;
   return {
     seed: random.seed,
-    event: gameOver ? 'Golpe militar encerrou o mandato.' : null,
+    event: gameOver ? (severeCrisis ? 'Golpe militar encerrou o mandato.' : 'Protestos em massa e um golpe militar encerraram o mandato.') : null,
     regime: { ...regime, coupRisk, revolutionRisk: 0, gameOver, outcome: gameOver ? 'golpe-militar' : null, electionsSuspended: false },
   };
 }

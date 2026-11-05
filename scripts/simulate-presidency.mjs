@@ -4,6 +4,7 @@ import {
   advanceMonth,
   createGameState,
   dispensarAlertaHostil,
+  desviarFundosParaCaixa2,
   dispensarHistoria,
   recusarJogosMundiais,
   resolvePeaceTreaty,
@@ -25,6 +26,17 @@ const STRATEGIES = Object.freeze({
       const inflation = state.economy.inflation;
       const target = inflation > 0.1 ? 0.2 : inflation > 0.06 ? 0.14 : inflation < 0.02 ? 0.06 : 0.1;
       return setBudget(state, 'interestRate', target);
+    },
+  },
+  imprudente: {
+    label: 'Imprudente (déficit, desvios e juros zerados)',
+    apply(state) {
+      let next = setBudget(state, 'interestRate', 0);
+      next = setBudget(next, 'incomeTaxRate', 0.02);
+      next = setBudget(next, 'vatRate', 0.02);
+      next = setBudget(next, 'socialSpend', 0.15);
+      next = setBudget(next, 'defenseSpend', 0.15);
+      return desviarFundosParaCaixa2(next);
     },
   },
   gastador: {

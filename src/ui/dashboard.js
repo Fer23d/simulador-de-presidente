@@ -487,6 +487,12 @@ function taxControl(label, key, value) {
   </div>`;
 }
 
+function unrestLabel(unrest) {
+  const value = Math.round(Number(unrest) || 0);
+  const stage = value >= 80 ? 'colapso' : value >= 60 ? 'crise política' : value >= 30 ? 'protestos' : 'calma';
+  return `${value}/100 · ${stage}`;
+}
+
 function overviewView(state, projection) {
   const budgetTone = projection.monthlyBalance >= 0 ? 'positive' : 'negative';
   const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid) || Boolean(state.pendingFinalDilemma) || Boolean(state.pendingInterrogation) || Boolean(state.pendingStory) || Boolean(state.pendingBriefing) || Boolean(state.pendingAllianceInvocation) || Boolean(state.pendingHostileAlert) || Boolean(state.wasteland_cinematic_pending) || Boolean(state.wasteland_cinematic_ready);
@@ -499,6 +505,7 @@ function overviewView(state, projection) {
         <div><span>Maioria exigida</span><strong>${Math.floor(state.congress.totalSeats / 2) + 1} votos</strong></div>
         <div><span>Lei Trabalhista</span><strong>${state.laws.laborReform.approved ? 'Aprovada' : state.laws.laborReform.voteCompleted ? 'Rejeitada' : 'Pendente'}</strong></div>
         <div><span>Força corporativa</span><strong>${Number(state.megacorp_power || 0).toFixed(0)} / 100</strong></div>
+        <div><span>Tensão social</span><strong class="${Number(state.regime?.unrest) >= 60 ? 'negative' : ''}">${unrestLabel(state.regime?.unrest)}</strong></div>
       </div>
       <button type="button" class="primary-action" data-action="advance" ${treatyPending ? 'disabled' : ''}>${state.is_wasteland ? '[ AVANÇAR 1 DIA (ANO ZERO PÓS-BOMBA) ]' : 'Avançar mês'} <span aria-hidden="true">→</span></button>
     </section>
