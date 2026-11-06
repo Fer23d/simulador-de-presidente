@@ -55,7 +55,7 @@ import { applyDialoguePacification } from '../core/dialogues.js';
 import { DIALOGUE_CHAR_INTERVAL_MS, isDialogueTextComplete, renderDialogueView } from './dialogue_renderer.js';
 import { equipSkin, getPresidentClassModifiers, getSkin, isSkinAvailableForClass, isSkinRequirementMet, PRESIDENT_CLASSES, PRESIDENT_SKINS, purchaseSkin, SKIN_RARITIES, startGame } from '../core/player_state.js';
 import { createEntitlements, getActiveTrial, startSkinTrial } from '../core/store.js';
-import { AssetManager, DEFAULT_ASSETS, drawSkinPreview } from '../core/sprite_engine.js';
+import { AssetManager, DEFAULT_ASSETS, drawSkinPreview } from '../core/sprite_engine.js?v=2026-11-06-life-support-static';
 import { createOnboarding, getBootTips, getStoryScenes, guessLanguage, MIN_BOOT_MS, onboardingText, ONBOARDING_KEY } from '../core/onboarding.js';
 import { bootScreenView, profileOnboardingView, storyOnboardingView } from './onboarding_ui.js';
 import { drawCoverArt } from '../core/cover_art.js';

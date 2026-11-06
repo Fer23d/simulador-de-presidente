@@ -7,7 +7,7 @@ import { findOilDerrickAt } from './oil_renderer.js';
 import { isFortAt } from './defense_renderer.js';
 import { isMarketAt, MARKET_X } from './market_renderer.js';
 import { hasMarketSuit } from './market.js';
-import { DEFAULT_ASSETS, drawNeedsPanel, getActorPlacement, getSharedAssetManager, renderSpriteScene } from './sprite_engine.js';
+import { DEFAULT_ASSETS, drawNeedsPanel, getActorPlacement, getSharedAssetManager, renderSpriteScene } from './sprite_engine.js?v=2026-11-06-life-support-static';
 import { isLootboxCrateClick } from './lootbox_renderer.js';
 import { Inhabitant } from './inhabitant.js';
 import { canPetDog, createDogActor, petDog, updateDogActor } from './companion.js';

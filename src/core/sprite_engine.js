@@ -776,56 +776,6 @@ function renderLaboratoryInterior(ctx, x, y, time = 0) {
   ctx.restore();
 }
 
-function renderLifeSupportDetails(ctx, x, y, time = 0) {
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(x + 4, y + 4, SLOT_WIDTH - 8, ROOM_HEIGHT - 8);
-  ctx.clip();
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  ctx.strokeStyle = 'rgba(164, 224, 239, .82)';
-  ctx.lineWidth = 7;
-  ctx.beginPath();
-  ctx.moveTo(x + 8, y + 28);
-  ctx.lineTo(x + SLOT_WIDTH - 10, y + 28);
-  ctx.lineTo(x + SLOT_WIDTH - 10, y + 50);
-  ctx.stroke();
-  ctx.strokeStyle = 'rgba(245, 250, 246, .72)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x + 8, y + 36);
-  ctx.lineTo(x + SLOT_WIDTH - 20, y + 36);
-  ctx.stroke();
-
-  for (const centerX of [x + 57, x + 132, x + 207]) {
-    const centerY = y + 91;
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.fillStyle = 'rgba(18, 36, 42, .88)';
-    ctx.strokeStyle = '#a8d8df';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(0, 0, 28, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.rotate(time * 0.006);
-    ctx.fillStyle = 'rgba(154, 212, 222, .9)';
-    for (let blade = 0; blade < 4; blade++) {
-      ctx.rotate(Math.PI / 2);
-      ctx.beginPath();
-      ctx.ellipse(0, -13, 6, 12, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = '#d9f0f1';
-    ctx.beginPath();
-    ctx.arc(0, 0, 5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-  ctx.restore();
-}
-
 function renderRoomAmbientLight(ctx, room, x, y) {
   const colors = ROOM_AMBIENT_LIGHTS[room.type];
   if (!colors || typeof ctx.createRadialGradient !== 'function') return;

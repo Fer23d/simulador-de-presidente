@@ -1,7 +1,7 @@
 import { WORLD_TOP } from './shelter_engine.js';
 import { formatDuration } from './oil.js';
 import { getFortStatus } from './defense.js';
-import { drawActorSprite } from './sprite_engine.js';
+import { drawActorSprite } from './sprite_engine.js?v=2026-11-06-life-support-static';
 import { getSkin } from './player_state.js';
 import { gradeStructure, hash, linear, paintBackdrop } from './art.js';
 import { translateUiText } from './i18n.js';

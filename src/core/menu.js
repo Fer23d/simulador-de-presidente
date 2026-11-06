@@ -1,4 +1,4 @@
-import { DEFAULT_ASSETS, drawActorSprite } from './sprite_engine.js';
+import { DEFAULT_ASSETS, drawActorSprite } from './sprite_engine.js?v=2026-11-06-life-support-static';
 import { PRESIDENT_CLASSES } from './player_state.js';
 
 const CARD_TOP = 142;
