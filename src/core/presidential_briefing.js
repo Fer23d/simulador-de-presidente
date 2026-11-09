@@ -78,8 +78,12 @@ export function createPresidentialMandate(value = {}) {
     promises: Array.isArray(value.promises) ? value.promises.filter((id) => typeof id === 'string').slice(-12) : [],
     scandals: Array.isArray(value.scandals) ? value.scandals.filter((id) => typeof id === 'string').slice(-12) : [],
     legacyScore: numberOr(value.legacyScore),
+    lastBriefingMonth: value.lastBriefingMonth != null && Number.isFinite(Number(value.lastBriefingMonth)) ? Math.floor(Number(value.lastBriefingMonth)) : null,
   };
 }
+
+// Um briefing a cada 2 ou 3 meses (alterna pela semente): os meses entre eles ficam livres para o jogador.
+export const BRIEFING_MIN_GAP = 2;
 
 function publicBriefing(briefing) {
   return {
@@ -121,10 +125,16 @@ export function queuePresidentialBriefing(state) {
   if (state.is_wasteland || state.city || state.regime?.gameOver || state.pendingBriefing || hasBlockingDecision(state)) return state;
   if (numberOr(state.monthCounter) < 1) return state;
   const mandate = createPresidentialMandate(state.presidentialMandate);
+  const monthCounter = numberOr(state.monthCounter);
+  const gap = BRIEFING_MIN_GAP + (Math.abs(Math.floor(numberOr(state.randomSeed, 1))) % 2);
+  const monthsInOffice = mandate.monthsInOffice + 1;
+  if (mandate.lastBriefingMonth !== null && monthCounter - mandate.lastBriefingMonth < gap) {
+    return { ...state, presidentialMandate: { ...mandate, monthsInOffice } };
+  }
   return {
     ...state,
     pendingBriefing: selectPresidentialBriefing(state),
-    presidentialMandate: { ...mandate, monthsInOffice: mandate.monthsInOffice + 1 },
+    presidentialMandate: { ...mandate, monthsInOffice, lastBriefingMonth: monthCounter },
     notice: 'Briefing presidencial: uma decisão aguarda o seu comando.',
   };
 }

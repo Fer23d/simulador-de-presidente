@@ -9,6 +9,7 @@ import { calculateMilitaryResearchPoints, getMilitaryTechnology, pesquisarTecnol
 import { getTraitModifiers } from './traits.js';
 import { EVENTS, applyEventOption, rollMonthlyEvent } from './events.js';
 import { createMinisters, dismissMinister as dismissCabinetMinister, getMinisterModifiers, hireMinister as hireCabinetMinister } from './ministers.js';
+import { applyUnrestAction as applyUnrestActionState, repressionHangover } from './unrest_actions.js';
 import { adjustFactions, advanceFactions, createFactions, getFactionModifiers, getFactionSupport, normalizeFactions } from './factions.js';
 import { absorverPaisParaUniao as absorbIntoUnion, decretarRevolucaoSocialista as decreeSocialistRevolution } from './revolution.js';
 import { financiarRebeldes as fundRebels } from './espionage.js';
@@ -537,6 +538,11 @@ export function insultarNacao(state, contactId) {
     : next;
 }
 
+export function applyUnrestAction(state, kind) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return applyUnrestActionState(state, kind);
+}
+
 export function dispensarAlertaHostil(state) {
   if (!state.pendingHostileAlert) return state;
   return { ...state, pendingHostileAlert: null, notice: 'Alerta militar reconhecido. O gabinete aguarda novas ordens.' };
@@ -1046,7 +1052,7 @@ export function advanceMonth(state) {
     technology,
   });
   // Tensao social: protestos e crise politica corroem trabalhadores e militares antes de um golpe.
-  const unrest = advanceUnrest(state.regime?.unrest, constitutionalState.economy, constitutionalState.factions);
+  const unrest = advanceUnrest(state.regime?.unrest, constitutionalState.economy, constitutionalState.factions, repressionHangover(state));
   const unrestAlert = unrestStageMessage(state.regime?.unrest, unrest);
   const pressuredFactions = unrest >= 30
     ? adjustFactions(constitutionalState.factions, { trabalhadores: unrest >= 60 ? -3 : -1.5, militares: unrest >= 60 ? -1.5 : 0 })
@@ -1434,6 +1440,8 @@ export function hydrateGameState(serialized) {
       slush_fund: Math.max(0, Number(parsed.slush_fund) || 0),
       slushFundTransfersThisMonth: Math.max(0, Math.floor(Number(parsed.slushFundTransfersThisMonth) || 0)),
       lastHostileMonth: Number.isFinite(Number(parsed.lastHostileMonth)) ? Number(parsed.lastHostileMonth) : null,
+      unrestActionMonths: Object.fromEntries(Object.entries(parsed.unrestActionMonths ?? {}).filter(([key, value]) => ['subsidy', 'dialogue', 'repression'].includes(key) && Number.isFinite(Number(value))).map(([key, value]) => [key, Number(value)])),
+      repressionUntil: Math.max(0, Math.floor(Number(parsed.repressionUntil) || 0)),
       escape_ending_triggered: Boolean(parsed.escape_ending_triggered),
       pendingFinalDilemma: Boolean(parsed.pendingFinalDilemma),
       double_agent_active: Boolean(parsed.double_agent_active),

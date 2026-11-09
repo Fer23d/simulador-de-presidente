@@ -981,3 +981,8 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .inflation-line { fill: none; stroke: var(--amber); stroke-width: 2; stroke-linejoin: round; }
 .inflation-area { fill: var(--amber); fill-opacity: .14; stroke: none; }
 .inflation-dot { fill: var(--amber); }
+
+/* Tensao social e divida */
+.unrest-panel { grid-column: 1 / -1; }
+.unrest-action { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+.unrest-action small { color: var(--muted); }

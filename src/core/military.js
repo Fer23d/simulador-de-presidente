@@ -236,11 +236,11 @@ export const UNREST_STAGES = Object.freeze([
 ]);
 
 // Tensao social (0 a 100): sobe com caixa negativo, inflacao alta, desemprego e rombo fiscal; cai devagar quando a economia respira.
-export function advanceUnrest(previous, economy, factions = {}) {
+export function advanceUnrest(previous, economy, factions = {}, extraPressure = 0) {
   const inflation = Number(economy.inflation) || 0;
   const unemployment = Number(economy.unemployment) || 0;
   const workers = Number(factions.trabalhadores);
-  let pressure = 0;
+  let pressure = Math.max(0, Number(extraPressure) || 0);
   const discontent = Number.isFinite(workers) && workers < 60;
   // Caixa negativo so alimenta a revolta quando o povo ja esta descontente (o orcamento inicial ja nasce deficitario).
   if ((Number(economy.cash) || 0) < 0 && discontent) pressure += 1.5;

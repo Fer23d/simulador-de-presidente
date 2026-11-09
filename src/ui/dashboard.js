@@ -1,6 +1,7 @@
 import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countries.js';
 import { getVoteForecast } from '../core/congress.js';
-import { BUDGET_LIMITS, NEUTRAL_INTEREST_RATE, projectBudget, summarizeInflation } from '../core/economy.js';
+import { BUDGET_LIMITS, NEUTRAL_INTEREST_RATE, getDebtStatus, projectBudget, summarizeInflation } from '../core/economy.js';
+import { UNREST_ACTIONS, getUnrestActionStatus } from '../core/unrest_actions.js';
 import { LAWS } from '../core/laws.js';
 import { TECHNOLOGIES } from '../core/technology.js';
 import { MILITARY_TECHNOLOGIES } from '../core/tech_tree.js';
@@ -71,6 +72,7 @@ import {
   attemptAutogolpe,
   executarAutoGolpe,
   resolverAutoGolpe,
+  applyUnrestAction,
   changeTax,
   createGameState,
   decretarRevolucaoSocialista,
@@ -493,6 +495,21 @@ function unrestLabel(unrest) {
   return `${value}/100 · ${stage}`;
 }
 
+function unrestPanel(state) {
+  const unrest = Math.round(Number(state.regime?.unrest) || 0);
+  const tone = unrest >= 60 ? 'negative' : unrest >= 30 ? '' : 'positive';
+  const buttons = Object.values(UNREST_ACTIONS).map((action) => {
+    const status = getUnrestActionStatus(state, action.id);
+    return `<div class="unrest-action"><button type="button" class="quiet-action ${action.id === 'repression' ? 'danger-action' : ''}" data-action="unrest-action" data-kind="${action.id}" ${status.available ? '' : 'disabled'}>${action.label}</button><small>${status.available ? action.detail : status.reason}</small></div>`;
+  }).join('');
+  return `<section class="panel unrest-panel">
+      <div class="panel-heading"><div><p class="eyebrow">Ruas e quartéis</p><h2>Tensão social</h2></div><span class="country-code ${tone}">${unrestLabel(unrest)}</span></div>
+      <div class="meter-track"><span style="width:${Math.min(100, unrest)}%"></span></div>
+      <p class="notice">Inflação alta, desemprego, caixa no vermelho e povo descontente aumentam a tensão. Acima de 80, os quartéis podem agir.</p>
+      ${buttons}
+    </section>`;
+}
+
 function overviewView(state, projection) {
   const budgetTone = projection.monthlyBalance >= 0 ? 'positive' : 'negative';
   const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid) || Boolean(state.pendingFinalDilemma) || Boolean(state.pendingInterrogation) || Boolean(state.pendingStory) || Boolean(state.pendingBriefing) || Boolean(state.pendingAllianceInvocation) || Boolean(state.pendingHostileAlert) || Boolean(state.wasteland_cinematic_pending) || Boolean(state.wasteland_cinematic_ready);
@@ -518,6 +535,7 @@ function overviewView(state, projection) {
         <div><dt>Governo</dt><dd>${state.country.tipo_governo}</dd></div>
       </dl>
     </section>
+    ${unrestPanel(state)}
     <section class="panel history-panel">
       <div class="panel-heading"><div><p class="eyebrow">Diário nacional</p><h2>Eventos recentes</h2></div></div>
       <ol class="history-list">${state.history.length ? state.history.map((entry) => `<li><span>${entry.type === 'vote' ? 'Congresso' : 'Economia'}</span>${entry.message}</li>`).join('') : '<li><span>Gabinete</span>Nenhum evento registrado.</li>'}</ol>
@@ -551,6 +569,15 @@ export function inflationChart(history) {
 function normalizedDebtShare(budget) {
   const interest = Math.min(0.3, Math.max(0, Number(budget.interestRate ?? NEUTRAL_INTEREST_RATE)));
   return Math.max(0, Number(budget.debtService) || 0) * (interest / NEUTRAL_INTEREST_RATE);
+}
+
+// Divida publica = caixa negativo acumulado; o rating define o premio de risco cobrado sobre os juros.
+function debtRows(state) {
+  const status = getDebtStatus(state.economy, state.budget);
+  const tone = status.ratio > 1.2 ? 'negative' : '';
+  return `<div class="ledger-row"><span>Dívida pública</span><strong class="${tone}">${formatMoney(status.debt)} · ${formatPercent(status.ratio, 0)} do PIB</strong></div>
+      <div class="ledger-row"><span>Rating de crédito</span><strong class="${tone}">${status.rating}${status.premium ? ` (+${formatPercent(status.premium, 1)} de risco)` : ''}</strong></div>
+      <div class="ledger-row"><span>Juros da dívida (mês)</span><strong>${formatMoney(status.monthlyInterest)}</strong></div>`;
 }
 
 function inflationPanel(state) {
@@ -589,6 +616,7 @@ export function budgetView(state, projection) {
       <div class="ledger-row total"><span>${projection.monthlyBalance >= 0 ? 'Superávit' : 'Déficit'}</span><strong class="${projection.monthlyBalance >= 0 ? 'positive' : 'negative'}">${formatMoney(projection.monthlyBalance)}</strong></div>
       <div class="ledger-row"><span>Força corporativa</span><strong class="${Number(state.megacorp_power || 0) > 80 ? 'negative' : ''}">${Number(state.megacorp_power || 0).toFixed(0)} / 100</strong></div>
       <button type="button" class="quiet-action danger-action" data-action="nationalize-megacorps" ${Number(state.megacorp_power || 0) > 0 ? '' : 'disabled'}>Estatizar Megacorporações</button>
+      ${debtRows(state)}
       <div class="ledger-row"><span>Custo dos juros da dívida</span><strong>${formatMoney(projection.monthlyGdp * normalizedDebtShare(state.budget))}</strong></div>
       <div class="ledger-row"><span>Rombo fiscal escondido</span><strong class="${Number(state.economy.fiscalHole) > 0 ? 'negative' : ''}">${formatMoney(state.economy.fiscalHole || 0)}</strong></div>
       ${Number(state.economy.fiscalHole) > 0 ? `<p class="notice">Desvios deixam um rombo nas contas: ele cobra ${formatMoney(projection.fiscalHoleCost || 0)} por mês (cresce com os juros) e pressiona a inflação.</p>` : ''}
@@ -2701,6 +2729,7 @@ export function mountDashboard(root) {
       return;
     }
     if (action === 'tab') { activeTab = control.dataset.tab; render(); return; }
+    if (action === 'unrest-action') { commit(applyUnrestAction(state, control.dataset.kind)); return; }
     if (action === 'city-story') { activeTab = 'history'; render(); return; }
     if (action === 'city-return') { activeTab = 'overview'; render(); return; }
     if (action === 'tax') { commit(changeTax(state, control.dataset.tax, Number(control.dataset.delta))); return; }

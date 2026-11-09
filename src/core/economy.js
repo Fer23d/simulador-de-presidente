@@ -71,6 +71,32 @@ export function fiscalHoleCost(economy, budget) {
   return hole * (FISCAL_HOLE_MONTHLY_COST + effectiveInterest(budget) / 12);
 }
 
+// Divida publica = caixa negativo acumulado. O mercado cobra um premio de risco conforme a divida pesa no PIB (rating).
+export const CREDIT_RATINGS = Object.freeze([
+  { id: 'AAA', maxRatio: 0.3, premium: 0 },
+  { id: 'AA', maxRatio: 0.6, premium: 0.005 },
+  { id: 'A', maxRatio: 0.9, premium: 0.01 },
+  { id: 'BBB', maxRatio: 1.2, premium: 0.02 },
+  { id: 'BB', maxRatio: 1.6, premium: 0.035 },
+  { id: 'B', maxRatio: 2.2, premium: 0.06 },
+  { id: 'CCC', maxRatio: Infinity, premium: 0.1 },
+]);
+export const DEBT_INTEREST_WEIGHT = 0.4;
+
+export function getPublicDebt(economy) {
+  return Math.max(0, -(Number(economy.cash) || 0));
+}
+
+export function getDebtStatus(economy, budget = {}) {
+  const gdp = Math.max(1, Number(economy.gdp) || 1);
+  const debt = getPublicDebt(economy);
+  const ratio = debt / gdp;
+  const rating = CREDIT_RATINGS.find((item) => ratio <= item.maxRatio) ?? CREDIT_RATINGS.at(-1);
+  const interest = effectiveInterest(budget);
+  const monthlyInterest = debt * ((interest + rating.premium) / 12) * DEBT_INTEREST_WEIGHT;
+  return { debt, ratio, rating: rating.id, premium: rating.premium, monthlyInterest };
+}
+
 export function projectBudget(economy, budget, modifiers = {}) {
   const monthlyGdp = economy.gdp / 12;
   const interest = effectiveInterest(budget);
@@ -99,7 +125,8 @@ export function projectBudget(economy, budget, modifiers = {}) {
     normalizedRate(budget.debtService) * (interest / NEUTRAL_INTEREST_RATE),
   ].reduce((total, rate) => total + rate, 0);
   const holeCost = fiscalHoleCost(economy, budget);
-  const expenses = (monthlyGdp * spendingRate) + holeCost;
+  const debtStatus = getDebtStatus(economy, budget);
+  const expenses = (monthlyGdp * spendingRate) + holeCost + debtStatus.monthlyInterest;
   const cashRevenueMultiplier = Math.max(0, 1 + (Number(modifiers.cashRevenueModifier) || 0));
   const revenue = (incomeTax + vat + tradeRevenue) * cashRevenueMultiplier;
 
@@ -111,6 +138,8 @@ export function projectBudget(economy, budget, modifiers = {}) {
     revenue,
     expenses,
     fiscalHoleCost: holeCost,
+    debtInterest: debtStatus.monthlyInterest,
+    creditRating: debtStatus.rating,
     monthlyBalance: revenue - expenses,
   };
 }
@@ -146,6 +175,7 @@ export function advanceEconomy(economy, budget, lawEffects = {}, modifiers = {})
     0.0025
       - (taxPressure * 0.006)
       - (interestGap * 0.012)
+      - (getDebtStatus(economy, budget).premium * 0.05)
       - (economy.inflation * 0.004)
       + (educationEffect * 0.02)
       + (infrastructureEffect * 0.03)
