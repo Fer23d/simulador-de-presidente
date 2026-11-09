@@ -10,6 +10,7 @@ const UI_MESSAGES = Object.freeze({
   'pt-BR': {
     'nav.overview': 'Visão geral',
     'nav.budget': 'Orçamento',
+    'nav.indicators': 'Indicadores',
     'nav.diplomacy': 'Diplomacia',
     'nav.military': 'Forças Armadas',
     'nav.cabinet': 'Gabinete',
@@ -54,6 +55,7 @@ const UI_MESSAGES = Object.freeze({
   es: {
     'nav.overview': 'Vista general',
     'nav.budget': 'Presupuesto',
+    'nav.indicators': 'Indicadores',
     'nav.diplomacy': 'Diplomacia',
     'nav.military': 'Fuerzas Armadas',
     'nav.cabinet': 'Gabinete',
@@ -98,6 +100,7 @@ const UI_MESSAGES = Object.freeze({
   en: {
     'nav.overview': 'Overview',
     'nav.budget': 'Budget',
+    'nav.indicators': 'Indicators',
     'nav.diplomacy': 'Diplomacy',
     'nav.military': 'Armed Forces',
     'nav.cabinet': 'Cabinet',

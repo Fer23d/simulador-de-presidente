@@ -986,3 +986,37 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .unrest-panel { grid-column: 1 / -1; }
 .unrest-action { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
 .unrest-action small { color: var(--muted); }
+
+/* Indicadores e setores */
+.indicators-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 1080px; }
+.sectors-panel { grid-column: 1 / -1; }
+.sector-row { margin: 10px 0; }
+.sector-head { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.sector-row small { color: var(--muted); }
+@media (max-width: 900px) { .indicators-grid { grid-template-columns: 1fr; } }
+
+/* Congresso vivo e eleicoes */
+.congress-life-panel { grid-column: 1 / -1; }
+.congress-card { border: 1px dashed var(--line); padding: 10px; margin: 10px 0; display: flex; flex-direction: column; gap: 6px; }
+.election-panel { grid-column: 1 / -1; }
+
+/* Mapa de bolhas da Diplomacia */
+.diplomacy-map { margin: 12px 0 18px; }
+.map-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.map-chip { background: transparent; color: var(--muted); border: 1px solid var(--line); padding: 4px 10px; cursor: pointer; font: inherit; }
+.map-chip[aria-pressed="true"] { color: var(--void); background: var(--phosphor); border-color: var(--phosphor); }
+.bubble-map { width: 100%; height: auto; display: block; background: var(--screen); border: 1px solid var(--line); }
+.map-ocean { fill: var(--screen); }
+.map-grid { stroke: var(--line); stroke-opacity: .25; stroke-width: 1; }
+.map-dot { cursor: pointer; stroke: var(--void); stroke-width: 1; transition: opacity .15s; }
+.map-dot--neutral { fill: var(--quiet); }
+.map-dot--trade { fill: #6aa8ff; }
+.map-dot--allies { fill: var(--phosphor); }
+.map-dot--hostile { fill: var(--amber); }
+.map-dot--war { fill: var(--danger); }
+.map-dot--annexed { fill: var(--muted); opacity: .5; }
+.map-dot--self { fill: var(--cyan); stroke: #fff; stroke-width: 2; cursor: default; }
+.map-dot.is-dim { opacity: .12; }
+.map-dot.is-selected { stroke: #fff; stroke-width: 2; }
+.map-country-card { border: 1px dashed var(--line); padding: 10px; margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.map-country-card span { display: block; color: var(--muted); }

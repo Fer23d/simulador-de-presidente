@@ -1,3 +1,5 @@
+import { advanceSectors } from './sectors.js';
+
 export const DEFAULT_BUDGET = Object.freeze({
   incomeTaxRate: 0.16,
   vatRate: 0.12,
@@ -184,6 +186,14 @@ export function advanceEconomy(economy, budget, lawEffects = {}, modifiers = {})
     -0.02,
     0.02,
   );
+  const sectorStep = advanceSectors(economy.sectors, growthRate, {
+    infrastructure: infrastructureEffect,
+    education: educationEffect,
+    science: Math.max(0, normalizedRate(budget.scienceSpend) - 0.015),
+    interestGap,
+    taxPressure,
+    inflation: economy.inflation,
+  });
   const inflation = clamp(
     economy.inflation
       + (deficitPressure * 0.012)
@@ -199,7 +209,7 @@ export function advanceEconomy(economy, budget, lawEffects = {}, modifiers = {})
   );
   const unemployment = clamp(
     economy.unemployment
-      - (growthRate * 0.45)
+      - (sectorStep.employmentGrowth * 0.45)
       + (Math.max(0, totalTaxRate - 0.35) * 0.004)
       + (lawEffects.unemploymentModifier ?? 0),
     0.02,
@@ -209,6 +219,7 @@ export function advanceEconomy(economy, budget, lawEffects = {}, modifiers = {})
     ...currentEconomy,
     gdp: Math.round(economy.gdp * (1 + growthRate)),
     inflation,
+    sectors: sectorStep.sectors,
     fiscalHole: Math.max(0, Number(economy.fiscalHole) || 0) * (1 - FISCAL_HOLE_MONTHLY_DECAY),
     inflationHistory: [...normalizeInflationHistory(economy.inflationHistory, economy.inflation), inflation].slice(-INFLATION_HISTORY_LIMIT),
     unemployment,

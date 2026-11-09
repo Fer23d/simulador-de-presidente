@@ -2,6 +2,9 @@ import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countri
 import { getVoteForecast } from '../core/congress.js';
 import { BUDGET_LIMITS, NEUTRAL_INTEREST_RATE, getDebtStatus, projectBudget, summarizeInflation } from '../core/economy.js';
 import { UNREST_ACTIONS, getUnrestActionStatus } from '../core/unrest_actions.js';
+import { COUNTRY_COORDS, projectCoords } from '../data/country_coords.js';
+import { OPPOSITION_BILLS, getBlocLoyalty, normalizeCongressLife } from '../core/congress_life.js';
+import { CAMPAIGN_ACTIONS, getCampaignActionStatus, getPollingShare, hasElections, isCampaign, monthsToElection, normalizeElection } from '../core/elections.js';
 import { LAWS } from '../core/laws.js';
 import { TECHNOLOGIES } from '../core/technology.js';
 import { MILITARY_TECHNOLOGIES } from '../core/tech_tree.js';
@@ -10,6 +13,7 @@ import { calculateInternalMaintenance } from '../core/infrastructure.js';
 import { MINISTERS } from '../core/ministers.js';
 import { getRoomEconomyProfile, getRoomStorageCapacity, getRoomUpgradeCosts } from '../core/bunker_economy.js';
 import { getFactionSupport } from '../core/factions.js';
+import { SECTOR_DEFS, SECTOR_IDS, getEmploymentShares, normalizeSectors } from '../core/sectors.js';
 import { canPromulgarConstituicao } from '../core/constitution.js';
 import { RESOLUTIONS } from '../core/un_assembly.js';
 import { getStoryEvent } from '../core/story_engine.js';
@@ -72,6 +76,9 @@ import {
   attemptAutogolpe,
   executarAutoGolpe,
   resolverAutoGolpe,
+  answerCongressDemand,
+  answerOppositionBill,
+  applyElectionAction,
   applyUnrestAction,
   changeTax,
   createGameState,
@@ -495,6 +502,30 @@ function unrestLabel(unrest) {
   return `${value}/100 · ${stage}`;
 }
 
+function electionPanel(state) {
+  if (!hasElections(state)) {
+    return `<section class="panel election-panel"><div class="panel-heading"><div><p class="eyebrow">Urnas</p><h2>Eleições</h2></div><span class="country-code">SEM ELEIÇÕES</span></div><p class="notice">Neste regime não há eleições: o poder se mantém pela força e pela lealdade dos quartéis.</p></section>`;
+  }
+  const election = normalizeElection(state.election);
+  const left = monthsToElection(state);
+  const poll = getPollingShare(state);
+  const tone = poll >= 50 ? 'positive' : 'negative';
+  const campaign = isCampaign(state);
+  const last = election.lastResult;
+  const buttons = campaign ? Object.values(CAMPAIGN_ACTIONS).map((action) => {
+    const status = getCampaignActionStatus(state, action.id);
+    return `<div class="unrest-action"><button type="button" class="quiet-action" data-action="election-action" data-kind="${action.id}" ${status.available ? '' : 'disabled'}>${action.label}</button><small>${status.available ? action.detail : status.reason}</small></div>`;
+  }).join('') : '';
+  return `<section class="panel election-panel">
+      <div class="panel-heading"><div><p class="eyebrow">Mandato ${Number(state.presidentialMandate?.term) || 1} · quatro anos</p><h2>Eleições</h2></div><span class="country-code ${tone}">PESQUISA ${poll.toFixed(1).replace('.', ',')}%</span></div>
+      <div class="ledger-row"><span>Próxima eleição</span><strong>${left === 0 ? 'neste mês' : `em ${left} mês(es)`}</strong></div>
+      <div class="ledger-row"><span>Para se reeleger</span><strong>50% ou mais</strong></div>
+      ${last ? `<div class="ledger-row"><span>Última eleição</span><strong class="${last.won ? 'positive' : 'negative'}">${last.won ? 'vitória' : 'derrota'} · ${last.share.toFixed(1).replace('.', ',')}%</strong></div>` : ''}
+      <p class="notice">${campaign ? 'A campanha está aberta: use as ações abaixo para ganhar votos.' : 'A intenção de voto vem do apoio interno, da economia e da tensão social. A campanha abre 3 meses antes.'}</p>
+      ${buttons}
+    </section>`;
+}
+
 function unrestPanel(state) {
   const unrest = Math.round(Number(state.regime?.unrest) || 0);
   const tone = unrest >= 60 ? 'negative' : unrest >= 30 ? '' : 'positive';
@@ -535,6 +566,7 @@ function overviewView(state, projection) {
         <div><dt>Governo</dt><dd>${state.country.tipo_governo}</dd></div>
       </dl>
     </section>
+    ${electionPanel(state)}
     ${unrestPanel(state)}
     <section class="panel history-panel">
       <div class="panel-heading"><div><p class="eyebrow">Diário nacional</p><h2>Eventos recentes</h2></div></div>
@@ -547,6 +579,63 @@ const INFLATION_LEVEL_LABEL = Object.freeze({ low: 'Deflação / estagnação', 
 const INFLATION_TREND_LABEL = Object.freeze({ up: '▲ subindo', down: '▼ caindo', stable: '■ estável' });
 
 // Gráfico de linha em SVG: um ponto por mês, até 60 meses. Faixa de 0 ao maior valor (minimo 10%).
+// Grafico de linha generico (um ponto por mes). `format` escreve o rotulo do eixo; o zero aparece quando ha valores negativos.
+export function lineChart(history, { format = (value) => String(value), label = 'Indicador', fromZero = false } = {}) {
+  const points = history.length > 1 ? history : [history[0] ?? 0, history[0] ?? 0];
+  const width = 320;
+  const height = 120;
+  const pad = 6;
+  const minimum = Math.min(...points);
+  const maximum = Math.max(...points);
+  const margin = (maximum - minimum) * 0.15 || Math.abs(maximum) * 0.05 || 1;
+  const low = fromZero ? Math.min(0, minimum) : minimum - margin;
+  const high = Math.max(maximum + (fromZero ? 0 : margin), low + 1e-9);
+  const span = high - low || 1;
+  const x = (index) => pad + (index / (points.length - 1)) * (width - pad * 2);
+  const y = (value) => height - pad - ((value - low) / span) * (height - pad * 2);
+  const line = points.map((value, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)} ${y(value).toFixed(1)}`).join(' ');
+  const area = `${line} L${x(points.length - 1).toFixed(1)} ${y(Math.max(low, 0)).toFixed(1)} L${x(0).toFixed(1)} ${y(Math.max(low, 0)).toFixed(1)} Z`;
+  const guides = [low, low + span / 2, high].map((level) => `<line x1="${pad}" x2="${width - pad}" y1="${y(level).toFixed(1)}" y2="${y(level).toFixed(1)}" class="inflation-guide"></line><text x="${pad + 2}" y="${(level === high ? y(level) + 11 : y(level) - 3).toFixed(1)}" class="inflation-axis">${escapeHtml(format(level))}</text>`).join('');
+  const zero = low < 0 ? `<line x1="${pad}" x2="${width - pad}" y1="${y(0).toFixed(1)}" y2="${y(0).toFixed(1)}" class="inflation-target"></line>` : '';
+  return `<svg class="inflation-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(label)}: ${points.length} meses">${guides}${zero}<path d="${area}" class="inflation-area"></path><path d="${line}" class="inflation-line"></path><circle cx="${x(points.length - 1).toFixed(1)}" cy="${y(points[points.length - 1]).toFixed(1)}" r="3.5" class="inflation-dot"></circle></svg>`;
+}
+
+function indicatorPanel(title, eyebrow, points, format, tone = '', fromZero = false) {
+  const last = points[points.length - 1] ?? 0;
+  const first = points[0] ?? last;
+  const delta = last - first;
+  const trend = Math.abs(delta) < 1e-9 ? '■' : delta > 0 ? '▲' : '▼';
+  return `<section class="panel indicator-panel"><div class="panel-heading"><div><p class="eyebrow">${eyebrow}</p><h2>${title}</h2></div><span class="country-code ${tone}">${escapeHtml(format(last))} ${trend}</span></div>${lineChart(points, { format, label: title, fromZero })}<div class="ledger-row"><span>Início do período</span><strong>${escapeHtml(format(first))}</strong></div><div class="ledger-row"><span>${points.length} meses registrados</span><strong>${delta >= 0 ? '+' : ''}${escapeHtml(format(delta))}</strong></div></section>`;
+}
+
+function sectorsPanel(state) {
+  const sectors = normalizeSectors(state.economy.sectors);
+  const employment = getEmploymentShares(sectors);
+  const rows = SECTOR_IDS.map((id) => {
+    const sector = sectors[id];
+    const growth = sector.growth;
+    const tone = growth > 0.0005 ? 'positive' : growth < -0.0005 ? 'negative' : '';
+    return `<div class="sector-row"><div class="sector-head"><strong>${SECTOR_DEFS[id].label}</strong><span class="${tone}">${growth >= 0 ? '+' : ''}${formatPercent(growth, 2)} ao mês</span></div><div class="meter-track"><span style="width:${(sector.share * 100).toFixed(1)}%"></span></div><small>${formatPercent(sector.share, 1)} do PIB · ${formatPercent(employment[id], 0)} dos empregos</small></div>`;
+  }).join('');
+  return `<section class="panel sectors-panel"><div class="panel-heading"><div><p class="eyebrow">Estrutura produtiva</p><h2>Setores da economia</h2></div></div>${rows}<p class="notice">Infraestrutura puxa indústria e energia; educação e ciência puxam serviços; juros altos sufocam a indústria; inflação alta e impostos pesados corroem a agropecuária. O PIB total é a soma dos quatro.</p></section>`;
+}
+
+function indicatorsView(state) {
+  const history = state.indicatorHistory ?? {};
+  const money = (value) => formatMoney(value);
+  const percent = (value) => formatPercent(value, 1);
+  const points = (key) => (history[key]?.length ? history[key] : [0]);
+  const cashPoints = points('cash');
+  const cashTone = (cashPoints[cashPoints.length - 1] ?? 0) < 0 ? 'negative' : 'positive';
+  return `<section class="view-grid indicators-grid">
+    ${indicatorPanel('PIB', 'Economia', points('gdp'), money, 'positive')}
+    ${indicatorPanel('Desemprego', 'Trabalho', points('unemployment'), percent)}
+    ${indicatorPanel('Caixa nacional', 'Finanças públicas', cashPoints, money, cashTone, true)}
+    ${indicatorPanel('Apoio interno', 'Política', points('approval'), (value) => `${value.toFixed(0)}%`)}
+    ${sectorsPanel(state)}
+  </section>`;
+}
+
 export function inflationChart(history) {
   const points = history.length > 1 ? history : [history[0] ?? 0, history[0] ?? 0];
   const width = 320;
@@ -636,6 +725,24 @@ export function renderCongress(state) {
   }).join('');
 }
 
+function congressLifePanel(state) {
+  const life = normalizeCongressLife(state.congressLife);
+  const blocs = state.congress.blocs.map((bloc) => {
+    const loyalty = Math.round(getBlocLoyalty(bloc));
+    const tone = loyalty >= 60 ? 'positive' : loyalty < 40 ? 'negative' : '';
+    return `<div class="sector-row"><div class="sector-head"><strong>${bloc.label}</strong><span class="${tone}">lealdade ${loyalty}%</span></div><div class="meter-track"><span style="width:${loyalty}%"></span></div></div>`;
+  }).join('');
+  const demandBloc = life.demand ? state.congress.blocs.find((bloc) => bloc.id === life.demand.blocId) : null;
+  const demand = life.demand && demandBloc
+    ? `<div class="congress-card"><strong>Favor cobrado: bancada ${demandBloc.label}</strong><p class="notice">Querem uma verba para suas bases: ${formatMoney(life.demand.cost)}. Se o prazo passar sem resposta, a bancada se ofende.</p><div class="action-row"><button type="button" class="primary-action" data-action="congress-demand" data-accept="yes">Conceder</button><button type="button" class="quiet-action" data-action="congress-demand" data-accept="no">Recusar</button></div></div>`
+    : '';
+  const bill = life.bill ? OPPOSITION_BILLS[life.bill.id] : null;
+  const billCard = bill
+    ? `<div class="congress-card"><strong>Projeto da oposição: ${bill.title}</strong><p class="notice">${bill.text}</p><small>${bill.sanction}</small><small>${bill.veto}</small><div class="action-row"><button type="button" class="primary-action" data-action="opposition-bill" data-choice="sanction">Sancionar</button><button type="button" class="quiet-action danger-action" data-action="opposition-bill" data-choice="veto">Vetar</button></div></div>`
+    : '';
+  return `<section class="panel congress-life-panel"><div class="panel-heading"><div><p class="eyebrow">Base aliada</p><h2>Coalizão e articulação</h2></div></div>${blocs}${demand}${billCard}${!demand && !billCard ? '<p class="notice">Sem pedidos nem projetos da oposição no momento. A lealdade das bancadas oscila com a economia, o orçamento e o seu apoio interno.</p>' : ''}</section>`;
+}
+
 export function congressView(state) {
   if (state.regime.type === 'dictatorship') return `<section class="panel"><p class="eyebrow">Instituições</p><h2>Congresso suspenso</h2><p class="notice">Leis sao aprovadas por decreto enquanto durar o estado de sitio.</p></section>`;
   const forecast = getVoteForecast({
@@ -657,6 +764,7 @@ export function congressView(state) {
       <div class="panel-heading"><div><p class="eyebrow">Bancadas</p><h2>Articulação</h2></div></div>
       <div class="bloc-list">${state.congress.blocs.map((bloc) => `<article class="bloc-row"><div><strong>${bloc.label}</strong><span>${bloc.seats} assentos</span></div><button type="button" class="quiet-action" data-action="negotiate" data-bloc="${bloc.id}" ${bloc.negotiated ? 'disabled' : ''}>${bloc.negotiated ? 'Apoio obtido' : `Negociar ${formatMoney(bloc.negotiationCost)}`}</button></article>`).join('')}</div><div class="ledger-row"><span>Elite / Trabalhadores</span><strong>${elite} / ${workers}</strong></div><div class="ledger-row"><span>Militares / Religiosos</span><strong>${military} / ${religious}</strong></div><button type="button" class="quiet-action danger-action" data-action="socialist-revolution" ${revolutionReady ? '' : 'disabled'}>Decretar Revolução Socialista</button><button type="button" class="quiet-action constitution-action" data-action="constitution-open" ${constitutionReady ? '' : 'disabled'}>Promulgar Nova Constituicao</button>
     </section>
+    ${congressLifePanel(state)}
   </section>`;
 }
 
@@ -675,7 +783,57 @@ function riskDiplomacyView(state) {
   return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Painel mundial</p><h2>Diplomacia de risco</h2></div><span class="country-code ${onuTone}">ONU ${state.geopolitics.onuScore}/100</span></div><div class="onu-meter"><div><span>Reputação global</span><strong class="${onuTone}">${state.geopolitics.internationalSanctions ? 'Sanções internacionais ativas' : 'Sem sanções internacionais'}</strong></div><div class="meter-track"><span style="width:${state.geopolitics.onuScore}%"></span></div></div><div class="bloc-list">${state.geopolitics.contacts.map((contact) => { const nuclearReady = contact.atWar && arsenal > 0 && !contact.anexado; return `<article class="bloc-row ${contact.anexado ? 'annexed-contact' : ''}"><div><strong>${contact.name} ${nuclearBadge(contact)}</strong><span>${contact.anexado ? 'Território anexado' : `Relação ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | População ${formatNumber.format(contact.population || 0)}${contact.sancionado_por_jogador ? ' | Sancionado' : ''}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.anexado || contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comércio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${contact.anexado || contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Aliança</button><button type="button" class="quiet-action" data-action="sanction" data-contact="${contact.id}" ${contact.anexado || contact.sancionado_por_jogador ? 'disabled' : ''}>Impor sanção</button><button type="button" class="quiet-action" data-action="ultimatum" data-contact="${contact.id}" ${contact.anexado ? 'disabled' : ''}>Exigir anexação</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.anexado || contact.atWar ? 'disabled' : ''}>Guerra</button>${nuclearReady ? `<button type="button" class="quiet-action nuclear-action" data-action="nuclear-strike" data-contact="${contact.id}">Ataque nuclear</button>` : ''}</div></article>`; }).join('')}</div></section>`;
 }
 
-export function diplomacyView(state, searchQuery = '') {
+const MAP_FILTERS = Object.freeze([
+  ['all', 'Todos'], ['allies', 'Aliados'], ['trade', 'Comércio'], ['hostile', 'Hostis'], ['war', 'Em guerra'], ['nuclear', 'Nucleares'], ['rich', 'Mais ricos'],
+]);
+
+function mapStatus(contact) {
+  if (contact.anexado || contact.annexed) return 'annexed';
+  if (contact.atWar) return 'war';
+  if (contact.alliance) return 'allies';
+  if (contact.tradeTreaty) return 'trade';
+  if ((Number(contact.relation) || 0) < 20) return 'hostile';
+  return 'neutral';
+}
+
+function mapMatches(contact, filter, richIds) {
+  if (filter === 'all') return true;
+  if (filter === 'nuclear') return contact.has_nukes === true;
+  if (filter === 'rich') return richIds.has(contact.id);
+  return mapStatus(contact) === filter;
+}
+
+// Mapa de bolhas: cada pais e um ponto na sua posicao aproximada. Clique para ver o pais e agir.
+export function diplomacyMap(state, mapUi = {}) {
+  const filter = MAP_FILTERS.some(([id]) => id === mapUi.filter) ? mapUi.filter : 'all';
+  const contacts = (state.world ?? state.geopolitics.contacts).filter((contact) => !contact.destruido && contact.id !== state.country.id && COUNTRY_COORDS[contact.id]);
+  const richIds = new Set([...contacts].sort((a, b) => (Number(b.pib_base) || 0) - (Number(a.pib_base) || 0)).slice(0, 25).map((contact) => contact.id));
+  const radius = (contact) => Math.max(2.5, Math.min(8, 2.5 + ((Math.log10(Math.max(1, Number(contact.pib_base) || 1)) - 9) * 1.1)));
+  const lines = [-120, -60, 0, 60, 120].map((lon) => { const x = ((lon + 180) / 360) * 1000; return `<line x1="${x}" x2="${x}" y1="0" y2="500" class="map-grid"></line>`; }).join('')
+    + [60, 30, 0, -30].map((lat) => { const y = ((80 - lat) / 138) * 500; return `<line x1="0" x2="1000" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="map-grid"></line>`; }).join('');
+  const selfPoint = projectCoords(state.country.id);
+  const dots = contacts.map((contact) => {
+    const point = projectCoords(contact.id);
+    const status = mapStatus(contact);
+    const matches = mapMatches(contact, filter, richIds);
+    const selected = mapUi.selected === contact.id;
+    return `<circle cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="${(radius(contact) + (selected ? 2 : 0)).toFixed(1)}" class="map-dot map-dot--${status}${matches ? '' : ' is-dim'}${selected ? ' is-selected' : ''}" data-action="map-country" data-country="${contact.id}" role="button" tabindex="0" aria-label="${escapeHtml(contact.name)}"><title>${escapeHtml(contact.name)} · relação ${formatRelation(contact.relation)}</title></circle>`;
+  }).join('');
+  const self = selfPoint ? `<circle cx="${selfPoint.x.toFixed(1)}" cy="${selfPoint.y.toFixed(1)}" r="9" class="map-dot map-dot--self"><title>${escapeHtml(state.country.nome)} (você)</title></circle>` : '';
+  const chips = MAP_FILTERS.map(([id, label]) => `<button type="button" class="map-chip" data-action="map-filter" data-filter="${id}" aria-pressed="${id === filter}">${label}</button>`).join('');
+  const picked = contacts.find((contact) => contact.id === mapUi.selected);
+  const card = picked ? mapCountryCard(picked) : '<p class="notice">Clique em um ponto do mapa para ver o país e agir. Verde: aliados · azul: comércio · laranja: hostis · vermelho: guerra · cinza: neutros.</p>';
+  return `<div class="diplomacy-map"><div class="map-filters">${chips}</div><svg class="bubble-map" viewBox="0 0 1000 500" role="group" aria-label="Mapa de relações internacionais"><rect width="1000" height="500" class="map-ocean"></rect>${lines}${dots}${self}</svg>${card}</div>`;
+}
+
+function mapCountryCard(contact) {
+  const status = mapStatus(contact);
+  const label = { war: 'Em guerra', allies: 'Aliado', trade: 'Acordo comercial', hostile: 'Hostil', annexed: 'Anexado', neutral: 'Sem tratado' }[status];
+  const blocked = contact.anexado || contact.annexed;
+  return `<article class="map-country-card"><div><strong>${escapeHtml(contact.name)} ${nuclearBadge(contact)}</strong><span>${label} · relação ${formatRelation(contact.relation)} · poder ${Number(contact.militaryPower || 0).toFixed(0)} · PIB ${formatMoney(contact.pib_base || 0)}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${blocked || contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comércio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${blocked || contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Aliança</button><button type="button" class="quiet-action" data-action="sabotage" data-contact="${contact.id}" ${blocked || contact.atWar ? 'disabled' : ''}>Sabotar</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${blocked || contact.atWar ? 'disabled' : ''}>Guerra</button></div></article>`;
+}
+
+export function diplomacyView(state, searchQuery = '', mapUi = {}) {
   if (state.is_wasteland) {
     return `<section class="panel wasteland-diplomacy"><div class="panel-heading"><div><p class="eyebrow">Superficie devastada</p><h2>Facções do Ermo</h2></div><span class="country-code">SUCATA ${formatNumber.format(state.scrap ?? 0)}</span></div><p class="notice">A diplomacia antiga morreu. Envie batedores, negocie com os sobreviventes e defenda o Vault.</p><div class="diplomacy-list">${(state.geopolitics.contacts ?? []).map((contact) => `<article class="bloc-row"><div><strong>${escapeHtml(contact.name)}</strong><span>Relação ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)}</span></div><button type="button" class="quiet-action" data-action="wasteland-scout" data-contact="${contact.id}" ${state.scrap >= 25 ? '' : 'disabled'}>[ ENVIAR BATEDORES ]</button></article>`).join('')}</div></section>`;
   }
@@ -691,7 +849,7 @@ export function diplomacyView(state, searchQuery = '') {
   const nuclearReady = unlockedTechs.has('nuke') && canAutorizarAniquilacaoNuclear(state);
   const peacePanel = `${target ? '<p class="notice">Um tratado de paz aguarda decisão no painel bloqueante.</p>' : ''}<p class="notice">Operação: Infiltrar Sósia do Líder em regimes não democráticos.</p>`;
   const leaguePanel = league ? `<div class="ledger-row"><span>${league.name}</span><strong>${league.memberIds.length} membros</strong></div>` : `<button type="button" class="quiet-action" data-action="league-create">Criar Nova Liga Global</button>`;
-  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relações Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}<label class="diplomacy-search"><span>Buscar país</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de países diplomáticos">${contacts.map((contact) => `<article class="bloc-row ${contact.wasteland ? 'wasteland-contact' : ''}" data-diplomacy-row data-country-name="${escapeHtml(contact.name)}"><div><strong>${contact.name} ${nuclearBadge(contact)}</strong><span>${contact.wasteland ? 'ZONA DE ANIQUILAÇÃO NUCLEAR' : `Relação ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | Defesa digital ${Number(contact.cyber_defense).toFixed(0)} | ${contact.trait}${contact.puppet ? ' | Fantoche' : ''}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.wasteland || contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button><button type="button" class="quiet-action" data-action="resource-import" data-contact="${contact.id}" data-resource="steel" data-amount="500" ${contact.wasteland || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Importar aço</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${contact.wasteland || contact.alliance || contact.atWar || contact.relation < 50 ? 'disabled' : ''}>Propor Aliança</button>${cyberReady ? `<button type="button" class="quiet-action danger-action" data-action="cyber-attack" data-contact="${contact.id}" ${contact.wasteland || (Number(contact.cyber_paralyzed_until) || 0) > (Number(state.monthCounter) || 0) ? 'disabled' : ''}>Lançar Ciberataque</button>` : ''}${bioReady ? `<button type="button" class="quiet-action danger-action" data-action="synthetic-virus" data-contact="${contact.id}" ${contact.wasteland || contact.bio_infected ? 'disabled' : ''}>Lançar Vírus Sintético</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="false-flag" data-contact="${contact.id}" ${contact.wasteland || contact.atWar || contact.anexado ? 'disabled' : ''}>Orquestrar Falsa Bandeira</button><button type="button" class="quiet-action danger-action" data-action="insult" data-contact="${contact.id}" ${contact.wasteland || contact.atWar || contact.anexado ? 'disabled' : ''}>[ INSULTAR LÍDER ESTRANGEIRO ]</button>${union ? `<button type="button" class="quiet-action" data-action="union-absorb" data-contact="${contact.id}" ${contact.wasteland || contact.relation > 80 || contact.puppet ? '' : 'disabled'}>Absorver pela União</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="fund-rebels" data-contact="${contact.id}" ${contact.wasteland ? 'disabled' : ''}>Financiar Rebeldes</button>${nuclearReady && contact.atWar && !contact.wasteland ? `<button type="button" class="quiet-action nuclear-action" data-action="nuclear-codes" data-contact="${contact.id}">CÓDIGOS NUCLEARES</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.wasteland || contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('')}<p class="notice" data-diplomacy-empty hidden>Nenhum país corresponde à busca.</p></div></section>`;
+  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relações Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}${diplomacyMap(state, mapUi)}<label class="diplomacy-search"><span>Buscar país</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de países diplomáticos">${contacts.map((contact) => `<article class="bloc-row ${contact.wasteland ? 'wasteland-contact' : ''}" data-diplomacy-row data-country-name="${escapeHtml(contact.name)}"><div><strong>${contact.name} ${nuclearBadge(contact)}</strong><span>${contact.wasteland ? 'ZONA DE ANIQUILAÇÃO NUCLEAR' : `Relação ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | Defesa digital ${Number(contact.cyber_defense).toFixed(0)} | ${contact.trait}${contact.puppet ? ' | Fantoche' : ''}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.wasteland || contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button><button type="button" class="quiet-action" data-action="resource-import" data-contact="${contact.id}" data-resource="steel" data-amount="500" ${contact.wasteland || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Importar aço</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${contact.wasteland || contact.alliance || contact.atWar || contact.relation < 50 ? 'disabled' : ''}>Propor Aliança</button>${cyberReady ? `<button type="button" class="quiet-action danger-action" data-action="cyber-attack" data-contact="${contact.id}" ${contact.wasteland || (Number(contact.cyber_paralyzed_until) || 0) > (Number(state.monthCounter) || 0) ? 'disabled' : ''}>Lançar Ciberataque</button>` : ''}${bioReady ? `<button type="button" class="quiet-action danger-action" data-action="synthetic-virus" data-contact="${contact.id}" ${contact.wasteland || contact.bio_infected ? 'disabled' : ''}>Lançar Vírus Sintético</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="false-flag" data-contact="${contact.id}" ${contact.wasteland || contact.atWar || contact.anexado ? 'disabled' : ''}>Orquestrar Falsa Bandeira</button><button type="button" class="quiet-action danger-action" data-action="insult" data-contact="${contact.id}" ${contact.wasteland || contact.atWar || contact.anexado ? 'disabled' : ''}>[ INSULTAR LÍDER ESTRANGEIRO ]</button>${union ? `<button type="button" class="quiet-action" data-action="union-absorb" data-contact="${contact.id}" ${contact.wasteland || contact.relation > 80 || contact.puppet ? '' : 'disabled'}>Absorver pela União</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="fund-rebels" data-contact="${contact.id}" ${contact.wasteland ? 'disabled' : ''}>Financiar Rebeldes</button>${nuclearReady && contact.atWar && !contact.wasteland ? `<button type="button" class="quiet-action nuclear-action" data-action="nuclear-codes" data-contact="${contact.id}">CÓDIGOS NUCLEARES</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.wasteland || contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('')}<p class="notice" data-diplomacy-empty hidden>Nenhum país corresponde à busca.</p></div></section>`;
 }
 
 export function filterDiplomacyRows(root, query = '') {
@@ -1280,6 +1438,7 @@ export function mountDashboard(root) {
   let activeTab = 'overview';
   let storageNotice = '';
   let diplomacyQuery = '';
+  let mapUi = { selected: null, filter: 'all' };
   const treatyModal = document.getElementById('modal-tratado');
   const crisisModal = document.getElementById('modal-crise');
   const unModal = document.getElementById('modal-onu');
@@ -1969,6 +2128,7 @@ export function mountDashboard(root) {
     const tabs = [
       ['overview', uiText(language, 'nav.overview')],
       ['budget', uiText(language, 'nav.budget')],
+      ['indicators', uiText(language, 'nav.indicators')],
       ['diplomacy', uiText(language, 'nav.diplomacy')],
       ['military', uiText(language, 'nav.military')],
       ['cabinet', uiText(language, 'nav.cabinet')],
@@ -1980,8 +2140,9 @@ export function mountDashboard(root) {
       ['profile', uiText(language, 'nav.profile')],
     ];
     const content = activeTab === 'history' ? storyModeView(state) : activeTab === 'profile' ? profileView(state, { audio: audio.settings, tutorialEnabled: tutorial.enabled }) : state.city ? cityView(state) : state.is_wasteland ? bunkerView(state)
+      : activeTab === 'indicators' ? indicatorsView(state)
       : activeTab === 'budget' ? budgetView(state, projection)
-      : activeTab === 'diplomacy' ? diplomacyView(state, diplomacyQuery)
+      : activeTab === 'diplomacy' ? diplomacyView(state, diplomacyQuery, mapUi)
         : activeTab === 'military' ? militaryView(state)
           : activeTab === 'cabinet' ? cabinetView(state)
           : activeTab === 'technology' ? technologyView(state)
@@ -2729,6 +2890,11 @@ export function mountDashboard(root) {
       return;
     }
     if (action === 'tab') { activeTab = control.dataset.tab; render(); return; }
+    if (action === 'map-country') { mapUi = { ...mapUi, selected: control.dataset.country }; render(); return; }
+    if (action === 'map-filter') { mapUi = { ...mapUi, filter: control.dataset.filter }; render(); return; }
+    if (action === 'congress-demand') { commit(answerCongressDemand(state, control.dataset.accept === 'yes')); return; }
+    if (action === 'opposition-bill') { commit(answerOppositionBill(state, control.dataset.choice)); return; }
+    if (action === 'election-action') { commit(applyElectionAction(state, control.dataset.kind)); return; }
     if (action === 'unrest-action') { commit(applyUnrestAction(state, control.dataset.kind)); return; }
     if (action === 'city-story') { activeTab = 'history'; render(); return; }
     if (action === 'city-return') { activeTab = 'overview'; render(); return; }

@@ -17,10 +17,10 @@ export function createCongress(seed = 1) {
   return {
     totalSeats: TOTAL_SEATS,
     blocs: [
-      { id: 'left', label: 'Esquerda', seats: leftSeats, support: 0, baseSupport: true, negotiated: false, negotiationCost: leftSeats * 8_000_000 },
-      { id: 'center', label: 'Centro', seats: centerSeats, support: 0, baseSupport: true, negotiated: false, negotiationCost: centerSeats * 10_000_000 },
-      { id: 'right', label: 'Direita', seats: rightSeats, support: 0, baseSupport: true, negotiated: false, negotiationCost: rightSeats * 12_000_000 },
-      { id: 'nationalist', label: 'Nacionalistas', seats: nationalistSeats, support: 0, baseSupport: true, negotiated: false, negotiationCost: nationalistSeats * 11_000_000 },
+      { id: 'left', label: 'Esquerda', seats: leftSeats, loyalty: 50, support: 0, baseSupport: true, negotiated: false, negotiationCost: leftSeats * 8_000_000 },
+      { id: 'center', label: 'Centro', seats: centerSeats, loyalty: 50, support: 0, baseSupport: true, negotiated: false, negotiationCost: centerSeats * 10_000_000 },
+      { id: 'right', label: 'Direita', seats: rightSeats, loyalty: 50, support: 0, baseSupport: true, negotiated: false, negotiationCost: rightSeats * 12_000_000 },
+      { id: 'nationalist', label: 'Nacionalistas', seats: nationalistSeats, loyalty: 50, support: 0, baseSupport: true, negotiated: false, negotiationCost: nationalistSeats * 11_000_000 },
     ],
   };
 }
@@ -34,7 +34,9 @@ function publicSupport(value) {
 function blocVoteShare(bloc, supportScore) {
   const support = clamp(Number(bloc.support) || 0, 0, 1);
   const popularityEffect = support > 0 && support < 1 ? clamp((supportScore - 50) / 500, -0.1, 0.1) : 0;
-  return clamp(support + popularityEffect, 0, 1);
+  // Bancada leal ao governo vota mais com ele; bancada distante, menos (lealdade 0 a 100, neutra em 50).
+  const loyaltyEffect = support > 0 && support < 1 && Number.isFinite(Number(bloc.loyalty)) ? clamp((Number(bloc.loyalty) - 50) / 250, -0.2, 0.2) : 0;
+  return clamp(support + popularityEffect + loyaltyEffect, 0, 1);
 }
 
 export function getVoteForecast(congress, factions) {

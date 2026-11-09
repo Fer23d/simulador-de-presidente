@@ -10,6 +10,10 @@ import { getTraitModifiers } from './traits.js';
 import { EVENTS, applyEventOption, rollMonthlyEvent } from './events.js';
 import { createMinisters, dismissMinister as dismissCabinetMinister, getMinisterModifiers, hireMinister as hireCabinetMinister } from './ministers.js';
 import { applyUnrestAction as applyUnrestActionState, repressionHangover } from './unrest_actions.js';
+import { createSectors, normalizeSectors } from './sectors.js';
+import { createCongressLife, normalizeCongressLife, processCongressLife, respondToBill, respondToDemand } from './congress_life.js';
+import { alignElection, applyCampaignAction, createElection, normalizeElection, processElection } from './elections.js';
+import { normalizeIndicatorHistory, recordIndicators, snapshotIndicators } from './indicators.js';
 import { adjustFactions, advanceFactions, createFactions, getFactionModifiers, getFactionSupport, normalizeFactions } from './factions.js';
 import { absorverPaisParaUniao as absorbIntoUnion, decretarRevolucaoSocialista as decreeSocialistRevolution } from './revolution.js';
 import { financiarRebeldes as fundRebels } from './espionage.js';
@@ -95,6 +99,7 @@ function createEconomy(country) {
     inflation,
     fiscalHole: 0,
     inflationHistory: [inflation],
+    sectors: createSectors(seed),
     unemployment: 0.05 + ((seed % 80) / 1_000),
     cash: Math.round(country.pib_base * 0.06),
   };
@@ -229,11 +234,12 @@ function collectPuppetTribute(economy, geopolitics) {
 export function createGameState(countryId = 'bra', playerProfile = {}) {
   const country = createCountryProfile(getCountryById(countryId) ?? COUNTRIES.find((item) => item.id === 'bra'));
   const geopolitics = createGeopolitics(country.id);
+  const economy0 = createEconomy(country);
   return {
     version: STATE_VERSION,
     country,
     calendar: { month: 1, year: 2026 },
-    economy: createEconomy(country),
+    economy: economy0,
     budget: { ...DEFAULT_BUDGET },
     government: 'republic',
     title: 'Presidente',
@@ -318,6 +324,9 @@ export function createGameState(countryId = 'bra', playerProfile = {}) {
     unlocked_chapters: ['cap_1_origem'],
     news: [],
     presidentialMandate: createPresidentialMandate(),
+    election: createElection(),
+    congressLife: createCongressLife(),
+    indicatorHistory: normalizeIndicatorHistory(null, snapshotIndicators(economy0, getFactionSupport(createFactions()))),
     pendingBriefing: null,
     pendingEvent: null,
     pendingAllianceInvocation: null,
@@ -536,6 +545,21 @@ export function insultarNacao(state, contactId) {
   return result.retaliation
     ? addNews(next, `Alerta militar: ${result.target.name} declarou guerra apos um insulto presidencial.`)
     : next;
+}
+
+export function answerCongressDemand(state, accept) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return respondToDemand(state, accept === true);
+}
+
+export function answerOppositionBill(state, action) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return respondToBill(state, action === 'sanction' ? 'sanction' : 'veto');
+}
+
+export function applyElectionAction(state, kind) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return applyCampaignAction(state, kind);
 }
 
 export function applyUnrestAction(state, kind) {
@@ -1064,7 +1088,7 @@ export function advanceMonth(state) {
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? internalProjectState.notice ?? `mês encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superávit' : 'com déficit'}.`;
 
-  const completedState = syncWorld({
+  const completedState = processElection(processCongressLife(syncWorld({
     ...state,
     economy: constitutionalState.economy,
     geopolitics: geopoliticalMonth.geopolitics,
@@ -1085,12 +1109,13 @@ export function advanceMonth(state) {
     randomSeed: stability.seed,
     calendar: { month, year },
     monthCounter: (Number(state.monthCounter) || 0) + 1,
+    indicatorHistory: recordIndicators(state.indicatorHistory, constitutionalState.economy, getFactionSupport(pressuredFactions)),
     megacorp_power: corporateState.megacorp_power,
     slushFundTransfersThisMonth: 0,
     activeLawIds: corporateState.activeLawIds,
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
-  });
+  })));
   const corporateDefault = resolveCorporateDefault(completedState);
   if (corporateDefault.regime?.gameOver) return resolverFinalDeJogo(corporateDefault);
   const article5State = detectArticle5(completedState);
@@ -1246,6 +1271,7 @@ export function hydrateGameState(serialized) {
         gdp: countryIsWasteland ? 0 : Math.max(1, Number(economy.gdp) || base.economy.gdp),
         inflation: clamp(Number(economy.inflation) || 0, 0, 0.8),
         fiscalHole: Math.max(0, Number(economy.fiscalHole) || 0),
+        sectors: normalizeSectors(economy.sectors, countrySeed(base.country.id)),
         inflationHistory: normalizeInflationHistory(economy.inflationHistory, clamp(Number(economy.inflation) || 0, 0, 0.8)),
         unemployment: clamp(Number(economy.unemployment) || base.economy.unemployment, 0.02, 0.45),
         cash: Number.isFinite(Number(economy.cash)) ? Number(economy.cash) : base.economy.cash,
@@ -1298,6 +1324,9 @@ export function hydrateGameState(serialized) {
         ? parsed.news.filter((item) => typeof item?.text === 'string' && item.calendar).slice(0, 5)
         : base.news,
       presidentialMandate: createPresidentialMandate(parsed.presidentialMandate),
+      congressLife: normalizeCongressLife(parsed.congressLife),
+      election: alignElection(normalizeElection(parsed.election), parsed.monthCounter),
+      indicatorHistory: normalizeIndicatorHistory(parsed.indicatorHistory, snapshotIndicators(parsed.economy ?? base.economy, getFactionSupport(parsed.factions ?? base.factions))),
       pendingBriefing: getPresidentialBriefing(parsed.pendingBriefing?.id),
       pendingEvent: EVENTS.find((event) => event.id === parsed.pendingEvent?.id) ?? null,
       pendingAllianceInvocation: parsed.pendingAllianceInvocation?.allyId && parsed.pendingAllianceInvocation?.attackerId
