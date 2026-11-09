@@ -11,6 +11,7 @@ import { EVENTS, applyEventOption, rollMonthlyEvent } from './events.js';
 import { createMinisters, dismissMinister as dismissCabinetMinister, getMinisterModifiers, hireMinister as hireCabinetMinister } from './ministers.js';
 import { applyUnrestAction as applyUnrestActionState, repressionHangover } from './unrest_actions.js';
 import { createSectors, normalizeSectors } from './sectors.js';
+import { createYearGoals, normalizeYearGoals, normalizeYearReports, processYearEnd } from './year_report.js';
 import { createCongressLife, normalizeCongressLife, processCongressLife, respondToBill, respondToDemand } from './congress_life.js';
 import { alignElection, applyCampaignAction, createElection, normalizeElection, processElection } from './elections.js';
 import { normalizeIndicatorHistory, recordIndicators, snapshotIndicators } from './indicators.js';
@@ -232,6 +233,11 @@ function collectPuppetTribute(economy, geopolitics) {
 }
 
 export function createGameState(countryId = 'bra', playerProfile = {}) {
+  const created = createGameStateBase(countryId, playerProfile);
+  return { ...created, yearGoals: createYearGoals(created), yearReports: [] };
+}
+
+function createGameStateBase(countryId = 'bra', playerProfile = {}) {
   const country = createCountryProfile(getCountryById(countryId) ?? COUNTRIES.find((item) => item.id === 'bra'));
   const geopolitics = createGeopolitics(country.id);
   const economy0 = createEconomy(country);
@@ -1088,7 +1094,7 @@ export function advanceMonth(state) {
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? internalProjectState.notice ?? `mês encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superávit' : 'com déficit'}.`;
 
-  const completedState = processElection(processCongressLife(syncWorld({
+  const completedState = processYearEnd(processElection(processCongressLife(syncWorld({
     ...state,
     economy: constitutionalState.economy,
     geopolitics: geopoliticalMonth.geopolitics,
@@ -1115,7 +1121,7 @@ export function advanceMonth(state) {
     activeLawIds: corporateState.activeLawIds,
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
-  })));
+  }))));
   const corporateDefault = resolveCorporateDefault(completedState);
   if (corporateDefault.regime?.gameOver) return resolverFinalDeJogo(corporateDefault);
   const article5State = detectArticle5(completedState);
@@ -1324,6 +1330,8 @@ export function hydrateGameState(serialized) {
         ? parsed.news.filter((item) => typeof item?.text === 'string' && item.calendar).slice(0, 5)
         : base.news,
       presidentialMandate: createPresidentialMandate(parsed.presidentialMandate),
+      yearGoals: normalizeYearGoals(parsed.yearGoals, { economy: parsed.economy ?? base.economy, factions: parsed.factions ?? base.factions, calendar: parsed.calendar ?? base.calendar, regime: parsed.regime ?? base.regime, laws: parsed.laws ?? {}, geopolitics: parsed.geopolitics ?? base.geopolitics, monthCounter: parsed.monthCounter }),
+      yearReports: normalizeYearReports(parsed.yearReports),
       congressLife: normalizeCongressLife(parsed.congressLife),
       election: alignElection(normalizeElection(parsed.election), parsed.monthCounter),
       indicatorHistory: normalizeIndicatorHistory(parsed.indicatorHistory, snapshotIndicators(parsed.economy ?? base.economy, getFactionSupport(parsed.factions ?? base.factions))),

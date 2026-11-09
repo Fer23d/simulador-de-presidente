@@ -3,6 +3,7 @@ import { getVoteForecast } from '../core/congress.js';
 import { BUDGET_LIMITS, NEUTRAL_INTEREST_RATE, getDebtStatus, projectBudget, summarizeInflation } from '../core/economy.js';
 import { UNREST_ACTIONS, getUnrestActionStatus } from '../core/unrest_actions.js';
 import { COUNTRY_COORDS, projectCoords } from '../data/country_coords.js';
+import { evaluateGoals, normalizeYearGoals, normalizeYearReports } from '../core/year_report.js';
 import { OPPOSITION_BILLS, getBlocLoyalty, normalizeCongressLife } from '../core/congress_life.js';
 import { CAMPAIGN_ACTIONS, getCampaignActionStatus, getPollingShare, hasElections, isCampaign, monthsToElection, normalizeElection } from '../core/elections.js';
 import { LAWS } from '../core/laws.js';
@@ -502,6 +503,43 @@ function unrestLabel(unrest) {
   return `${value}/100 · ${stage}`;
 }
 
+function goalValueText(goal) {
+  if (goal.id === 'fiscal') return goal.target > 0 ? `dívida ${formatPercent(goal.value, 0)} do PIB` : formatMoney(goal.value);
+  if (goal.id === 'approval') return `${goal.value.toFixed(0)}%`;
+  return formatPercent(goal.value, 1);
+}
+
+function goalRows(goals) {
+  return goals.map((goal) => `<div class="ledger-row"><span>${goal.met ? '✔' : '✖'} ${escapeHtml(goal.label)}</span><strong class="${goal.met ? 'positive' : 'negative'}">${goalValueText(goal)}</strong></div>`).join('');
+}
+
+function yearReportPanel(state) {
+  if (state.is_wasteland || state.city) return '';
+  const goals = normalizeYearGoals(state.yearGoals, state);
+  const current = evaluateGoals(state, goals);
+  const reports = normalizeYearReports(state.yearReports);
+  const last = reports[reports.length - 1];
+  const history = reports.slice(-6).map((report) => `<span class="year-grade" title="${report.year}: ${report.met}/${report.total} metas">${report.year} · ${report.grade}</span>`).join('');
+  const figures = last ? last.figures : null;
+  const signed = (value, text) => `${value >= 0 ? '+' : '−'}${text}`;
+  const reportBlock = last
+    ? `<h3>Balanço de ${last.year} · nota ${last.grade}</h3>
+      ${goalRows(last.goals.map((goal) => ({ ...goal, label: goal.label })))}
+      <div class="ledger-row"><span>Crescimento do PIB</span><strong class="${figures.gdpGrowth >= 0 ? 'positive' : 'negative'}">${signed(figures.gdpGrowth, formatPercent(Math.abs(figures.gdpGrowth), 1))}</strong></div>
+      <div class="ledger-row"><span>Variação do caixa</span><strong class="${figures.cashChange >= 0 ? 'positive' : 'negative'}">${signed(figures.cashChange, formatMoney(Math.abs(figures.cashChange)))}</strong></div>
+      <div class="ledger-row"><span>Apoio interno</span><strong>${signed(figures.approvalChange, Math.abs(figures.approvalChange).toFixed(0))} pontos</strong></div>
+      <div class="ledger-row"><span>Leis aprovadas · novas guerras</span><strong>${figures.lawsPassed} · ${figures.newWars}</strong></div>
+      <p class="notice"><strong>Recomendação do gabinete:</strong> ${escapeHtml(last.recommendation)}</p>`
+    : '<p class="notice">O primeiro relatório sai em janeiro, com a nota do ano e a recomendação do gabinete.</p>';
+  return `<section class="panel year-report-panel">
+      <div class="panel-heading"><div><p class="eyebrow">Gabinete</p><h2>Relatório anual</h2></div><span class="country-code">${last ? `NOTA ${last.grade}` : `METAS DE ${goals.year}`}</span></div>
+      <h3>Metas de ${goals.year} (acompanhamento)</h3>
+      ${goalRows(current)}
+      ${reportBlock}
+      ${history ? `<div class="year-grades">${history}</div>` : ''}
+    </section>`;
+}
+
 function electionPanel(state) {
   if (!hasElections(state)) {
     return `<section class="panel election-panel"><div class="panel-heading"><div><p class="eyebrow">Urnas</p><h2>Eleições</h2></div><span class="country-code">SEM ELEIÇÕES</span></div><p class="notice">Neste regime não há eleições: o poder se mantém pela força e pela lealdade dos quartéis.</p></section>`;
@@ -541,7 +579,7 @@ function unrestPanel(state) {
     </section>`;
 }
 
-function overviewView(state, projection) {
+export function overviewView(state, projection) {
   const budgetTone = projection.monthlyBalance >= 0 ? 'positive' : 'negative';
   const treatyPending = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid) || Boolean(state.pendingFinalDilemma) || Boolean(state.pendingInterrogation) || Boolean(state.pendingStory) || Boolean(state.pendingBriefing) || Boolean(state.pendingAllianceInvocation) || Boolean(state.pendingHostileAlert) || Boolean(state.wasteland_cinematic_pending) || Boolean(state.wasteland_cinematic_ready);
   return `<section class="view-grid overview-grid">
@@ -566,6 +604,7 @@ function overviewView(state, projection) {
         <div><dt>Governo</dt><dd>${state.country.tipo_governo}</dd></div>
       </dl>
     </section>
+    ${yearReportPanel(state)}
     ${electionPanel(state)}
     ${unrestPanel(state)}
     <section class="panel history-panel">
