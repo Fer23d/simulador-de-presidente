@@ -1,5 +1,4 @@
 import { hash } from './art.js';
-import { getPresidentClass } from './player_state.js';
 import { getLeaderName } from './player_profile.js';
 import { DAYS_PER_MONTH } from './vault_time.js';
 
