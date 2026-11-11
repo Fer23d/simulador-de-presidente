@@ -498,6 +498,12 @@ for (const locale of ['es', 'en']) {
   }
 }
 
+function legacyTranslationPairs(language) {
+  const locale = normalizeLanguage(language);
+  if (!LEGACY_TRANSLATION_CACHE.has(locale)) LEGACY_TRANSLATION_CACHE.set(locale, LEGACY_UI_TRANSLATIONS[locale] ?? []);
+  return LEGACY_TRANSLATION_CACHE.get(locale);
+}
+
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

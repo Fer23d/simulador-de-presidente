@@ -474,6 +474,10 @@ export function importarRecursos(state, contactId, resource, amount) {
   return syncWorld({ ...state, geopolitics: result.geopolitics, economy: result.economy, country: result.country, notice: result.reason });
 }
 
+export function proporAlianca(state, contactId) {
+  return proposeAlliance(state, contactId);
+}
+
 export function alterarNotaONU(state, value) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   return syncWorld({ ...state, geopolitics: changeOnuScore(state.geopolitics, value), notice: 'Nota da ONU atualizada.' });
@@ -504,6 +508,10 @@ export function startWar(state, contactId) {
       : `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'} sob alegação de legítima defesa.`)
     : `Guerra declarada contra ${target?.name ?? 'alvo estrangeiro'}.`;
   return checkStoryChapters(registrarEventoHistorico(addNews(syncWorld({ ...next, geopolitics, notice }), notice), 'guerra', `Declarada guerra contra ${target?.name ?? 'um alvo estrangeiro'}. O mundo sustem a respiração.`));
+}
+
+export function declararGuerra(state, contactId) {
+  return startWar(state, contactId);
 }
 
 export function insultarNacao(state, contactId) {

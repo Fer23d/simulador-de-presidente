@@ -1,4 +1,4 @@
-import { COUNTRIES } from '../data/countries.js';
+import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countries.js';
 import { getVoteForecast } from '../core/congress.js';
 import { BUDGET_LIMITS, NEUTRAL_INTEREST_RATE, getDebtStatus, projectBudget, summarizeInflation } from '../core/economy.js';
 import { UNREST_ACTIONS, getUnrestActionStatus } from '../core/unrest_actions.js';
@@ -47,7 +47,7 @@ import { awardXp, describeLevelGate, getGameMode, getLevel, getNewLevelEntries }
 import { levelTabView, levelToastParts, levelTrackView } from './level_ui.js';
 import { DOOR_OPENS_AT_MONTH } from '../core/endings.js';
 import { getGeneratorFuelPlan, getOilSaleOffer, sellOil, toggleGeneratorFuel } from '../core/oil_economy.js';
-import { getLightingGenerators, getPowerBudget, ROOM_ENERGY_DRAW } from '../core/power.js';
+import { checkRoomPower, getLightingGenerators, getPowerBudget, ROOM_ENERGY_DRAW } from '../core/power.js';
 import { buildOilDerrick, collectOil, formatDuration, getDerrickBuildCost, getDerrickStatus, normalizeOilField, OIL_LEVELS, OIL_MAX_LEVEL, upgradeOilDerrick } from '../core/oil.js';
 import { drawOilDerrickPreview } from '../core/oil_renderer.js';
 import { assignGarrison, buildFort, dismissRaid, FORT_LEVELS, FORT_MAX_LEVEL, getArmySoldiers, getFortStatus, getThreatEstimate, RECRUIT_BATCH, RECRUIT_COST, recruitSoldiers, upgradeFort } from '../core/defense.js';
@@ -97,6 +97,7 @@ import {
   exigirAnexacao,
   hydrateGameState,
   negotiate,
+  proposeAlliance,
   criarLiga,
   proposeTreaty,
   researchTechnology,
@@ -131,6 +132,7 @@ import {
   fugirEmSilencio,
   afundarComONavio,
   infiltrarSosiaLider,
+  resolverSitioNegro,
   reivindicarSitioNegro,
   escolherSitioNegro,
   pesquisarTecnologiaMilitar,
@@ -514,6 +516,17 @@ function metric(label, value, tone = '') {
   return `<article class="metric ${tone}"><span>${label}</span><strong>${value}</strong></article>`;
 }
 
+function taxControl(label, key, value) {
+  return `<div class="tax-control">
+    <span>${label}</span>
+    <div class="stepper" role="group" aria-label="${label}">
+      <button type="button" class="icon-button" data-action="tax" data-tax="${key}" data-delta="-1" aria-label="Diminuir ${label}">−</button>
+      <strong>${formatPercent(value, 0)}</strong>
+      <button type="button" class="icon-button" data-action="tax" data-tax="${key}" data-delta="1" aria-label="Aumentar ${label}">+</button>
+    </div>
+  </div>`;
+}
+
 function unrestLabel(unrest) {
   const value = Math.round(Number(unrest) || 0);
   const stage = value >= 80 ? 'colapso' : value >= 60 ? 'crise política' : value >= 30 ? 'protestos' : 'calma';
@@ -822,6 +835,21 @@ export function congressView(state) {
     </section>
     ${congressLifePanel(state)}
   </section>`;
+}
+
+function legacyDiplomacyView(state) {
+  const onuTone = state.geopolitics.onuScore < 25 ? 'negative' : state.geopolitics.onuScore >= 60 ? 'positive' : '';
+  const selectedId = state.ui?.selectedMapCountryId ?? state.country.id;
+  const selected = createCountryProfile(getCountryById(selectedId) ?? getCountryById(state.country.id));
+  const annexed = new Set(state.geopolitics.annexedCountryIds ?? []);
+  const mapCountry = (id, label, path) => `<path d="${path}" class="map-country ${selected.id === id ? 'selected' : ''} ${annexed.has(id) ? 'annexed' : ''}" ${annexed.has(id) ? '' : `data-action="map-country" data-country="${id}" role="button" tabindex="0" aria-label="Selecionar ${label}"`}></path>`;
+  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Painel mundial</p><h2>Diplomacia e Mapa</h2></div><span class="country-code ${onuTone}">ONU ${state.geopolitics.onuScore}/100</span></div><div class="onu-meter"><div><span>Reputação global</span><strong class="${onuTone}">${state.geopolitics.internationalSanctions ? 'Sanções internacionais ativas' : 'Sem sanções internacionais'}</strong></div><div class="meter-track"><span style="width:${state.geopolitics.onuScore}%"></span></div></div><div class="map-layout"><svg class="world-map" viewBox="0 0 800 360" aria-label="Mapa mundial simplificado de teste"><path class="map-ocean" d="M0 0H800V360H0Z"></path>${mapCountry('usa', 'Estados Unidos', 'M105 92h126l35 32-23 48-98 6-46-38z')}${mapCountry('bra', 'Brasil', 'M270 191l71-12 47 48-19 84-65 7-44-61z')}${mapCountry('rus', 'Rússia', 'M420 64h235l65 35-38 47-174-2-88-39z')}${mapCountry('chn', 'China', 'M570 164l93-6 56 43-37 62-92 3-42-55z')}<text x="142" y="132">EUA</text><text x="312" y="245">BR</text><text x="545" y="105">RÚSSIA</text><text x="615" y="214">CHINA</text></svg><aside class="map-selection"><p class="eyebrow">Nação selecionada</p><h3>${selected.nome} ${nuclearBadge(selected)}</h3><div class="ledger-row"><span>Área</span><strong>${formatNumber.format(selected.area_km2)} km²</strong></div><div class="ledger-row"><span>População</span><strong>${formatNumber.format(selected.populacao_base)}</strong></div><div class="ledger-row"><span>Governo</span><strong>${selected.tipo_governo}</strong></div></aside></div><div class="bloc-list">${state.geopolitics.contacts.map((contact) => `<article class="bloc-row ${contact.anexado ? 'annexed-contact' : ''}"><div><strong>${contact.name} ${nuclearBadge(contact)}</strong><span>${contact.anexado ? 'Território anexado' : `Relação ${formatRelation(contact.relation)} | Poder ${contact.militaryPower.toFixed(0)} | ${contact.atWar ? 'Em guerra' : contact.alliance ? 'Aliado' : contact.tradeTreaty ? 'Acordo comercial' : 'Sem tratado'}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.anexado || contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comércio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${contact.anexado || contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Aliança</button><button type="button" class="quiet-action" data-action="sabotage" data-contact="${contact.id}" ${contact.anexado || contact.atWar ? 'disabled' : ''}>Sabotar</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.anexado || contact.atWar ? 'disabled' : ''}>Guerra</button></div></article>`).join('')}</div></section>`;
+}
+
+function riskDiplomacyView(state) {
+  const onuTone = state.geopolitics.onuScore < 25 ? 'negative' : state.geopolitics.onuScore >= 60 ? 'positive' : '';
+  const arsenal = Math.max(0, Number(state.military.armasNucleares) || 0);
+  return `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Painel mundial</p><h2>Diplomacia de risco</h2></div><span class="country-code ${onuTone}">ONU ${state.geopolitics.onuScore}/100</span></div><div class="onu-meter"><div><span>Reputação global</span><strong class="${onuTone}">${state.geopolitics.internationalSanctions ? 'Sanções internacionais ativas' : 'Sem sanções internacionais'}</strong></div><div class="meter-track"><span style="width:${state.geopolitics.onuScore}%"></span></div></div><div class="bloc-list">${state.geopolitics.contacts.map((contact) => { const nuclearReady = contact.atWar && arsenal > 0 && !contact.anexado; return `<article class="bloc-row ${contact.anexado ? 'annexed-contact' : ''}"><div><strong>${contact.name} ${nuclearBadge(contact)}</strong><span>${contact.anexado ? 'Território anexado' : `Relação ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | População ${formatNumber.format(contact.population || 0)}${contact.sancionado_por_jogador ? ' | Sancionado' : ''}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.anexado || contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comércio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${contact.anexado || contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Aliança</button><button type="button" class="quiet-action" data-action="sanction" data-contact="${contact.id}" ${contact.anexado || contact.sancionado_por_jogador ? 'disabled' : ''}>Impor sanção</button><button type="button" class="quiet-action" data-action="ultimatum" data-contact="${contact.id}" ${contact.anexado ? 'disabled' : ''}>Exigir anexação</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.anexado || contact.atWar ? 'disabled' : ''}>Guerra</button>${nuclearReady ? `<button type="button" class="quiet-action nuclear-action" data-action="nuclear-strike" data-contact="${contact.id}">Ataque nuclear</button>` : ''}</div></article>`; }).join('')}</div></section>`;
 }
 
 const MAP_FILTERS = Object.freeze([
@@ -1220,6 +1248,13 @@ export function renderInterrogation(state) {
     : '<button type="button" class="arcade-vote-yes" data-action="interrogation-method" data-method="soro">[ SORO DA VERDADE ]</button><button type="button" class="quiet-action" data-action="interrogation-method" data-method="tortura">[ TORTURA PSICOLOGICA ]</button><button type="button" class="quiet-action" data-action="interrogation-method" data-method="suborno">[ SUBORNO: R$ 1 BI ]</button>';
   return `<section class="terminal-dialog" role="dialog" aria-modal="true"><pre>&gt; PRISIONEIRO #847 ADQUIRIDO.
 &gt; INICIANDO INTERROGATORIO.</pre><div class="action-row">${actions}</div></section>`;
+}
+
+function legacyMilitaryView(state) {
+  const military = { soldiers: 0, equipmentMultiplier: 1, nuclear: {}, ...state.military };
+  const nuclear = { civilProgress: 0, militaryProgress: 0, ...military.nuclear };
+  const canCoup = state.regime.type === 'democracy' && military.support >= 85 && state.budget.defenseSpend >= 0.06;
+  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Forcas Armadas</p><h2>Poder ${Number(military.power || 0).toFixed(0)}</h2><p class="notice">${state.notice}</p><div class="ledger-row"><span>Soldados</span><strong>${formatNumber.format(military.soldiers)}</strong></div><div class="ledger-row"><span>Equipamento</span><strong>x${Number(military.equipmentMultiplier).toFixed(2)}</strong></div><div class="ledger-row"><span>Apoio militar</span><strong>${Number(military.support || 0).toFixed(0)}%</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="recruit">Recrutar Soldados</button><button type="button" class="quiet-action" data-action="equipment" data-kind="tanks">Comprar Blindados</button><button type="button" class="quiet-action" data-action="equipment" data-kind="jets">Comprar Cacas</button></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section><section class="panel"><p class="eyebrow">Programa nuclear</p><h2>Projetos especiais</h2><div class="ledger-row"><span>Energia civil</span><strong>${Number(nuclear.civilProgress).toFixed(0)}%</strong></div><div class="ledger-row"><span>Dissuasão militar</span><strong>${Number(nuclear.militaryProgress).toFixed(0)}%</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="nuclear" data-kind="civil" data-amount="5000000000">Energia 5 bi</button><button type="button" class="quiet-action" data-action="nuclear" data-kind="military" data-amount="5000000000">Dissuasão 5 bi</button></div></section></section>`;
 }
 
 export function renderMilitaryResearchProjects(state) {

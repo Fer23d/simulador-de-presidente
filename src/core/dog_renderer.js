@@ -447,7 +447,7 @@ function collar(ctx, bodyXf, head) {
   ctx.restore();
 }
 
-// Arte pintada: layd_sheet.webp tem 4 colunas x 4 linhas, virada para a direita, pes na base de cada celula.
+// Arte pintada: layd_sheet.png tem 4 colunas x 4 linhas, virada para a direita, pes na base de cada celula.
 // Linha 1 anda, linha 2 corre, linha 3 parada (em pe, sentada, sentada feliz, deitada doente), linha 4 anda doente.
 const SHEET_COLS = 4;
 const SHEET_ROWS = 4;

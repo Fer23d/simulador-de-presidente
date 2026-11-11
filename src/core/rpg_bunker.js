@@ -299,6 +299,8 @@ export function getElevatorCabinGroundY(player, cabinFloor = player.floor) {
   return player.liftTarget !== null ? player.y : cellCenter(cabinFloor, 0).y;
 }
 
+export const renderRpgBunker = renderSpriteScene;
+
 export function createRpgBunkerEngine(canvas, { grid = INITIAL_SHELTER_GRID, player: savedPlayer,
   inhabitants = [], cabinFloor: savedCabinFloor, onBuild, onRoom, onPlayerChanged, onInhabitantsChanged, onHint,
   onDetain, onAssetsReady, onEnvironmentChanged, environment = {}, isNight = environment?.isNight ?? false, weather: savedWeather = {},

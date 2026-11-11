@@ -1,4 +1,5 @@
 // Layd, a cadela que passa a seguir o presidente quando ele decide ficar no Vault.
+export const LAYD_ID = 'layd';
 export const LAYD_NAME = 'Layd';
 
 const FOLLOW_GAP = 66;

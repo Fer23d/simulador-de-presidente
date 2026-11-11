@@ -45,6 +45,11 @@ export const LAYD_EVENTS = Object.freeze([
   }),
 ]);
 
+export const LAYD_MISSION_ROOMS = Object.freeze({
+  'layd-vaccine': Object.freeze(['laboratory', 'medical']),
+  'layd-ration': Object.freeze(['greenhouse', 'dormitory', 'office']),
+});
+
 export function getLaydEvent(eventId) {
   return LAYD_EVENTS.find((event) => event.id === eventId) ?? null;
 }

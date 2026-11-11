@@ -1,4 +1,4 @@
-import { COUNTRIES, createCountryProfile } from '../data/countries.js';
+import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countries.js';
 
 function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));

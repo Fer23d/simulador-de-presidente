@@ -32,8 +32,8 @@ test('the painted art slots are optional: a missing file never reports a broken 
 
 test('the generated production art is present in the project asset pack', () => {
   for (const file of [
-    'layd_sheet.webp', 'dark_market_stall.webp', 'dark_market_merchant.webp',
-    'room_radiation_clinic.webp', 'room_laboratory.webp', 'room_life_support.webp', 'cover_art.webp',
+    'layd_sheet.png', 'dark_market_stall.png', 'dark_market_merchant.png',
+    'room_radiation_clinic.png', 'room_laboratory.png', 'room_life_support.png', 'cover_art.png',
   ]) {
     assert.equal(existsSync(resolve('assets', 'img', file)), true, `missing generated asset ${file}`);
   }

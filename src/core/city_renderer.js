@@ -27,19 +27,18 @@ let cityGroundImageRequested = false;
 let cityRoadImage = null;
 let cityRoadImageRequested = false;
 const REALISTIC_BUILDING_ASSETS = Object.freeze({
-  house: 'assets/img/city_building_house_realistic.webp',
-  farm: 'assets/img/city_building_greenhouse_realistic.webp',
-  well: 'assets/img/city_building_purifier_realistic.webp',
-  generator: 'assets/img/city_building_generator_realistic.webp',
-  solar: 'assets/img/city_building_solar_realistic.webp',
-  derrick: 'assets/img/city_building_derrick_realistic.webp',
-  market: 'assets/img/city_building_market_realistic.webp',
-  clinic: 'assets/img/city_building_clinic_realistic.webp',
-  workshop: 'assets/img/city_building_workshop_realistic.webp',
-  guard: 'assets/img/city_building_guard_realistic.webp',
-  plaza: 'assets/img/city_building_plaza_realistic.webp',
-  // O Descontaminador tem arte propria (antes reaproveitava a do Purificador de agua).
-  purifier: 'assets/img/city_building_decontaminator_realistic.webp',
+  house: 'assets/img/city_building_house_realistic.png',
+  farm: 'assets/img/city_building_greenhouse_realistic.png',
+  well: 'assets/img/city_building_purifier_realistic.png',
+  generator: 'assets/img/city_building_generator_realistic.png',
+  solar: 'assets/img/city_building_solar_realistic.png',
+  derrick: 'assets/img/city_building_derrick_realistic.png',
+  market: 'assets/img/city_building_market_realistic.png',
+  clinic: 'assets/img/city_building_clinic_realistic.png',
+  workshop: 'assets/img/city_building_workshop_realistic.png',
+  guard: 'assets/img/city_building_guard_realistic.png',
+  plaza: 'assets/img/city_building_plaza_realistic.png',
+  purifier: 'assets/img/city_building_purifier_realistic.png',
 });
 const REALISTIC_BUILDING_SCALES = Object.freeze({
   farm: 1.28, well: 1.34, purifier: 1.28, solar: 1.28, derrick: 1.35,
@@ -47,10 +46,10 @@ const REALISTIC_BUILDING_SCALES = Object.freeze({
 });
 const buildingImages = new Map();
 const CITIZEN_ASSETS = Object.freeze([
-  'assets/img/city_citizen_worker_realistic.webp',
-  'assets/img/city_citizen_scientist_realistic.webp',
-  'assets/img/city_citizen_medic_realistic.webp',
-  'assets/img/city_citizen_guard_realistic.webp',
+  'assets/img/city_citizen_worker_realistic.png',
+  'assets/img/city_citizen_scientist_realistic.png',
+  'assets/img/city_citizen_medic_realistic.png',
+  'assets/img/city_citizen_guard_realistic.png',
 ]);
 const citizenImages = new Map();
 // Camadas visuais estáticas são preparadas uma vez por mapa. Antes, a camada
@@ -78,7 +77,7 @@ function getCityGroundImage() {
   const image = document.createElement('img');
   image.decoding = 'async';
   image.alt = '';
-  image.src = 'assets/img/city_ground_realistic_v2.webp';
+  image.src = 'assets/img/city_ground_realistic_v2.png';
   image.addEventListener('load', () => { cityGroundImage = image; groundCache = null; });
   return null;
 }
@@ -90,7 +89,7 @@ function getCityRoadImage() {
   const image = document.createElement('img');
   image.decoding = 'async';
   image.alt = '';
-  image.src = 'assets/img/city_road_surface.webp';
+  image.src = 'assets/img/city_road_surface.png';
   image.addEventListener('load', () => { cityRoadImage = image; });
   return null;
 }
