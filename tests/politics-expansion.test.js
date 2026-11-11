@@ -113,7 +113,7 @@ test('o mapa tem coordenadas para todos os paises e a diplomacia mostra o mapa',
   const state = base();
   const first = state.geopolitics.contacts[0].id;
   const html = diplomacyView(state, '', { selected: first, filter: 'hostile' });
-  assert.match(html, /bubble-map/);
+  assert.match(html, /world-map-svg/);
   assert.match(html, /data-action="map-country"/);
   assert.match(html, /map-chip/);
   assert.match(diplomacyMap(state, { selected: first }), /map-country-card/);

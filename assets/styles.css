@@ -1000,29 +1000,23 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .congress-card { border: 1px dashed var(--line); padding: 10px; margin: 10px 0; display: flex; flex-direction: column; gap: 6px; }
 .election-panel { grid-column: 1 / -1; }
 
-/* Mapa de bolhas da Diplomacia */
+/* Mapa-mundi da Diplomacia */
 .diplomacy-map { margin: 12px 0 18px; }
 .map-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .map-chip { background: transparent; color: var(--muted); border: 1px solid var(--line); padding: 4px 10px; cursor: pointer; font: inherit; }
 .map-chip[aria-pressed="true"] { color: var(--void); background: var(--phosphor); border-color: var(--phosphor); }
-.bubble-map { width: 100%; height: auto; display: block; background: var(--screen); border: 1px solid var(--line); }
-.map-ocean { fill: var(--screen); }
-.map-grid { stroke: var(--line); stroke-opacity: .25; stroke-width: 1; }
-.map-dot { cursor: pointer; stroke: var(--void); stroke-width: 1; transition: opacity .15s; }
-.map-dot--neutral { fill: var(--quiet); }
-.map-dot--trade { fill: #6aa8ff; }
-.map-dot--allies { fill: var(--phosphor); }
-.map-dot--hostile { fill: var(--amber); }
-.map-dot--war { fill: var(--danger); }
-.map-dot--annexed { fill: var(--muted); opacity: .5; }
-.map-dot--self { fill: var(--cyan); stroke: #fff; stroke-width: 2; cursor: default; }
-.map-dot.is-dim { opacity: .12; }
-.map-dot.is-selected { stroke: #fff; stroke-width: 2; }
+.map-chip--region[aria-pressed="true"] { background: var(--cyan); border-color: var(--cyan); }
+.world-map-svg { width: 100%; height: auto; display: block; background: #06100e; border: 1px solid var(--line); }
+.map-ocean { fill: #06100e; }
+.map-land { fill: #1a2b25; stroke: #0b1613; stroke-width: .5; }
+.map-shape { cursor: pointer; stroke: #0b1613; stroke-width: .5; transition: opacity .15s; fill: #2e4a3d; vector-effect: non-scaling-stroke; }
+.map-shape:hover { stroke: #fff; stroke-width: 1.4; }
+.map-shape--trade { fill: #3d79c9; }
+.map-shape--allies { fill: #35b26a; }
+.map-shape--war { fill: #e0483f; }
+.map-shape--annexed { fill: #555; opacity: .6; }
+.map-shape--self { fill: var(--cyan); stroke: #fff; stroke-width: 1.2; pointer-events: none; vector-effect: non-scaling-stroke; }
+.map-shape.is-dim { opacity: .16; }
+.map-shape.is-selected { stroke: #fff; stroke-width: 2; }
 .map-country-card { border: 1px dashed var(--line); padding: 10px; margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 .map-country-card span { display: block; color: var(--muted); }
-
-/* Relatorio anual */
-.year-report-panel { grid-column: 1 / -1; }
-.year-report-panel h3 { margin: 14px 0 6px; color: var(--amber); font-size: .9rem; }
-.year-grades { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.year-grade { border: 1px solid var(--line); padding: 3px 8px; color: var(--muted); }

@@ -2,7 +2,7 @@ import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countri
 import { getVoteForecast } from '../core/congress.js';
 import { BUDGET_LIMITS, NEUTRAL_INTEREST_RATE, getDebtStatus, projectBudget, summarizeInflation } from '../core/economy.js';
 import { UNREST_ACTIONS, getUnrestActionStatus } from '../core/unrest_actions.js';
-import { COUNTRY_COORDS, projectCoords } from '../data/country_coords.js';
+import { COUNTRY_PATHS, COUNTRY_POINTS, LAND_BACKGROUND, MAP_REGIONS } from '../data/world_map.js';
 import { evaluateGoals, normalizeYearGoals, normalizeYearReports } from '../core/year_report.js';
 import { OPPOSITION_BILLS, getBlocLoyalty, normalizeCongressLife } from '../core/congress_life.js';
 import { CAMPAIGN_ACTIONS, getCampaignActionStatus, getPollingShare, hasElections, isCampaign, monthsToElection, normalizeElection } from '../core/elections.js';
@@ -842,27 +842,42 @@ function mapMatches(contact, filter, richIds) {
   return mapStatus(contact) === filter;
 }
 
-// Mapa de bolhas: cada pais e um ponto na sua posicao aproximada. Clique para ver o pais e agir.
+// Mapa-mundi: cada pais e um contorno clicavel, colorido pela relacao com o jogador ou pelo tratado em vigor.
+const MAP_REGION_LABELS = Object.freeze([['world', 'Mundo'], ['americas', 'Américas'], ['europe', 'Europa'], ['africa', 'África'], ['asia', 'Ásia'], ['oceania', 'Oceania']]);
+
+// Sem tratado: do vermelho escuro (relacao -100) ao verde escuro (+100), para ver de relance quem esta distante.
+function relationFill(relation) {
+  const value = Math.max(-100, Math.min(100, Number(relation) || 0));
+  const hue = 8 + ((value + 100) / 200) * 112;
+  return `hsl(${hue.toFixed(0)} 38% 30%)`;
+}
+
 export function diplomacyMap(state, mapUi = {}) {
   const filter = MAP_FILTERS.some(([id]) => id === mapUi.filter) ? mapUi.filter : 'all';
-  const contacts = (state.world ?? state.geopolitics.contacts).filter((contact) => !contact.destruido && contact.id !== state.country.id && COUNTRY_COORDS[contact.id]);
+  const region = MAP_REGIONS[mapUi.region] ? mapUi.region : 'world';
+  const contacts = (state.world ?? state.geopolitics.contacts).filter((contact) => !contact.destruido && contact.id !== state.country.id && (COUNTRY_PATHS[contact.id] || COUNTRY_POINTS[contact.id]));
   const richIds = new Set([...contacts].sort((a, b) => (Number(b.pib_base) || 0) - (Number(a.pib_base) || 0)).slice(0, 25).map((contact) => contact.id));
-  const radius = (contact) => Math.max(2.5, Math.min(8, 2.5 + ((Math.log10(Math.max(1, Number(contact.pib_base) || 1)) - 9) * 1.1)));
-  const lines = [-120, -60, 0, 60, 120].map((lon) => { const x = ((lon + 180) / 360) * 1000; return `<line x1="${x}" x2="${x}" y1="0" y2="500" class="map-grid"></line>`; }).join('')
-    + [60, 30, 0, -30].map((lat) => { const y = ((80 - lat) / 138) * 500; return `<line x1="0" x2="1000" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="map-grid"></line>`; }).join('');
-  const selfPoint = projectCoords(state.country.id);
-  const dots = contacts.map((contact) => {
-    const point = projectCoords(contact.id);
+  const shapes = contacts.map((contact) => {
     const status = mapStatus(contact);
     const matches = mapMatches(contact, filter, richIds);
     const selected = mapUi.selected === contact.id;
-    return `<circle cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="${(radius(contact) + (selected ? 2 : 0)).toFixed(1)}" class="map-dot map-dot--${status}${matches ? '' : ' is-dim'}${selected ? ' is-selected' : ''}" data-action="map-country" data-country="${contact.id}" role="button" tabindex="0" aria-label="${escapeHtml(contact.name)}"><title>${escapeHtml(contact.name)} · relação ${formatRelation(contact.relation)}</title></circle>`;
+    const classes = `map-shape map-shape--${status}${matches ? '' : ' is-dim'}${selected ? ' is-selected' : ''}`;
+    const fill = status === 'neutral' || status === 'hostile' ? ` style="fill:${relationFill(contact.relation)}"` : '';
+    const attrs = `class="${classes}"${fill} data-action="map-country" data-country="${contact.id}" role="button" tabindex="0" aria-label="${escapeHtml(contact.name)}"`;
+    const title = `<title>${escapeHtml(contact.name)} · relação ${formatRelation(contact.relation)}</title>`;
+    if (COUNTRY_PATHS[contact.id]) return `<path d="${COUNTRY_PATHS[contact.id]}" ${attrs}>${title}</path>`;
+    const [x, y] = COUNTRY_POINTS[contact.id];
+    return `<circle cx="${x}" cy="${y}" r="3.6" ${attrs}>${title}</circle>`;
   }).join('');
-  const self = selfPoint ? `<circle cx="${selfPoint.x.toFixed(1)}" cy="${selfPoint.y.toFixed(1)}" r="9" class="map-dot map-dot--self"><title>${escapeHtml(state.country.nome)} (você)</title></circle>` : '';
-  const chips = MAP_FILTERS.map(([id, label]) => `<button type="button" class="map-chip" data-action="map-filter" data-filter="${id}" aria-pressed="${id === filter}">${label}</button>`).join('');
+  const home = COUNTRY_PATHS[state.country.id]
+    ? `<path d="${COUNTRY_PATHS[state.country.id]}" class="map-shape map-shape--self"><title>${escapeHtml(state.country.nome)} (você)</title></path>`
+    : (COUNTRY_POINTS[state.country.id] ? `<circle cx="${COUNTRY_POINTS[state.country.id][0]}" cy="${COUNTRY_POINTS[state.country.id][1]}" r="5" class="map-shape map-shape--self"></circle>` : '');
+  const regionChips = MAP_REGION_LABELS.map(([id, label]) => `<button type="button" class="map-chip map-chip--region" data-action="map-region" data-region="${id}" aria-pressed="${id === region}">${label}</button>`).join('');
+  const filterChips = MAP_FILTERS.map(([id, label]) => `<button type="button" class="map-chip" data-action="map-filter" data-filter="${id}" aria-pressed="${id === filter}">${label}</button>`).join('');
   const picked = contacts.find((contact) => contact.id === mapUi.selected);
-  const card = picked ? mapCountryCard(picked) : '<p class="notice">Clique em um ponto do mapa para ver o país e agir. Verde: aliados · azul: comércio · laranja: hostis · vermelho: guerra · cinza: neutros.</p>';
-  return `<div class="diplomacy-map"><div class="map-filters">${chips}</div><svg class="bubble-map" viewBox="0 0 1000 500" role="group" aria-label="Mapa de relações internacionais"><rect width="1000" height="500" class="map-ocean"></rect>${lines}${dots}${self}</svg>${card}</div>`;
+  const card = picked ? mapCountryCard(picked) : '<p class="notice">Clique em um país para ver os dados e agir. Verde: aliado · azul: comércio · vermelho vivo: guerra · tons de vermelho a verde: relação (do pior ao melhor) · ciano: você.</p>';
+  const [vx, vy, vw, vh] = MAP_REGIONS[region];
+  return `<div class="diplomacy-map"><div class="map-filters">${regionChips}</div><div class="map-filters">${filterChips}</div><svg class="world-map-svg" viewBox="${vx} ${vy} ${vw} ${vh}" role="group" aria-label="Mapa-múndi de relações internacionais"><rect x="0" y="0" width="1000" height="500" class="map-ocean"></rect><path d="${LAND_BACKGROUND}" class="map-land"></path>${shapes}${home}</svg>${card}</div>`;
 }
 
 function mapCountryCard(contact) {
@@ -1477,7 +1492,7 @@ export function mountDashboard(root) {
   let activeTab = 'overview';
   let storageNotice = '';
   let diplomacyQuery = '';
-  let mapUi = { selected: null, filter: 'all' };
+  let mapUi = { selected: null, filter: 'all', region: 'world' };
   const treatyModal = document.getElementById('modal-tratado');
   const crisisModal = document.getElementById('modal-crise');
   const unModal = document.getElementById('modal-onu');
@@ -2930,6 +2945,7 @@ export function mountDashboard(root) {
     }
     if (action === 'tab') { activeTab = control.dataset.tab; render(); return; }
     if (action === 'map-country') { mapUi = { ...mapUi, selected: control.dataset.country }; render(); return; }
+    if (action === 'map-region') { mapUi = { ...mapUi, region: control.dataset.region }; render(); return; }
     if (action === 'map-filter') { mapUi = { ...mapUi, filter: control.dataset.filter }; render(); return; }
     if (action === 'congress-demand') { commit(answerCongressDemand(state, control.dataset.accept === 'yes')); return; }
     if (action === 'opposition-bill') { commit(answerOppositionBill(state, control.dataset.choice)); return; }
