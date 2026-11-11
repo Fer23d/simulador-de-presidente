@@ -2,6 +2,7 @@ import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countri
 import { getVoteForecast } from '../core/congress.js';
 import { BUDGET_LIMITS, NEUTRAL_INTEREST_RATE, getDebtStatus, projectBudget, summarizeInflation } from '../core/economy.js';
 import { UNREST_ACTIONS, getUnrestActionStatus } from '../core/unrest_actions.js';
+import { ACHIEVEMENTS, ACHIEVEMENTS_KEY, createAchievementStore, findNewAchievements, recordAchievements } from '../core/achievements.js';
 import { COUNTRY_PATHS, COUNTRY_POINTS, LAND_BACKGROUND, MAP_REGIONS } from '../data/world_map.js';
 import { evaluateGoals, normalizeYearGoals, normalizeYearReports } from '../core/year_report.js';
 import { OPPOSITION_BILLS, getBlocLoyalty, normalizeCongressLife } from '../core/congress_life.js';
@@ -333,7 +334,26 @@ export function soundControlView(settings) {
   return `<button type="button" class="sound-toggle" data-sound-toggle aria-pressed="${muted}" aria-label="${muted ? 'Ligar som' : 'Desligar som'}">${muted ? '🔇' : '🔊'}</button><input type="range" class="sound-volume" data-sound-volume min="0" max="100" value="${Math.round(volume * 100)}" aria-label="Volume">`;
 }
 
-export function profileView(state, { audio = {}, tutorialEnabled = true } = {}) {
+function achievementsPanel(state, store, trophies) {
+  const unlocked = createAchievementStore(store).unlocked;
+  const total = ACHIEVEMENTS.length;
+  const done = ACHIEVEMENTS.filter((item) => unlocked[item.id]).length;
+  const cards = ACHIEVEMENTS.map((item) => {
+    const info = unlocked[item.id];
+    return `<article class="achievement-card${info ? ' is-unlocked' : ''}"><span class="achievement-icon" aria-hidden="true">${info ? item.icon : '🔒'}</span><div><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description)}</p>${info ? `<small>Conquistada${info.year ? ` em ${info.year}` : ''}</small>` : ''}</div></article>`;
+  }).join('');
+  void state; void trophies;
+  return `<section class="panel achievements-panel"><div class="panel-heading"><div><p class="eyebrow">/// CONTA ///</p><h2>Conquistas</h2></div><span class="country-code">${done}/${total}</span></div><span class="encyclopedia-meter" role="meter" aria-label="Progresso das conquistas" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}"><span style="width:${Math.round((done / total) * 100)}%"></span></span><div class="achievement-grid">${cards}</div></section>`;
+}
+
+export function profileView(state, options = {}) {
+  const html = profileViewBase(state, options);
+  const panel = achievementsPanel(state, options.achievements, options.trophies);
+  const at = html.lastIndexOf('</section>');
+  return at < 0 ? html : html.slice(0, at) + panel + html.slice(at);
+}
+
+function profileViewBase(state, { audio = {}, tutorialEnabled = true } = {}) {
   const language = getUiLanguage(state);
   const settings = normalizeAudioSettings(audio);
   const profileName = state.playerProfile?.name ?? '';
@@ -471,6 +491,16 @@ function showCodexToast(stack, item) {
   toast.textContent = `📖 NOVA ENTRADA: ${item.icon} ${item.name}`;
   stack.append(toast);
   window.setTimeout(() => toast.remove(), 4_200);
+}
+
+function showAchievementToast(stack, item) {
+  if (!stack || !item || typeof document === 'undefined') return;
+  const toast = document.createElement('p');
+  toast.className = 'codex-toast codex-toast--rare achievement-toast';
+  toast.setAttribute('role', 'status');
+  toast.textContent = `🏆 CONQUISTA: ${item.icon} ${item.title}`;
+  stack.append(toast);
+  window.setTimeout(() => toast.remove(), 4_800);
 }
 
 function saveState(state) {
@@ -1892,6 +1922,7 @@ export function mountDashboard(root) {
     audio.setMood(getMusicMood(state));
     audio.setStorm(isStormWeather(state));
   }
+  let achievementStore = (() => { try { return createAchievementStore(JSON.parse(localStorage.getItem(ACHIEVEMENTS_KEY) ?? '{}')); } catch { return createAchievementStore(); } })();
   let trophies = (() => { try { return createTrophies(JSON.parse(localStorage.getItem(TROPHIES_KEY) ?? '{}')); } catch { return createTrophies(); } })();
   const codexToastStack = document.querySelector('.codex-toast-stack');
   let encyclopedia = loadEncyclopedia();
@@ -2193,7 +2224,7 @@ export function mountDashboard(root) {
       ['countries', uiText(language, 'nav.countries')],
       ['profile', uiText(language, 'nav.profile')],
     ];
-    const content = activeTab === 'history' ? storyModeView(state) : activeTab === 'profile' ? profileView(state, { audio: audio.settings, tutorialEnabled: tutorial.enabled }) : state.city ? cityView(state) : state.is_wasteland ? bunkerView(state)
+    const content = activeTab === 'history' ? storyModeView(state) : activeTab === 'profile' ? profileView(state, { audio: audio.settings, tutorialEnabled: tutorial.enabled, achievements: achievementStore, trophies }) : state.city ? cityView(state) : state.is_wasteland ? bunkerView(state)
       : activeTab === 'indicators' ? indicatorsView(state)
       : activeTab === 'budget' ? budgetView(state, projection)
       : activeTab === 'diplomacy' ? diplomacyView(state, diplomacyQuery, mapUi)
@@ -2501,6 +2532,16 @@ export function mountDashboard(root) {
     updateTutorial();
     announceLevels(previous, state);
     updateLevelTab();
+    checkAchievements();
+  }
+
+  // Conquistas da conta: avalia o estado depois de cada acao, guarda as novas e avisa com um aviso na tela.
+  function checkAchievements() {
+    const fresh = findNewAchievements(state, achievementStore, trophies);
+    if (!fresh.length) return;
+    achievementStore = recordAchievements(achievementStore, fresh, state);
+    try { localStorage.setItem(ACHIEVEMENTS_KEY, JSON.stringify(achievementStore)); } catch { /* sem armazenamento: conquista so nesta sessao */ }
+    for (const item of fresh) showAchievementToast(codexToastStack, item);
   }
 
   window.logHistoryEvent = (type, text) => commit(registrarEventoHistorico(state, type, text));
