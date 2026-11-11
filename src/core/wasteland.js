@@ -4,7 +4,7 @@ import { getBunkerEnergyConsumption, getBunkerFoodConsumption, getBunkerOxygenCo
   getRoomStorageCapacity } from './bunker_economy.js';
 import { createInitialInhabitants, createRpgPlayer } from './rpg_bunker.js';
 import { advanceMonthlyGameMechanics, getRoomProductivityMultiplier, getWastelandEvent, WASTELAND_EVENTS } from './game_mechanics.js';
-import { countActiveGenerators, createEnvironmentState, hasReliableNightPower } from './environment.js';
+import { createEnvironmentState, hasReliableNightPower } from './environment.js';
 import { advanceInhabitantNeeds, countDormitoryBeds } from './needs.js';
 import { getWeather } from './weather.js';
 import { createMissionLocation } from './missions.js';

@@ -37,15 +37,3 @@ export const COUNTRY_COORDS = Object.freeze({
   twn: [23.7, 121.0], esh: [24.2, -12.9],
 });
 
-// Projecao equirretangular simples dentro de um quadro de 1000 x 500 (corta latitudes extremas).
-export function projectCoords(id, width = 1000, height = 500) {
-  const point = COUNTRY_COORDS[id];
-  if (!point) return null;
-  const [lat, lon] = point;
-  const top = 80;
-  const bottom = -58;
-  return {
-    x: ((lon + 180) / 360) * width,
-    y: ((top - Math.max(bottom, Math.min(top, lat))) / (top - bottom)) * height,
-  };
-}

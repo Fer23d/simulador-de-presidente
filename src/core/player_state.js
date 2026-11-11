@@ -207,6 +207,3 @@ export function equipSkin(state, skinId, { entitled = [] } = {}) {
     notice: `${skin.name} equipada.` };
 }
 
-export function getPresidentSpriteKey(classId) {
-  return getPresidentClass(classId)?.spriteSheet ?? 'character_sheet';
-}
