@@ -1,11 +1,28 @@
 import { isMissionPending } from './missions.js';
 import { getVaultDay } from './vault_time.js';
+import { isCampaign } from './elections.js';
+import { normalizeCongressLife } from './congress_life.js';
 
 // Tutorial guiado da primeira partida e dicas de contexto que aparecem uma unica vez.
 // Passos "ack" esperam o jogador clicar em ENTENDI; os demais concluem sozinhos ao detectar a acao no estado.
 export const TUTORIAL_STEPS = Object.freeze([
   Object.freeze({ id: 'presidency', phase: 'presidency', ack: true, title: 'O GABINETE',
     text: 'Você governa o país mês a mês. Ajuste o orçamento, negocie com os blocos e use [ Avançar mês ] para o tempo correr. Cada decisão aproxima ou afasta a guerra — e o Vault espera lá embaixo.' }),
+  Object.freeze({ id: 'pres_budget', phase: 'presidency', ack: true, tab: 'budget', title: 'O ORÇAMENTO',
+    text: 'Impostos entram e despesas saem. Se você gasta mais do que arrecada, o caixa fica negativo e vira dívida pública: o rating cai e os juros da dívida pesam todo mês. O resultado do mês aparece em "Resultado fiscal".' }),
+  Object.freeze({ id: 'pres_interest', phase: 'presidency', ack: true, tab: 'budget', title: 'JUROS E INFLAÇÃO',
+    text: 'No painel Banco Central (mais abaixo no Orçamento) você controla a taxa de juros. Juros altos seguram a inflação, mas encarecem a dívida e esfriam o crescimento. Olhe o gráfico: inflação acima de 8% ao mês começa a irritar os trabalhadores.' }),
+  Object.freeze({ id: 'pres_advance', phase: 'presidency', tab: 'overview', title: 'O TEMPO PASSA',
+    text: 'Na Visão geral, clique em [ AVANÇAR MÊS ]. Cada mês a economia se move, eventos acontecem e, de vez em quando, um briefing pede uma decisão sua.',
+    done: (state) => (Number(state.monthCounter) || 0) >= 1 }),
+  Object.freeze({ id: 'pres_overview', phase: 'presidency', ack: true, tab: 'overview', title: 'RUAS, URNAS E METAS',
+    text: 'A Visão geral mostra três coisas: a tensão social (se subir, use subsídio, diálogo ou repressão antes que os quartéis ajam), as eleições (a cada 4 anos, com campanha nos últimos 3 meses) e o relatório anual, com as metas do ano e a nota do gabinete.' }),
+  Object.freeze({ id: 'pres_indicators', phase: 'presidency', ack: true, tab: 'indicators', title: 'INDICADORES E SETORES',
+    text: 'Acompanhe PIB, desemprego, caixa e apoio interno nos gráficos. Mais abaixo, os quatro setores da economia: infraestrutura puxa indústria e energia, educação e ciência puxam serviços.' }),
+  Object.freeze({ id: 'pres_congress', phase: 'presidency', ack: true, tab: 'congress', title: 'O CONGRESSO',
+    text: 'Leis precisam de maioria. Cada bancada tem uma lealdade que sobe e desce com o seu governo, cobra favores e a oposição propõe projetos que você sanciona ou veta. Negocie antes de votar.' }),
+  Object.freeze({ id: 'pres_map', phase: 'presidency', ack: true, tab: 'diplomacy', title: 'O MUNDO',
+    text: 'No mapa, cada país tem uma cor: verde é aliado, azul é comércio, vermelho vivo é guerra, e os demais vão do vermelho ao verde pela relação. Clique em um país para negociar, sabotar ou declarar guerra. Cuidado: país hostil pode atacar.' }),
   Object.freeze({ id: 'controls', phase: 'vault', ack: true, title: 'O ÚLTIMO GABINETE',
     text: 'A e D movem você pelo andar. W e S chamam o elevador. Aperte E perto de uma sala para gerenciá-la.' }),
   Object.freeze({ id: 'dormitory', phase: 'vault', title: 'ABRIGUE OS SOBREVIVENTES',
@@ -24,7 +41,36 @@ export const TUTORIAL_STEPS = Object.freeze([
     text: 'Depois de 36 meses e do nível 25 a Porta do Vault fica pronta, mas só você decide quando sair: use o tempo para montar e melhorar o bunker. Alertas de missão mostram andar e setor: vá até lá para ver o que aconteceu.' }),
 ]);
 
+// Dicas de contexto do modo Presidente: aparecem uma vez, quando a situacao pede.
+const PRESIDENCY_TIPS = Object.freeze([
+  Object.freeze({ id: 'p_briefing', phase: 'presidency', tab: 'overview', title: 'BRIEFING PRESIDENCIAL',
+    text: 'O gabinete trouxe uma decisão. Cada opção mexe em caixa, inflação e no apoio das facções. Leia o custo antes de escolher.',
+    when: (state) => Boolean(state.pendingBriefing) }),
+  Object.freeze({ id: 'p_inflation', phase: 'presidency', tab: 'budget', title: 'INFLAÇÃO ALTA',
+    text: 'A inflação passou de 8% ao mês. Suba a taxa de juros no Banco Central e segure o déficit: os trabalhadores já estão perdendo poder de compra.',
+    when: (state) => (Number(state.economy?.inflation) || 0) >= 0.08 }),
+  Object.freeze({ id: 'p_debt', phase: 'presidency', tab: 'budget', title: 'O CAIXA FICOU NEGATIVO',
+    text: 'Caixa negativo é dívida pública. Quanto maior ela pesa no PIB, pior o rating e maiores os juros. Corte despesas ou suba impostos antes que a conta vire bola de neve.',
+    when: (state) => (Number(state.economy?.cash) || 0) < 0 }),
+  Object.freeze({ id: 'p_unrest', phase: 'presidency', tab: 'overview', title: 'TENSÃO NAS RUAS',
+    text: 'A tensão social passou de 30: há protestos. Na Visão geral você pode dar subsídio, abrir diálogo com sindicatos ou reprimir (rápido, mas deixa ressaca e abala sua imagem). Acima de 80 os quartéis podem agir.',
+    when: (state) => (Number(state.regime?.unrest) || 0) >= 30 }),
+  Object.freeze({ id: 'p_congress', phase: 'presidency', tab: 'congress', title: 'O CONGRESSO PEDE ALGO',
+    text: 'Uma bancada cobra um favor ou a oposição apresentou um projeto. Responda na aba Congresso: ignorar também é uma resposta, e ela custa lealdade.',
+    when: (state) => { const life = normalizeCongressLife(state.congressLife); return Boolean(life.demand || life.bill); } }),
+  Object.freeze({ id: 'p_election', phase: 'presidency', tab: 'overview', title: 'A CAMPANHA COMEÇOU',
+    text: 'Faltam três meses para a eleição. Veja a pesquisa na Visão geral e use propaganda ou promessas populistas: com 50% ou mais dos votos você é reeleito, senão o mandato acaba.',
+    when: (state) => isCampaign(state) }),
+  Object.freeze({ id: 'p_report', phase: 'presidency', tab: 'overview', title: 'O PRIMEIRO RELATÓRIO',
+    text: 'O gabinete fechou o ano: veja a nota, as metas cumpridas e a recomendação na Visão geral. Metas cumpridas melhoram o apoio de trabalhadores e elite; falhar piora.',
+    when: (state) => (state.yearReports ?? []).length >= 1 }),
+  Object.freeze({ id: 'p_hostile', phase: 'presidency', tab: 'diplomacy', title: 'ALERTA MILITAR',
+    text: 'Um país declarou guerra. Reconheça o alerta e escolha como responder na Diplomacia: defender, negociar a paz ou contra-atacar. Gastar com defesa ajuda.',
+    when: (state) => Boolean(state.pendingHostileAlert) }),
+]);
+
 export const TUTORIAL_TIPS = Object.freeze([
+  ...PRESIDENCY_TIPS,
   Object.freeze({ id: 'mission', title: 'ALERTA NO VAULT',
     text: 'Um problema surgiu em outro andar. Leia o alerta, vá até o andar e o setor indicados e descubra o que houve. Resolver rende sucata.',
     when: (state) => isMissionPending(state.pendingBunkerEvent) }),
@@ -76,8 +122,9 @@ export function getTutorialPhase(state) {
 // Conclui sozinhos os passos cuja acao ja aparece no estado (inclusive de saves antigos).
 export function syncTutorial(tutorial, state) {
   const current = createTutorial(tutorial);
-  if (getTutorialPhase(state) !== 'vault') return current;
-  const done = TUTORIAL_STEPS.filter((step) => step.done && !current.done.includes(step.id) && step.done(state)).map((step) => step.id);
+  const phase = getTutorialPhase(state);
+  if (!phase) return current;
+  const done = TUTORIAL_STEPS.filter((step) => step.phase === phase && step.done && !current.done.includes(step.id) && step.done(state)).map((step) => step.id);
   return done.length ? { ...current, done: [...current.done, ...done] } : current;
 }
 
@@ -99,8 +146,9 @@ export function completeTutorialStep(tutorial, id) {
 // Dicas so aparecem no Vault, uma vez cada, e nunca por cima de um passo do tutorial.
 export function getContextTip(tutorial, state) {
   const current = createTutorial(tutorial);
-  if (!current.enabled || getTutorialPhase(state) !== 'vault' || getTutorialStep(current, state)) return null;
-  return TUTORIAL_TIPS.find((tip) => !current.tips.includes(tip.id) && tip.when(state)) ?? null;
+  const phase = getTutorialPhase(state);
+  if (!current.enabled || !phase || getTutorialStep(current, state)) return null;
+  return TUTORIAL_TIPS.find((tip) => (tip.phase ?? 'vault') === phase && !current.tips.includes(tip.id) && tip.when(state)) ?? null;
 }
 
 export function markTipSeen(tutorial, id) {

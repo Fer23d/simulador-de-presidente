@@ -321,10 +321,10 @@ export function titleScreenView({ view = 'main', hasSave = false, audio = {}, tu
 
 export function tutorialCoachView(step, tip = null) {
   if (step) {
-    return `<p class="tutorial-kicker">TUTORIAL${step.total > 1 ? ` ${step.number}/${step.total}` : ''}</p><h3>${escapeHtml(step.title)}</h3><p>${escapeHtml(step.text)}</p><div class="tutorial-actions">${step.ack ? `<button type="button" class="primary-action" data-tutorial-ack="${step.id}">[ ENTENDI ]</button>` : '<span class="tutorial-waiting">AGUARDANDO SUA AÇÃO…</span>'}<button type="button" class="tutorial-skip" data-tutorial-skip>Pular tutorial</button></div>`;
+    return `<p class="tutorial-kicker">TUTORIAL${step.total > 1 ? ` ${step.number}/${step.total}` : ''}</p><h3>${escapeHtml(step.title)}</h3><p>${escapeHtml(step.text)}</p><div class="tutorial-actions">${step.tab ? `<button type="button" class="quiet-action" data-tutorial-tab="${step.tab}">[ IR PARA A ABA ]</button>` : ''}${step.ack ? `<button type="button" class="primary-action" data-tutorial-ack="${step.id}">[ ENTENDI ]</button>` : '<span class="tutorial-waiting">AGUARDANDO SUA AÇÃO…</span>'}<button type="button" class="tutorial-skip" data-tutorial-skip>Pular tutorial</button></div>`;
   }
   if (tip) {
-    return `<p class="tutorial-kicker">DICA</p><h3>${escapeHtml(tip.title)}</h3><p>${escapeHtml(tip.text)}</p><div class="tutorial-actions"><button type="button" class="primary-action" data-tutorial-tip="${tip.id}">[ OK ]</button><button type="button" class="tutorial-skip" data-tutorial-skip>Desligar dicas</button></div>`;
+    return `<p class="tutorial-kicker">DICA</p><h3>${escapeHtml(tip.title)}</h3><p>${escapeHtml(tip.text)}</p><div class="tutorial-actions">${tip.tab ? `<button type="button" class="quiet-action" data-tutorial-tab="${tip.tab}">[ IR PARA A ABA ]</button>` : ''}<button type="button" class="primary-action" data-tutorial-tip="${tip.id}">[ OK ]</button><button type="button" class="tutorial-skip" data-tutorial-skip>Desligar dicas</button></div>`;
   }
   return '';
 }
@@ -1623,6 +1623,8 @@ export function mountDashboard(root) {
   }
 
   tutorialCoach.addEventListener('click', (event) => {
+    const goto = event.target.closest('[data-tutorial-tab]');
+    if (goto) { activeTab = goto.dataset.tutorialTab; render(); return; }
     const ack = event.target.closest('[data-tutorial-ack]');
     const tip = event.target.closest('[data-tutorial-tip]');
     if (ack) tutorial = completeTutorialStep(tutorial, ack.dataset.tutorialAck);
