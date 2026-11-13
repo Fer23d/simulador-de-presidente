@@ -1035,3 +1035,8 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .nuclear-plan-panel { margin-bottom: 14px; }
 .nuclear-track { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
 .nuclear-track small { color: var(--muted); }
+
+/* Cupulas e inspecoes (aba Diplomacia) */
+.diplomacy-life-panel { margin-bottom: 14px; }
+.summit-option { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.summit-option small { color: var(--muted); }

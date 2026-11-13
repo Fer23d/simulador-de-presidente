@@ -13,6 +13,7 @@ import { createMinisters, dismissMinister as dismissCabinetMinister, getMinister
 import { applyUnrestAction as applyUnrestActionState, repressionHangover } from './unrest_actions.js';
 import { createSectors, normalizeSectors } from './sectors.js';
 import { createYearGoals, normalizeYearGoals, normalizeYearReports, processYearEnd } from './year_report.js';
+import { createDiplomacyLife, normalizeDiplomacyLife, processDiplomacyLife, respondToInspection, respondToSummit } from './diplomacy_life.js';
 import { createCongressLife, normalizeCongressLife, processCongressLife, respondToBill, respondToDemand } from './congress_life.js';
 import { alignElection, applyCampaignAction, createElection, normalizeElection, processElection } from './elections.js';
 import { normalizeIndicatorHistory, recordIndicators, snapshotIndicators } from './indicators.js';
@@ -333,6 +334,7 @@ function createGameStateBase(countryId = 'bra', playerProfile = {}) {
     presidentialMandate: createPresidentialMandate(),
     election: createElection(),
     congressLife: createCongressLife(),
+    diplomacyLife: createDiplomacyLife(),
     indicatorHistory: normalizeIndicatorHistory(null, snapshotIndicators(economy0, getFactionSupport(createFactions()))),
     pendingBriefing: null,
     pendingEvent: null,
@@ -549,6 +551,16 @@ export function insultarNacao(state, contactId) {
 export function answerCongressDemand(state, accept) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   return respondToDemand(state, accept === true);
+}
+
+export function answerInspection(state, accept) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return respondToInspection(state, accept === true);
+}
+
+export function answerSummit(state, optionId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return respondToSummit(state, optionId);
 }
 
 export function answerOppositionBill(state, action) {
@@ -1094,7 +1106,7 @@ export function advanceMonth(state) {
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? internalProjectState.notice ?? `mês encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superávit' : 'com déficit'}.`;
 
-  const completedState = processYearEnd(processElection(processCongressLife(syncWorld({
+  const completedState = processYearEnd(processElection(processDiplomacyLife(processCongressLife(syncWorld({
     ...state,
     economy: constitutionalState.economy,
     geopolitics: geopoliticalMonth.geopolitics,
@@ -1121,7 +1133,7 @@ export function advanceMonth(state) {
     activeLawIds: corporateState.activeLawIds,
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
-  }))));
+  })))));
   const corporateDefault = resolveCorporateDefault(completedState);
   if (corporateDefault.regime?.gameOver) return resolverFinalDeJogo(corporateDefault);
   const article5State = detectArticle5(completedState);
@@ -1333,6 +1345,7 @@ export function hydrateGameState(serialized) {
       yearGoals: normalizeYearGoals(parsed.yearGoals, { economy: parsed.economy ?? base.economy, factions: parsed.factions ?? base.factions, calendar: parsed.calendar ?? base.calendar, regime: parsed.regime ?? base.regime, laws: parsed.laws ?? {}, geopolitics: parsed.geopolitics ?? base.geopolitics, monthCounter: parsed.monthCounter }),
       yearReports: normalizeYearReports(parsed.yearReports),
       congressLife: normalizeCongressLife(parsed.congressLife),
+      diplomacyLife: normalizeDiplomacyLife(parsed.diplomacyLife),
       election: alignElection(normalizeElection(parsed.election), parsed.monthCounter),
       indicatorHistory: normalizeIndicatorHistory(parsed.indicatorHistory, snapshotIndicators(parsed.economy ?? base.economy, getFactionSupport(parsed.factions ?? base.factions))),
       pendingBriefing: getPresidentialBriefing(parsed.pendingBriefing?.id),
