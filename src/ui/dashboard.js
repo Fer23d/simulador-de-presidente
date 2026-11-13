@@ -889,7 +889,7 @@ function relationFill(relation) {
 export function diplomacyMap(state, mapUi = {}) {
   const filter = MAP_FILTERS.some(([id]) => id === mapUi.filter) ? mapUi.filter : 'all';
   const region = MAP_REGIONS[mapUi.region] ? mapUi.region : 'world';
-  const contacts = (state.world ?? state.geopolitics.contacts).filter((contact) => !contact.destruido && contact.id !== state.country.id && (COUNTRY_PATHS[contact.id] || COUNTRY_POINTS[contact.id]));
+  const contacts = (state.world ?? state.geopolitics.contacts).filter((contact) => (!contact.destruido || contact.anexado || contact.annexed) && contact.id !== state.country.id && (COUNTRY_PATHS[contact.id] || COUNTRY_POINTS[contact.id]));
   const richIds = new Set([...contacts].sort((a, b) => (Number(b.pib_base) || 0) - (Number(a.pib_base) || 0)).slice(0, 25).map((contact) => contact.id));
   const shapes = contacts.map((contact) => {
     const status = mapStatus(contact);
