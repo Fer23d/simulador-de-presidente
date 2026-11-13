@@ -2,6 +2,7 @@
 // Os dois sistemas deixam um pedido pendente (com prazo) que o jogador responde na aba Diplomacia;
 // se o prazo passa, vale a resposta mais fria (recusar a inspecao, faltar a cupula).
 import { adjustFactions } from './factions.js';
+import { easeTradeWar } from './trade_war.js';
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
 
@@ -231,12 +232,19 @@ export function respondToSummit(state, optionId, expired = false) {
       : (summit.id === 'security' && optionId === 'disarm' ? adjustFactions(next.factions, { militares: -3 }) : (summit.id === 'security' ? adjustFactions(next.factions, { militares: 3 }) : next.factions)),
   };
   if (summit.id === 'g20' && optionId === 'protect') next = { ...next, geopolitics: shiftRelations(next.geopolitics, -2) };
-  return {
+  const result = {
     ...next,
     notice: good
       ? `${summit.title}: "${option.label}" foi bem recebida. O acordo vale por ${SUMMIT_BONUS_MONTHS} meses.`
       : `${summit.title}: "${option.label}" teve resultado morno. O acordo rende metade do esperado.`,
   };
+  // Uma cúpula bem-sucedida de comércio ajuda a derrubar tarifas de uma guerra comercial em curso.
+  const tradeFriendly = (summit.id === 'g20' && (optionId === 'open' || optionId === 'cooperate')) || (summit.id === 'regional' && (optionId === 'lead' || optionId === 'join'));
+  if (good && tradeFriendly && result.tradeWar?.active) {
+    const eased = easeTradeWar(result, 10, summit.title);
+    return { ...eased, notice: `${result.notice} ${eased.notice}` };
+  }
+  return result;
 }
 
 // Efeito mensal do ultimo acordo fechado numa cupula.

@@ -1044,3 +1044,7 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 /* Paises anexados: marcados como territorio do jogador */
 .map-shape--mine { fill: var(--cyan); opacity: .8; stroke: #fff; stroke-width: 1; }
 .map-shape--mine.is-dim { opacity: .3; }
+
+/* Guerra comercial */
+.trade-war-panel { margin-bottom: 14px; }
+.map-shape--tariff { fill: #e08a2f; }
