@@ -75,21 +75,25 @@ test('a defensive victory opens the peace treaty without an ONU annexation penal
   assert.deepEqual(result.geopolitics.peaceTreaty, { targetId: 'arg', status: 'pending', defensiveVictory: true });
 });
 
-test('DEFCON 1 nuclear aggression transitions a vault nation into Wasteland', () => {
+test('DEFCON 1 com uma potencia nuclear em guerra leva uma nacao com Vault ao Ermo', () => {
   const state = createGameState('bra');
-  const prepared = {
-    ...state,
-    vault_built: true,
-    global_defcon: 1,
-    geopolitics: {
-      ...state.geopolitics,
-      contacts: state.geopolitics.contacts.map((contact) => contact.id === 'rus'
-        ? { ...contact, relation: -80, nuclearWeapons: 1 }
-        : contact),
-    },
-  };
-  const result = advanceMonth(prepared);
-
-  assert.equal(result.is_wasteland, true);
-  assert.equal(result.pendingHostileAlert.type, 'nuclear');
+  const alerts = [];
+  for (let seed = 1; seed <= 40; seed += 1) {
+    const prepared = {
+      ...state,
+      randomSeed: seed,
+      vault_built: true,
+      global_defcon: 1,
+      geopolitics: {
+        ...state.geopolitics,
+        contacts: state.geopolitics.contacts.map((contact) => contact.id === 'rus'
+          ? { ...contact, relation: -80, atWar: true, atWarAgainst: 'bra', has_nukes: true, nuclearWeapons: 1 }
+          : contact),
+      },
+    };
+    const result = advanceMonth(prepared);
+    assert.equal(result.is_wasteland, true);
+    if (result.pendingHostileAlert) alerts.push(result.pendingHostileAlert.type);
+  }
+  assert.ok(alerts.every((type) => type === 'nuclear'));
 });

@@ -22,8 +22,9 @@ export function markAnnexationTension(state) {
   };
 }
 
-// Potencia nuclear hostil: tem bomba, nao e aliada nem fantoche do jogador e esta em guerra ou com relacao ruim.
-// Sem uma assim, a tensao pode chegar a DEFCON 2, mas ninguem aperta o botao.
+// Potencia nuclear hostil: tem bomba, nao e aliada nem fantoche do jogador e ESTA EM GUERRA com ele.
+// Sem uma assim, a tensao pode chegar a DEFCON 2, mas ninguem aperta o botao: paises que nao foram atacados nem atacaram
+// nao iniciam guerra nuclear.
 export function hasHostileNuclearPower(state) {
   const allies = new Set(state.player_alliance ?? []);
   return (state.geopolitics?.contacts ?? []).some((contact) => (
@@ -31,7 +32,7 @@ export function hasHostileNuclearPower(state) {
     && !contact.destruido && !contact.anexado && !contact.wasteland
     && !contact.alliance && !allies.has(contact.id)
     && !(contact.puppet && contact.is_puppet_of === 'jogador')
-    && (contact.atWar || (Number(contact.relation) || 0) < 20)
+    && contact.atWar === true
   ));
 }
 

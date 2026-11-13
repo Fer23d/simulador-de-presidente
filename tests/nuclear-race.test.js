@@ -27,7 +27,7 @@ test('BUG: com todas as potencias nucleares amigas o DEFCON nao chega a 1 mesmo 
 test('BUG: uma potencia nuclear hostil continua levando ao DEFCON 1; aliada ou fantoche nao conta', () => {
   const hostileNuke = createGameState('bra').geopolitics.contacts.find((c) => c.has_nukes).id;
   let hostile = mapContacts({ ...base(), defconAnnexationMonths: 24 }, (c) => (c.has_nukes ? { ...c, relation: 60 } : c));
-  hostile = patchContact(hostile, hostileNuke, { relation: -10 });
+  hostile = patchContact(hostile, hostileNuke, { atWar: true });
   assert.equal(hasHostileNuclearPower(hostile), true);
   for (let i = 0; i < 20; i += 1) hostile = advanceDefcon(hostile);
   assert.equal(hostile.global_defcon, 1);
@@ -40,12 +40,25 @@ test('BUG: uma potencia nuclear hostil continua levando ao DEFCON 1; aliada ou f
 test('BUG: no DEFCON 1 so ataca com bomba quem nao e aliado nem fantoche', () => {
   const nuke = createGameState('bra').geopolitics.contacts.find((c) => c.has_nukes).id;
   const calmWorld = mapContacts({ ...base(), global_defcon: 1 }, (c) => (c.has_nukes ? { ...c, relation: 60 } : c));
-  const dangerous = { ...patchContact(calmWorld, nuke, { relation: -50 }), pendingHostileAlert: null };
-  assert.equal(processarAgressaoIA(dangerous, 0).pendingHostileAlert?.type, 'nuclear');
+  const dangerous = { ...patchContact(calmWorld, nuke, { relation: -50, atWar: true, atWarAgainst: 'bra' }), pendingHostileAlert: null };
+  const alerts = (state) => Array.from({ length: 80 }, (_, index) => processarAgressaoIA({ ...state, randomSeed: index + 1 }, 0).pendingHostileAlert?.type).filter(Boolean);
+  const strikes = alerts(dangerous);
+  assert.ok(strikes.length > 0 && strikes.length < 80, 'em guerra, o ataque vem com chance mensal');
+  assert.ok(strikes.every((type) => type === 'nuclear'));
+  assert.deepEqual(alerts({ ...dangerous, geopolitics: { ...dangerous.geopolitics, contacts: dangerous.geopolitics.contacts.map((c) => (c.id === nuke ? { ...c, atWar: false } : c)) } }), [], 'sem guerra nao ha ataque nuclear, mesmo com relacao pessima');
   const allied = patchContact(dangerous, nuke, { alliance: true });
-  assert.equal(processarAgressaoIA(allied, 0).pendingHostileAlert, null);
+  assert.deepEqual(alerts(allied), []);
   const puppet = patchContact(dangerous, nuke, { puppet: true, is_puppet_of: 'jogador' });
-  assert.equal(processarAgressaoIA(puppet, 0).pendingHostileAlert, null);
+  assert.deepEqual(alerts(puppet), []);
+});
+
+test('BUG: paises aleatorios sem guerra nunca iniciam guerra nuclear, mesmo com relacao pessima e DEFCON 1', () => {
+  const state = mapContacts({ ...base(), global_defcon: 1 }, (c) => (c.has_nukes ? { ...c, relation: -90, atWar: false } : c));
+  assert.equal(hasHostileNuclearPower(state), false);
+  for (let seed = 1; seed <= 120; seed += 1) {
+    const result = processarAgressaoIA({ ...state, randomSeed: seed, pendingHostileAlert: null }, 0);
+    assert.notEqual(result.pendingHostileAlert?.type, 'nuclear');
+  }
 });
 
 test('estado novo e saves antigos ganham nuclearRace; saves normalizam dados sujos', () => {

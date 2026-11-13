@@ -48,7 +48,7 @@ test('a escalada do DEFCON e gradual: primeira queda imediata e as seguintes a c
     ...state,
     global_defcon: 5,
     defconAnnexationMonths: 40,
-    geopolitics: { ...state.geopolitics, contacts: state.geopolitics.contacts.map((contact) => ({ ...contact, relation: contact.has_nukes ? -50 : contact.relation })) },
+    geopolitics: { ...state.geopolitics, contacts: state.geopolitics.contacts.map((contact) => ({ ...contact, atWar: contact.has_nukes ? true : contact.atWar })) },
   };
   const levels = [];
   for (let month = 0; month < 14; month += 1) {

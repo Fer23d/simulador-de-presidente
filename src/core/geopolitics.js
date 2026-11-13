@@ -189,29 +189,31 @@ export function insultarNacao(geopolitics, contactId, seed) {
   };
 }
 
+// Chance mensal de um pais nuclear JA em guerra com o jogador lancar o ataque quando o mundo esta em DEFCON 1.
+export const NUCLEAR_STRIKE_CHANCE = 0.3;
+
 export function processarAgressaoIA(state, probability = 0.03) {
   let random = nextRandom(state.randomSeed);
   let nuclearAttack = null;
   let firstAttack = null;
   const contacts = state.geopolitics.contacts.map((contact) => {
-    if (contact.destruido || contact.anexado || contact.wasteland || contact.atWar) return contact;
+    if (contact.destruido || contact.anexado || contact.wasteland) return contact;
+    const friendly = contact.alliance || (state.player_alliance ?? []).includes(contact.id) || (contact.puppet && contact.is_puppet_of === 'jogador');
+    if (contact.atWar) {
+      // Ataque nuclear so vem de quem ja esta em guerra com voce: paises sem conflito nunca apertam o botao.
+      if (state.global_defcon === 1 && contact.has_nukes === true && !friendly && !nuclearAttack) {
+        random = nextRandom(random.seed);
+        if (random.value < NUCLEAR_STRIKE_CHANCE) {
+          nuclearAttack = contact;
+          return { ...contact, nuclearStrikeIncoming: true, relation: -100 };
+        }
+      }
+      return contact;
+    }
     const hatesPlayer = (Number(contact.relation) || 0) < 20;
     if (!hatesPlayer) {
       random = nextRandom(random.seed);
       return contact;
-    }
-    const friendly = contact.alliance || (state.player_alliance ?? []).includes(contact.id) || (contact.puppet && contact.is_puppet_of === 'jogador');
-    if (state.global_defcon === 1 && contact.has_nukes === true && !friendly && (Number(contact.relation) || 0) < 0) {
-      nuclearAttack = contact;
-      return {
-        ...contact,
-        atWar: true,
-        atWarAgainst: state.country.id,
-        warInitiator: contact.id,
-        defensiveWar: true,
-        nuclearStrikeIncoming: true,
-        relation: -100,
-      };
     }
     const attacks = !firstAttack && random.value < probability;
     random = nextRandom(random.seed);
