@@ -200,7 +200,8 @@ export function processarAgressaoIA(state, probability = 0.03) {
       random = nextRandom(random.seed);
       return contact;
     }
-    if (state.global_defcon === 1 && contact.has_nukes === true && (Number(contact.relation) || 0) < 0) {
+    const friendly = contact.alliance || (state.player_alliance ?? []).includes(contact.id) || (contact.puppet && contact.is_puppet_of === 'jogador');
+    if (state.global_defcon === 1 && contact.has_nukes === true && !friendly && (Number(contact.relation) || 0) < 0) {
       nuclearAttack = contact;
       return {
         ...contact,

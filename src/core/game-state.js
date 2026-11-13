@@ -13,6 +13,7 @@ import { createMinisters, dismissMinister as dismissCabinetMinister, getMinister
 import { applyUnrestAction as applyUnrestActionState, repressionHangover } from './unrest_actions.js';
 import { createSectors, normalizeSectors } from './sectors.js';
 import { createYearGoals, normalizeYearGoals, normalizeYearReports, processYearEnd } from './year_report.js';
+import { createNuclearRace, normalizeNuclearRace, processNuclearRace, proposeNonProliferation, sabotageProgram, setbackProgram } from './nuclear_race.js';
 import { beginOffensive, createOffensives, getAttackStatus, normalizeOffensives, processOffensives, requestReinforcements, stopOffensive } from './offensives.js';
 import { createDeployments, normalizeDeployments, processDeployments, recallTroops, requestAlliedTroops, sendTroops } from './deployments.js';
 import { applyTradeWarAction, createTradeWar, normalizeTradeWar, processTradeWar } from './trade_war.js';
@@ -341,6 +342,7 @@ function createGameStateBase(countryId = 'bra', playerProfile = {}) {
     tradeWar: createTradeWar(),
     ...createDeployments(),
     ...createOffensives(),
+    nuclearRace: createNuclearRace(),
     indicatorHistory: normalizeIndicatorHistory(null, snapshotIndicators(economy0, getFactionSupport(createFactions()))),
     pendingBriefing: null,
     pendingEvent: null,
@@ -559,6 +561,16 @@ export function answerCongressDemand(state, accept) {
   return respondToDemand(state, accept === true);
 }
 
+export function proporNaoProliferacao(state, contactId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(proposeNonProliferation(state, contactId));
+}
+
+export function sabotarProgramaNuclear(state, contactId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(sabotageProgram(state, contactId));
+}
+
 export function atacarDaBase(state, baseId, targetId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const status = getAttackStatus(state, baseId, targetId);
@@ -642,7 +654,8 @@ export function sabotar(state, contactId) {
 export function lancarCiberataque(state, contactId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = launchCyberAttack(state, contactId);
-  return result.geopolitics === state.geopolitics ? result : addNews(syncWorld(result), result.notice);
+  if (result.geopolitics === state.geopolitics) return result;
+  return addNews(syncWorld(setbackProgram(result, contactId, 15, 'Ciberataque')), result.notice);
 }
 
 export function lancarVirusSintetico(state, contactId) {
@@ -1155,7 +1168,7 @@ export function advanceMonth(state) {
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? internalProjectState.notice ?? `mês encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superávit' : 'com déficit'}.`;
 
-  const completedState = processYearEnd(processElection(processOffensives(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
+  const completedState = processYearEnd(processElection(processNuclearRace(processOffensives(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
     ...state,
     economy: constitutionalState.economy,
     geopolitics: geopoliticalMonth.geopolitics,
@@ -1182,7 +1195,7 @@ export function advanceMonth(state) {
     activeLawIds: corporateState.activeLawIds,
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
-  }))))))));
+  })))))))));
   const corporateDefault = resolveCorporateDefault(completedState);
   if (corporateDefault.regime?.gameOver) return resolverFinalDeJogo(corporateDefault);
   const article5State = detectArticle5(completedState);
@@ -1350,7 +1363,8 @@ export function hydrateGameState(serialized) {
         contacts: parsed.is_wasteland ? hydrateWastelandContacts(parsed.geopolitics.contacts) : base.geopolitics.contacts.map((baseContact) => ({
           ...baseContact,
           ...(parsed.geopolitics.contacts.find((savedContact) => savedContact?.id === baseContact.id) ?? {}),
-          has_nukes: baseContact.has_nukes,
+          // Paises que fizeram a propria bomba na corrida nuclear continuam nucleares ao carregar.
+          has_nukes: baseContact.has_nukes === true || (Array.isArray(parsed.nuclearRace?.completed) && parsed.nuclearRace.completed.includes(baseContact.id)),
         })),
       } : base.geopolitics,
       military: parsed.version >= 2 && parsed.military && Number.isFinite(parsed.military.power) && Number.isFinite(parsed.military.support)
@@ -1398,6 +1412,7 @@ export function hydrateGameState(serialized) {
       tradeWar: normalizeTradeWar(parsed.tradeWar),
       ...normalizeDeployments(parsed),
       ...normalizeOffensives(parsed),
+      nuclearRace: normalizeNuclearRace(parsed.nuclearRace),
       election: alignElection(normalizeElection(parsed.election), parsed.monthCounter),
       indicatorHistory: normalizeIndicatorHistory(parsed.indicatorHistory, snapshotIndicators(parsed.economy ?? base.economy, getFactionSupport(parsed.factions ?? base.factions))),
       pendingBriefing: getPresidentialBriefing(parsed.pendingBriefing?.id),

@@ -18,6 +18,19 @@ export function markAnnexationTension(state) {
   };
 }
 
+// Potencia nuclear hostil: tem bomba, nao e aliada nem fantoche do jogador e esta em guerra ou com relacao ruim.
+// Sem uma assim, a tensao pode chegar a DEFCON 2, mas ninguem aperta o botao.
+export function hasHostileNuclearPower(state) {
+  const allies = new Set(state.player_alliance ?? []);
+  return (state.geopolitics?.contacts ?? []).some((contact) => (
+    (contact.has_nukes === true || (Number(contact.nuclearWeapons) || 0) > 0)
+    && !contact.destruido && !contact.anexado && !contact.wasteland
+    && !contact.alliance && !allies.has(contact.id)
+    && !(contact.puppet && contact.is_puppet_of === 'jogador')
+    && (contact.atWar || (Number(contact.relation) || 0) < 20)
+  ));
+}
+
 export function advanceDefcon(state) {
   const activeWars = (state.geopolitics?.contacts ?? []).filter((contact) => contact.atWar).length;
   const annexationMonths = Math.max(0, Math.floor(Number(state.defconAnnexationMonths) || 0));
@@ -26,7 +39,8 @@ export function advanceDefcon(state) {
   let peacefulMonths = Math.max(0, Math.floor(Number(state.defconPeacefulMonths) || 0));
 
   if (tense) {
-    level = Math.max(1, level - 1);
+    const lowered = Math.max(1, level - 1);
+    level = lowered === 1 && level > 1 && !hasHostileNuclearPower(state) ? level : lowered;
     peacefulMonths = 0;
   } else {
     peacefulMonths += 1;

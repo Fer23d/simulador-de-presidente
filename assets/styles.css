@@ -1055,3 +1055,9 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 
 /* Ofensivas a partir de bases */
 .attack-banner { border: 1px dashed #e0483f; padding: 8px; }
+
+/* Corrida nuclear */
+.nuclear-race-panel { margin-bottom: 14px; }
+.nuclear-program { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
+.nuclear-program small { color: var(--muted); }
+.map-shape--atomic { fill: #a45fd0; }
