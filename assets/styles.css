@@ -1048,3 +1048,7 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 /* Guerra comercial */
 .trade-war-panel { margin-bottom: 14px; }
 .map-shape--tariff { fill: #e08a2f; }
+
+/* Tropas no exterior */
+.troop-controls { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.troop-controls small { color: var(--muted); }

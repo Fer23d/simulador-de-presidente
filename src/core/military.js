@@ -53,7 +53,9 @@ export function getPoderTotal(military) {
   const supportBonus = 1 + Math.min(0.65, (naval * 0.012) + (air * 0.012));
   const readiness = clamp(Number(military?.readiness) || 1, 0.5, 1.8);
   const readinessPower = (terrestrial * supportBonus * readiness) + ((naval + air) * 0.45);
-  return Math.round(clamp(readinessPower + (Number(military?.combatAdjustment) || 0), 0, 300) * 10) / 10;
+  // Tropas emprestadas por aliados (pedido de tropas) somam ao poder enquanto durarem.
+  const allied = Math.max(0, Number(military?.alliedForces?.power) || 0);
+  return Math.round(clamp(readinessPower + (Number(military?.combatAdjustment) || 0) + allied, 0, 300) * 10) / 10;
 }
 
 export function getPoderTerrestre(military) {
