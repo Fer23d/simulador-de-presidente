@@ -13,6 +13,7 @@ import { createMinisters, dismissMinister as dismissCabinetMinister, getMinister
 import { applyUnrestAction as applyUnrestActionState, repressionHangover } from './unrest_actions.js';
 import { createSectors, normalizeSectors } from './sectors.js';
 import { createYearGoals, normalizeYearGoals, normalizeYearReports, processYearEnd } from './year_report.js';
+import { bumpReputationStat, createReputation, normalizeReputation, processReputation, renameOrganization, restoreOrganizationName } from './identity.js';
 import { moveCapital, processCapital } from './capital.js';
 import { processTerritoryThreats } from './territory_defense.js';
 import { createNuclearRace, normalizeNuclearRace, processNuclearRace, proposeNonProliferation, sabotageProgram, setbackProgram } from './nuclear_race.js';
@@ -347,6 +348,8 @@ function createGameStateBase(countryId = 'bra', playerProfile = {}) {
     nuclearRace: createNuclearRace(),
     capitalId: null,
     capitalMoveMonth: -99,
+    orgRenameMonth: -99,
+    reputation: createReputation(),
     indicatorHistory: normalizeIndicatorHistory(null, snapshotIndicators(economy0, getFactionSupport(createFactions()))),
     pendingBriefing: null,
     pendingEvent: null,
@@ -496,6 +499,24 @@ export function alterarNotaONU(state, value) {
 }
 
 export function startWar(state, contactId) {
+  const before = state.geopolitics.contacts.find((contact) => contact.id === contactId);
+  const result = startWarCore(state, contactId);
+  const after = result.geopolitics.contacts.find((contact) => contact.id === contactId);
+  return after?.atWar && !before?.atWar ? bumpReputationStat(result, 'warsDeclared') : result;
+}
+
+export function renomearOrganizacao(state, name) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = renameOrganization(state, name);
+  return result.country === state.country ? result : addNews(result, result.notice);
+}
+
+export function restaurarNomeOriginal(state) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return restoreOrganizationName(state);
+}
+
+function startWarCore(state, contactId) {
   const targetBeforeWar = state.geopolitics.contacts.find((contact) => contact.id === contactId);
   const isPlayerAllianceMember = Boolean(targetBeforeWar && ((state.player_alliance ?? []).includes(contactId) || targetBeforeWar.alliance));
   if (isPlayerAllianceMember) {
@@ -573,7 +594,9 @@ export function mudarSedeDoGoverno(state, targetId) {
 
 export function proporNaoProliferacao(state, contactId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
-  return syncWorld(proposeNonProliferation(state, contactId));
+  const result = proposeNonProliferation(state, contactId);
+  const signed = (result.nuclearRace?.programs?.[contactId]?.pausedUntil ?? 0) > (state.nuclearRace?.programs?.[contactId]?.pausedUntil ?? 0);
+  return syncWorld(signed ? bumpReputationStat(result, 'ntpSigned') : result);
 }
 
 export function sabotarProgramaNuclear(state, contactId) {
@@ -1178,7 +1201,7 @@ export function advanceMonth(state) {
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? internalProjectState.notice ?? `mês encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superávit' : 'com déficit'}.`;
 
-  const completedState = processYearEnd(processElection(processCapital(processTerritoryThreats(processNuclearRace(processOffensives(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
+  const completedState = processYearEnd(processElection(processReputation(processCapital(processTerritoryThreats(processNuclearRace(processOffensives(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
     ...state,
     economy: constitutionalState.economy,
     geopolitics: geopoliticalMonth.geopolitics,
@@ -1205,7 +1228,7 @@ export function advanceMonth(state) {
     activeLawIds: corporateState.activeLawIds,
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
-  })))))))))));
+  }))))))))))));
   const corporateDefault = resolveCorporateDefault(completedState);
   if (corporateDefault.regime?.gameOver) return resolverFinalDeJogo(corporateDefault);
   const article5State = detectArticle5(completedState);
@@ -1301,7 +1324,8 @@ export function hydrateGameState(serialized) {
       ...base,
       country: {
         ...base.country,
-        nome: typeof parsed.country?.nome === 'string' ? parsed.country.nome : base.country.nome,
+        nome: typeof parsed.country?.nome === 'string' && parsed.country.nome.trim() ? parsed.country.nome : base.country.nome,
+        ...(typeof parsed.country?.originalName === 'string' && parsed.country.originalName ? { originalName: parsed.country.originalName } : {}),
         area_km2: countryIsWasteland ? 0 : (Number.isFinite(Number(parsed.country?.area_km2)) ? Math.max(1, Number(parsed.country.area_km2)) : base.country.area_km2),
         populacao: countryIsWasteland ? 0 : (Number.isFinite(Number(parsed.country?.populacao ?? parsed.country?.populacao_base)) ? Math.max(1, Number(parsed.country.populacao ?? parsed.country.populacao_base)) : base.country.populacao),
         populacao_base: countryIsWasteland ? 0 : (Number.isFinite(Number(parsed.country?.populacao_base ?? parsed.country?.populacao)) ? Math.max(1, Number(parsed.country.populacao_base ?? parsed.country.populacao)) : base.country.populacao_base),
@@ -1423,6 +1447,8 @@ export function hydrateGameState(serialized) {
       ...normalizeDeployments(parsed),
       ...normalizeOffensives(parsed),
       nuclearRace: normalizeNuclearRace(parsed.nuclearRace),
+      orgRenameMonth: Number.isFinite(Number(parsed.orgRenameMonth)) ? Math.floor(Number(parsed.orgRenameMonth)) : -99,
+      reputation: normalizeReputation(parsed.reputation),
       capitalId: typeof parsed.capitalId === 'string' && parsed.capitalId ? parsed.capitalId : null,
       capitalMoveMonth: Number.isFinite(Number(parsed.capitalMoveMonth)) ? Math.floor(Number(parsed.capitalMoveMonth)) : -99,
       election: alignElection(normalizeElection(parsed.election), parsed.monthCounter),

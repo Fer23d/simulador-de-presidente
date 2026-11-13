@@ -2,6 +2,7 @@
 // reagem. Os sem bomba iniciam programas proprios; os que ja tem bomba ampliam o arsenal. O jogador pode frear os
 // programas com sancoes, tratado de nao proliferacao, sabotagem, guerra, governo fantoche, anexacao e desmilitarizacao.
 import { adjustFactions } from './factions.js';
+import { getTitleModifier } from './identity.js';
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
 
@@ -119,7 +120,8 @@ export function getRaceActionStatus(state, kind, id) {
     if (program.pausedUntil > month) return { available: false, reason: `Tratado em vigor por mais ${program.pausedUntil - month} mês(es).` };
     if (state.military?.nuclear?.bombBuilt) return { available: false, reason: 'Com bomba no seu arsenal, você não tem autoridade para pedir isso.' };
     if (contact.atWar) return { available: false, reason: 'Não se negocia durante uma guerra.' };
-    if ((Number(contact.relation) || 0) < NPT_MIN_RELATION) return { available: false, reason: `Relação abaixo de ${NPT_MIN_RELATION}.` };
+    const minRelation = NPT_MIN_RELATION + getTitleModifier(state, 'nptRelation');
+    if ((Number(contact.relation) || 0) < minRelation) return { available: false, reason: `Relação abaixo de ${minRelation}.` };
     return { available: true, reason: '', cost: Math.round(gdp * 0.008) };
   }
   if (kind === 'sabotage') {

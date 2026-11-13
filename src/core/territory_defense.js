@@ -6,6 +6,7 @@ import { getDeployed, getDeploymentKind, getCapitalId, getTerritoryLoyalty } fro
 import { adjustFactions } from './factions.js';
 import { distanceKm, getBaseForce, getSupply } from './offensives.js';
 import { normalizeMilitary } from './military.js';
+import { bumpReputationStat, getTitleModifier } from './identity.js';
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
 const count = (value) => Math.max(0, Math.floor(Number(value) || 0));
@@ -63,7 +64,7 @@ export function getAttackChance(state, territoryId) {
   const attackers = getAttackers(state, territoryId);
   const base = attackers.reduce((sum, item) => sum + item.weight, 0) * 0.005;
   const tension = (Number(state.global_defcon) || 5) <= 2 ? 1.4 : 1;
-  return clamp(base * tension, 0, MAX_ATTACK_CHANCE);
+  return clamp(base * tension * getTitleModifier(state, 'territoryAttack'), 0, MAX_ATTACK_CHANCE);
 }
 
 export function describeThreat(chance) {
@@ -118,7 +119,7 @@ function liberate(state, territoryId, attackerName, notes) {
   } else {
     notes.push(`${territory.name} foi perdido para ${attackerName} e voltou a ser independente.`);
   }
-  return next;
+  return bumpReputationStat(next, 'territoriesLost');
 }
 
 // Fim de mes: possivel ataque a cada territorio anexado.

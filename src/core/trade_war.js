@@ -3,6 +3,7 @@
 // (retaliar, negociar, diversificar mercados, subsidiar setores, recorrer a ONU). A diversificacao de mercados
 // e permanente e funciona como seguro: quem investe antes sofre menos quando a guerra comeca.
 import { adjustFactions } from './factions.js';
+import { getTitleModifier } from './identity.js';
 import { SECTOR_IDS, normalizeSectors } from './sectors.js';
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
@@ -103,6 +104,7 @@ export function getTradeWarRisk(state) {
   if (state.military?.nuclear?.bombBuilt) chance += 0.03;
   if ((Number(state.geopolitics?.onuScore) || 50) < 30) chance += 0.02;
   chance *= 1 - (tw.diversification / 100) * 0.5;
+  chance *= getTitleModifier(state, 'tradeWarRisk');
   return clamp(chance, 0, 0.16);
 }
 
