@@ -13,6 +13,7 @@ import { createMinisters, dismissMinister as dismissCabinetMinister, getMinister
 import { applyUnrestAction as applyUnrestActionState, repressionHangover } from './unrest_actions.js';
 import { createSectors, normalizeSectors } from './sectors.js';
 import { createYearGoals, normalizeYearGoals, normalizeYearReports, processYearEnd } from './year_report.js';
+import { beginOffensive, createOffensives, getAttackStatus, normalizeOffensives, processOffensives, requestReinforcements, stopOffensive } from './offensives.js';
 import { createDeployments, normalizeDeployments, processDeployments, recallTroops, requestAlliedTroops, sendTroops } from './deployments.js';
 import { applyTradeWarAction, createTradeWar, normalizeTradeWar, processTradeWar } from './trade_war.js';
 import { createDiplomacyLife, normalizeDiplomacyLife, processDiplomacyLife, respondToInspection, respondToSummit } from './diplomacy_life.js';
@@ -339,6 +340,7 @@ function createGameStateBase(countryId = 'bra', playerProfile = {}) {
     diplomacyLife: createDiplomacyLife(),
     tradeWar: createTradeWar(),
     ...createDeployments(),
+    ...createOffensives(),
     indicatorHistory: normalizeIndicatorHistory(null, snapshotIndicators(economy0, getFactionSupport(createFactions()))),
     pendingBriefing: null,
     pendingEvent: null,
@@ -555,6 +557,29 @@ export function insultarNacao(state, contactId) {
 export function answerCongressDemand(state, accept) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   return respondToDemand(state, accept === true);
+}
+
+export function atacarDaBase(state, baseId, targetId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const status = getAttackStatus(state, baseId, targetId);
+  if (!status.available) return { ...state, notice: status.reason };
+  let next = state;
+  if (!state.geopolitics.contacts.find((contact) => contact.id === targetId)?.atWar) {
+    next = startWar(state, targetId);
+    if (!next.geopolitics.contacts.find((contact) => contact.id === targetId)?.atWar) return next;
+  }
+  const launched = beginOffensive(next, baseId, targetId);
+  return syncWorld({ ...launched, history: addHistory(launched, { type: 'ofensiva', message: launched.notice, calendar: launched.calendar }) });
+}
+
+export function suspenderOfensiva(state, targetId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(stopOffensive(state, targetId));
+}
+
+export function pedirReforcos(state, baseId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(requestReinforcements(state, baseId));
 }
 
 export function enviarTropas(state, contactId) {
@@ -1130,7 +1155,7 @@ export function advanceMonth(state) {
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? internalProjectState.notice ?? `mês encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superávit' : 'com déficit'}.`;
 
-  const completedState = processYearEnd(processElection(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
+  const completedState = processYearEnd(processElection(processOffensives(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
     ...state,
     economy: constitutionalState.economy,
     geopolitics: geopoliticalMonth.geopolitics,
@@ -1157,7 +1182,7 @@ export function advanceMonth(state) {
     activeLawIds: corporateState.activeLawIds,
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
-  })))))));
+  }))))))));
   const corporateDefault = resolveCorporateDefault(completedState);
   if (corporateDefault.regime?.gameOver) return resolverFinalDeJogo(corporateDefault);
   const article5State = detectArticle5(completedState);
@@ -1372,6 +1397,7 @@ export function hydrateGameState(serialized) {
       diplomacyLife: normalizeDiplomacyLife(parsed.diplomacyLife),
       tradeWar: normalizeTradeWar(parsed.tradeWar),
       ...normalizeDeployments(parsed),
+      ...normalizeOffensives(parsed),
       election: alignElection(normalizeElection(parsed.election), parsed.monthCounter),
       indicatorHistory: normalizeIndicatorHistory(parsed.indicatorHistory, snapshotIndicators(parsed.economy ?? base.economy, getFactionSupport(parsed.factions ?? base.factions))),
       pendingBriefing: getPresidentialBriefing(parsed.pendingBriefing?.id),

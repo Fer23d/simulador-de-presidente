@@ -1052,3 +1052,6 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 /* Tropas no exterior */
 .troop-controls { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .troop-controls small { color: var(--muted); }
+
+/* Ofensivas a partir de bases */
+.attack-banner { border: 1px dashed #e0483f; padding: 8px; }

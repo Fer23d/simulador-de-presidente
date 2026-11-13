@@ -547,6 +547,8 @@ export function advanceGeopolitics(geopolitics, military, economy, seed) {
     if (updated.demilitarizedMonths > 0) updated = { ...updated, demilitarizedMonths: updated.demilitarizedMonths - 1 };
     if (!updated.atWar) return updated;
     cash -= cashCost;
+    // Guerras travadas por uma ofensiva a partir de base avancada sao resolvidas em offensives.js.
+    if (updated.frontBaseId) return updated;
     const alliedPower = geopolitics.contacts
       .filter((candidate) => candidate.alliance && !candidate.atWar)
       .reduce((total, candidate) => total + (candidate.militaryPower * 0.08), 0);

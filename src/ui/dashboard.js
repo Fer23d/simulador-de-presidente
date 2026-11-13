@@ -5,6 +5,7 @@ import { UNREST_ACTIONS, getUnrestActionStatus } from '../core/unrest_actions.js
 import { ACHIEVEMENTS, ACHIEVEMENTS_KEY, createAchievementStore, findNewAchievements, recordAchievements } from '../core/achievements.js';
 import { COUNTRY_PATHS, COUNTRY_POINTS, LAND_BACKGROUND, MAP_REGIONS } from '../data/world_map.js';
 import { evaluateGoals, normalizeYearGoals, normalizeYearReports } from '../core/year_report.js';
+import { MIN_ATTACK_SHARE, describeOdds, getAttackStatus, getBaseForce, getReinforcementStatus, normalizeOffensives } from '../core/offensives.js';
 import { LOAN_MONTHS, REINFORCEMENT_CAP, getAlliedForcesPower, getContingent, getDeployStatus, getDeployed, getDeploymentKind, getRequestStatus, getTerritoryLoyalty, normalizeDeployments, troopsPower, UPKEEP_RATE } from '../core/deployments.js';
 import { CONCESSIONS, DIVERSIFY_CAP, describeRisk, getAppealChance, getMonthlyTradeWarLoss, getNegotiationChance, getTradeWarActionStatus, getTradeWarMitigation, getTradeWarRisk, normalizeTradeWar } from '../core/trade_war.js';
 import { SUMMITS, getSummitChance, normalizeDiplomacyLife } from '../core/diplomacy_life.js';
@@ -88,6 +89,9 @@ import {
   enviarTropas,
   retirarTropas,
   pedirTropas,
+  atacarDaBase,
+  suspenderOfensiva,
+  pedirReforcos,
   answerSummit,
   applyElectionAction,
   applyUnrestAction,
@@ -955,9 +959,11 @@ export function diplomacyMap(state, mapUi = {}) {
   const regionChips = MAP_REGION_LABELS.map(([id, label]) => `<button type="button" class="map-chip map-chip--region" data-action="map-region" data-region="${id}" aria-pressed="${id === region}">${label}</button>`).join('');
   const filterChips = MAP_FILTERS.map(([id, label]) => `<button type="button" class="map-chip" data-action="map-filter" data-filter="${id}" aria-pressed="${id === filter}">${label}</button>`).join('');
   const picked = contacts.find((contact) => contact.id === mapUi.selected);
-  const card = picked ? mapCountryCard(picked, picked.id === tariffId, state) : '<p class="notice">Clique em um país para ver os dados e agir. Verde: aliado · azul: comércio · vermelho vivo: guerra · tons de vermelho a verde: relação (do pior ao melhor) · ciano: você e os países que anexou (território seu) · laranja: quem impôs tarifas a você.</p>';
+  const attackBase = mapUi.attackFrom ? contacts.find((item) => item.id === mapUi.attackFrom) : null;
+  const attackBanner = attackBase ? `<p class="notice attack-banner">Modo ataque: escolha no mapa o país a atacar saindo de <strong>${escapeHtml(attackBase.name)}</strong>. <button type="button" class="quiet-action" data-action="attack-cancel">Cancelar</button></p>` : '';
+  const card = picked ? attackBanner + mapCountryCard(picked, picked.id === tariffId, state, mapUi) : '<p class="notice">Clique em um país para ver os dados e agir. Verde: aliado · azul: comércio · vermelho vivo: guerra · tons de vermelho a verde: relação (do pior ao melhor) · ciano: você e os países que anexou (território seu) · laranja: quem impôs tarifas a você.</p>';
   const [vx, vy, vw, vh] = MAP_REGIONS[region];
-  return `<div class="diplomacy-map"><div class="map-filters">${regionChips}</div><div class="map-filters">${filterChips}</div><svg class="world-map-svg" viewBox="${vx} ${vy} ${vw} ${vh}" role="group" aria-label="Mapa-múndi de relações internacionais"><rect x="0" y="0" width="1000" height="500" class="map-ocean"></rect><path d="${LAND_BACKGROUND}" class="map-land"></path>${shapes}${home}</svg>${card}</div>`;
+  return `<div class="diplomacy-map">${picked ? '' : attackBanner}<div class="map-filters">${regionChips}</div><div class="map-filters">${filterChips}</div><svg class="world-map-svg" viewBox="${vx} ${vy} ${vw} ${vh}" role="group" aria-label="Mapa-múndi de relações internacionais"><rect x="0" y="0" width="1000" height="500" class="map-ocean"></rect><path d="${LAND_BACKGROUND}" class="map-land"></path>${shapes}${home}</svg>${card}</div>`;
 }
 
 function troopControls(state, contact, compact = false) {
@@ -970,14 +976,35 @@ function troopControls(state, contact, compact = false) {
   const send = `<button type="button" class="quiet-action" data-action="send-troops" data-contact="${contact.id}" ${status.available ? '' : 'disabled'} title="${status.reason}">Enviar tropas</button>`;
   const recall = present ? `<button type="button" class="quiet-action" data-action="recall-troops" data-contact="${contact.id}">Retirar tropas</button>` : '';
   const request = kind === 'ally' ? (() => { const r = getRequestStatus(state, contact.id); return `<button type="button" class="quiet-action" data-action="request-troops" data-contact="${contact.id}" ${r.available ? '' : 'disabled'} title="${r.reason}">Pedir tropas${r.available ? ` (${Math.round(r.chance * 100)}%)` : ''}</button>`; })() : '';
-  return compact ? `${send}${recall}${request}` : `<div class="troop-controls">${info}<div class="action-row">${send}${recall}${request}</div></div>`;
+  let base = '';
+  if (!compact && kind === 'territory') {
+    const reinforce = getReinforcementStatus(state, contact.id);
+    const attackable = present && getBaseForce(state, contact.id).share >= MIN_ATTACK_SHARE;
+    const reinforceLabel = reinforce.available ? `Pedir reforços (chegam em ${reinforce.months} mês(es))` : 'Pedir reforços';
+    base = `<button type="button" class="quiet-action danger-action" data-action="attack-mode" data-base="${contact.id}" ${attackable ? '' : 'disabled'} title="${attackable ? '' : 'Guarneça a base com mais tropas para atacar a partir dela.'}">Atacar a partir daqui</button><button type="button" class="quiet-action" data-action="request-reinforcements" data-base="${contact.id}" ${reinforce.available ? '' : 'disabled'} title="${reinforce.reason}">${reinforceLabel}</button>`;
+  }
+  return compact ? `${send}${recall}${request}` : `<div class="troop-controls">${info}<div class="action-row">${send}${recall}${request}${base}</div></div>`;
 }
 
-function mapCountryCard(contact, tariff = false, state = null) {
+function attackControls(state, contact, mapUi) {
+  const offensive = normalizeOffensives({ offensives: state.offensives, convoys: state.convoys }).offensives[contact.id];
+  if (offensive) {
+    const base = (state.geopolitics?.contacts ?? []).find((item) => item.id === offensive.baseId);
+    return `<div class="troop-controls"><small>Ofensiva em curso a partir de ${escapeHtml(base?.name ?? offensive.baseId)}: ${offensive.rounds} rodada(s), ${offensive.wins} vitória(s), ${offensive.losses} revés(es).</small><div class="action-row"><button type="button" class="quiet-action" data-action="stop-offensive" data-target="${contact.id}">Suspender ofensiva</button></div></div>`;
+  }
+  const from = mapUi?.attackFrom;
+  if (!from || from === contact.id) return '';
+  const base = (state.geopolitics?.contacts ?? []).find((item) => item.id === from);
+  const status = getAttackStatus(state, from, contact.id);
+  if (!status.available) return `<div class="troop-controls"><small>Ataque a partir de ${escapeHtml(base?.name ?? from)}: ${status.reason}</small></div>`;
+  return `<div class="troop-controls"><small>Saindo de ${escapeHtml(base?.name ?? from)}: ${status.km.toLocaleString('pt-BR')} km · suprimento ${Math.round(status.supply * 100)}% · poder da força ${status.score.toFixed(1)} contra ${status.enemy.toFixed(0)} · condições ${describeOdds(status.ratio)}. Declara guerra e usa só as tropas da base.</small><div class="action-row"><button type="button" class="quiet-action danger-action" data-action="launch-offensive" data-base="${from}" data-target="${contact.id}">Atacar saindo de ${escapeHtml(base?.name ?? from)}</button></div></div>`;
+}
+
+function mapCountryCard(contact, tariff = false, state = null, mapUi = {}) {
   const status = tariff ? 'tariff' : mapStatus(contact);
   const label = { tariff: 'Impôs tarifas a você', war: 'Em guerra', allies: 'Aliado', trade: 'Acordo comercial', hostile: 'Hostil', annexed: 'Território seu (anexado)', neutral: 'Sem tratado' }[status];
   const blocked = contact.anexado || contact.annexed;
-  return `<article class="map-country-card"><div><strong>${escapeHtml(contact.name)} ${nuclearBadge(contact)}</strong><span>${label} · relação ${formatRelation(contact.relation)} · poder ${Number(contact.militaryPower || 0).toFixed(0)} · PIB ${formatMoney(contact.pib_base || 0)}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${blocked || contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comércio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${blocked || contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Aliança</button><button type="button" class="quiet-action" data-action="sabotage" data-contact="${contact.id}" ${blocked || contact.atWar ? 'disabled' : ''}>Sabotar</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${blocked || contact.atWar ? 'disabled' : ''}>Guerra</button></div>${state ? troopControls(state, contact) : ''}</article>`;
+  return `<article class="map-country-card"><div><strong>${escapeHtml(contact.name)} ${nuclearBadge(contact)}</strong><span>${label} · relação ${formatRelation(contact.relation)} · poder ${Number(contact.militaryPower || 0).toFixed(0)} · PIB ${formatMoney(contact.pib_base || 0)}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${blocked || contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comércio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${blocked || contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Aliança</button><button type="button" class="quiet-action" data-action="sabotage" data-contact="${contact.id}" ${blocked || contact.atWar ? 'disabled' : ''}>Sabotar</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${blocked || contact.atWar ? 'disabled' : ''}>Guerra</button></div>${state ? troopControls(state, contact) : ''}${state ? attackControls(state, contact, mapUi) : ''}</article>`;
 }
 
 export function diplomacyView(state, searchQuery = '', mapUi = {}) {
@@ -1342,7 +1369,12 @@ export function troopsAbroadPanel(state) {
     const contact = (state.geopolitics?.contacts ?? []).find((item) => item.id === id);
     return `<div class="ledger-row"><span>Tropas de ${escapeHtml(contact?.name ?? id)} com você</span><strong>+${loan.power.toFixed(1)} poder · ${loan.until - (Number(state.monthCounter) || 0)} mês(es)</strong></div>`;
   }).join('');
-  return `<section class="panel troops-abroad-panel"><p class="eyebrow">Projeção de força</p><h2>Tropas no exterior</h2><p class="notice">Envie tropas a territórios seus ou a aliados pelo mapa da Diplomacia (cada envio leva ${formatNumber.format(getContingent(state).soldiers)} soldados e ${contingent.armor} blindados, 10% do exército). Aliados também emprestam tropas por ${LOAN_MONTHS} meses.</p>${rows ? `<div class="branch-list">${rows}</div>` : '<p class="notice">Nenhuma tropa no exterior.</p>'}${loans}${allied > 0 ? `<div class="ledger-row"><span>Poder emprestado por aliados</span><strong>+${allied.toFixed(1)}</strong></div>` : ''}</section>`;
+  const off = normalizeOffensives({ offensives: state.offensives, convoys: state.convoys });
+  const nameOf = (id) => (state.geopolitics?.contacts ?? []).find((item) => item.id === id)?.name ?? id;
+  const month = Number(state.monthCounter) || 0;
+  const convoyRows = off.convoys.map((convoy) => `<div class="ledger-row"><span>Reforços a caminho de ${escapeHtml(nameOf(convoy.baseId))}</span><strong>${formatNumber.format(convoy.soldiers)} soldados, ${convoy.armor} blindados · chegam em ${Math.max(0, convoy.arrives - month)} mês(es)</strong></div>`).join('');
+  const offensiveRows = Object.entries(off.offensives).map(([targetId, op]) => `<article class="branch-row"><div><strong>Ofensiva contra ${escapeHtml(nameOf(targetId))}</strong><span>a partir de ${escapeHtml(nameOf(op.baseId))} | ${op.rounds} rodada(s) | ${op.wins} vitória(s) | ${op.losses} revés(es)</span></div><button type="button" class="quiet-action" data-action="stop-offensive" data-target="${targetId}">Suspender</button></article>`).join('');
+  return `<section class="panel troops-abroad-panel"><p class="eyebrow">Projeção de força</p><h2>Tropas no exterior</h2><p class="notice">Envie tropas a territórios seus ou a aliados pelo mapa da Diplomacia (cada envio leva ${formatNumber.format(getContingent(state).soldiers)} soldados e ${contingent.armor} blindados, 10% do exército). Aliados também emprestam tropas por ${LOAN_MONTHS} meses.</p>${rows ? `<div class="branch-list">${rows}</div>` : '<p class="notice">Nenhuma tropa no exterior.</p>'}${loans}${allied > 0 ? `<div class="ledger-row"><span>Poder emprestado por aliados</span><strong>+${allied.toFixed(1)}</strong></div>` : ''}${convoyRows}${offensiveRows ? `<div class="branch-list">${offensiveRows}</div>` : ''}</section>`;
 }
 
 export function militaryView(state) {
@@ -3088,6 +3120,11 @@ export function mountDashboard(root) {
     if (action === 'map-region') { mapUi = { ...mapUi, region: control.dataset.region }; render(); return; }
     if (action === 'map-filter') { mapUi = { ...mapUi, filter: control.dataset.filter }; render(); return; }
     if (action === 'congress-demand') { commit(answerCongressDemand(state, control.dataset.accept === 'yes')); return; }
+    if (action === 'attack-mode') { mapUi = { ...mapUi, attackFrom: control.dataset.base }; render(); return; }
+    if (action === 'attack-cancel') { mapUi = { ...mapUi, attackFrom: null }; render(); return; }
+    if (action === 'launch-offensive') { mapUi = { ...mapUi, attackFrom: null }; commit(atacarDaBase(state, control.dataset.base, control.dataset.target)); return; }
+    if (action === 'stop-offensive') { commit(suspenderOfensiva(state, control.dataset.target)); return; }
+    if (action === 'request-reinforcements') { commit(pedirReforcos(state, control.dataset.base)); return; }
     if (action === 'send-troops') { commit(enviarTropas(state, control.dataset.contact)); return; }
     if (action === 'recall-troops') { commit(retirarTropas(state, control.dataset.contact)); return; }
     if (action === 'request-troops') { commit(pedirTropas(state, control.dataset.contact)); return; }
