@@ -167,5 +167,5 @@ test('avancar meses completos com tropas no exterior mantem o estado valido', ()
     assert.ok(Number.isFinite(current.economy.cash));
     assert.ok(current.military.exercito.soldados >= 0);
   }
-  assert.ok(Object.keys(current.territories).length > 0);
+  assert.ok(Object.keys(current.territories).length > 0 || !current.geopolitics.contacts.find((c) => c.id === territory).anexado, 'o territorio segue registrado ou foi perdido num ataque');
 });

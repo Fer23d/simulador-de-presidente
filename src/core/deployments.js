@@ -19,6 +19,11 @@ export const LOAN_MIN_RELATION = 55;
 export const TERRITORY_START_LOYALTY = 30;
 export const REINFORCEMENT_CAP = 20;
 
+// Sede do governo: o territorio escolhido ou, por padrao, o pais do jogador.
+export function getCapitalId(state) {
+  return typeof state.capitalId === 'string' && state.capitalId ? state.capitalId : state.country?.id;
+}
+
 export function createDeployments() {
   return { deployments: {}, territories: {}, alliedLoans: {} };
 }
@@ -36,6 +41,7 @@ export function normalizeDeployments(source = {}) {
   const territories = {};
   for (const [id, item] of Object.entries(isRecord(source.territories) ? source.territories : {})) {
     territories[id] = { loyalty: clamp(Number(item?.loyalty) || 0, 0, 100) };
+    if (Number.isFinite(Number(item?.lastAttack))) territories[id].lastAttack = Math.floor(Number(item.lastAttack));
   }
   const alliedLoans = {};
   for (const [id, item] of Object.entries(isRecord(source.alliedLoans) ? source.alliedLoans : {})) {
@@ -249,6 +255,7 @@ export function processDeployments(state) {
     const target = clamp(25 + garrison * 8, 25, 85);
     const loyalty = clamp(current + ((target - current) * 0.12), 0, 100);
     territories[contact.id] = { loyalty };
+    if (data.territories[contact.id]?.lastAttack !== undefined) territories[contact.id].lastAttack = data.territories[contact.id].lastAttack;
     if (contact.anexado) cash += Math.round(monthly * TRIBUTE_RATE * (loyalty / 100));
     if (loyalty < 35 && hash(month, 811 + contact.id.length, next) < 0.6) {
       cash -= Math.round(monthly * 0.002 * ((35 - loyalty) / 35));

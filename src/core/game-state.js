@@ -13,6 +13,8 @@ import { createMinisters, dismissMinister as dismissCabinetMinister, getMinister
 import { applyUnrestAction as applyUnrestActionState, repressionHangover } from './unrest_actions.js';
 import { createSectors, normalizeSectors } from './sectors.js';
 import { createYearGoals, normalizeYearGoals, normalizeYearReports, processYearEnd } from './year_report.js';
+import { moveCapital, processCapital } from './capital.js';
+import { processTerritoryThreats } from './territory_defense.js';
 import { createNuclearRace, normalizeNuclearRace, processNuclearRace, proposeNonProliferation, sabotageProgram, setbackProgram } from './nuclear_race.js';
 import { beginOffensive, createOffensives, getAttackStatus, normalizeOffensives, processOffensives, requestReinforcements, stopOffensive } from './offensives.js';
 import { createDeployments, normalizeDeployments, processDeployments, recallTroops, requestAlliedTroops, sendTroops } from './deployments.js';
@@ -343,6 +345,8 @@ function createGameStateBase(countryId = 'bra', playerProfile = {}) {
     ...createDeployments(),
     ...createOffensives(),
     nuclearRace: createNuclearRace(),
+    capitalId: null,
+    capitalMoveMonth: -99,
     indicatorHistory: normalizeIndicatorHistory(null, snapshotIndicators(economy0, getFactionSupport(createFactions()))),
     pendingBriefing: null,
     pendingEvent: null,
@@ -360,6 +364,7 @@ function createGameStateBase(countryId = 'bra', playerProfile = {}) {
     global_defcon: 5,
     defconPeacefulMonths: 0,
     defconAnnexationMonths: 0,
+    defconTenseMonths: 0,
     defcon_one_triggered: false,
     nuclearSanctionsPending: false,
     onuReputationPermanentlyZero: false,
@@ -559,6 +564,11 @@ export function insultarNacao(state, contactId) {
 export function answerCongressDemand(state, accept) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   return respondToDemand(state, accept === true);
+}
+
+export function mudarSedeDoGoverno(state, targetId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(moveCapital(state, targetId));
 }
 
 export function proporNaoProliferacao(state, contactId) {
@@ -1168,7 +1178,7 @@ export function advanceMonth(state) {
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? internalProjectState.notice ?? `mês encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superávit' : 'com déficit'}.`;
 
-  const completedState = processYearEnd(processElection(processNuclearRace(processOffensives(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
+  const completedState = processYearEnd(processElection(processCapital(processTerritoryThreats(processNuclearRace(processOffensives(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
     ...state,
     economy: constitutionalState.economy,
     geopolitics: geopoliticalMonth.geopolitics,
@@ -1195,7 +1205,7 @@ export function advanceMonth(state) {
     activeLawIds: corporateState.activeLawIds,
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
-  })))))))));
+  })))))))))));
   const corporateDefault = resolveCorporateDefault(completedState);
   if (corporateDefault.regime?.gameOver) return resolverFinalDeJogo(corporateDefault);
   const article5State = detectArticle5(completedState);
@@ -1413,6 +1423,8 @@ export function hydrateGameState(serialized) {
       ...normalizeDeployments(parsed),
       ...normalizeOffensives(parsed),
       nuclearRace: normalizeNuclearRace(parsed.nuclearRace),
+      capitalId: typeof parsed.capitalId === 'string' && parsed.capitalId ? parsed.capitalId : null,
+      capitalMoveMonth: Number.isFinite(Number(parsed.capitalMoveMonth)) ? Math.floor(Number(parsed.capitalMoveMonth)) : -99,
       election: alignElection(normalizeElection(parsed.election), parsed.monthCounter),
       indicatorHistory: normalizeIndicatorHistory(parsed.indicatorHistory, snapshotIndicators(parsed.economy ?? base.economy, getFactionSupport(parsed.factions ?? base.factions))),
       pendingBriefing: getPresidentialBriefing(parsed.pendingBriefing?.id),
@@ -1458,6 +1470,7 @@ export function hydrateGameState(serialized) {
       global_defcon: clamp(Math.floor(Number(parsed.global_defcon) || base.global_defcon), 1, 5),
       defconPeacefulMonths: Math.max(0, Math.floor(Number(parsed.defconPeacefulMonths) || 0)),
       defconAnnexationMonths: Math.max(0, Math.floor(Number(parsed.defconAnnexationMonths) || 0)),
+      defconTenseMonths: Math.max(0, Math.floor(Number(parsed.defconTenseMonths) || 0)),
       defcon_one_triggered: Boolean(parsed.defcon_one_triggered),
       government: ['republic', 'empire', 'corporate'].includes(parsed.government) ? parsed.government : base.government,
       title: typeof parsed.title === 'string' ? parsed.title : base.title,

@@ -3,7 +3,7 @@
 // entre a base e o alvo pesa no suprimento. Reforcos do pais principal viajam em comboios que demoram conforme
 // a distancia entre a capital e a base.
 import { COUNTRY_COORDS } from '../data/country_coords.js';
-import { getDeploymentKind, getDeployed, troopsPower } from './deployments.js';
+import { getCapitalId, getDeploymentKind, getDeployed, troopsPower } from './deployments.js';
 import { adjustFactions } from './factions.js';
 import { getPoderTotal, normalizeMilitary } from './military.js';
 
@@ -115,7 +115,7 @@ export function getAttackStatus(state, baseId, targetId) {
   if (view(state).offensives[targetId]) return { available: false, reason: `Já há uma ofensiva contra ${target.name}.` };
   if (base.share < MIN_ATTACK_SHARE) return { available: false, reason: `A base precisa de pelo menos ${Math.round(MIN_ATTACK_SHARE * 100)}% do exército para atacar (hoje tem ${Math.round(base.share * 100)}%).` };
   const km = distanceKm(baseId, targetId);
-  const supply = getSupply(km);
+  const supply = getSupply(km) * (getCapitalId(state) === baseId ? 1.1 : 1);
   const score = (base.power * supply) + alliedSupport(state);
   const enemy = Math.max(1, Number(target.militaryPower) || 1);
   return { available: true, reason: '', km, supply, score, enemy, ratio: score / enemy, power: base.power };
@@ -171,7 +171,8 @@ export function getReinforcementStatus(state, baseId) {
   if (contingent.soldiers < 100) return { available: false, reason: 'Exército de casa pequeno demais para enviar reforços.' };
   const total = home.soldiers + away.soldiers + transit.soldiers;
   if (away.soldiers + transit.soldiers + contingent.soldiers > total * 0.5) return { available: false, reason: 'No máximo metade do exército pode ficar fora de casa.' };
-  const km = distanceKm(state.country.id, baseId);
+  // A distancia dos reforcos conta a partir da sede do governo (que pode estar num territorio anexado).
+  const km = distanceKm(getCapitalId(state), baseId);
   const months = travelMonths(km);
   const gdp = Number(state.economy?.gdp) || 0;
   return { available: true, reason: '', contingent, km, months, cost: Math.round((gdp / 12) * 0.004 * months) };
@@ -246,7 +247,7 @@ export function processOffensives(state) {
     if (!target.atWar) { finish(`A guerra contra ${target.name} acabou e a ofensiva foi encerrada.`); continue; }
     const km = distanceKm(op.baseId, targetId);
     const noise = (hash(month, 389 + targetId.length, next) - 0.5) * (4 + (power * 0.2));
-    const score = (power * getSupply(km)) + alliedSupport(next) + noise;
+    const score = (power * getSupply(km) * (getCapitalId(next) === op.baseId ? 1.1 : 1)) + alliedSupport(next) + noise;
     const enemyPower = Number(target.militaryPower) || 0;
     const won = score >= enemyPower;
     cash -= Math.round((gdp / 12) * 0.004);
@@ -259,7 +260,7 @@ export function processOffensives(state) {
     if (!won) {
       const territories = next.territories ?? {};
       const loyalty = territories[op.baseId]?.loyalty ?? 30;
-      next = { ...next, territories: { ...territories, [op.baseId]: { loyalty: clamp(loyalty - 5, 0, 100) } } };
+      next = { ...next, territories: { ...territories, [op.baseId]: { ...(territories[op.baseId] ?? {}), loyalty: clamp(loyalty - 5, 0, 100) } } };
       next = patchContact(next, targetId, { relation: -100 });
       factions = adjustFactions(factions, { militares: -0.8 });
       notes.push(`Revés em ${target.name}: ${lostSoldiers.toLocaleString('pt-BR')} soldados perdidos e a base ${base.name} sofreu um contra-ataque.`);

@@ -29,7 +29,7 @@ test('BUG: uma potencia nuclear hostil continua levando ao DEFCON 1; aliada ou f
   let hostile = mapContacts({ ...base(), defconAnnexationMonths: 24 }, (c) => (c.has_nukes ? { ...c, relation: 60 } : c));
   hostile = patchContact(hostile, hostileNuke, { relation: -10 });
   assert.equal(hasHostileNuclearPower(hostile), true);
-  for (let i = 0; i < 6; i += 1) hostile = advanceDefcon(hostile);
+  for (let i = 0; i < 20; i += 1) hostile = advanceDefcon(hostile);
   assert.equal(hostile.global_defcon, 1);
   const allied = patchContact(hostile, hostileNuke, { alliance: true });
   assert.equal(hasHostileNuclearPower(allied), false);

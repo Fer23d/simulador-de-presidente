@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createGameState } from '../src/core/game-state.js';
 import { advanceMonth } from '../src/core/game-state.js';
-import { advanceDefcon, applyDefconEconomicShock } from '../src/core/defcon.js';
+import { advanceDefcon, applyDefconEconomicShock, markAnnexationTension } from '../src/core/defcon.js';
 
 test('lowers DEFCON when three foreign wars are active', () => {
   const state = createGameState('bra');
@@ -40,4 +40,30 @@ test('monthly progression preserves DEFCON effects when no global modal opens', 
 
   assert.equal(result.global_defcon, 2);
   assert.ok(result.economy.gdp < state.economy.gdp);
+});
+
+test('a escalada do DEFCON e gradual: primeira queda imediata e as seguintes a cada 4 meses', () => {
+  const state = createGameState('bra');
+  let current = {
+    ...state,
+    global_defcon: 5,
+    defconAnnexationMonths: 40,
+    geopolitics: { ...state.geopolitics, contacts: state.geopolitics.contacts.map((contact) => ({ ...contact, relation: contact.has_nukes ? -50 : contact.relation })) },
+  };
+  const levels = [];
+  for (let month = 0; month < 14; month += 1) {
+    current = advanceDefcon(current);
+    levels.push(current.global_defcon);
+  }
+  assert.deepEqual(levels, [4, 4, 4, 4, 3, 3, 3, 3, 2, 2, 2, 2, 1, 1]);
+  const calm = advanceDefcon({ ...current, defconAnnexationMonths: 0, geopolitics: { ...current.geopolitics, contacts: current.geopolitics.contacts.map((contact) => ({ ...contact, atWar: false })) } });
+  assert.equal(calm.defconTenseMonths, 0);
+});
+
+test('uma anexacao so mantem o DEFCON tenso por 8 meses', () => {
+  let state = { ...createGameState('bra'), global_defcon: 5 };
+  state = markAnnexationTension(state);
+  assert.equal(state.defconAnnexationMonths, 8);
+  for (let month = 0; month < 12; month += 1) state = advanceDefcon(state);
+  assert.equal(state.global_defcon, 3);
 });
