@@ -857,7 +857,7 @@ export function congressView(state) {
 }
 
 const MAP_FILTERS = Object.freeze([
-  ['all', 'Todos'], ['allies', 'Aliados'], ['trade', 'Comércio'], ['hostile', 'Hostis'], ['war', 'Em guerra'], ['nuclear', 'Nucleares'], ['rich', 'Mais ricos'],
+  ['all', 'Todos'], ['allies', 'Aliados'], ['trade', 'Comércio'], ['hostile', 'Hostis'], ['war', 'Em guerra'], ['annexed', 'Meu território'], ['nuclear', 'Nucleares'], ['rich', 'Mais ricos'],
 ]);
 
 function mapStatus(contact) {
@@ -895,10 +895,10 @@ export function diplomacyMap(state, mapUi = {}) {
     const status = mapStatus(contact);
     const matches = mapMatches(contact, filter, richIds);
     const selected = mapUi.selected === contact.id;
-    const classes = `map-shape map-shape--${status}${matches ? '' : ' is-dim'}${selected ? ' is-selected' : ''}`;
+    const classes = `map-shape map-shape--${status === 'annexed' ? 'mine' : status}${matches ? '' : ' is-dim'}${selected ? ' is-selected' : ''}`;
     const fill = status === 'neutral' || status === 'hostile' ? ` style="fill:${relationFill(contact.relation)}"` : '';
     const attrs = `class="${classes}"${fill} data-action="map-country" data-country="${contact.id}" role="button" tabindex="0" aria-label="${escapeHtml(contact.name)}"`;
-    const title = `<title>${escapeHtml(contact.name)} · relação ${formatRelation(contact.relation)}</title>`;
+    const title = `<title>${escapeHtml(contact.name)} · ${status === 'annexed' ? 'território seu' : `relação ${formatRelation(contact.relation)}`}</title>`;
     if (COUNTRY_PATHS[contact.id]) return `<path d="${COUNTRY_PATHS[contact.id]}" ${attrs}>${title}</path>`;
     const [x, y] = COUNTRY_POINTS[contact.id];
     return `<circle cx="${x}" cy="${y}" r="3.6" ${attrs}>${title}</circle>`;
@@ -909,14 +909,14 @@ export function diplomacyMap(state, mapUi = {}) {
   const regionChips = MAP_REGION_LABELS.map(([id, label]) => `<button type="button" class="map-chip map-chip--region" data-action="map-region" data-region="${id}" aria-pressed="${id === region}">${label}</button>`).join('');
   const filterChips = MAP_FILTERS.map(([id, label]) => `<button type="button" class="map-chip" data-action="map-filter" data-filter="${id}" aria-pressed="${id === filter}">${label}</button>`).join('');
   const picked = contacts.find((contact) => contact.id === mapUi.selected);
-  const card = picked ? mapCountryCard(picked) : '<p class="notice">Clique em um país para ver os dados e agir. Verde: aliado · azul: comércio · vermelho vivo: guerra · tons de vermelho a verde: relação (do pior ao melhor) · ciano: você.</p>';
+  const card = picked ? mapCountryCard(picked) : '<p class="notice">Clique em um país para ver os dados e agir. Verde: aliado · azul: comércio · vermelho vivo: guerra · tons de vermelho a verde: relação (do pior ao melhor) · ciano: você e os países que anexou (território seu).</p>';
   const [vx, vy, vw, vh] = MAP_REGIONS[region];
   return `<div class="diplomacy-map"><div class="map-filters">${regionChips}</div><div class="map-filters">${filterChips}</div><svg class="world-map-svg" viewBox="${vx} ${vy} ${vw} ${vh}" role="group" aria-label="Mapa-múndi de relações internacionais"><rect x="0" y="0" width="1000" height="500" class="map-ocean"></rect><path d="${LAND_BACKGROUND}" class="map-land"></path>${shapes}${home}</svg>${card}</div>`;
 }
 
 function mapCountryCard(contact) {
   const status = mapStatus(contact);
-  const label = { war: 'Em guerra', allies: 'Aliado', trade: 'Acordo comercial', hostile: 'Hostil', annexed: 'Anexado', neutral: 'Sem tratado' }[status];
+  const label = { war: 'Em guerra', allies: 'Aliado', trade: 'Acordo comercial', hostile: 'Hostil', annexed: 'Território seu (anexado)', neutral: 'Sem tratado' }[status];
   const blocked = contact.anexado || contact.annexed;
   return `<article class="map-country-card"><div><strong>${escapeHtml(contact.name)} ${nuclearBadge(contact)}</strong><span>${label} · relação ${formatRelation(contact.relation)} · poder ${Number(contact.militaryPower || 0).toFixed(0)} · PIB ${formatMoney(contact.pib_base || 0)}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${blocked || contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comércio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${blocked || contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Aliança</button><button type="button" class="quiet-action" data-action="sabotage" data-contact="${contact.id}" ${blocked || contact.atWar ? 'disabled' : ''}>Sabotar</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${blocked || contact.atWar ? 'disabled' : ''}>Guerra</button></div></article>`;
 }

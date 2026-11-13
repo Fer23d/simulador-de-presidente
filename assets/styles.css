@@ -1040,3 +1040,7 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .diplomacy-life-panel { margin-bottom: 14px; }
 .summit-option { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
 .summit-option small { color: var(--muted); }
+
+/* Paises anexados: marcados como territorio do jogador */
+.map-shape--mine { fill: var(--cyan); opacity: .8; stroke: #fff; stroke-width: 1; }
+.map-shape--mine.is-dim { opacity: .3; }
