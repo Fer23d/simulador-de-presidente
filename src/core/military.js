@@ -13,12 +13,19 @@ function consume(resources, key, amount) {
   return { ...resources, [key]: available(resources, key) - amount };
 }
 
+// Para comecar o Plano Nuclear (aba Tecnologia): pesquisa e caixa. Depois disso o governo pode financiar as duas frentes.
+export const NUCLEAR_PLAN_COST = Object.freeze({ research: 300, cash: 10_000_000_000 });
+
 function nuclearDefaults(nuclear = {}) {
+  const civilProgress = clamp(Number(nuclear.civilProgress) || 0, 0, 100);
+  const militaryProgress = clamp(Number(nuclear.militaryProgress) || 0, 0, 100);
   return {
-    civilProgress: clamp(Number(nuclear.civilProgress) || 0, 0, 100),
-    militaryProgress: clamp(Number(nuclear.militaryProgress) || 0, 0, 100),
+    civilProgress,
+    militaryProgress,
     civilOnline: Boolean(nuclear.civilOnline),
     bombBuilt: Boolean(nuclear.bombBuilt),
+    // Saves antigos que ja tinham programa andando contam como plano iniciado.
+    planStarted: Boolean(nuclear.planStarted) || civilProgress > 0 || militaryProgress > 0 || Boolean(nuclear.civilOnline) || Boolean(nuclear.bombBuilt),
     arsenal: Math.max(0, Math.floor(Number(nuclear.arsenal) || (nuclear.bombBuilt ? 1 : 0))),
     diplomaticPenaltyApplied: Boolean(nuclear.diplomaticPenaltyApplied),
   };
@@ -170,6 +177,21 @@ export function comprarEquipamento(military, economy, kind, resources = {}) {
   if (kind === 'jets') return comprarCacas(military, economy, 1, resources);
   if (kind === 'ships') return comprarNavios(military, economy, 1, resources);
   return { ok: false, reason: 'Equipamento inválido.', military, economy };
+}
+
+export function startNuclearPlan(military, economy, technology) {
+  const nuclear = nuclearDefaults(military.nuclear);
+  if (nuclear.planStarted) return { ok: false, reason: 'O Plano Nuclear já foi iniciado.', military, economy, technology };
+  const points = Number(technology?.points) || 0;
+  if (points < NUCLEAR_PLAN_COST.research) return { ok: false, reason: 'Pontos de Pesquisa insuficientes para iniciar o Plano Nuclear.', military, economy, technology };
+  if ((Number(economy.cash) || 0) < NUCLEAR_PLAN_COST.cash) return { ok: false, reason: 'Caixa insuficiente para iniciar o Plano Nuclear.', military, economy, technology };
+  return {
+    ok: true,
+    reason: 'Plano Nuclear iniciado: agora é possível financiar a energia civil e a dissuasão militar.',
+    military: normalizeMilitary({ ...military, nuclear: { ...nuclear, planStarted: true } }),
+    economy: { ...economy, cash: economy.cash - NUCLEAR_PLAN_COST.cash },
+    technology: { ...technology, points: points - NUCLEAR_PLAN_COST.research },
+  };
 }
 
 export function fundNuclearProject(military, economy, kind, amount, resources = {}) {

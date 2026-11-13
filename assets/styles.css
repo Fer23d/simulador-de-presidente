@@ -1030,3 +1030,8 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .achievement-card p { margin: 0; color: var(--muted); font-size: .8rem; }
 .achievement-card small { color: var(--amber); }
 .achievement-icon { font-size: 1.6rem; line-height: 1; }
+
+/* Plano Nuclear (aba Tecnologia) */
+.nuclear-plan-panel { margin-bottom: 14px; }
+.nuclear-track { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
+.nuclear-track small { color: var(--muted); }

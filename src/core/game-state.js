@@ -2,6 +2,7 @@ import { createCongress, negotiateSupport, voteOnLaw } from './congress.js';
 import { COUNTRIES, createCountryProfile, getCountryById } from '../data/countries.js';
 import { DEFAULT_BUDGET, advanceEconomy, clampBudgetRate, clampTaxRate, normalizeInflationHistory, setBudgetRate } from './economy.js';
 import { advanceGeopolitics, anexarPais as annexTreatyTarget, alterarNotaONU as changeOnuScore, aplicarReparacoes as applyReparationsTreaty, createGeopolitics, criarLiga as createLeagueState, desmilitarizarPais as demilitarizeTreatyTarget, declareWar, estabelecerFantoche as establishPuppet, exigirAnexacao as demandAnnexation, getGeopoliticalModifiers, insultarNacao as insultNation, importarRecursos as importResources, imporSancao as imposeSanction, interceptArticle5 as detectArticle5, inviteToLeague as inviteLeagueMember, isLegitimateDefenseTarget, processarAgressaoIA, proposeAlliance as formAlliance, proposeTradeTreaty, respondArticle5 as respondArticle5State, sabotar as sabotageCountry, saquearTesouro as lootTreatyTarget } from './geopolitics.js';
+import { startNuclearPlan } from './military.js';
 import { advanceMilitary, advanceUnrest, unrestStageMessage, applyNuclearCompletion, calculateMilitaryMaintenance, canAutogolpe, comprarBlindados, comprarCacas, comprarEquipamento, comprarNavios, createMilitary, createRegime, evaluateRegime, fundNuclearProject, getPoderTotal, normalizeMilitary, recrutarSoldado as recruitSoldiers } from './military.js';
 import { aggregateActiveLawEffects, LAWS, LAW_LABOR_REFORM } from './laws.js';
 import { advanceTechnology, createTechnology, getTechnologyModifiers, purchaseTechnology } from './technology.js';
@@ -867,8 +868,15 @@ export function autorizarAniquilacaoNuclear(state, contactId, authorizationCode)
   return state.vault_built ? enterWasteland(result, 'ataque-nuclear') : result;
 }
 
+export function iniciarPlanoNuclear(state) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const result = startNuclearPlan(state.military, state.economy, state.technology);
+  return { ...state, military: result.military, economy: result.economy, technology: result.technology, notice: result.reason };
+}
+
 export function fundNuclear(state, kind, amount) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  if (!state.military?.nuclear?.planStarted) return { ...state, notice: 'Inicie o Plano Nuclear na aba Tecnologia antes de financiar o programa.' };
   const result = fundNuclearProject(state.military, state.economy, kind, amount, state.country);
   return { ...state, military: result.military, economy: result.economy, country: result.resources ?? state.country, notice: result.reason };
 }

@@ -7,6 +7,7 @@ import {
   createGameState,
   attemptAutogolpe,
   fundNuclear,
+  iniciarPlanoNuclear,
   hydrateGameState,
   negotiate,
   proposeTreaty,
@@ -432,7 +433,8 @@ test('integrates diplomatic, nuclear, and war commands', () => {
   const state = createGameState('bra');
   const treaty = proposeTreaty(state, 'arg');
   const war = startWar(state, 'arg');
-  const nuclear = fundNuclear(state, 'civil', 5_000_000_000);
+  const planned = iniciarPlanoNuclear({ ...state, technology: { ...state.technology, points: 500 } });
+  const nuclear = fundNuclear(planned, 'civil', 5_000_000_000);
 
   assert.equal(treaty.geopolitics.contacts.find((item) => item.id === 'arg').tradeTreaty, true);
   assert.equal(war.geopolitics.contacts.find((item) => item.id === 'arg').atWar, true);

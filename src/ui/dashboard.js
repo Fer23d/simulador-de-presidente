@@ -10,7 +10,7 @@ import { CAMPAIGN_ACTIONS, getCampaignActionStatus, getPollingShare, hasElection
 import { LAWS } from '../core/laws.js';
 import { TECHNOLOGIES } from '../core/technology.js';
 import { MILITARY_TECHNOLOGIES } from '../core/tech_tree.js';
-import { calculateMilitaryMaintenance } from '../core/military.js';
+import { NUCLEAR_PLAN_COST, calculateMilitaryMaintenance } from '../core/military.js';
 import { calculateInternalMaintenance } from '../core/infrastructure.js';
 import { MINISTERS } from '../core/ministers.js';
 import { getRoomEconomyProfile, getRoomStorageCapacity, getRoomUpgradeCosts } from '../core/bunker_economy.js';
@@ -87,6 +87,7 @@ import {
   decretarRevolucaoSocialista,
   financiarRebeldes,
   fundNuclear,
+  iniciarPlanoNuclear,
   importarRecursos,
   insultarNacao,
   dispensarAlertaHostil,
@@ -1240,10 +1241,9 @@ export function militaryView(state) {
   const exercito = military.exercito ?? { soldados: military.soldiers ?? 0, blindados: 0 };
   const marinha = military.marinha ?? { navios: 0 };
   const aeronautica = military.aeronautica ?? { cacas: 0 };
-  const nuclear = military.nuclear ?? {};
   const maintenance = calculateMilitaryMaintenance(military, state.military_tech_level);
   const canCoup = state.regime.type === 'democracy' && military.support >= 85 && state.budget.defenseSpend >= 0.06;
-  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Tríade militar</p><h2>Poder total ${Number(military.power || 0).toFixed(1)}</h2><p class="notice">${state.notice}</p><div class="branch-list"><article class="branch-row"><div><strong>Exercito</strong><span>${formatNumber.format(exercito.soldados)} soldados | ${formatNumber.format(exercito.blindados)} blindados</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="recruit">Recrutar soldados</button><button type="button" class="quiet-action" data-action="buy-tank">Comprar blindado</button></div></article><article class="branch-row"><div><strong>Marinha</strong><span>${formatNumber.format(marinha.navios)} navios operacionais</span></div><button type="button" class="quiet-action" data-action="buy-ship">Comprar navio</button></article><article class="branch-row"><div><strong>Aeronáutica</strong><span>${formatNumber.format(aeronautica.cacas)} cacas operacionais</span></div><button type="button" class="quiet-action" data-action="buy-jet">Comprar caca</button></article></div><div class="ledger-row"><span>Apoio militar</span><strong>${Number(military.support || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>CUSTO DE MANUTENÇÃO MENSAL</span><strong>${formatMoney(maintenance)}</strong></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section><section class="panel"><p class="eyebrow">Arsenal estratégico</p><h2>Programa nuclear</h2><div class="ledger-row"><span>Energia civil</span><strong>${Number(nuclear.civilProgress || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Dissuasão militar</span><strong>${Number(nuclear.militaryProgress || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Armas nucleares</span><strong>${Number(military.armasNucleares || 0)}</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="nuclear" data-kind="civil" data-amount="5000000000">Energia 5 bi</button><button type="button" class="quiet-action" data-action="nuclear" data-kind="military" data-amount="5000000000">Dissuasão 5 bi</button></div></section>${renderMilitaryResearchProjects(state)}</section>`;
+  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Tríade militar</p><h2>Poder total ${Number(military.power || 0).toFixed(1)}</h2><p class="notice">${state.notice}</p><div class="branch-list"><article class="branch-row"><div><strong>Exercito</strong><span>${formatNumber.format(exercito.soldados)} soldados | ${formatNumber.format(exercito.blindados)} blindados</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="recruit">Recrutar soldados</button><button type="button" class="quiet-action" data-action="buy-tank">Comprar blindado</button></div></article><article class="branch-row"><div><strong>Marinha</strong><span>${formatNumber.format(marinha.navios)} navios operacionais</span></div><button type="button" class="quiet-action" data-action="buy-ship">Comprar navio</button></article><article class="branch-row"><div><strong>Aeronáutica</strong><span>${formatNumber.format(aeronautica.cacas)} cacas operacionais</span></div><button type="button" class="quiet-action" data-action="buy-jet">Comprar caca</button></article></div><div class="ledger-row"><span>Apoio militar</span><strong>${Number(military.support || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Armas nucleares (o Plano Nuclear fica em Tecnologia)</span><strong>${Number(military.armasNucleares || 0)}</strong></div><div class="ledger-row"><span>CUSTO DE MANUTENÇÃO MENSAL</span><strong>${formatMoney(maintenance)}</strong></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section>${renderMilitaryResearchProjects(state)}</section>`;
 }
 
 function cabinetView(state) {
@@ -1264,8 +1264,31 @@ O CAIXA PAGOU PELA MUDANCA.
 ESCOLHA O REGIME QUE SOBREVIVERA.</pre><div class="constitution-options"><button type="button" class="constitution-choice" data-action="government-select" data-government="empire">[ IMPERIO NACIONAL ]<span>Exercito brutal. ONU ignorada. O mundo se torna hostil.</span></button><button type="button" class="constitution-choice" data-action="government-select" data-government="corporate">[ SINDICATO CORPORATIVO ]<span>Impostos em dobro. Se o caixa quebrar, vem a aquisição hostil.</span></button></div></section>`;
 }
 
+function nuclearTrack(label, progress, kind, hint, canFund) {
+  const value = Math.max(0, Math.min(100, Number(progress) || 0));
+  return `<div class="nuclear-track"><div class="sector-head"><strong>${label}</strong><span>${value.toFixed(0)}%</span></div><div class="meter-track"><span style="width:${value}%"></span></div><small>${hint}</small><button type="button" class="quiet-action" data-action="nuclear" data-kind="${kind}" data-amount="5000000000" ${value >= 100 || !canFund ? 'disabled' : ''}>${value >= 100 ? 'Concluída' : 'Investir R$ 5 bi'}</button></div>`;
+}
+
+export function nuclearPlanPanel(state) {
+  const nuclear = state.military?.nuclear ?? {};
+  const points = Number(state.technology?.points) || 0;
+  const heading = '<div class="panel-heading"><div><p class="eyebrow">Programa estratégico</p><h2>Plano Nuclear</h2></div>';
+  if (!nuclear.planStarted) {
+    const ready = points >= NUCLEAR_PLAN_COST.research && (Number(state.economy?.cash) || 0) >= NUCLEAR_PLAN_COST.cash;
+    return `<section class="panel nuclear-plan-panel">${heading}<span class="country-code">NÃO INICIADO</span></div><p class="notice">Reúna cientistas, urânio e verba para uma frente civil (energia nuclear) e uma frente militar (dissuasão). Iniciar o plano custa ${NUCLEAR_PLAN_COST.research} PP e ${formatMoney(NUCLEAR_PLAN_COST.cash)}.</p><button type="button" class="primary-action" data-action="nuclear-plan" ${ready ? '' : 'disabled'}>[ COMEÇAR PLANO NUCLEAR ]</button>${ready ? '' : `<p class="notice">Faltam recursos: você tem ${points} PP e ${formatMoney(state.economy?.cash ?? 0)}.</p>`}</section>`;
+  }
+  const uranium = Number(state.country?.uranium) || 0;
+  const canFund = uranium >= 50 && (Number(state.economy?.cash) || 0) >= 5_000_000_000;
+  return `<section class="panel nuclear-plan-panel">${heading}<span class="country-code">EM ANDAMENTO</span></div>
+    ${nuclearTrack('Energia nuclear civil', nuclear.civilProgress, 'civil', 'Concluída: mais crescimento e infraestrutura 10% mais barata.', canFund)}
+    ${nuclearTrack('Dissuasão militar', nuclear.militaryProgress, 'military', 'Concluída: a bomba fica pronta, mas vêm sanções e relação −35 com todos os países.', canFund)}
+    <div class="ledger-row"><span>Urânio disponível (cada investimento de 5 bi usa 50)</span><strong>${formatNumber.format(uranium)}</strong></div>
+    <div class="ledger-row"><span>Armas nucleares</span><strong>${Number(state.military?.armasNucleares || 0)}</strong></div>
+  </section>`;
+}
+
 function technologyView(state) {
-  return `<section class="panel technology-panel"><div class="panel-heading"><div><p class="eyebrow">Inovação nacional</p><h2>Tecnologia</h2></div><span class="country-code">${state.technology.points} PP</span></div><div class="technology-list">${TECHNOLOGIES.map((technology) => {
+  return `${nuclearPlanPanel(state)}<section class="panel technology-panel"><div class="panel-heading"><div><p class="eyebrow">Inovação nacional</p><h2>Tecnologia</h2></div><span class="country-code">${state.technology.points} PP</span></div><div class="technology-list">${TECHNOLOGIES.map((technology) => {
     const unlocked = state.technology.unlocked.includes(technology.id);
     const affordable = state.technology.points >= technology.cost;
     return `<article class="technology-card ${unlocked ? 'unlocked' : ''}"><p class="eyebrow">${technology.branch}</p><h3>${technology.title}</h3><p>${technology.description}</p><div><span>${technology.cost} PP</span><button type="button" class="quiet-action" data-action="research" data-technology="${technology.id}" ${unlocked || !affordable ? 'disabled' : ''}>${unlocked ? 'Concluida' : 'Pesquisar'}</button></div></article>`;
@@ -2990,6 +3013,7 @@ export function mountDashboard(root) {
     if (action === 'buy-tank') { commit(comprarBlindado(state)); return; }
     if (action === 'buy-ship') { commit(comprarNavio(state)); return; }
     if (action === 'buy-jet') { commit(comprarCaca(state)); return; }
+    if (action === 'nuclear-plan') { commit(iniciarPlanoNuclear(state)); return; }
     if (action === 'nuclear') { commit(fundNuclear(state, control.dataset.kind, Number(control.dataset.amount))); return; }
     if (action === 'minister-hire') { commit(hireMinister(state, control.dataset.minister)); return; }
     if (action === 'minister-dismiss') { commit(dismissMinister(state, control.dataset.minister)); return; }
