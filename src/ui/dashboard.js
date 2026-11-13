@@ -173,6 +173,13 @@ const TROPHIES_KEY = 'simulador-presidente-trofeus-v1';
 const AUDIO_KEY = 'simulador-presidente-audio-v1';
 // O progresso do tutorial fica fora do save: quem já aprendeu não repete a cada Nova Partida.
 const TUTORIAL_KEY = 'simulador-presidente-tutorial-v1';
+const UI_PREFS_KEY = 'simulador-presidente-ui-v1';
+function readUiPrefs() {
+  try { const value = JSON.parse(localStorage.getItem(UI_PREFS_KEY) ?? '{}'); return value && typeof value === 'object' ? value : {}; } catch { return {}; }
+}
+function writeUiPref(key, value) {
+  try { localStorage.setItem(UI_PREFS_KEY, JSON.stringify({ ...readUiPrefs(), [key]: value })); } catch { /* so nesta sessao */ }
+}
 
 function oilStatRow(label, value, max, nextValue = null, unit = '') {
   const percent = max > 0 ? Math.round(Math.min(1, value / max) * 100) : 0;
@@ -823,7 +830,7 @@ export function summitCard(state) {
   return `<div class="congress-card summit-card"><strong>${summit.title} — ${summit.theme}</strong><p class="notice">${summit.text} Quem não comparece perde 2 pontos na ONU.</p>${options}</div>`;
 }
 
-export function identityPanel(state) {
+export function identityPanel(state, collapsed = false) {
   const reputation = { ...normalizeReputation(state.reputation), active: getActiveTitles(state) };
   reputation.current = reputation.active[0] ?? null;
   const current = reputation.current ? TITLES[reputation.current] : null;
@@ -831,6 +838,7 @@ export function identityPanel(state) {
   const original = getOriginalName(state);
   const annexed = getAnnexedCount(state);
   const heading = '<div class="panel-heading"><div><p class="eyebrow">Identidade</p><h2>Título e organização</h2></div>';
+  const toggle = `<button type="button" class="quiet-action panel-toggle" data-action="toggle-identity" aria-expanded="${collapsed ? 'false' : 'true'}">${collapsed ? '[ + EXPANDIR ]' : '[ − MINIMIZAR ]'}</button>`;
   const titleBlock = current
     ? `<div class="identity-title"><strong>${current.icon} ${escapeHtml(current.label)}</strong><p class="notice">${escapeHtml(current.story)}</p><small>${escapeHtml(current.effects)}</small></div>`
     : '<p class="notice">Você ainda não tem um título. O mundo dá nomes a quem age: veja abaixo o que desbloqueia cada um.</p>';
@@ -844,7 +852,11 @@ export function identityPanel(state) {
   const orgBlock = `<div class="identity-org"><div class="ledger-row"><span>Nome da organização</span><strong>${escapeHtml(state.country?.nome ?? '')}${renamed ? ` (antes: ${escapeHtml(original)})` : ''}</strong></div>${status.available || annexed >= ORG_MIN_ANNEXED ? '' : `<p class="notice">${escapeHtml(status.reason)}</p>`}<label class="profile-field"><span>Novo nome (vale para o jogo todo)</span><input type="text" maxlength="${ORG_NAME_MAX}" data-org-name placeholder="Ex.: União Soviética" ${annexed >= ORG_MIN_ANNEXED ? '' : 'disabled'}></label><div class="action-row"><button type="button" class="primary-action" data-action="rename-org" ${status.available ? '' : 'disabled'} title="${escapeHtml(status.reason)}">Rebatizar a organização</button>${renamed ? '<button type="button" class="quiet-action" data-action="restore-org-name">Voltar ao nome original</button>' : ''}</div>${annexed >= ORG_MIN_ANNEXED ? `<small>${status.available ? 'Ou escolha uma sugestão:' : escapeHtml(status.reason)}</small><div class="action-row">${suggestions}</div>` : ''}</div>`;
   const stats = reputation.stats;
   const record = `<div class="ledger-row"><span>Seu histórico</span><strong>${stats.warsDeclared} guerra(s) declarada(s) · ${stats.ntpSigned} tratado(s) de não proliferação · ${stats.territoriesLost} território(s) perdido(s)</strong></div>`;
-  return `<section class="panel identity-panel">${heading}<span class="country-code">${current ? escapeHtml(current.label.toUpperCase()) : 'SEM TÍTULO'}</span></div>${titleBlock}${others}${record}${orgBlock}</section>`;
+  const badge = `<span class="country-code">${current ? escapeHtml(current.label.toUpperCase()) : 'SEM TÍTULO'}</span>`;
+  if (collapsed) {
+    return `<section class="panel identity-panel is-collapsed">${heading}${badge}${toggle}</div><p class="notice">${current ? `${current.icon} ${escapeHtml(current.label)} · ` : ''}${escapeHtml(state.country?.nome ?? '')}</p></section>`;
+  }
+  return `<section class="panel identity-panel">${heading}${badge}${toggle}</div>${titleBlock}${others}${record}${orgBlock}</section>`;
 }
 
 export function nuclearRacePanel(state) {
@@ -1088,7 +1100,7 @@ export function diplomacyView(state, searchQuery = '', mapUi = {}) {
   const nuclearReady = unlockedTechs.has('nuke') && canAutorizarAniquilacaoNuclear(state);
   const peacePanel = `${target ? '<p class="notice">Um tratado de paz aguarda decisão no painel bloqueante.</p>' : ''}<p class="notice">Operação: Infiltrar Sósia do Líder em regimes não democráticos.</p>`;
   const leaguePanel = league ? `<div class="ledger-row"><span>${league.name}</span><strong>${league.memberIds.length} membros</strong></div>` : `<button type="button" class="quiet-action" data-action="league-create">Criar Nova Liga Global</button>`;
-  return `${identityPanel(state)}${nuclearRacePanel(state)}${tradeWarPanel(state)}${diplomacyLifePanel(state)}<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relações Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}${diplomacyMap(state, mapUi)}<label class="diplomacy-search"><span>Buscar país</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de países diplomáticos">${contacts.map((contact) => `<article class="bloc-row ${contact.wasteland ? 'wasteland-contact' : ''}" data-diplomacy-row data-country-name="${escapeHtml(contact.name)}"><div><strong>${contact.name} ${nuclearBadge(contact)}</strong><span>${contact.wasteland ? 'ZONA DE ANIQUILAÇÃO NUCLEAR' : `Relação ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | Defesa digital ${Number(contact.cyber_defense).toFixed(0)} | ${contact.trait}${contact.puppet ? ' | Fantoche' : ''}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.wasteland || contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button><button type="button" class="quiet-action" data-action="resource-import" data-contact="${contact.id}" data-resource="steel" data-amount="500" ${contact.wasteland || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Importar aço</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${contact.wasteland || contact.alliance || contact.atWar || contact.relation < 50 ? 'disabled' : ''}>Propor Aliança</button>${contact.alliance ? troopControls(state, contact, true) : ''}${cyberReady ? `<button type="button" class="quiet-action danger-action" data-action="cyber-attack" data-contact="${contact.id}" ${contact.wasteland || (Number(contact.cyber_paralyzed_until) || 0) > (Number(state.monthCounter) || 0) ? 'disabled' : ''}>Lançar Ciberataque</button>` : ''}${bioReady ? `<button type="button" class="quiet-action danger-action" data-action="synthetic-virus" data-contact="${contact.id}" ${contact.wasteland || contact.bio_infected ? 'disabled' : ''}>Lançar Vírus Sintético</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="false-flag" data-contact="${contact.id}" ${contact.wasteland || contact.atWar || contact.anexado ? 'disabled' : ''}>Orquestrar Falsa Bandeira</button><button type="button" class="quiet-action danger-action" data-action="insult" data-contact="${contact.id}" ${contact.wasteland || contact.atWar || contact.anexado ? 'disabled' : ''}>[ INSULTAR LÍDER ESTRANGEIRO ]</button>${union ? `<button type="button" class="quiet-action" data-action="union-absorb" data-contact="${contact.id}" ${contact.wasteland || contact.relation > 80 || contact.puppet ? '' : 'disabled'}>Absorver pela União</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="fund-rebels" data-contact="${contact.id}" ${contact.wasteland ? 'disabled' : ''}>Financiar Rebeldes</button>${nuclearReady && contact.atWar && !contact.wasteland ? `<button type="button" class="quiet-action nuclear-action" data-action="nuclear-codes" data-contact="${contact.id}">CÓDIGOS NUCLEARES</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.wasteland || contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('')}<p class="notice" data-diplomacy-empty hidden>Nenhum país corresponde à busca.</p></div></section>`;
+  return `${identityPanel(state, mapUi.identityCollapsed === true)}${nuclearRacePanel(state)}${tradeWarPanel(state)}${diplomacyLifePanel(state)}<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Diplomacia</p><h2>Relações Internacionais</h2></div><span class="country-code">ONU ${state.geopolitics.onuScore}/100</span></div>${peacePanel}${leaguePanel}${diplomacyMap(state, mapUi)}<label class="diplomacy-search"><span>Buscar país</span><input type="search" data-action="diplomacy-search" value="${escapeHtml(searchQuery)}" placeholder="Ex.: Argentina" autocomplete="off"></label><div class="diplomacy-list" aria-label="Lista de países diplomáticos">${contacts.map((contact) => `<article class="bloc-row ${contact.wasteland ? 'wasteland-contact' : ''}" data-diplomacy-row data-country-name="${escapeHtml(contact.name)}"><div><strong>${contact.name} ${nuclearBadge(contact)}</strong><span>${contact.wasteland ? 'ZONA DE ANIQUILAÇÃO NUCLEAR' : `Relação ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)} | Defesa digital ${Number(contact.cyber_defense).toFixed(0)} | ${contact.trait}${contact.puppet ? ' | Fantoche' : ''}`}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${contact.wasteland || contact.tradeTreaty || contact.atWar || contact.relation <= 30 ? 'disabled' : ''}>Propor Acordo Comercial</button><button type="button" class="quiet-action" data-action="resource-import" data-contact="${contact.id}" data-resource="steel" data-amount="500" ${contact.wasteland || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Importar aço</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${contact.wasteland || contact.alliance || contact.atWar || contact.relation < 50 ? 'disabled' : ''}>Propor Aliança</button>${contact.alliance ? troopControls(state, contact, true) : ''}${cyberReady ? `<button type="button" class="quiet-action danger-action" data-action="cyber-attack" data-contact="${contact.id}" ${contact.wasteland || (Number(contact.cyber_paralyzed_until) || 0) > (Number(state.monthCounter) || 0) ? 'disabled' : ''}>Lançar Ciberataque</button>` : ''}${bioReady ? `<button type="button" class="quiet-action danger-action" data-action="synthetic-virus" data-contact="${contact.id}" ${contact.wasteland || contact.bio_infected ? 'disabled' : ''}>Lançar Vírus Sintético</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="false-flag" data-contact="${contact.id}" ${contact.wasteland || contact.atWar || contact.anexado ? 'disabled' : ''}>Orquestrar Falsa Bandeira</button><button type="button" class="quiet-action danger-action" data-action="insult" data-contact="${contact.id}" ${contact.wasteland || contact.atWar || contact.anexado ? 'disabled' : ''}>[ INSULTAR LÍDER ESTRANGEIRO ]</button>${union ? `<button type="button" class="quiet-action" data-action="union-absorb" data-contact="${contact.id}" ${contact.wasteland || contact.relation > 80 || contact.puppet ? '' : 'disabled'}>Absorver pela União</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="fund-rebels" data-contact="${contact.id}" ${contact.wasteland ? 'disabled' : ''}>Financiar Rebeldes</button>${nuclearReady && contact.atWar && !contact.wasteland ? `<button type="button" class="quiet-action nuclear-action" data-action="nuclear-codes" data-contact="${contact.id}">CÓDIGOS NUCLEARES</button>` : ''}<button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${contact.wasteland || contact.atWar ? 'disabled' : ''}>${contact.atWar ? 'Em guerra' : 'Guerra'}</button></div></article>`).join('')}<p class="notice" data-diplomacy-empty hidden>Nenhum país corresponde à busca.</p></div></section>`;
 }
 
 export function filterDiplomacyRows(root, query = '') {
@@ -1719,7 +1731,7 @@ export function mountDashboard(root) {
   let activeTab = 'overview';
   let storageNotice = '';
   let diplomacyQuery = '';
-  let mapUi = { selected: null, filter: 'all', region: 'world' };
+  let mapUi = { selected: null, filter: 'all', region: 'world', identityCollapsed: readUiPrefs().identityCollapsed === true };
   const treatyModal = document.getElementById('modal-tratado');
   const crisisModal = document.getElementById('modal-crise');
   const unModal = document.getElementById('modal-onu');
@@ -3198,6 +3210,12 @@ export function mountDashboard(root) {
     if (action === 'map-region') { mapUi = { ...mapUi, region: control.dataset.region }; render(); return; }
     if (action === 'map-filter') { mapUi = { ...mapUi, filter: control.dataset.filter }; render(); return; }
     if (action === 'congress-demand') { commit(answerCongressDemand(state, control.dataset.accept === 'yes')); return; }
+    if (action === 'toggle-identity') {
+      mapUi = { ...mapUi, identityCollapsed: !mapUi.identityCollapsed };
+      writeUiPref('identityCollapsed', mapUi.identityCollapsed);
+      render();
+      return;
+    }
     if (action === 'rename-org') {
       const typed = root.querySelector('[data-org-name]')?.value ?? '';
       commit(renomearOrganizacao(state, control.dataset.name ?? typed));

@@ -1073,3 +1073,8 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 /* Guia: destaca a aba que o passo atual explica */
 .tab-button.tutorial-highlight { border-color: #ffb000; box-shadow: 0 0 0 2px #ffb000, 0 0 14px rgba(255, 176, 0, .55); color: #ffe2a8; animation: guide-pulse 1.4s ease-in-out infinite; }
 @keyframes guide-pulse { 50% { box-shadow: 0 0 0 2px #ffb000, 0 0 24px rgba(255, 176, 0, .9); } }
+
+/* Paineis minimizaveis */
+.panel-toggle { margin-left: 10px; padding: 4px 10px; font-size: 12px; }
+.identity-panel.is-collapsed { padding-bottom: 12px; }
+.identity-panel.is-collapsed .notice { margin: 6px 0 0; }

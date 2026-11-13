@@ -8,7 +8,7 @@ import {
 import { getTradeWarRisk } from '../src/core/trade_war.js';
 import { getAttackChance, processTerritoryThreats } from '../src/core/territory_defense.js';
 import { getRaceActionStatus } from '../src/core/nuclear_race.js';
-import { diplomacyMap, identityPanel } from '../src/ui/dashboard.js';
+import { diplomacyMap, diplomacyView, identityPanel } from '../src/ui/dashboard.js';
 
 const mapContacts = (state, fn) => ({ ...state, geopolitics: { ...state.geopolitics, contacts: state.geopolitics.contacts.map(fn) } });
 const annex = (state, ids) => mapContacts(state, (c) => (ids.includes(c.id) ? { ...c, anexado: true, destruido: true, militaryPower: 0 } : c));
@@ -210,4 +210,22 @@ test('avancar meses completos avalia os titulos sem erros', () => {
     state = { ...state, geopolitics: { ...state.geopolitics, peaceTreaty: null } };
   }
   assert.ok(state.reputation.active.includes('conqueror') || state.geopolitics.contacts.filter((c) => c.anexado).length < 2);
+});
+
+test('o painel de titulo e organizacao pode ser minimizado e expandido', () => {
+  const state = annex(base('rus'), ['chl', 'ury']);
+  const open = identityPanel(state);
+  assert.match(open, /data-action="toggle-identity"/);
+  assert.match(open, /MINIMIZAR/);
+  assert.match(open, /data-org-name/);
+  const closed = identityPanel(state, true);
+  assert.match(closed, /data-action="toggle-identity"/);
+  assert.match(closed, /EXPANDIR/);
+  assert.match(closed, /aria-expanded="false"/);
+  assert.match(closed, /Conquistador/, 'o titulo atual continua visivel');
+  assert.match(closed, new RegExp(state.country.nome));
+  assert.doesNotMatch(closed, /data-org-name|rename-org|Seu histórico/, 'o conteudo some quando minimizado');
+  assert.ok(closed.length < open.length / 2);
+  assert.match(diplomacyView(state, '', { identityCollapsed: true }), /is-collapsed/);
+  assert.doesNotMatch(diplomacyView(state, '', {}), /is-collapsed/);
 });
