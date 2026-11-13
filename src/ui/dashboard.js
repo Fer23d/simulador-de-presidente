@@ -62,7 +62,7 @@ import { drawOilDerrickPreview } from '../core/oil_renderer.js';
 import { assignGarrison, buildFort, dismissRaid, FORT_LEVELS, FORT_MAX_LEVEL, getArmySoldiers, getFortStatus, getThreatEstimate, RECRUIT_BATCH, RECRUIT_COST, recruitSoldiers, upgradeFort } from '../core/defense.js';
 import { drawFortPreview, drawRaidBattle, RAID_ANIMATION_MS } from '../core/defense_renderer.js';
 import { getIntroScenes } from '../core/intro_story.js';
-import { completeTutorialStep, createTutorial, getContextTip, getTutorialStep, markTipSeen, restartTutorial, setTutorialEnabled, syncTutorial } from '../core/tutorial.js';
+import { completeTutorialStep, createTutorial, getContextTip, getTutorialPhase, getTutorialStep, markTipSeen, restartTutorial, setTutorialEnabled, syncTutorial } from '../core/tutorial.js';
 import { createAudioEngine, getMusicMood, isStormWeather, normalizeAudioSettings } from '../core/audio.js';
 import { chooseEnding, createTrophies, ENDINGS, getEndingOptions, getEndingStory, getForcedEnding, isDoorOpen, recordTrophy } from '../core/endings.js';
 import { createSurfaceSectors, getExplorationPercent, getSectorExpedition, getSurfaceMap, SECTOR_TYPES } from '../core/surface_map.js';
@@ -1811,12 +1811,18 @@ export function mountDashboard(root) {
     const tip = step ? null : getContextTip(tutorial, state);
     const markup = tutorialCoachView(step, tip);
     const key = step ? `step:${step.id}` : tip ? `tip:${tip.id}` : '';
+    let navigated = false;
     if (tutorialCoach.dataset.key !== key) {
       tutorialCoach.dataset.key = key;
       tutorialCoach.innerHTML = markup;
       if (key) audio.play('chime');
+      // Cada passo do guia leva direto para a aba que ele explica.
+      if (step?.tab && activeTab !== step.tab && !titleOpen) { activeTab = step.tab; navigated = true; }
     }
     tutorialCoach.hidden = titleOpen || !markup;
+    if (navigated) render();
+    document.querySelectorAll('.tab-button.tutorial-highlight').forEach((button) => button.classList.remove('tutorial-highlight'));
+    if (step?.tab && !titleOpen) document.querySelector(`.tab-button[data-tab="${step.tab}"]`)?.classList.add('tutorial-highlight');
   }
 
   tutorialCoach.addEventListener('click', (event) => {
@@ -1830,6 +1836,8 @@ export function mountDashboard(root) {
     else return;
     saveTutorial();
     updateTutorial();
+    // Terminado o guia, o briefing que esperava aparece.
+    if (state.pendingBriefing && !getTutorialStep(tutorial, state)) render();
   });
 
   // Cinzas caindo atras do logo; o laco para quando a tela de titulo fecha.
@@ -2665,7 +2673,9 @@ export function mountDashboard(root) {
     if (dilemmaModal) { const markup = renderFinalDilemma(state); dilemmaModal.hidden = !markup; dilemmaModal.innerHTML = markup; }
     if (interrogationModal) { const markup = renderInterrogation(state); interrogationModal.hidden = !markup; interrogationModal.style.display = markup ? '' : 'none'; interrogationModal.innerHTML = markup; }
     if (storyModal) { const markup = renderStoryCard(state); storyModal.hidden = !markup; storyModal.innerHTML = markup; }
-    if (briefingModal) { const markup = renderPresidentialBriefing(state); briefingModal.hidden = !markup; briefingModal.innerHTML = markup; }
+    // O briefing espera o guia terminar para nao esconder a explicacao das abas.
+    const guideRunning = Boolean(getTutorialStep(tutorial, state)) && getTutorialPhase(state) === 'presidency';
+    if (briefingModal) { const markup = guideRunning ? '' : renderPresidentialBriefing(state); briefingModal.hidden = !markup; briefingModal.innerHTML = markup; }
     if (allianceModal) { const markup = renderAllianceInvocation(state); allianceModal.hidden = !markup; allianceModal.innerHTML = markup; }
     if (hostileAlertModal) { const markup = renderHostileAlert(state); hostileAlertModal.hidden = !markup; hostileAlertModal.innerHTML = markup; }
     if (governmentModal) { const markup = renderGovernmentModal(state); governmentModal.hidden = !markup; governmentModal.innerHTML = markup; }

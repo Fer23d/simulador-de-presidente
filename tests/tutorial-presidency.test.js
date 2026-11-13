@@ -8,10 +8,27 @@ const presidencySteps = TUTORIAL_STEPS.filter((step) => step.phase === 'presiden
 const game = (patch = {}) => ({ ...createGameState('bra'), ...patch });
 const finishAll = (tutorial) => presidencySteps.reduce((current, step) => completeTutorialStep(current, step.id), tutorial);
 
-test('o tutorial do Presidente tem oito passos, em ordem, e cada um aponta uma aba', () => {
-  assert.equal(presidencySteps.length, 8);
-  assert.deepEqual(presidencySteps.map((step) => step.id), ['presidency', 'pres_budget', 'pres_interest', 'pres_advance', 'pres_overview', 'pres_indicators', 'pres_congress', 'pres_map']);
+// Abas da barra lateral, na ordem em que aparecem.
+const SIDEBAR_TABS = ['overview', 'budget', 'indicators', 'diplomacy', 'military', 'cabinet', 'technology', 'projects', 'congress', 'history', 'countries', 'profile'];
+
+test('o guia do Presidente tem 17 passos, em ordem, e cada um aponta uma aba', () => {
+  assert.equal(presidencySteps.length, 17);
+  assert.equal(presidencySteps[0].id, 'presidency');
+  assert.equal(new Set(presidencySteps.map((step) => step.id)).size, presidencySteps.length, 'ids unicos');
   assert.ok(presidencySteps.slice(1).every((step) => step.tab));
+  assert.ok(presidencySteps.every((step) => step.title && step.text.length > 60));
+});
+
+test('o guia percorre as 12 abas da barra lateral, na ordem em que aparecem', () => {
+  const visited = [];
+  for (const step of presidencySteps) if (step.tab && visited[visited.length - 1] !== step.tab) visited.push(step.tab);
+  assert.deepEqual(visited.slice(0, SIDEBAR_TABS.length), SIDEBAR_TABS);
+  for (const tab of SIDEBAR_TABS) assert.ok(presidencySteps.some((step) => step.tab === tab), `falta explicar a aba ${tab}`);
+});
+
+test('o guia fala dos sistemas novos: nuclear, cupulas, guerra comercial, territorios e titulos', () => {
+  const text = presidencySteps.map((step) => step.text).join(' ');
+  for (const word of ['Plano Nuclear', 'cúpulas', 'Guerra comercial', 'anexados', 'Título e organização', 'Tropas no exterior', 'Corrida nuclear', 'AIEA']) assert.ok(text.includes(word), `o guia deveria citar: ${word}`);
 });
 
 test('os passos andam conforme o jogador confirma e avanca o mes', () => {
@@ -22,13 +39,13 @@ test('os passos andam conforme o jogador confirma e avanca o mes', () => {
     const step = getTutorialStep(tutorial, state);
     if (!step) break;
     seen.push(step.id);
-    if (step.id === 'pres_advance') { assert.ok(!step.ack, 'este passo espera a acao'); break; }
+    if (step.id === 'guide_advance') { assert.ok(!step.ack, 'este passo espera a acao'); break; }
     tutorial = completeTutorialStep(tutorial, step.id);
   }
-  assert.deepEqual(seen, ['presidency', 'pres_budget', 'pres_interest', 'pres_advance']);
+  assert.deepEqual(seen, ['presidency', 'guide_overview', 'guide_advance']);
   const after = syncTutorial(tutorial, game({ monthCounter: 1 }));
-  assert.ok(after.done.includes('pres_advance'));
-  assert.equal(getTutorialStep(after, game({ monthCounter: 1 })).id, 'pres_overview');
+  assert.ok(after.done.includes('guide_advance'));
+  assert.equal(getTutorialStep(after, game({ monthCounter: 1 })).id, 'guide_budget');
 });
 
 test('dicas do Presidente esperam o tutorial acabar e aparecem uma vez', () => {
@@ -55,10 +72,11 @@ test('cada situacao dispara a dica certa', () => {
 });
 
 test('o quadro do tutorial mostra o botao de ir para a aba', () => {
-  const step = presidencySteps.find((item) => item.id === 'pres_budget');
-  const html = tutorialCoachView({ ...step, number: 2, total: 8 });
+  const step = presidencySteps.find((item) => item.id === 'guide_budget');
+  const html = tutorialCoachView({ ...step, number: 4, total: 17 });
   assert.match(html, /data-tutorial-tab="budget"/);
-  assert.match(html, /data-tutorial-ack="pres_budget"/);
+  assert.match(html, /data-tutorial-ack="guide_budget"/);
+  assert.ok(html.includes("TUTORIAL 4/17"));
   const tip = TUTORIAL_TIPS.find((item) => item.id === 'p_debt');
   assert.match(tutorialCoachView(null, tip), /data-tutorial-tab="budget"/);
 });

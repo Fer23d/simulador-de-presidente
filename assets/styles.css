@@ -1069,3 +1069,7 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .identity-title small { color: var(--muted); }
 .identity-locked { opacity: .6; }
 .identity-org { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+
+/* Guia: destaca a aba que o passo atual explica */
+.tab-button.tutorial-highlight { border-color: #ffb000; box-shadow: 0 0 0 2px #ffb000, 0 0 14px rgba(255, 176, 0, .55); color: #ffe2a8; animation: guide-pulse 1.4s ease-in-out infinite; }
+@keyframes guide-pulse { 50% { box-shadow: 0 0 0 2px #ffb000, 0 0 24px rgba(255, 176, 0, .9); } }
