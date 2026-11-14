@@ -4,6 +4,10 @@
 //  - Depois que voce anexa 3 paises, o mundo acorda: potencias passam a anexar vizinhos mais fracos e a cobicar seus territorios.
 //  - Coalizoes (ate 5 paises, nenhum em duas): quem ataca um membro enfrenta todos; protegem os membros de anexacao.
 import { distanceKm } from './offensives.js';
+import { SPECIALTIES, getSpecialties } from './specialties.js';
+import { getPoderTotal } from './military.js';
+import { createGeopolitics } from './geopolitics.js';
+import { adjustFactions } from './factions.js';
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
 
@@ -23,10 +27,18 @@ export const COALITION_FORM_COOLDOWN = 6;
 export const COALITION_FORM_CHANCE = 0.1;
 export const COALITION_GROW_CHANCE = 0.04;
 export const BREAK_ONU_PENALTY = 15;
+export const PLAYER_BLOC_MAX_ALLIES = COALITION_MAX_MEMBERS - 1;
+export const BLOC_FOUND_COST_RATE = 0.01;
+export const BRIBE_COST_RATE = 0.015;
+export const BRIBE_COOLDOWN = 6;
+export const RENEW_WINDOW_MONTHS = 6;
+export const PACT_TRADE_RATE = 0.004;
+export const PACT_TRADE_AFTER = 12;
+export const LIBERATION_COST_RATE = 0.02;
 export const COALITION_COLORS = Object.freeze(['#ffb000', '#ff5ec4', '#7cf0ff', '#c8ff4d', '#ff8a4d']);
 
 export function createWorldOrder() {
-  return { pacts: {}, offer: null, cooldowns: {}, offerCooldowns: {}, signed: 0, broken: 0, awake: false, awakeMonth: -1, annexations: [], lastAnnexMonth: -99, coalitions: [], lastFormMonth: -99, coalitionWars: 0, nextCoalitionId: 1 };
+  return { pacts: {}, offer: null, cooldowns: {}, offerCooldowns: {}, signed: 0, broken: 0, awake: false, awakeMonth: -1, annexations: [], lastAnnexMonth: -99, coalitions: [], lastFormMonth: -99, coalitionWars: 0, nextCoalitionId: 1, liberated: 0 };
 }
 
 const month0 = (value, fallback = 0) => (Number.isFinite(Number(value)) ? Math.floor(Number(value)) : fallback);
@@ -45,17 +57,18 @@ export function normalizeWorldOrder(value) {
   const cleanMap = (map) => Object.fromEntries(Object.entries(map ?? {}).filter(([, v]) => Number.isFinite(Number(v))).map(([k, v]) => [k, month0(v)]));
   const seen = new Set();
   const coalitions = (Array.isArray(value.coalitions) ? value.coalitions : []).map((item, index) => {
-    const members = [...new Set((Array.isArray(item?.members) ? item.members : []).filter((id) => typeof id === 'string'))].filter((id) => !seen.has(id)).slice(0, COALITION_MAX_MEMBERS);
+    const isPlayer = item?.player === true;
+    const members = [...new Set((Array.isArray(item?.members) ? item.members : []).filter((id) => typeof id === 'string'))].filter((id) => !seen.has(id)).slice(0, isPlayer ? PLAYER_BLOC_MAX_ALLIES : COALITION_MAX_MEMBERS);
     members.forEach((id) => seen.add(id));
-    return { id: typeof item?.id === 'string' ? item.id : `bloc${index + 1}`, name: typeof item?.name === 'string' && item.name ? item.name.slice(0, 60) : 'Coalizão', leader: members.includes(item?.leader) ? item.leader : members[0], members, formedMonth: month0(item?.formedMonth), colorIndex: clamp(month0(item?.colorIndex, index), 0, COALITION_COLORS.length - 1) };
-  }).filter((item) => item.members.length >= 2);
-  const annexations = (Array.isArray(value.annexations) ? value.annexations : []).filter((item) => item && typeof item.by === 'string' && typeof item.victim === 'string').slice(-12).map((item) => ({ by: item.by, victim: item.victim, month: month0(item.month) }));
+    return { id: typeof item?.id === 'string' ? item.id : `bloc${index + 1}`, name: typeof item?.name === 'string' && item.name ? item.name.slice(0, 60) : 'Coalizão', leader: members.includes(item?.leader) ? item.leader : members[0], members, formedMonth: month0(item?.formedMonth), colorIndex: clamp(month0(item?.colorIndex, index), 0, COALITION_COLORS.length - 1), player: isPlayer };
+  }).filter((item) => item.members.length >= (item.player ? 1 : 2));
+  const annexations = (Array.isArray(value.annexations) ? value.annexations : []).filter((item) => item && typeof item.by === 'string' && typeof item.victim === 'string').slice(-12).map((item) => ({ by: item.by, victim: item.victim, month: month0(item.month), covets: Array.isArray(item.covets) ? item.covets.filter((id) => typeof id === 'string').slice(0, 3) : [] }));
   return {
     pacts, offer, cooldowns: cleanMap(value.cooldowns), offerCooldowns: cleanMap(value.offerCooldowns),
     signed: Math.max(0, month0(value.signed)), broken: Math.max(0, month0(value.broken)),
     awake: value.awake === true, awakeMonth: month0(value.awakeMonth, -1), annexations, lastAnnexMonth: month0(value.lastAnnexMonth, -99),
     coalitions, lastFormMonth: month0(value.lastFormMonth, -99), coalitionWars: Math.max(0, month0(value.coalitionWars)),
-    nextCoalitionId: Math.max(coalitions.length + 1, month0(value.nextCoalitionId, 1)),
+    nextCoalitionId: Math.max(coalitions.length + 1, month0(value.nextCoalitionId, 1)), liberated: Math.max(0, month0(value.liberated)),
   };
 }
 
@@ -205,6 +218,39 @@ export function answerPactOffer(state, accept) {
   return { ...setOrder(next, { ...order, offer: null, offerCooldowns: { ...order.offerCooldowns, [offer.id]: month + 8 } }), notice: `Você recusou o pacto oferecido por ${contact.name}.` };
 }
 
+// Pactos cumpridos ha mais de um ano aquecem o comercio: bonus mensal em caixa por pacto.
+export function getPactTradeBonus(state) {
+  const now = monthOf(state);
+  const gdp = Number(state.economy?.gdp) || 0;
+  const mature = listPacts(state).filter((item) => now - item.start >= PACT_TRADE_AFTER).length;
+  return (gdp / 12) * PACT_TRADE_RATE * mature;
+}
+
+export function getRenewStatus(state, contactId) {
+  const pact = getPact(state, contactId);
+  if (!pact) return { available: false, reason: 'Sem pacto em vigor.' };
+  const left = pact.end - monthOf(state);
+  if (left > RENEW_WINDOW_MONTHS) return { available: false, reason: `Só dá para renovar nos últimos ${RENEW_WINDOW_MONTHS} meses (faltam ${left}).` };
+  return { available: true, reason: '', left, chance: clamp(getPactChance(state, contactId, 1) + 0.3, 0.3, 0.95) };
+}
+
+export function renewPact(state, contactId, years = 1) {
+  const length = PACT_YEARS.includes(Number(years)) ? Number(years) : 1;
+  const status = getRenewStatus(state, contactId);
+  if (!status.available) return { ...state, notice: status.reason };
+  const contact = findContact(state, contactId);
+  const order = view(state);
+  const month = monthOf(state);
+  const chance = clamp(status.chance - (0.05 * (length - 1)), 0.2, 0.95);
+  if (hash(month, 911 + idSalt(contactId), state) >= chance) {
+    return { ...setOrder(state, { ...order, cooldowns: { ...order.cooldowns, [`r_${contactId}`]: month + 3 } }), notice: `${contact.name} não quis renovar agora (chance era ${Math.round(chance * 100)}%).` };
+  }
+  const pact = order.pacts[contactId];
+  const end = Math.min(pact.end + (length * 12), month + 48);
+  const next = patchContact(state, contactId, (item) => ({ relation: clamp((Number(item.relation) || 0) + 5, -100, 100) }));
+  return { ...setOrder(next, { ...order, pacts: { ...order.pacts, [contactId]: { ...pact, end, years: clamp(Math.ceil((end - pact.start) / 12), 1, 4) } } }), notice: `Pacto com ${contact.name} renovado até ${end - month} mês(es) à frente (relação +5).` };
+}
+
 function processPacts(state) {
   const month = monthOf(state);
   let next = state;
@@ -222,6 +268,8 @@ function processPacts(state) {
       const { [id]: gone, ...rest } = order.pacts;
       order = { ...order, pacts: rest };
       notes.push(`O pacto de não agressão com ${name} expirou. Proponha um novo se quiser manter a paz.`);
+    } else if (pact.end - month === RENEW_WINDOW_MONTHS) {
+      notes.push(`O pacto com ${name} expira em ${RENEW_WINDOW_MONTHS} meses: já dá para renová-lo na aba Diplomacia.`);
     } else if (pact.end - month === 3) {
       notes.push(`O pacto com ${name} expira em 3 meses.`);
     }
@@ -244,6 +292,8 @@ function processPacts(state) {
     }
   }
   next = setOrder(next, order);
+  const bonus = getPactTradeBonus(next);
+  if (bonus > 0) next = { ...next, economy: { ...next.economy, cash: (Number(next.economy.cash) || 0) + bonus } };
   return notes.length ? { ...next, notice: notes.join(' ') } : next;
 }
 
@@ -260,26 +310,51 @@ function protectedByCoalition(state, aggressor, victim) {
   return (Number(aggressor.militaryPower) || 0) <= total * 1.2;
 }
 
-function rivalAnnex(state, order, month) {
-  const aggressors = (state.geopolitics.contacts ?? [])
-    .filter((contact) => isLive(contact) && !isFriendly(state, contact) && (Number(contact.militaryPower) || 0) >= 25)
-    .sort((a, b) => (Number(b.militaryPower) || 0) - (Number(a.militaryPower) || 0)).slice(0, 10);
-  if (!aggressors.length) return { state, order };
-  const aggressor = aggressors[Math.floor(hash(month, 521, state) * aggressors.length) % aggressors.length];
+// Candidatos a ser anexados por um agressor, do mais provavel ao menos. Recursos que o agressor nao tem pesam a favor.
+function victimCandidates(state, aggressor, order) {
   const treatyTarget = state.geopolitics?.peaceTreaty?.targetId;
   const mine = getCoalitionOf(state, aggressor.id);
   const nuclearIds = Object.keys(state.nuclearRace?.programs ?? {});
-  const victims = (state.geopolitics.contacts ?? [])
+  const owned = new Set(getSpecialties(aggressor.id));
+  return (state.geopolitics.contacts ?? [])
     .filter((contact) => contact.id !== aggressor.id && isLive(contact) && !isFriendly(state, contact) && !contact.atWar && contact.id !== treatyTarget
       && !nuclearIds.includes(contact.id) && state.tradeWar?.active?.aggressorId !== contact.id
       && (Number(contact.militaryPower) || 0) < (Number(aggressor.militaryPower) || 0) * 0.7
       && distanceKm(aggressor.id, contact.id) <= ANNEX_MAX_KM
       && !(mine && mine.members.includes(contact.id))
       && !protectedByCoalition(state, aggressor, contact))
-    .map((contact) => ({ contact, score: (distanceKm(aggressor.id, contact.id) / 1000) + ((Number(contact.militaryPower) || 0) / Math.max(1, Number(aggressor.militaryPower) || 1)) * 4 }))
-    .sort((a, b) => a.score - b.score).slice(0, 3);
+    .map((contact) => {
+      const covets = getSpecialties(contact.id).filter((id) => !owned.has(id));
+      const score = (distanceKm(aggressor.id, contact.id) / 1000) + ((Number(contact.militaryPower) || 0) / Math.max(1, Number(aggressor.militaryPower) || 1)) * 4 - (covets.length * 2.5);
+      return { contact, score, covets };
+    })
+    .sort((a, b) => a.score - b.score);
+}
+
+// Radar: o alvo preferido das maiores potencias (para o jogador agir antes).
+export function getRivalTargets(state, limit = 3) {
+  const order = view(state);
+  const aggressors = (state.geopolitics?.contacts ?? [])
+    .filter((contact) => isLive(contact) && !isFriendly(state, contact) && (Number(contact.militaryPower) || 0) >= 25)
+    .sort((a, b) => (Number(b.militaryPower) || 0) - (Number(a.militaryPower) || 0)).slice(0, 6);
+  const targets = [];
+  for (const aggressor of aggressors) {
+    const best = victimCandidates(state, aggressor, order)[0];
+    if (best && !targets.some((item) => item.victimId === best.contact.id)) targets.push({ aggressorId: aggressor.id, aggressorName: aggressor.name, victimId: best.contact.id, victimName: best.contact.name, covets: best.covets });
+  }
+  return targets.slice(0, limit);
+}
+
+function rivalAnnex(state, order, month) {
+  const aggressors = (state.geopolitics.contacts ?? [])
+    .filter((contact) => isLive(contact) && !isFriendly(state, contact) && (Number(contact.militaryPower) || 0) >= 25)
+    .sort((a, b) => (Number(b.militaryPower) || 0) - (Number(a.militaryPower) || 0)).slice(0, 10);
+  if (!aggressors.length) return { state, order };
+  const aggressor = aggressors[Math.floor(hash(month, 521, state) * aggressors.length) % aggressors.length];
+  const victims = victimCandidates(state, aggressor, order).slice(0, 3);
   if (!victims.length) return { state, order };
-  const victim = victims[Math.floor(hash(month, 547, state) * victims.length) % victims.length].contact;
+  const pick = victims[Math.floor(hash(month, 547, state) * victims.length) % victims.length];
+  const victim = pick.contact;
   let next = patchContact(state, victim.id, { destruido: true, annexedBy: aggressor.id, militaryPower: 0, atWar: false });
   next = patchContact(next, aggressor.id, (item) => ({
     pib_base: (Number(item.pib_base) || 0) + ((Number(victim.pib_base) || 0) * 0.8),
@@ -288,8 +363,9 @@ function rivalAnnex(state, order, month) {
     annexationsMade: (Number(item.annexationsMade) || 0) + 1,
   }));
   const { [victim.id]: removedPact, ...pacts } = order.pacts;
-  const updated = { ...order, pacts, lastAnnexMonth: month, annexations: [...order.annexations, { by: aggressor.id, victim: victim.id, month }].slice(-12) };
-  return { state: { ...next, notice: `${aggressor.name} anexou ${victim.name}. As potências agora disputam o mapa.` }, order: updated };
+  const updated = { ...order, pacts, lastAnnexMonth: month, annexations: [...order.annexations, { by: aggressor.id, victim: victim.id, month, covets: pick.covets }].slice(-12) };
+  const reason = pick.covets.length ? ` de olho em ${pick.covets.map((id) => SPECIALTIES[id]?.long ?? id).join(' e ')}` : '';
+  return { state: { ...next, notice: `${aggressor.name} anexou ${victim.name}${reason}. As potências agora disputam o mapa.` }, order: updated };
 }
 
 // ---------- coalizoes ----------
@@ -298,13 +374,13 @@ function cleanCoalitions(state, order) {
   const coalitions = order.coalitions.map((coalition) => {
     const members = coalition.members.filter((id) => {
       const contact = findContact(state, id);
-      const ok = contact && isLive(contact) && !isFriendly(state, contact);
+      const ok = contact && isLive(contact) && (coalition.player ? isFriendly(state, contact) : !isFriendly(state, contact));
       if (!ok && contact && !contact.destruido) notes.push(`${contact.name} deixou a coalizão ${coalition.name}.`);
       return ok;
     });
     return { ...coalition, members, leader: members.includes(coalition.leader) ? coalition.leader : members[0] };
   }).filter((coalition) => {
-    if (coalition.members.length >= 2) return true;
+    if (coalition.members.length >= (coalition.player ? 1 : 2)) return true;
     notes.push(`A coalizão ${coalition.name} se desfez.`);
     return false;
   });
@@ -332,7 +408,7 @@ function growCoalitions(state, order, month) {
   const taken = new Set(order.coalitions.flatMap((item) => item.members));
   let notice = null;
   const coalitions = order.coalitions.map((coalition, index) => {
-    if (coalition.members.length >= COALITION_MAX_MEMBERS || hash(month, 677 + (index * 13), state) >= COALITION_GROW_CHANCE) return coalition;
+    if (coalition.player || coalition.members.length >= COALITION_MAX_MEMBERS || hash(month, 677 + (index * 13), state) >= COALITION_GROW_CHANCE) return coalition;
     const candidate = (state.geopolitics.contacts ?? []).filter((contact) => isLive(contact) && !isFriendly(state, contact) && !taken.has(contact.id) && (Number(contact.militaryPower) || 0) >= 8 && (Number(contact.relation) || 0) < 70 && distanceKm(coalition.leader, contact.id) <= 6500)
       .sort((a, b) => distanceKm(coalition.leader, a.id) - distanceKm(coalition.leader, b.id))[0];
     if (!candidate) return coalition;
@@ -351,6 +427,7 @@ export function coalitionRespond(state) {
   let nextOrder = order;
   const notes = [];
   for (const coalition of order.coalitions) {
+    if (coalition.player) continue;
     const warring = coalition.members.map((id) => findContact(next, id)).filter((contact) => contact?.atWar);
     if (!warring.length) continue;
     const joined = [];
@@ -383,17 +460,19 @@ export function processWorldOrder(state) {
     order = { ...order, awake: true, awakeMonth: month };
     notes.push(`Com ${AWAKEN_ANNEXATIONS} países anexados por você, o mundo reage: potências passam a anexar vizinhos, formar coalizões e cobiçar seus territórios.`);
   }
-  if (order.awake) {
+  {
     const cleaned = cleanCoalitions(next, order);
     order = cleaned.order;
     notes.push(...cleaned.notes);
+  }
+  if (order.awake) {
     if (month - order.lastAnnexMonth >= ANNEX_COOLDOWN_MONTHS && hash(month, 503, next) < ANNEX_MONTHLY_CHANCE) {
       const result = rivalAnnex(next, order, month);
       if (result.order !== order) notes.push(result.state.notice);
       next = result.state;
       order = result.order;
     }
-    if (order.coalitions.length < COALITION_MAX_COUNT && month - order.lastFormMonth >= COALITION_FORM_COOLDOWN && hash(month, 587, next) < COALITION_FORM_CHANCE) {
+    if (order.coalitions.filter((item) => !item.player).length < COALITION_MAX_COUNT && month - order.lastFormMonth >= COALITION_FORM_COOLDOWN && hash(month, 587, next) < COALITION_FORM_CHANCE) {
       const result = formCoalition(next, order, month);
       if (result.order !== order) notes.push(result.state.notice);
       next = result.state;
@@ -406,4 +485,135 @@ export function processWorldOrder(state) {
   next = coalitionRespond(setOrder(next, order));
   if (next.notice && next.notice !== state.notice && !notes.includes(next.notice)) notes.push(next.notice);
   return notes.length ? { ...next, notice: [...new Set(notes)].join(' ') } : next;
+}
+
+// ---------- contra-acoes: subornar membros e fundar o proprio bloco ----------
+const gdpOf = (state) => Number(state.economy?.gdp) || 0;
+
+export function getBribeStatus(state, contactId) {
+  if (!isActive(state)) return { available: false, reason: 'Indisponível.' };
+  const coalition = getCoalitionOf(state, contactId);
+  const contact = findContact(state, contactId);
+  if (!coalition || coalition.player || !contact) return { available: false, reason: 'Não é membro de uma coalizão rival.' };
+  const cooldown = view(state).cooldowns[`b_${contactId}`];
+  if (Number.isFinite(cooldown) && cooldown > monthOf(state)) return { available: false, reason: `Tentativa recente: aguarde ${cooldown - monthOf(state)} mês(es).` };
+  const cost = Math.round(gdpOf(state) * BRIBE_COST_RATE);
+  if ((Number(state.economy?.cash) || 0) < cost) return { available: false, reason: 'Caixa insuficiente.', cost };
+  const chance = clamp(0.25 + ((Number(contact.relation) || 0) / 200) + (coalition.members.length <= 3 ? 0.12 : 0) - (coalition.leader === contactId ? 0.15 : 0), 0.08, 0.8);
+  return { available: true, reason: '', cost, chance, coalition };
+}
+
+export function bribeMember(state, contactId) {
+  const status = getBribeStatus(state, contactId);
+  if (!status.available) return { ...state, notice: status.reason };
+  const contact = findContact(state, contactId);
+  const order = view(state);
+  const month = monthOf(state);
+  const paid = { ...state, economy: { ...state.economy, cash: (Number(state.economy.cash) || 0) - status.cost } };
+  const cooled = { ...order, cooldowns: { ...order.cooldowns, [`b_${contactId}`]: month + BRIBE_COOLDOWN } };
+  if (hash(month, 977 + idSalt(contactId), state) >= status.chance) {
+    const next = patchContact(paid, contactId, (item) => ({ relation: clamp((Number(item.relation) || 0) - 8, -100, 100) }));
+    return { ...setOrder(next, cooled), notice: `${contact.name} recusou o suborno e o escândalo vazou (relação −8). Chance era ${Math.round(status.chance * 100)}%.` };
+  }
+  const left = { ...cooled, coalitions: cooled.coalitions.map((item) => (item.id === status.coalition.id ? { ...item, members: item.members.filter((id) => id !== contactId), leader: item.leader === contactId ? item.members.find((id) => id !== contactId) : item.leader } : item)) };
+  const cleaned = cleanCoalitions(patchContact(paid, contactId, (item) => ({ relation: clamp((Number(item.relation) || 0) + 15, -100, 100) })), left);
+  const extra = cleaned.notes.length ? ` ${cleaned.notes.join(' ')}` : '';
+  return { ...setOrder(patchContact(paid, contactId, (item) => ({ relation: clamp((Number(item.relation) || 0) + 15, -100, 100) })), cleaned.order), notice: `${contact.name} deixou a coalizão ${status.coalition.name} após negociações discretas (relação +15).${extra}` };
+}
+
+export function getPlayerBloc(state) {
+  return (state.worldOrder?.coalitions ?? []).find((item) => item.player) ?? null;
+}
+
+export function getInviteStatus(state, contactId) {
+  if (!isActive(state)) return { available: false, reason: 'Indisponível.' };
+  const contact = findContact(state, contactId);
+  if (!contact || !isLive(contact)) return { available: false, reason: 'País fora do jogo.' };
+  if (!contact.alliance) return { available: false, reason: 'Só aliados formais entram no seu bloco.' };
+  if (contact.atWar) return { available: false, reason: 'Em guerra.' };
+  const bloc = getPlayerBloc(state);
+  if (bloc?.members.includes(contactId)) return { available: false, reason: 'Já está no seu bloco.', inBloc: true };
+  if (getCoalitionOf(state, contactId)) return { available: false, reason: 'Já pertence a outra coalizão.' };
+  if (bloc && bloc.members.length >= PLAYER_BLOC_MAX_ALLIES) return { available: false, reason: `Seu bloco já tem ${PLAYER_BLOC_MAX_ALLIES} aliados (limite de ${COALITION_MAX_MEMBERS} países com você).` };
+  const cost = bloc ? 0 : Math.round(gdpOf(state) * BLOC_FOUND_COST_RATE);
+  if ((Number(state.economy?.cash) || 0) < cost) return { available: false, reason: 'Caixa insuficiente para fundar o bloco.', cost };
+  return { available: true, reason: '', cost, founding: !bloc };
+}
+
+export function inviteToBloc(state, contactId) {
+  const status = getInviteStatus(state, contactId);
+  if (!status.available) return { ...state, notice: status.reason };
+  const order = view(state);
+  const contact = findContact(state, contactId);
+  const paid = { ...state, economy: { ...state.economy, cash: (Number(state.economy.cash) || 0) - status.cost } };
+  const next = patchContact(paid, contactId, (item) => ({ relation: clamp((Number(item.relation) || 0) + 6, -100, 100) }));
+  if (status.founding) {
+    const used = new Set(order.coalitions.map((item) => item.colorIndex));
+    const colorIndex = Math.max(0, COALITION_COLORS.findIndex((_, index) => !used.has(index)));
+    const bloc = { id: `bloc${order.nextCoalitionId}`, name: `Bloco de ${state.country?.nome ?? 'você'}`, leader: contactId, members: [contactId], formedMonth: monthOf(state), colorIndex, player: true };
+    return { ...setOrder(next, { ...order, coalitions: [...order.coalitions, bloc], nextCoalitionId: order.nextCoalitionId + 1 }), notice: `Você fundou o "${bloc.name}" com ${contact.name}: membros se protegem da anexação rival e reforçam a defesa dos seus territórios.` };
+  }
+  return { ...setOrder(next, { ...order, coalitions: order.coalitions.map((item) => (item.player ? { ...item, members: [...item.members, contactId] } : item)) }), notice: `${contact.name} entrou no seu bloco.` };
+}
+
+export function leaveBloc(state, contactId) {
+  const bloc = getPlayerBloc(state);
+  if (!bloc?.members.includes(contactId)) return { ...state, notice: 'Esse país não está no seu bloco.' };
+  const order = view(state);
+  const members = bloc.members.filter((id) => id !== contactId);
+  const coalitions = members.length ? order.coalitions.map((item) => (item.player ? { ...item, members, leader: members.includes(item.leader) ? item.leader : members[0] } : item)) : order.coalitions.filter((item) => !item.player);
+  return { ...setOrder(state, { ...order, coalitions }), notice: `${findContact(state, contactId)?.name ?? contactId} saiu do seu bloco.${members.length ? '' : ' O bloco foi dissolvido.'}` };
+}
+
+export function dissolveBloc(state) {
+  const bloc = getPlayerBloc(state);
+  if (!bloc) return { ...state, notice: 'Você não tem um bloco.' };
+  const order = view(state);
+  return { ...setOrder(state, { ...order, coalitions: order.coalitions.filter((item) => !item.player) }), notice: `O ${bloc.name} foi dissolvido.` };
+}
+
+// Forca dos membros do bloco somada a defesa dos territorios.
+export function getBlocSupport(state) {
+  const bloc = getPlayerBloc(state);
+  if (!bloc) return 0;
+  return bloc.members.reduce((sum, id) => sum + ((Number(findContact(state, id)?.militaryPower) || 0) * 0.08), 0);
+}
+
+// ---------- libertar paises anexados por rivais ----------
+export function getLiberationStatus(state, victimId) {
+  const victim = findContact(state, victimId);
+  if (!isActive(state)) return { available: false, reason: 'Indisponível.' };
+  if (!victim?.annexedBy) return { available: false, reason: 'Este país não foi anexado por um rival.' };
+  const captor = findContact(state, victim.annexedBy);
+  if (!captor || captor.destruido || captor.anexado) return { available: false, reason: 'O captor não está mais no jogo.' };
+  if (!captor.atWar) return { available: false, reason: `Declare guerra a ${captor.name} para libertar ${victim.name}.` };
+  const mine = getPoderTotal(state.military);
+  const theirs = Number(captor.militaryPower) || 0;
+  if (mine < theirs * 0.8) return { available: false, reason: `Suas forças (${mine.toFixed(0)}) ainda são fracas diante de ${captor.name} (${theirs.toFixed(0)}).` };
+  const cost = Math.round(gdpOf(state) * LIBERATION_COST_RATE);
+  if ((Number(state.economy?.cash) || 0) < cost) return { available: false, reason: 'Caixa insuficiente para a campanha.', cost };
+  return { available: true, reason: '', cost, captor };
+}
+
+export function liberateCountry(state, victimId, keep = false) {
+  const status = getLiberationStatus(state, victimId);
+  if (!status.available) return { ...state, notice: status.reason };
+  const victim = findContact(state, victimId);
+  const captor = status.captor;
+  const fresh = createGeopolitics(state.country.id).contacts.find((item) => item.id === victimId) ?? {};
+  const order = view(state);
+  let next = { ...state, economy: { ...state.economy, cash: (Number(state.economy.cash) || 0) - status.cost } };
+  next = patchContact(next, captor.id, (item) => ({
+    militaryPower: Math.max(0, (Number(item.militaryPower) || 0) * 0.8),
+    pib_base: Math.max(0, (Number(item.pib_base) || 0) - ((Number(fresh.pib_base) || 0) * 0.8)),
+    population: Math.max(0, (Number(item.population) || 0) - (Number(fresh.population) || 0)),
+  }));
+  if (keep) {
+    next = patchContact(next, victimId, { annexedBy: null, anexado: true, annexed: true, destruido: true, militaryPower: 0, relation: 0 });
+    next = { ...next, geopolitics: { ...next.geopolitics, annexedCountryIds: [...new Set([...(next.geopolitics.annexedCountryIds ?? []), victimId])] }, factions: adjustFactions(next.factions, { militares: 1.5, elite: 0.5 }) };
+    return { ...setOrder(next, { ...order, liberated: order.liberated + 1 }), notice: `${victim.name} foi arrancado de ${captor.name} e agora é território seu (campanha custou o equivalente a ${Math.round(LIBERATION_COST_RATE * 100)}% do PIB).` };
+  }
+  next = patchContact(next, victimId, { annexedBy: null, destruido: false, annexed: false, anexado: false, atWar: false, pib_base: fresh.pib_base ?? 0, population: fresh.population ?? 0, area_km2: fresh.area_km2 ?? 0, militaryPower: Math.max(5, Math.round((Number(fresh.militaryPower) || 10) * 0.4)), relation: 70 });
+  next = { ...next, geopolitics: { ...next.geopolitics, onuScore: clamp((Number(next.geopolitics.onuScore) || 0) + 6, 0, 100) }, factions: adjustFactions(next.factions, { militares: 1, trabalhadores: 0.5 }) };
+  return { ...setOrder(next, { ...order, liberated: order.liberated + 1 }), notice: `${victim.name} foi libertado de ${captor.name} e voltou a ser independente: relação +70 e a ONU aplaudiu (+6).` };
 }

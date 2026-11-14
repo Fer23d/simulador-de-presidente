@@ -19,7 +19,7 @@ import { isLandlocked } from '../data/military_equipment.js';
 import { bumpReputationStat, createReputation, normalizeReputation, processReputation, renameOrganization, restoreOrganizationName } from './identity.js';
 import { moveCapital, processCapital } from './capital.js';
 import { processTerritoryThreats } from './territory_defense.js';
-import { answerPactOffer, breakPact, coalitionRespond, createWorldOrder, normalizeWorldOrder, penalizePactWar, processWorldOrder, proposePact } from './world_order.js';
+import { answerPactOffer, bribeMember, dissolveBloc, inviteToBloc, leaveBloc, liberateCountry, renewPact, breakPact, coalitionRespond, createWorldOrder, normalizeWorldOrder, penalizePactWar, processWorldOrder, proposePact } from './world_order.js';
 import { createNuclearRace, normalizeNuclearRace, processNuclearRace, proposeNonProliferation, sabotageProgram, setbackProgram } from './nuclear_race.js';
 import { beginOffensive, createOffensives, getAttackStatus, normalizeOffensives, processOffensives, requestReinforcements, stopOffensive } from './offensives.js';
 import { createDeployments, normalizeDeployments, processDeployments, recallTroops, requestAlliedTroops, sendTroops } from './deployments.js';
@@ -520,6 +520,36 @@ export function proporPacto(state, contactId, years = 1) {
 export function romperPacto(state, contactId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   return syncWorld(breakPact(state, contactId));
+}
+
+export function renovarPacto(state, contactId, years = 1) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(renewPact(state, contactId, years));
+}
+
+export function subornarMembro(state, contactId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(bribeMember(state, contactId));
+}
+
+export function convidarParaBloco(state, contactId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(inviteToBloc(state, contactId));
+}
+
+export function tirarDoBloco(state, contactId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(leaveBloc(state, contactId));
+}
+
+export function dissolverBloco(state) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(dissolveBloc(state));
+}
+
+export function libertarPais(state, victimId, keep = false) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(liberateCountry(state, victimId, keep));
 }
 
 export function responderPacto(state, accept) {

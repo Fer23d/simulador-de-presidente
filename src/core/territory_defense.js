@@ -7,7 +7,7 @@ import { adjustFactions } from './factions.js';
 import { distanceKm, getBaseForce, getSupply } from './offensives.js';
 import { normalizeMilitary } from './military.js';
 import { bumpReputationStat, getTitleModifier } from './identity.js';
-import { getCoalitionBonus, hasPact, isAwake } from './world_order.js';
+import { getBlocSupport, getCoalitionBonus, hasPact, isAwake } from './world_order.js';
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
 const count = (value) => Math.max(0, Math.floor(Number(value) || 0));
@@ -60,7 +60,7 @@ export function getDefenseScore(state, territoryId) {
   const force = getBaseForce(state, territoryId);
   const loyaltyBonus = (getTerritoryLoyalty(state, territoryId) / 100) * 4;
   const capitalBonus = getCapitalId(state) === territoryId ? CAPITAL_DEFENSE_BONUS : 0;
-  return { score: (force.power + loyaltyBonus) * DEFENDER_ADVANTAGE + capitalBonus, share: force.share };
+  return { score: (force.power + loyaltyBonus + getBlocSupport(state)) * DEFENDER_ADVANTAGE + capitalBonus, share: force.share };
 }
 
 export function getAttackChance(state, territoryId) {

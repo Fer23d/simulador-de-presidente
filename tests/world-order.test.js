@@ -133,3 +133,81 @@ test('hydrate: save antigo sem worldOrder carrega com padroes', () => {
   assert.equal(dirty.coalitions[0].members.length, 5);
   assert.equal(dirty.coalitions.length, 1, 'membro repetido nao entra em segunda coalizao');
 });
+
+import { bribeMember, dissolveBloc, getBribeStatus, getInviteStatus, getLiberationStatus, getPactTradeBonus, getPlayerBloc, getRenewStatus, getRivalTargets, inviteToBloc, leaveBloc, liberateCountry, renewPact } from '../src/core/world_order.js';
+
+const rich = (s) => ({ ...s, economy: { ...s.economy, cash: 5e12 } });
+
+test('suborno: membro sai da coalizao e coalizao pequena se desfaz', () => {
+  let s = rich(base());
+  s = { ...s, worldOrder: { ...normalizeWorldOrder(null), coalitions: [{ id: 'b1', name: 'X', leader: 'deu', members: ['deu', 'fra'], formedMonth: 1, colorIndex: 0 }] } };
+  assert.equal(getBribeStatus(s, 'arg').available, false);
+  let out = null;
+  for (let m = 12; m < 80 && !out; m += 1) {
+    const r = bribeMember({ ...s, monthCounter: m }, 'fra');
+    if (!getCoalitionOf(r, 'fra')) out = r;
+  }
+  assert.ok(out, 'algum mes funciona');
+  assert.equal(out.worldOrder.coalitions.length, 0, 'sobrou 1 membro: dissolvida');
+  assert.ok(out.economy.cash < 5e12);
+});
+
+test('bloco do jogador: fundar, limite de 4 aliados, nao entra em outra coalizao, sair', () => {
+  let s = rich(base());
+  for (const id of ['arg', 'chl', 'per', 'col', 'ury']) s = patch(s, id, { alliance: true, relation: 80 });
+  assert.equal(getInviteStatus(s, 'arg').founding, true);
+  s = inviteToBloc(s, 'arg');
+  assert.equal(getPlayerBloc(s).members.length, 1);
+  for (const id of ['chl', 'per', 'col']) s = inviteToBloc(s, id);
+  assert.equal(getPlayerBloc(s).members.length, 4);
+  assert.equal(getInviteStatus(s, 'ury').available, false, 'limite de 5 com voce');
+  assert.equal(getInviteStatus(s, 'arg').available, false);
+  s = leaveBloc(s, 'arg');
+  assert.equal(getPlayerBloc(s).members.length, 3);
+  s = dissolveBloc(s);
+  assert.equal(getPlayerBloc(s), null);
+  // aliado que perde a alianca sai do bloco no ciclo mensal
+  let t = inviteToBloc(rich(patch(base(), 'arg', { alliance: true })), 'arg');
+  t = patch(t, 'arg', { alliance: false });
+  t = processWorldOrder(t);
+  assert.equal(getPlayerBloc(t), null);
+});
+
+test('radar: rivais miram quem tem recurso que lhes falta', () => {
+  const s = { ...base(), worldOrder: { ...normalizeWorldOrder(null), awake: true } };
+  const targets = getRivalTargets(s, 3);
+  assert.ok(targets.length >= 1);
+  assert.ok(targets.every((t) => t.victimId !== t.aggressorId));
+});
+
+test('libertacao: exige guerra com o captor e forca; devolve independencia ou anexa', () => {
+  let s = rich(base());
+  s = patch(s, 'geo', { destruido: true, annexedBy: 'rus', militaryPower: 0 });
+  assert.equal(getLiberationStatus(s, 'geo').available, false);
+  s = patch(s, 'rus', { atWar: true, militaryPower: 5 });
+  assert.equal(getLiberationStatus(s, 'geo').available, true);
+  const free = liberateCountry(s, 'geo', false);
+  assert.equal(contact(free, 'geo').annexedBy, null);
+  assert.equal(contact(free, 'geo').destruido, false);
+  assert.ok(contact(free, 'geo').militaryPower > 0);
+  const kept = liberateCountry(s, 'geo', true);
+  assert.equal(contact(kept, 'geo').anexado, true);
+  assert.ok(kept.geopolitics.annexedCountryIds.includes('geo'));
+  assert.equal(kept.worldOrder.liberated, 1);
+});
+
+test('renovacao: so nos ultimos 6 meses e bonus comercial depois de 1 ano', () => {
+  let s = rich(patch(base(), 'arg', { relation: 80 }));
+  s = { ...s, monthCounter: 30, worldOrder: { ...normalizeWorldOrder(null), pacts: { arg: { start: 0, end: 60, years: 4 } } } };
+  assert.equal(getRenewStatus(s, 'arg').available, false);
+  assert.ok(getPactTradeBonus(s) > 0);
+  const late = { ...s, monthCounter: 56 };
+  assert.equal(getRenewStatus(late, 'arg').available, true);
+  let out = null;
+  for (let m = 54; m < 59 && !out; m += 1) {
+    const r = renewPact({ ...late, monthCounter: m }, 'arg', 2);
+    if (r.worldOrder.pacts.arg.end > 60) out = r;
+  }
+  assert.ok(out, 'alguma tentativa renova');
+  assert.ok(out.worldOrder.pacts.arg.end <= out.monthCounter + 48);
+});

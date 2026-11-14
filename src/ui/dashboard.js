@@ -14,7 +14,7 @@ import { getCapitalStatus } from '../core/capital.js';
 import { describePressure, getPlayerNuclearPressure, getPrograms, getRaceActionStatus, normalizeNuclearRace } from '../core/nuclear_race.js';
 import { MIN_ATTACK_SHARE, describeOdds, getAttackStatus, getBaseForce, getReinforcementStatus, normalizeOffensives } from '../core/offensives.js';
 import { getCapitalId } from '../core/deployments.js';
-import { COALITION_MAX_MEMBERS, MAX_ACTIVE_PACTS, PACT_YEARS, AWAKEN_ANNEXATIONS, coalitionColor, getAnnexedByRivals, getCoalitionOf, getPact, getPactChance, getPactStatus, isAwake, listPacts, normalizeWorldOrder } from '../core/world_order.js';
+import { COALITION_MAX_MEMBERS, MAX_ACTIVE_PACTS, PACT_YEARS, AWAKEN_ANNEXATIONS, coalitionColor, getAnnexedByRivals, getCoalitionOf, getPact, getPactChance, getPactStatus, isAwake, listPacts, normalizeWorldOrder, getBribeStatus, getInviteStatus, getPlayerBloc, getLiberationStatus, getRenewStatus, getRivalTargets, getPactTradeBonus, PLAYER_BLOC_MAX_ALLIES } from '../core/world_order.js';
 import { LOAN_MONTHS, REINFORCEMENT_CAP, getAlliedForcesPower, getContingent, getDeployStatus, getDeployed, getDeploymentKind, getRequestStatus, getTerritoryLoyalty, normalizeDeployments, troopsPower, UPKEEP_RATE } from '../core/deployments.js';
 import { CONCESSIONS, DIVERSIFY_CAP, describeRisk, getAppealChance, getMonthlyTradeWarLoss, getNegotiationChance, getTradeWarActionStatus, getTradeWarMitigation, getTradeWarRisk, normalizeTradeWar } from '../core/trade_war.js';
 import { SUMMITS, getSummitChance, normalizeDiplomacyLife } from '../core/diplomacy_life.js';
@@ -106,6 +106,12 @@ import {
   proporPacto,
   romperPacto,
   responderPacto,
+  renovarPacto,
+  subornarMembro,
+  convidarParaBloco,
+  tirarDoBloco,
+  dissolverBloco,
+  libertarPais,
   sabotarProgramaNuclear,
   suspenderOfensiva,
   pedirReforcos,
@@ -1092,16 +1098,32 @@ function mapLegend(state, order) {
 }
 
 function worldOrderControls(state, contact) {
-  if (contact.destruido || contact.anexado || contact.annexed || contact.annexedBy || contact.wasteland) return '';
+  if (contact.annexedBy) {
+    const captor = state.geopolitics.contacts.find((item) => item.id === contact.annexedBy);
+    const lib = getLiberationStatus(state, contact.id);
+    const cost = lib.cost ? ` (${formatMoney(lib.cost)})` : '';
+    return `<div class="troop-controls"><small>Anexado por <strong>${escapeHtml(captor?.name ?? contact.annexedBy)}</strong>. ${lib.available ? 'Suas forças bastam para uma campanha de libertação.' : escapeHtml(lib.reason)}</small><div class="action-row"><button type="button" class="quiet-action" data-action="liberate" data-contact="${contact.id}" data-keep="no" ${lib.available ? '' : 'disabled'} title="${escapeHtml(lib.reason)}">Libertar e devolver a independência${cost}</button><button type="button" class="quiet-action danger-action" data-action="liberate" data-contact="${contact.id}" data-keep="yes" ${lib.available ? '' : 'disabled'} title="${escapeHtml(lib.reason)}">Libertar e anexar${cost}</button></div></div>`;
+  }
+  if (contact.destruido || contact.anexado || contact.annexed || contact.wasteland) return '';
   const pact = getPact(state, contact.id);
   const bloc = getCoalitionOf(state, contact.id);
+  let blocActions = '';
+  if (bloc && !bloc.player) {
+    const bribe = getBribeStatus(state, contact.id);
+    blocActions = `<button type="button" class="quiet-action" data-action="bribe-member" data-contact="${contact.id}" ${bribe.available ? '' : 'disabled'} title="${escapeHtml(bribe.reason)}">Subornar para sair da coalizão${bribe.available ? ` (${formatMoney(bribe.cost)} · ${Math.round(bribe.chance * 100)}%)` : ''}</button>`;
+  } else if (bloc?.player) {
+    blocActions = `<button type="button" class="quiet-action" data-action="leave-bloc" data-contact="${contact.id}">Tirar do meu bloco</button>`;
+  } else if (contact.alliance) {
+    const invite = getInviteStatus(state, contact.id);
+    blocActions = `<button type="button" class="quiet-action" data-action="invite-bloc" data-contact="${contact.id}" ${invite.available ? '' : 'disabled'} title="${escapeHtml(invite.reason)}">${invite.founding ? 'Fundar bloco com este aliado' : 'Convidar para o meu bloco'}${invite.available && invite.cost ? ` (${formatMoney(invite.cost)})` : ''}</button>`;
+  }
   const blocLine = bloc ? `<small>Membro da coalizão <strong>${escapeHtml(bloc.name)}</strong> (${bloc.members.length} países): atacar este país traz todos os membros para a guerra.</small>` : '';
   if (pact) {
-    return `<div class="troop-controls"><small>Pacto de não agressão em vigor: restam ${pact.end - (Number(state.monthCounter) || 0)} mês(es). Declarar guerra a este país é traição (ONU −15).</small>${blocLine}<div class="action-row"><button type="button" class="quiet-action danger-action" data-action="break-pact" data-contact="${contact.id}">Romper pacto</button></div></div>`;
+    return `<div class="troop-controls"><small>Pacto de não agressão em vigor: restam ${pact.end - (Number(state.monthCounter) || 0)} mês(es). Declarar guerra a este país é traição (ONU −15).</small>${blocLine}<div class="action-row"><button type="button" class="quiet-action danger-action" data-action="break-pact" data-contact="${contact.id}">Romper pacto</button>${blocActions}</div></div>`;
   }
   const status = getPactStatus(state, contact.id, 1);
   const options = PACT_YEARS.map((years) => `<option value="${years}">${years} ano${years > 1 ? 's' : ''} (${Math.round(getPactChance(state, contact.id, years) * 100)}%)</option>`).join('');
-  return `<div class="troop-controls">${blocLine}<div class="action-row"><select data-pact-years="${contact.id}" aria-label="Duração do pacto" ${status.available ? '' : 'disabled'}>${options}</select><button type="button" class="quiet-action" data-action="propose-pact" data-contact="${contact.id}" ${status.available ? '' : 'disabled'} title="${escapeHtml(status.reason)}">Propor pacto de não agressão</button></div>${status.available ? '' : `<small>${escapeHtml(status.reason)}</small>`}</div>`;
+  return `<div class="troop-controls">${blocLine}<div class="action-row">${blocActions}<select data-pact-years="${contact.id}" aria-label="Duração do pacto" ${status.available ? '' : 'disabled'}>${options}</select><button type="button" class="quiet-action" data-action="propose-pact" data-contact="${contact.id}" ${status.available ? '' : 'disabled'} title="${escapeHtml(status.reason)}">Propor pacto de não agressão</button></div>${status.available ? '' : `<small>${escapeHtml(status.reason)}</small>`}</div>`;
 }
 
 function worldOrderPanel(state) {
@@ -1109,14 +1131,25 @@ function worldOrderPanel(state) {
   const nameOf = (id) => state.geopolitics.contacts.find((item) => item.id === id)?.name ?? id;
   const offer = order.offer ? `<div class="congress-card"><strong>Proposta de pacto: ${escapeHtml(nameOf(order.offer.id))}</strong><p class="notice">Oferece um pacto de não agressão de ${order.offer.years} ano(s). Responda em até ${Math.max(0, order.offer.deadline - (Number(state.monthCounter) || 0))} mês(es).</p><div class="action-row"><button type="button" class="primary-action" data-action="pact-answer" data-accept="yes">Aceitar</button><button type="button" class="quiet-action" data-action="pact-answer" data-accept="no">Recusar</button></div></div>` : '';
   const pacts = listPacts(state);
-  const pactRows = pacts.map((item) => `<article class="branch-row"><div><strong>${escapeHtml(item.name)}</strong><span>Pacto de ${item.years} ano(s) · restam ${item.monthsLeft} mês(es)</span></div><button type="button" class="quiet-action danger-action" data-action="break-pact" data-contact="${item.id}">Romper</button></article>`).join('');
+  const pactRows = pacts.map((item) => {
+    const renew = getRenewStatus(state, item.id);
+    const years = renew.available ? `<select data-renew-years="${item.id}" aria-label="Duração da renovação">${PACT_YEARS.map((y) => `<option value="${y}">+${y} ano${y > 1 ? 's' : ''}</option>`).join('')}</select><button type="button" class="quiet-action" data-action="renew-pact" data-contact="${item.id}" title="Chance ${Math.round(renew.chance * 100)}%">Renovar (${Math.round(renew.chance * 100)}%)</button>` : '';
+    return `<article class="branch-row"><div><strong>${escapeHtml(item.name)}</strong><span>Pacto de ${item.years} ano(s) · restam ${item.monthsLeft} mês(es)${renew.available ? ' · janela de renovação aberta' : ''}</span></div><div class="action-row">${years}<button type="button" class="quiet-action danger-action" data-action="break-pact" data-contact="${item.id}">Romper</button></div></article>`;
+  }).join('');
+  const tradeBonus = getPactTradeBonus(state);
+  const tradeLine = tradeBonus > 0 ? `<div class="ledger-row"><span>Bônus comercial dos pactos cumpridos</span><strong>+${formatMoney(tradeBonus)} por mês</strong></div>` : '';
+  const bloc = getPlayerBloc(state);
+  const blocCard = bloc
+    ? `<h3>Seu bloco</h3><article class="branch-row"><div><strong><i class="legend-swatch legend-swatch--bloc" style="border-color:${coalitionColor(bloc)}"></i> ${escapeHtml(bloc.name)}</strong><span>${bloc.members.length}/${PLAYER_BLOC_MAX_ALLIES} aliados: ${escapeHtml(bloc.members.map((id) => state.geopolitics.contacts.find((item) => item.id === id)?.name ?? id).join(', '))}. Membros resistem à anexação rival e reforçam a defesa dos seus territórios.</span></div><button type="button" class="quiet-action danger-action" data-action="dissolve-bloc">Dissolver</button></article>`
+    : '<p class="notice">Você ainda não tem bloco. Abra um aliado no mapa e funde um bloco de defesa coletiva (até 4 aliados).</p>';
+  const radar = getRivalTargets(state).map((item) => `<div class="ledger-row"><span>${escapeHtml(item.aggressorName)} está de olho em ${escapeHtml(item.victimName)}</span><strong>${item.covets.length ? item.covets.map((id) => SPECIALTIES[id]?.icon ?? '').join(' ') + ' ' + escapeHtml(item.covets.map((id) => SPECIALTIES[id]?.long ?? id).join(', ')) : 'sem recurso decisivo'}</strong></div>`).join('');
   const annexedCount = Math.max(state.geopolitics.contacts.filter((item) => item.anexado).length, (state.geopolitics.annexedCountryIds ?? []).length);
   const status = isAwake(state)
     ? '<p class="notice"><strong>As potências acordaram.</strong> Outros países anexam vizinhos mais fracos, formam coalizões e cobiçam seus territórios. Pactos protegem; guarnições seguram a base.</p>'
     : `<p class="notice">O mundo observa. Com ${AWAKEN_ANNEXATIONS} países anexados (hoje ${annexedCount}), as potências passam a anexar vizinhos, formar coalizões e atacar seus territórios.</p>`;
-  const blocRows = order.coalitions.map((item) => `<article class="branch-row"><div><strong><i class="legend-swatch legend-swatch--bloc" style="border-color:${coalitionColor(item)}"></i> ${escapeHtml(item.name)}</strong><span>${item.members.length}/${COALITION_MAX_MEMBERS} · ${escapeHtml(item.members.map(nameOf).join(', '))}</span></div></article>`).join('');
-  const annexRows = getAnnexedByRivals(state).map((item) => `<div class="ledger-row"><span>${escapeHtml(item.name)}</span><strong>anexado por ${escapeHtml(nameOf(item.annexedBy))}</strong></div>`).join('');
-  return `<section class="panel world-order-panel"><div class="panel-heading"><div><p class="eyebrow">Ordem mundial</p><h2>Pactos e coalizões</h2></div><span class="country-code">PACTOS ${pacts.length}/${MAX_ACTIVE_PACTS}</span></div>${offer}${status}${pactRows ? `<h3>Pactos em vigor</h3><div class="branch-list">${pactRows}</div>` : '<p class="notice">Nenhum pacto em vigor. Abra um país no mapa para propor um pacto de 1 a 4 anos.</p>'}${blocRows ? `<h3>Coalizões</h3><div class="branch-list">${blocRows}</div>` : ''}${annexRows ? `<h3>Anexados por potências rivais</h3>${annexRows}` : ''}</section>`;
+  const blocRows = order.coalitions.filter((item) => !item.player).map((item) => `<article class="branch-row"><div><strong><i class="legend-swatch legend-swatch--bloc" style="border-color:${coalitionColor(item)}"></i> ${escapeHtml(item.name)}</strong><span>${item.members.length}/${COALITION_MAX_MEMBERS} · ${escapeHtml(item.members.map(nameOf).join(', '))}</span></div></article>`).join('');
+  const annexRows = getAnnexedByRivals(state).map((item) => `<div class="ledger-row"><span>${escapeHtml(item.name)}</span><strong>anexado por ${escapeHtml(nameOf(item.annexedBy))}${(() => { const log = [...order.annexations].reverse().find((entry) => entry.victim === item.id); return log?.covets?.length ? ' · ' + log.covets.map((id) => SPECIALTIES[id]?.icon ?? '').join(' ') : ''; })()}</strong></div>`).join('');
+  return `<section class="panel world-order-panel"><div class="panel-heading"><div><p class="eyebrow">Ordem mundial</p><h2>Pactos e coalizões</h2></div><span class="country-code">PACTOS ${pacts.length}/${MAX_ACTIVE_PACTS}</span></div>${offer}${status}${pactRows ? `<h3>Pactos em vigor</h3><div class="branch-list">${pactRows}</div>${tradeLine}` : '<p class="notice">Nenhum pacto em vigor. Abra um país no mapa para propor um pacto de 1 a 4 anos.</p>'}${blocCard}${isAwake(state) && radar ? `<h3>Radar das potências</h3>${radar}` : ''}${blocRows ? `<h3>Coalizões</h3><div class="branch-list">${blocRows}</div>` : ''}${annexRows ? `<h3>Anexados por potências rivais</h3>${annexRows}` : ''}</section>`;
 }
 
 function troopControls(state, contact, compact = false) {
@@ -3382,6 +3415,16 @@ export function mountDashboard(root) {
       commit(proporPacto(state, control.dataset.contact, years));
       return;
     }
+    if (action === 'renew-pact') {
+      const years = Number(root.querySelector(`[data-renew-years="${control.dataset.contact}"]`)?.value) || 1;
+      commit(renovarPacto(state, control.dataset.contact, years));
+      return;
+    }
+    if (action === 'bribe-member') { commit(subornarMembro(state, control.dataset.contact)); return; }
+    if (action === 'invite-bloc') { commit(convidarParaBloco(state, control.dataset.contact)); return; }
+    if (action === 'leave-bloc') { commit(tirarDoBloco(state, control.dataset.contact)); return; }
+    if (action === 'dissolve-bloc') { commit(dissolverBloco(state)); return; }
+    if (action === 'liberate') { commit(libertarPais(state, control.dataset.contact, control.dataset.keep === 'yes')); return; }
     if (action === 'break-pact') { commit(romperPacto(state, control.dataset.contact)); return; }
     if (action === 'pact-answer') { commit(responderPacto(state, control.dataset.accept === 'yes')); return; }
     if (action === 'trade-war') { commit(acaoGuerraComercial(state, control.dataset.kind, control.dataset.option)); return; }
