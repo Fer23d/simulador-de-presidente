@@ -1109,3 +1109,18 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .legend-swatch--rival { background: #4d3446; border-color: #4d3446; }
 .world-order-panel h3 { margin: 12px 0 6px; font-size: 14px; color: var(--muted); }
 select[data-pact-years] { background: #0a100d; color: var(--phosphor); border: 1px solid var(--line); padding: 4px; font: inherit; }
+
+/* Missoes historicas */
+.missions-grid { display: grid; gap: 16px; }
+.mission-card-panel.is-running { border-color: var(--phosphor); }
+.mission-card-panel.is-done { opacity: .85; }
+.mission-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.mission-chip { padding: 2px 8px; border: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.mission-chip--mine { border-color: #7cf0ff; color: #7cf0ff; }
+.mission-chip--rival, .mission-chip--lost { border-color: #ff6b5e; color: #ff6b5e; }
+.mission-chip--war { border-color: #ffb000; color: #ffb000; }
+.mission-overlay { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(2, 8, 5, .88); }
+.mission-story { width: min(720px, 100%); max-height: 90vh; overflow-y: auto; padding: 22px 26px; background: #07110b; border: 1px solid var(--phosphor); box-shadow: 0 0 24px rgba(80, 255, 140, .25); }
+.mission-story h3 { margin: 16px 0 4px; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; color: #ffb000; }
+.mission-story p { line-height: 1.55; }
+.mission-story--epilogue { border-color: #ffd24d; }

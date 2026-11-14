@@ -19,6 +19,8 @@ import { isLandlocked } from '../data/military_equipment.js';
 import { bumpReputationStat, createReputation, normalizeReputation, processReputation, renameOrganization, restoreOrganizationName } from './identity.js';
 import { moveCapital, processCapital } from './capital.js';
 import { processTerritoryThreats } from './territory_defense.js';
+import { abandonMission, checkMissions, createMissions, dismissEpilogue, getMissionStatus, normalizeMissions, processMissions, startMission } from './historical_missions.js';
+import { MISSIONS as HISTORICAL_MISSIONS } from '../data/historical_missions.js';
 import { answerPactOffer, bribeMember, dissolveBloc, inviteToBloc, leaveBloc, liberateCountry, renewPact, breakPact, coalitionRespond, createWorldOrder, normalizeWorldOrder, penalizePactWar, processWorldOrder, proposePact } from './world_order.js';
 import { createNuclearRace, normalizeNuclearRace, processNuclearRace, proposeNonProliferation, sabotageProgram, setbackProgram } from './nuclear_race.js';
 import { beginOffensive, createOffensives, getAttackStatus, normalizeOffensives, processOffensives, requestReinforcements, stopOffensive } from './offensives.js';
@@ -351,6 +353,7 @@ function createGameStateBase(countryId = 'bra', playerProfile = {}) {
     ...createOffensives(),
     nuclearRace: createNuclearRace(),
     worldOrder: createWorldOrder(),
+    missions: createMissions(),
     capitalId: null,
     capitalMoveMonth: -99,
     orgRenameMonth: -99,
@@ -549,7 +552,30 @@ export function dissolverBloco(state) {
 
 export function libertarPais(state, victimId, keep = false) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
-  return syncWorld(liberateCountry(state, victimId, keep));
+  return checkMissions(syncWorld(liberateCountry(state, victimId, keep)));
+}
+
+// Pegar uma missao faz o jogador assumir o pais da historia: se ele governa outro pais, comeca uma nova partida no pais da missao
+// (as missoes ja cumpridas ficam guardadas).
+export function aceitarMissao(state, missionId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  const mission = HISTORICAL_MISSIONS[missionId];
+  const status = getMissionStatus(state, missionId);
+  if (!mission || !status.available) return startMission(state, missionId);
+  if (!mission.home || mission.home === state.country?.id) return startMission(state, missionId);
+  const fresh = createGameState(mission.home, state.playerProfile);
+  const carried = { ...fresh, missions: { ...fresh.missions, completed: normalizeMissions(state.missions).completed } };
+  const started = startMission(carried, missionId);
+  return { ...started, notice: `Você assumiu o governo de ${fresh.country.nome} para cumprir a missão "${mission.title}". ${mission.objective}` };
+}
+
+export function abandonarMissao(state) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return abandonMission(state);
+}
+
+export function fecharEpilogoMissao(state) {
+  return dismissEpilogue(state);
 }
 
 export function responderPacto(state, accept) {
@@ -926,7 +952,7 @@ export function anexarPais(state, contactId) {
     ? state
     : { ...state, geopolitics: { ...state.geopolitics, peaceTreaty: { targetId, status: 'pending' } } };
   const annexed = annexTreatyTarget(prepared);
-  return markAnnexationTension(syncWorld({ ...annexed, military: normalizeMilitary(annexed.military) }));
+  return checkMissions(markAnnexationTension(syncWorld({ ...annexed, military: normalizeMilitary(annexed.military) })));
 }
 
 export function resolvePeaceTreaty(state, contactId, choice) {
@@ -1269,7 +1295,7 @@ export function advanceMonth(state) {
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? internalProjectState.notice ?? `mês encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superávit' : 'com déficit'}.`;
 
-  const completedState = processYearEnd(processElection(processSpecialties(processEquipment(processReputation(processCapital(processTerritoryThreats(processWorldOrder(processNuclearRace(processOffensives(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
+  const completedState = processYearEnd(processElection(processSpecialties(processEquipment(processReputation(processCapital(processTerritoryThreats(processMissions(processWorldOrder(processNuclearRace(processOffensives(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
     ...state,
     economy: constitutionalState.economy,
     geopolitics: geopoliticalMonth.geopolitics,
@@ -1296,7 +1322,7 @@ export function advanceMonth(state) {
     activeLawIds: corporateState.activeLawIds,
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
-  })))))))))))))));
+  }))))))))))))))));
   const corporateDefault = resolveCorporateDefault(completedState);
   if (corporateDefault.regime?.gameOver) return resolverFinalDeJogo(corporateDefault);
   const article5State = detectArticle5(completedState);
@@ -1516,6 +1542,7 @@ export function hydrateGameState(serialized) {
       ...normalizeOffensives(parsed),
       nuclearRace: normalizeNuclearRace(parsed.nuclearRace),
       worldOrder: normalizeWorldOrder(parsed.worldOrder),
+      missions: normalizeMissions(parsed.missions),
       orgRenameMonth: Number.isFinite(Number(parsed.orgRenameMonth)) ? Math.floor(Number(parsed.orgRenameMonth)) : -99,
       reputation: normalizeReputation(parsed.reputation),
       capitalId: typeof parsed.capitalId === 'string' && parsed.capitalId ? parsed.capitalId : null,

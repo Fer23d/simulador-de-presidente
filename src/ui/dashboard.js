@@ -14,6 +14,8 @@ import { getCapitalStatus } from '../core/capital.js';
 import { describePressure, getPlayerNuclearPressure, getPrograms, getRaceActionStatus, normalizeNuclearRace } from '../core/nuclear_race.js';
 import { MIN_ATTACK_SHARE, describeOdds, getAttackStatus, getBaseForce, getReinforcementStatus, normalizeOffensives } from '../core/offensives.js';
 import { getCapitalId } from '../core/deployments.js';
+import { MISSION_LIST, MISSIONS } from '../data/historical_missions.js';
+import { describeMissionTime, getMissionStatus, getProgress, getTargets, normalizeMissions } from '../core/historical_missions.js';
 import { COALITION_MAX_MEMBERS, MAX_ACTIVE_PACTS, PACT_YEARS, AWAKEN_ANNEXATIONS, coalitionColor, getAnnexedByRivals, getCoalitionOf, getPact, getPactChance, getPactStatus, isAwake, listPacts, normalizeWorldOrder, getBribeStatus, getInviteStatus, getPlayerBloc, getLiberationStatus, getRenewStatus, getRivalTargets, getPactTradeBonus, PLAYER_BLOC_MAX_ALLIES } from '../core/world_order.js';
 import { LOAN_MONTHS, REINFORCEMENT_CAP, getAlliedForcesPower, getContingent, getDeployStatus, getDeployed, getDeploymentKind, getRequestStatus, getTerritoryLoyalty, normalizeDeployments, troopsPower, UPKEEP_RATE } from '../core/deployments.js';
 import { CONCESSIONS, DIVERSIFY_CAP, describeRisk, getAppealChance, getMonthlyTradeWarLoss, getNegotiationChance, getTradeWarActionStatus, getTradeWarMitigation, getTradeWarRisk, normalizeTradeWar } from '../core/trade_war.js';
@@ -106,6 +108,9 @@ import {
   proporPacto,
   romperPacto,
   responderPacto,
+  aceitarMissao,
+  abandonarMissao,
+  fecharEpilogoMissao,
   renovarPacto,
   subornarMembro,
   convidarParaBloco,
@@ -1035,6 +1040,7 @@ function mapMatches(contact, filter, richIds, extra = {}) {
   if (filter === 'all') return true;
   if (filter === 'blocs') return extra.blocIds?.has(contact.id) === true;
   if (filter === 'pacts') return extra.pactIds?.has(contact.id) === true;
+  if (filter === 'mission') return extra.missionIds?.has(contact.id) === true;
   if (filter === 'nuclear') return contact.has_nukes === true;
   if (filter === 'rich') return richIds.has(contact.id);
   return mapStatus(contact) === filter;
@@ -1051,7 +1057,7 @@ function relationFill(relation) {
 }
 
 export function diplomacyMap(state, mapUi = {}) {
-  const filter = MAP_FILTERS.some(([id]) => id === mapUi.filter) ? mapUi.filter : 'all';
+  const filter = (MAP_FILTERS.some(([id]) => id === mapUi.filter) || mapUi.filter === 'mission') ? mapUi.filter : 'all';
   const region = MAP_REGIONS[mapUi.region] ? mapUi.region : 'world';
   const contacts = (state.world ?? state.geopolitics.contacts).filter((contact) => (!contact.destruido || contact.anexado || contact.annexed || contact.annexedBy) && contact.id !== state.country.id && (COUNTRY_PATHS[contact.id] || COUNTRY_POINTS[contact.id]));
   const tariffId = normalizeTradeWar(state.tradeWar).active?.aggressorId;
@@ -1062,7 +1068,7 @@ export function diplomacyMap(state, mapUi = {}) {
   const richIds = new Set([...contacts].sort((a, b) => (Number(b.pib_base) || 0) - (Number(a.pib_base) || 0)).slice(0, 25).map((contact) => contact.id));
   const shapes = contacts.map((contact) => {
     const status = contact.id === tariffId ? 'tariff' : (programIds.has(contact.id) && !contact.atWar ? 'atomic' : mapStatus(contact));
-    const matches = mapMatches(contact, filter, richIds, { blocIds, pactIds }) && (!mapUi.resource || getSpecialties(contact.id).includes(mapUi.resource));
+    const matches = mapMatches(contact, filter, richIds, { blocIds, pactIds, missionIds: new Set(normalizeMissions(state.missions).active ? getTargets(state, normalizeMissions(state.missions).active.id) : []) }) && (!mapUi.resource || getSpecialties(contact.id).includes(mapUi.resource));
     const selected = mapUi.selected === contact.id;
     const classes = `map-shape map-shape--${status === 'annexed' ? 'mine' : status}${matches ? '' : ' is-dim'}${selected ? ' is-selected' : ''}${pactIds.has(contact.id) ? ' has-pact' : ''}${blocIds.has(contact.id) ? ' in-bloc' : ''}`;
     const bloc = getCoalitionOf(state, contact.id);
@@ -1080,7 +1086,9 @@ export function diplomacyMap(state, mapUi = {}) {
     ? `<path d="${COUNTRY_PATHS[state.country.id]}" class="map-shape map-shape--self"><title>${escapeHtml(state.country.nome)} (você)</title></path>`
     : (COUNTRY_POINTS[state.country.id] ? `<circle cx="${COUNTRY_POINTS[state.country.id][0]}" cy="${COUNTRY_POINTS[state.country.id][1]}" r="5" class="map-shape map-shape--self"></circle>` : '');
   const regionChips = MAP_REGION_LABELS.map(([id, label]) => `<button type="button" class="map-chip map-chip--region" data-action="map-region" data-region="${id}" aria-pressed="${id === region}">${label}</button>`).join('');
-  const filterChips = MAP_FILTERS.map(([id, label]) => `<button type="button" class="map-chip" data-action="map-filter" data-filter="${id}" aria-pressed="${id === filter}">${label}</button>`).join('');
+  const activeMission = normalizeMissions(state.missions).active;
+  const missionIds = new Set(activeMission ? getTargets(state, activeMission.id) : []);
+  const filterChips = [...MAP_FILTERS, ...(activeMission ? [['mission', 'Missão']] : [])].map(([id, label]) => `<button type="button" class="map-chip" data-action="map-filter" data-filter="${id}" aria-pressed="${id === filter}">${label}</button>`).join('');
   const picked = contacts.find((contact) => contact.id === mapUi.selected);
   const attackBase = mapUi.attackFrom ? contacts.find((item) => item.id === mapUi.attackFrom) : null;
   const resourceBanner = mapUi.resource && SPECIALTIES[mapUi.resource] ? `<p class="notice resource-banner">Mostrando no mapa os países com ${SPECIALTIES[mapUi.resource].icon} ${SPECIALTIES[mapUi.resource].long}. <button type="button" class="quiet-action" data-action="map-resource" data-resource="">Limpar</button></p>` : '';
@@ -1089,6 +1097,52 @@ export function diplomacyMap(state, mapUi = {}) {
   const card = picked ? attackBanner + mapCountryCard(picked, picked.id === tariffId, state, mapUi, programIds.has(picked.id)) : '<p class="notice">Clique em um país para ver os dados e agir. Verde: aliado · azul: comércio · vermelho vivo: guerra · tons de vermelho a verde: relação (do pior ao melhor) · ciano: você e os países que anexou (território seu) · laranja: quem impôs tarifas a você · roxo: país com programa nuclear em curso.</p>';
   const [vx, vy, vw, vh] = MAP_REGIONS[region];
   return `<div class="diplomacy-map">${picked ? '' : attackBanner}${resourceBanner}<div class="map-filters">${regionChips}</div><div class="map-filters">${filterChips}</div><svg class="world-map-svg" viewBox="${vx} ${vy} ${vw} ${vh}" role="group" aria-label="Mapa-múndi de relações internacionais"><rect x="0" y="0" width="1000" height="500" class="map-ocean"></rect><path d="${LAND_BACKGROUND}" class="map-land"></path>${shapes}${home}</svg>${legend}${card}</div>`;
+}
+
+const STATUS_LABEL = Object.freeze({ mine: ['✔ anexado', 'positive'], rival: ['anexado por rival', 'negative'], war: ['em guerra', ''], puppet: ['fantoche seu', ''], free: ['independente', ''], lost: ['indisponível', 'negative'] });
+
+export function missionsView(state) {
+  const data = normalizeMissions(state.missions);
+  const cards = MISSION_LIST.map((mission) => {
+    const progress = getProgress(state, mission.id);
+    const status = getMissionStatus(state, mission.id);
+    const done = data.completed[mission.id];
+    const running = data.active?.id === mission.id;
+    const percent = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
+    const chips = progress.items.map((item) => `<span class="mission-chip mission-chip--${item.status}" title="${escapeHtml(STATUS_LABEL[item.status][0])}">${escapeHtml(item.name)}</span>`).join('');
+    const action = done
+      ? '<span class="country-code">CUMPRIDA</span>'
+      : running
+        ? '<button type="button" class="quiet-action danger-action" data-action="mission-abandon">Abandonar missão</button>'
+        : `<button type="button" class="primary-action" data-action="mission-preview" data-mission="${mission.id}" ${status.available ? '' : 'disabled'} title="${escapeHtml(status.reason)}">Ver dossiê e aceitar</button>`;
+    const doneNote = done ? `<p class="notice">Concluída em ${describeMissionTime(done.months)} com ${done.wars} guerra(s) declarada(s). <button type="button" class="quiet-action" data-action="mission-preview" data-mission="${mission.id}">Reler o dossiê</button></p>` : '';
+    const readNote = !done && !running ? `<p class="notice"><button type="button" class="quiet-action" data-action="mission-preview" data-mission="${mission.id}">Ler a história</button></p>` : '';
+    const lostNote = progress.lost && !done ? '<p class="notice negative">Algum alvo foi destruído e não pode mais ser anexado: abandone a missão ou escolha outra.</p>' : '';
+    return `<section class="panel mission-card-panel${running ? ' is-running' : ''}${done ? ' is-done' : ''}"><div class="panel-heading"><div><p class="eyebrow">${mission.icon} Dificuldade ${escapeHtml(mission.difficulty)}</p><h2>${escapeHtml(mission.title)}</h2></div>${action}</div><p class="notice">${escapeHtml(mission.subtitle)}. ${escapeHtml(mission.objective)}</p><div class="ledger-row"><span>Progresso</span><strong>${progress.done} / ${progress.total}</strong></div><div class="meter-track"><span style="width:${percent}%"></span></div><div class="mission-chips">${chips}</div>${doneNote}${readNote}${lostNote}</section>`;
+  }).join('');
+  return `<section class="view-grid missions-grid"><section class="panel"><div class="panel-heading"><div><p class="eyebrow">Desafios históricos</p><h2>Missões</h2></div><span class="country-code">${Object.keys(data.completed).length}/${MISSION_LIST.length} CUMPRIDAS</span></div><p class="notice">Escolha uma missão para ler a história real do império e aceitar o desafio. Só uma missão fica ativa por vez, e o progresso conta países que você anexou. Use o filtro "Missão" no mapa da Diplomacia para ver os alvos.</p></section>${cards}</section>`;
+}
+
+export function renderMissionOverlay(state, ui = {}) {
+  const data = normalizeMissions(state.missions);
+  const epilogueId = data.pendingEpilogue;
+  const previewId = MISSIONS[ui.preview] ? ui.preview : null;
+  if (!previewId && !epilogueId) return '';
+  if (previewId) {
+    const mission = MISSIONS[previewId];
+    const status = getMissionStatus(state, previewId);
+    const targets = getProgress(state, previewId);
+    const numbers = mission.story.numbers.map(([label, value]) => `<div class="ledger-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
+    const homeName = COUNTRIES.find((country) => country.id === mission.home)?.nome ?? mission.home;
+    const switching = mission.home && mission.home !== state.country?.id;
+    const accept = status.available ? '<button type="button" class="primary-action" data-action="mission-accept">Aceitar missão</button>' : `<span class="notice">${escapeHtml(status.reason)}</span>`;
+    return `<div class="mission-overlay" role="dialog" aria-modal="true" aria-labelledby="mission-title"><article class="mission-story"><p class="eyebrow">${mission.icon} Dossiê histórico</p><h2 id="mission-title">${escapeHtml(mission.title)}</h2><h3>Como começou</h3><p>${escapeHtml(mission.story.origin)}</p><h3>O auge</h3><p>${escapeHtml(mission.story.peak)}</p><h3>Como terminou</h3><p>${escapeHtml(mission.story.end)}</p><h3>Em números</h3>${numbers}<h3>Sua missão</h3><p>${escapeHtml(mission.objective)} São ${targets.total} países. Recompensa: ${escapeHtml(mission.reward.label)}.</p><p class="notice">Você governará <strong>${escapeHtml(homeName)}</strong>, o país da história.${switching && status.available ? ` Aceitar inicia uma nova partida como ${escapeHtml(homeName)} (a partida atual será substituída; missões já cumpridas ficam guardadas).` : ''}</p><div class="modal-actions">${accept}<button type="button" class="quiet-action" data-action="mission-close">Fechar</button></div></article></div>`;
+  }
+  const mission = MISSIONS[epilogueId];
+  const done = data.completed[epilogueId];
+  const rows = [['Tempo da campanha', describeMissionTime(done.months)], ['Países reunidos', String(done.targets)], ['Guerras declaradas', String(done.wars)], ['População reunida', formatNumber.format(done.population)], ['Área reunida', `${formatNumber.format(Math.round(done.area))} km²`]];
+  const numbers = rows.map(([label, value]) => `<div class="ledger-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
+  return `<div class="mission-overlay" role="dialog" aria-modal="true" aria-labelledby="mission-title"><article class="mission-story mission-story--epilogue"><p class="eyebrow">${mission.icon} Missão cumprida</p><h2 id="mission-title">${escapeHtml(mission.title)}</h2><h3>Como terminou na história real</h3><p>${escapeHtml(mission.story.end)}</p><h3>Como terminou na sua versão</h3><p>${escapeHtml(mission.epilogue)}</p><h3>Os números da sua campanha</h3>${numbers}<p class="notice">Recompensa recebida: ${escapeHtml(mission.reward.label)}.</p><div class="modal-actions"><button type="button" class="primary-action" data-action="mission-epilogue-close">Continuar</button></div></article></div>`;
 }
 
 function mapLegend(state, order) {
@@ -1896,6 +1950,7 @@ export function mountDashboard(root) {
   let storageNotice = '';
   let diplomacyQuery = '';
   let militaryUi = { folds: (readUiPrefs().militaryFolds && typeof readUiPrefs().militaryFolds === 'object') ? readUiPrefs().militaryFolds : {} };
+  let missionUi = { preview: null };
   let mapUi = { selected: null, filter: 'all', region: 'world', identityCollapsed: readUiPrefs().identityCollapsed === true, strategicCollapsed: readUiPrefs().strategicCollapsed === true, resource: null };
   const treatyModal = document.getElementById('modal-tratado');
   const crisisModal = document.getElementById('modal-crise');
@@ -2605,10 +2660,11 @@ export function mountDashboard(root) {
       ['projects', uiText(language, 'nav.projects')],
       ['congress', uiText(language, 'nav.congress')],
       ['history', uiText(language, 'nav.history')],
+      ['missions', uiText(language, 'nav.missions')],
       ['countries', uiText(language, 'nav.countries')],
       ['profile', uiText(language, 'nav.profile')],
     ];
-    const content = activeTab === 'history' ? storyModeView(state) : activeTab === 'profile' ? profileView(state, { audio: audio.settings, tutorialEnabled: tutorial.enabled, achievements: achievementStore, trophies }) : state.city ? cityView(state) : state.is_wasteland ? bunkerView(state)
+    const content = activeTab === 'history' ? storyModeView(state) : activeTab === 'missions' && !state.city && !state.is_wasteland ? missionsView(state) : activeTab === 'profile' ? profileView(state, { audio: audio.settings, tutorialEnabled: tutorial.enabled, achievements: achievementStore, trophies }) : state.city ? cityView(state) : state.is_wasteland ? bunkerView(state)
       : activeTab === 'indicators' ? indicatorsView(state)
       : activeTab === 'budget' ? budgetView(state, projection)
       : activeTab === 'diplomacy' ? diplomacyView(state, diplomacyQuery, mapUi)
@@ -2629,7 +2685,7 @@ export function mountDashboard(root) {
       ${storageNotice ? `<p class="storage-notice">${storageNotice}</p>` : ''}
       ${state.notice === STORY_NOTICE ? `<p class="storage-notice story-notification" role="status">${STORY_NOTICE}</p>` : ''}
       <section class="content-area">${content}</section>${renderNews(state)}
-    </section></div>`;
+    </section>${renderMissionOverlay(state, missionUi)}</div>`;
     if (state.city) {
       cityController = createCityController(root, {
         getState: () => state,
@@ -3415,6 +3471,11 @@ export function mountDashboard(root) {
       commit(proporPacto(state, control.dataset.contact, years));
       return;
     }
+    if (action === 'mission-preview') { missionUi = { ...missionUi, preview: control.dataset.mission }; render(); return; }
+    if (action === 'mission-close') { missionUi = { ...missionUi, preview: null }; render(); return; }
+    if (action === 'mission-accept') { const id = missionUi.preview; missionUi = { ...missionUi, preview: null }; activeTab = 'missions'; commit(aceitarMissao(state, id)); return; }
+    if (action === 'mission-abandon') { commit(abandonarMissao(state)); return; }
+    if (action === 'mission-epilogue-close') { commit(fecharEpilogoMissao(state)); return; }
     if (action === 'renew-pact') {
       const years = Number(root.querySelector(`[data-renew-years="${control.dataset.contact}"]`)?.value) || 1;
       commit(renovarPacto(state, control.dataset.contact, years));

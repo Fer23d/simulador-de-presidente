@@ -9,17 +9,17 @@ const game = (patch = {}) => ({ ...createGameState('bra'), ...patch });
 const finishAll = (tutorial) => presidencySteps.reduce((current, step) => completeTutorialStep(current, step.id), tutorial);
 
 // Abas da barra lateral, na ordem em que aparecem.
-const SIDEBAR_TABS = ['overview', 'budget', 'indicators', 'diplomacy', 'military', 'cabinet', 'technology', 'projects', 'congress', 'history', 'countries', 'profile'];
+const SIDEBAR_TABS = ['overview', 'budget', 'indicators', 'diplomacy', 'military', 'cabinet', 'technology', 'projects', 'congress', 'history', 'missions', 'countries', 'profile'];
 
-test('o guia do Presidente tem 17 passos, em ordem, e cada um aponta uma aba', () => {
-  assert.equal(presidencySteps.length, 17);
+test('o guia do Presidente tem 18 passos, em ordem, e cada um aponta uma aba', () => {
+  assert.equal(presidencySteps.length, 18);
   assert.equal(presidencySteps[0].id, 'presidency');
   assert.equal(new Set(presidencySteps.map((step) => step.id)).size, presidencySteps.length, 'ids unicos');
   assert.ok(presidencySteps.slice(1).every((step) => step.tab));
   assert.ok(presidencySteps.every((step) => step.title && step.text.length > 60));
 });
 
-test('o guia percorre as 12 abas da barra lateral, na ordem em que aparecem', () => {
+test('o guia percorre as 13 abas da barra lateral, na ordem em que aparecem', () => {
   const visited = [];
   for (const step of presidencySteps) if (step.tab && visited[visited.length - 1] !== step.tab) visited.push(step.tab);
   assert.deepEqual(visited.slice(0, SIDEBAR_TABS.length), SIDEBAR_TABS);

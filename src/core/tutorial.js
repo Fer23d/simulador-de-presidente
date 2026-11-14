@@ -35,6 +35,8 @@ export const TUTORIAL_STEPS = Object.freeze([
     text: 'Leis precisam de maioria. Cada bancada tem uma lealdade que sobe e desce com o seu governo, cobra favores, e a oposição propõe projetos que você sanciona ou veta. Negocie antes de votar.' }),
   Object.freeze({ id: 'guide_history', phase: 'presidency', ack: true, tab: 'history', title: 'MODO HISTÓRIA',
     text: 'O arquivo pessoal do presidente: capítulos e dossiês de Last Office, liberados conforme você joga. Leia para entender o mundo e o que a Porta do Vault esconde.' }),
+  Object.freeze({ id: 'guide_missions', phase: 'presidency', ack: true, tab: 'missions', title: 'MISSÕES',
+    text: 'Desafios históricos: reerga a União Soviética, o Império Português ou o Império Espanhol anexando os países que os formaram. Cada missão abre um dossiê com a história real, mostra seu progresso e rende uma recompensa e um epílogo com os números da sua campanha.' }),
   Object.freeze({ id: 'guide_countries', phase: 'presidency', ack: true, tab: 'countries', title: 'PAÍSES',
     text: 'O banco mundial com as 200 nações jogáveis: consulte população, área e dados de cada país antes de escolher aliados, rivais ou uma nova partida.' }),
   Object.freeze({ id: 'guide_profile', phase: 'presidency', ack: true, tab: 'profile', title: 'MEU PERFIL',
