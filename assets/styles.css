@@ -1087,3 +1087,11 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .specialty-badges { display: block; color: var(--cyan); font-size: 12px; }
 .specialty-line { margin: 6px 0 0; color: var(--muted); }
 .resource-banner { border: 1px dashed var(--cyan); padding: 8px; }
+
+/* Equipamentos por setor */
+.branch-block { display: flex; flex-direction: column; gap: 6px; }
+.equipment-fold { display: flex; flex-direction: column; gap: 4px; margin: 0 0 8px; padding: 6px 0 6px 12px; border-left: 2px solid var(--line); }
+.equipment-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.equipment-row span { display: block; color: var(--muted); font-size: 13px; }
+.equipment-row select { max-width: 240px; background: #0a100d; color: var(--phosphor); border: 1px solid var(--line); padding: 4px; font: inherit; }
+.fold-toggle { white-space: nowrap; }

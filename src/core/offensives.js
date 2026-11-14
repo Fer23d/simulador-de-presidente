@@ -6,6 +6,7 @@ import { COUNTRY_COORDS } from '../data/country_coords.js';
 import { getCapitalId, getDeploymentKind, getDeployed, troopsPower } from './deployments.js';
 import { adjustFactions } from './factions.js';
 import { getLogisticsBonus } from './specialties.js';
+import { getEquipmentPowerAt } from './equipment.js';
 import { getPoderTotal, normalizeMilitary } from './military.js';
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
@@ -82,7 +83,8 @@ export function getBaseForce(state, baseId) {
   const share = clamp(troopsPower(getDeployed(state, baseId)) / totalArmy, 0, 1);
   const army = state.military?.exercito ?? {};
   const fullPower = getPoderTotal({ ...state.military, exercito: { ...army, soldados: all.soldiers, blindados: all.armor } });
-  return { share, power: fullPower * share };
+  // Equipamentos posicionados na base (F-22, blindados, defesa antiaerea...) somam a forca dela.
+  return { share, power: (fullPower * share) + getEquipmentPowerAt(state, baseId) };
 }
 
 function homeForce(state) {

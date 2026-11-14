@@ -14,6 +14,8 @@ import { applyUnrestAction as applyUnrestActionState, repressionHangover } from 
 import { createSectors, normalizeSectors } from './sectors.js';
 import { createYearGoals, normalizeYearGoals, normalizeYearReports, processYearEnd } from './year_report.js';
 import { processSpecialties } from './specialties.js';
+import { buyEquipment, processEquipment, recallEquipment, sendEquipment } from './equipment.js';
+import { isLandlocked } from '../data/military_equipment.js';
 import { bumpReputationStat, createReputation, normalizeReputation, processReputation, renameOrganization, restoreOrganizationName } from './identity.js';
 import { moveCapital, processCapital } from './capital.js';
 import { processTerritoryThreats } from './territory_defense.js';
@@ -832,6 +834,21 @@ export function comprarMaterialMilitar(state, kind) {
   return { ...state, military: result.military, economy: result.economy, country: result.resources ?? state.country, notice: result.reason };
 }
 
+export function comprarItem(state, itemId, quantity = 1) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return buyEquipment(state, itemId, quantity);
+}
+
+export function enviarEquipamento(state, itemId, contactId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(sendEquipment(state, itemId, contactId));
+}
+
+export function retirarEquipamento(state, contactId, itemId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return recallEquipment(state, contactId, itemId);
+}
+
 export function comprarBlindado(state, amount = 1) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const result = comprarBlindados(state.military, state.economy, amount, state.country);
@@ -840,6 +857,7 @@ export function comprarBlindado(state, amount = 1) {
 
 export function comprarNavio(state, amount = 1) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  if (isLandlocked(state.country?.id)) return { ...state, notice: 'Seu país não tem saída para o mar: não há onde operar navios.' };
   const result = comprarNavios(state.military, state.economy, amount, state.country);
   return { ...state, military: result.military, economy: result.economy, country: result.resources ?? state.country, notice: result.reason };
 }
@@ -1202,7 +1220,7 @@ export function advanceMonth(state) {
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? internalProjectState.notice ?? `mês encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superávit' : 'com déficit'}.`;
 
-  const completedState = processYearEnd(processElection(processSpecialties(processReputation(processCapital(processTerritoryThreats(processNuclearRace(processOffensives(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
+  const completedState = processYearEnd(processElection(processSpecialties(processEquipment(processReputation(processCapital(processTerritoryThreats(processNuclearRace(processOffensives(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
     ...state,
     economy: constitutionalState.economy,
     geopolitics: geopoliticalMonth.geopolitics,
@@ -1229,7 +1247,7 @@ export function advanceMonth(state) {
     activeLawIds: corporateState.activeLawIds,
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
-  })))))))))))));
+  }))))))))))))));
   const corporateDefault = resolveCorporateDefault(completedState);
   if (corporateDefault.regime?.gameOver) return resolverFinalDeJogo(corporateDefault);
   const article5State = detectArticle5(completedState);

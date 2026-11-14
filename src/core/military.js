@@ -1,5 +1,6 @@
 import { nextRandom } from './geopolitics.js';
 import { getRecruitmentCostMultiplier } from './traits.js';
+import { normalizeEquipmentAbroad, normalizeEquipmentMap, sumFirepower, sumUpkeep } from '../data/military_equipment.js';
 
 function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
@@ -52,7 +53,9 @@ export function getPoderTotal(military) {
   const air = branches.aeronautica.cacas * 3.5;
   const supportBonus = 1 + Math.min(0.65, (naval * 0.012) + (air * 0.012));
   const readiness = clamp(Number(military?.readiness) || 1, 0.5, 1.8);
-  const readinessPower = (terrestrial * supportBonus * readiness) + ((naval + air) * 0.45);
+  // Equipamentos do catalogo (F-22, submarinos, porta-avioes...) somam o seu poder de fogo; os enviados ao exterior saem da conta.
+  const equipmentPower = sumFirepower(military?.equipment) * readiness;
+  const readinessPower = (terrestrial * supportBonus * readiness) + ((naval + air) * 0.45) + equipmentPower;
   // Tropas emprestadas por aliados (pedido de tropas) somam ao poder enquanto durarem.
   const allied = Math.max(0, Number(military?.alliedForces?.power) || 0);
   return Math.round(clamp(readinessPower + (Number(military?.combatAdjustment) || 0) + allied, 0, 300) * 10) / 10;
@@ -69,14 +72,17 @@ export function getPoderTerrestre(military) {
 export function normalizeMilitary(military = {}) {
   const branches = branchDefaults(military);
   const nuclear = nuclearDefaults(military.nuclear);
+  const equipment = normalizeEquipmentMap(military.equipment);
   return {
     ...military,
     ...branches,
+    equipment,
+    equipmentAbroad: normalizeEquipmentAbroad(military.equipmentAbroad),
     soldiers: branches.exercito.soldados,
     equipmentMultiplier: clamp(1 + (branches.exercito.blindados * 0.003) + (branches.marinha.navios * 0.004) + (branches.aeronautica.cacas * 0.005), 1, 3),
     readiness: clamp(Number(military.readiness) || 1, 0.5, 1.8),
     combatAdjustment: Number(military.combatAdjustment) || 0,
-    power: getPoderTotal({ ...military, ...branches }),
+    power: getPoderTotal({ ...military, ...branches, equipment }),
     armasNucleares: Math.max(0, Math.floor(Number(military.armasNucleares) || nuclear.arsenal)),
     nuclear,
   };
@@ -103,7 +109,9 @@ export function calculateMilitaryMaintenance(military = {}, militaryTechLevel = 
   const baseCost = (normalized.exercito.soldados * 180)
     + (normalized.exercito.blindados * 6_000_000)
     + (normalized.marinha.navios * 12_000_000)
-    + (normalized.aeronautica.cacas * 9_000_000);
+    + (normalized.aeronautica.cacas * 9_000_000)
+    + sumUpkeep(normalized.equipment)
+    + Object.values(normalized.equipmentAbroad).reduce((total, map) => total + sumUpkeep(map), 0);
   return Math.round(baseCost * techMultiplier);
 }
 

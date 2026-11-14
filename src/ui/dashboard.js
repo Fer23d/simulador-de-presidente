@@ -7,6 +7,8 @@ import { COUNTRY_PATHS, COUNTRY_POINTS, LAND_BACKGROUND, MAP_REGIONS } from '../
 import { evaluateGoals, normalizeYearGoals, normalizeYearReports } from '../core/year_report.js';
 import { TITLES, TITLE_ORDER, getActiveTitles, ORG_NAME_MAX, ORG_MIN_ANNEXED, getAnnexedCount, getOrgNameSuggestions, getOriginalName, getRenameStatus, normalizeReputation } from '../core/identity.js';
 import { SPECIALTIES, SPECIALTY_ORDER, accessLabel, describeMonthly, getAccess, getSpecialties, getSupply } from '../core/specialties.js';
+import { EQUIPMENT_BRANCHES, EQUIPMENT_LIST, isLandlocked } from '../data/military_equipment.js';
+import { EQUIPMENT_BY_BRANCH, getAbroad, getAbroadTotal, getBuyStatus, getOwned, listDestinations } from '../core/equipment.js';
 import { describeThreat, getAttackChance, getDefenseScore } from '../core/territory_defense.js';
 import { getCapitalStatus } from '../core/capital.js';
 import { describePressure, getPlayerNuclearPressure, getPrograms, getRaceActionStatus, normalizeNuclearRace } from '../core/nuclear_race.js';
@@ -94,6 +96,9 @@ import {
   acaoGuerraComercial,
   enviarTropas,
   retirarTropas,
+  comprarItem,
+  enviarEquipamento,
+  retirarEquipamento,
   pedirTropas,
   atacarDaBase,
   proporNaoProliferacao,
@@ -1484,20 +1489,64 @@ export function troopsAbroadPanel(state) {
   const month = Number(state.monthCounter) || 0;
   const convoyRows = off.convoys.map((convoy) => `<div class="ledger-row"><span>Reforços a caminho de ${escapeHtml(nameOf(convoy.baseId))}</span><strong>${formatNumber.format(convoy.soldiers)} soldados, ${convoy.armor} blindados · chegam em ${Math.max(0, convoy.arrives - month)} mês(es)</strong></div>`).join('');
   const offensiveRows = Object.entries(off.offensives).map(([targetId, op]) => `<article class="branch-row"><div><strong>Ofensiva contra ${escapeHtml(nameOf(targetId))}</strong><span>a partir de ${escapeHtml(nameOf(op.baseId))} | ${op.rounds} rodada(s) | ${op.wins} vitória(s) | ${op.losses} revés(es)</span></div><button type="button" class="quiet-action" data-action="stop-offensive" data-target="${targetId}">Suspender</button></article>`).join('');
+  const abroadEquipment = Object.entries(state.military?.equipmentAbroad ?? {}).map(([contactId, map]) => {
+    const name = (state.geopolitics?.contacts ?? []).find((item) => item.id === contactId)?.name ?? contactId;
+    return Object.entries(map).map(([itemId, count]) => `<article class="branch-row"><div><strong>${escapeHtml(name)}</strong><span>${count}× ${escapeHtml(EQUIPMENT_LIST.find((item) => item.id === itemId)?.name ?? itemId)} posicionado(s)</span></div><button type="button" class="quiet-action" data-action="recall-equipment" data-contact="${contactId}" data-item="${itemId}">Retirar</button></article>`).join('');
+  }).join('');
   const capitalId = getCapitalId(state);
   const capitalName = (state.geopolitics?.contacts ?? []).find((item) => item.id === capitalId)?.name ?? state.country?.nome ?? capitalId;
   const capitalRow = `<div class="ledger-row"><span>Sede do governo</span><strong>${escapeHtml(capitalName)}${capitalId === state.country?.id ? ' (em casa)' : ' (território anexado)'}</strong></div>`;
-  return `<section class="panel troops-abroad-panel"><p class="eyebrow">Projeção de força</p><h2>Tropas no exterior</h2>${capitalRow}<p class="notice">Envie tropas a territórios seus ou a aliados pelo mapa da Diplomacia (cada envio leva ${formatNumber.format(getContingent(state).soldiers)} soldados e ${contingent.armor} blindados, 10% do exército). Aliados também emprestam tropas por ${LOAN_MONTHS} meses.</p>${rows ? `<div class="branch-list">${rows}</div>` : '<p class="notice">Nenhuma tropa no exterior.</p>'}${loans}${allied > 0 ? `<div class="ledger-row"><span>Poder emprestado por aliados</span><strong>+${allied.toFixed(1)}</strong></div>` : ''}${convoyRows}${offensiveRows ? `<div class="branch-list">${offensiveRows}</div>` : ''}</section>`;
+  return `<section class="panel troops-abroad-panel"><p class="eyebrow">Projeção de força</p><h2>Tropas no exterior</h2>${capitalRow}<p class="notice">Envie tropas a territórios seus ou a aliados pelo mapa da Diplomacia (cada envio leva ${formatNumber.format(getContingent(state).soldiers)} soldados e ${contingent.armor} blindados, 10% do exército). Aliados também emprestam tropas por ${LOAN_MONTHS} meses.</p>${rows ? `<div class="branch-list">${rows}</div>` : '<p class="notice">Nenhuma tropa no exterior.</p>'}${loans}${allied > 0 ? `<div class="ledger-row"><span>Poder emprestado por aliados</span><strong>+${allied.toFixed(1)}</strong></div>` : ''}${abroadEquipment ? `<h3>Equipamentos no exterior</h3><div class="branch-list">${abroadEquipment}</div>` : ''}${convoyRows}${offensiveRows ? `<div class="branch-list">${offensiveRows}</div>` : ''}</section>`;
 }
 
-export function militaryView(state) {
+function equipmentRow(state, item) {
+  const buy = getBuyStatus(state, item.id);
+  const owned = getOwned(state, item.id);
+  const abroad = getAbroadTotal(state, item.id);
+  const requirement = item.requires && !buy.available && buy.reason.startsWith('Requer') ? ` · ${buy.reason}` : '';
+  const tags = [item.naval ? 'naval' : '', item.strategic ? 'ativo estratégico' : ''].filter(Boolean).join(', ');
+  let send = '';
+  if (owned > 0) {
+    const options = listDestinations(state, item.id);
+    const usable = options.filter((option) => option.available);
+    send = options.length
+      ? `<select data-equip-dest="${item.id}" aria-label="Destino do ${escapeHtml(item.name)}">${options.map((option) => `<option value="${option.id}" ${option.available ? '' : 'disabled'}>${escapeHtml(option.name)} (${option.kind === 'territory' ? 'território' : 'aliado'})${option.available ? '' : ' — ' + escapeHtml(option.reason)}</option>`).join('')}</select><button type="button" class="quiet-action" data-action="send-equipment" data-item="${item.id}" ${usable.length ? '' : 'disabled'}>Enviar</button>`
+      : '<small>Sem aliados ou territórios para receber.</small>';
+  }
+  return `<article class="equipment-row"><div><strong>${escapeHtml(item.name)}</strong><span>Poder de fogo ${item.firepower.toFixed(1)} · ${formatMoney(item.cost)} + ${formatNumber.format(item.steel)} aço${tags ? ' · ' + tags : ''}${requirement} · em estoque: ${owned}${abroad ? ` · no exterior: ${abroad}` : ''}</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="buy-equipment" data-item="${item.id}" ${buy.available ? '' : 'disabled'} title="${escapeHtml(buy.reason)}">Comprar</button>${send}</div></article>`;
+}
+
+function militaryBranches(state, ui = {}) {
+  const military = state.military;
+  const folds = ui.folds ?? {};
+  const landlocked = isLandlocked(state.country?.id);
+  const summary = {
+    exercito: `${formatNumber.format(military.exercito?.soldados ?? military.soldiers ?? 0)} soldados | ${formatNumber.format(military.exercito?.blindados ?? 0)} blindados`,
+    marinha: landlocked ? 'Sem saída para o mar: marinha indisponível.' : `${formatNumber.format(military.marinha?.navios ?? 0)} navios operacionais`,
+    aeronautica: `${formatNumber.format(military.aeronautica?.cacas ?? 0)} caças operacionais`,
+  };
+  const generic = {
+    exercito: '<button type="button" class="quiet-action" data-action="recruit">Recrutar soldados</button><button type="button" class="quiet-action" data-action="buy-tank">Comprar blindado</button>',
+    marinha: `<button type="button" class="quiet-action" data-action="buy-ship" ${landlocked ? 'disabled title="Seu país não tem saída para o mar."' : ''}>Comprar navio</button>`,
+    aeronautica: '<button type="button" class="quiet-action" data-action="buy-jet">Comprar caça</button>',
+  };
+  return Object.values(EQUIPMENT_BRANCHES).map((branch) => {
+    const open = folds[branch.id] === true;
+    const items = (EQUIPMENT_BY_BRANCH[branch.id] ?? []).map((item) => equipmentRow(state, item)).join('');
+    const fold = open ? `<div class="equipment-fold">${items}</div>` : '';
+    const stock = EQUIPMENT_LIST.filter((item) => item.branch === branch.id).reduce((sum, item) => sum + getOwned(state, item.id), 0);
+    return `<div class="branch-block"><article class="branch-row"><div><strong>${branch.icon} ${branch.label}</strong><span>${summary[branch.id]}${stock ? ` · ${stock} equipamento(s) em estoque` : ''}</span></div><div class="action-row">${generic[branch.id]}<button type="button" class="quiet-action fold-toggle" data-action="toggle-fold" data-branch="${branch.id}" aria-expanded="${open}">${open ? '▴ Equipamentos' : '▾ Equipamentos'}</button></div></article>${fold}</div>`;
+  }).join('');
+}
+
+export function militaryView(state, ui = {}) {
   const military = state.military;
   const exercito = military.exercito ?? { soldados: military.soldiers ?? 0, blindados: 0 };
   const marinha = military.marinha ?? { navios: 0 };
   const aeronautica = military.aeronautica ?? { cacas: 0 };
   const maintenance = calculateMilitaryMaintenance(military, state.military_tech_level);
   const canCoup = state.regime.type === 'democracy' && military.support >= 85 && state.budget.defenseSpend >= 0.06;
-  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Tríade militar</p><h2>Poder total ${Number(military.power || 0).toFixed(1)}</h2><p class="notice">${state.notice}</p><div class="branch-list"><article class="branch-row"><div><strong>Exercito</strong><span>${formatNumber.format(exercito.soldados)} soldados | ${formatNumber.format(exercito.blindados)} blindados</span></div><div class="action-row"><button type="button" class="quiet-action" data-action="recruit">Recrutar soldados</button><button type="button" class="quiet-action" data-action="buy-tank">Comprar blindado</button></div></article><article class="branch-row"><div><strong>Marinha</strong><span>${formatNumber.format(marinha.navios)} navios operacionais</span></div><button type="button" class="quiet-action" data-action="buy-ship">Comprar navio</button></article><article class="branch-row"><div><strong>Aeronáutica</strong><span>${formatNumber.format(aeronautica.cacas)} cacas operacionais</span></div><button type="button" class="quiet-action" data-action="buy-jet">Comprar caca</button></article></div><div class="ledger-row"><span>Apoio militar</span><strong>${Number(military.support || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Armas nucleares (o Plano Nuclear fica em Tecnologia)</span><strong>${Number(military.armasNucleares || 0)}</strong></div><div class="ledger-row"><span>CUSTO DE MANUTENÇÃO MENSAL</span><strong>${formatMoney(maintenance)}</strong></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section>${troopsAbroadPanel(state)}${renderMilitaryResearchProjects(state)}</section>`;
+  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Tríade militar</p><h2>Poder total ${Number(military.power || 0).toFixed(1)}</h2><p class="notice">${state.notice}</p><div class="branch-list">${militaryBranches(state, ui)}</div><div class="ledger-row"><span>Apoio militar</span><strong>${Number(military.support || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Armas nucleares (o Plano Nuclear fica em Tecnologia)</span><strong>${Number(military.armasNucleares || 0)}</strong></div><div class="ledger-row"><span>CUSTO DE MANUTENÇÃO MENSAL</span><strong>${formatMoney(maintenance)}</strong></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section>${troopsAbroadPanel(state)}${renderMilitaryResearchProjects(state)}</section>`;
 }
 
 function cabinetView(state) {
@@ -1764,6 +1813,7 @@ export function mountDashboard(root) {
   let activeTab = 'overview';
   let storageNotice = '';
   let diplomacyQuery = '';
+  let militaryUi = { folds: (readUiPrefs().militaryFolds && typeof readUiPrefs().militaryFolds === 'object') ? readUiPrefs().militaryFolds : {} };
   let mapUi = { selected: null, filter: 'all', region: 'world', identityCollapsed: readUiPrefs().identityCollapsed === true, strategicCollapsed: readUiPrefs().strategicCollapsed === true, resource: null };
   const treatyModal = document.getElementById('modal-tratado');
   const crisisModal = document.getElementById('modal-crise');
@@ -2480,7 +2530,7 @@ export function mountDashboard(root) {
       : activeTab === 'indicators' ? indicatorsView(state)
       : activeTab === 'budget' ? budgetView(state, projection)
       : activeTab === 'diplomacy' ? diplomacyView(state, diplomacyQuery, mapUi)
-        : activeTab === 'military' ? militaryView(state)
+        : activeTab === 'military' ? militaryView(state, militaryUi)
           : activeTab === 'cabinet' ? cabinetView(state)
           : activeTab === 'technology' ? technologyView(state)
             : activeTab === 'projects' ? projectsView(state)
@@ -3312,6 +3362,20 @@ export function mountDashboard(root) {
     if (action === 'nuclear-strike') { commit(lancarAtaqueNuclear(state, control.dataset.contact)); return; }
     if (action === 'recruit') { commit(recrutarSoldado(state)); return; }
     if (action === 'equipment') { commit(comprarMaterialMilitar(state, control.dataset.kind)); return; }
+    if (action === 'toggle-fold') {
+      const branch = control.dataset.branch;
+      militaryUi = { ...militaryUi, folds: { ...militaryUi.folds, [branch]: !militaryUi.folds[branch] } };
+      writeUiPref('militaryFolds', militaryUi.folds);
+      render();
+      return;
+    }
+    if (action === 'buy-equipment') { commit(comprarItem(state, control.dataset.item)); return; }
+    if (action === 'send-equipment') {
+      const destination = root.querySelector(`[data-equip-dest="${control.dataset.item}"]`)?.value;
+      commit(enviarEquipamento(state, control.dataset.item, destination));
+      return;
+    }
+    if (action === 'recall-equipment') { commit(retirarEquipamento(state, control.dataset.contact, control.dataset.item)); return; }
     if (action === 'buy-tank') { commit(comprarBlindado(state)); return; }
     if (action === 'buy-ship') { commit(comprarNavio(state)); return; }
     if (action === 'buy-jet') { commit(comprarCaca(state)); return; }
