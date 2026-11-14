@@ -19,6 +19,7 @@ import { isLandlocked } from '../data/military_equipment.js';
 import { bumpReputationStat, createReputation, normalizeReputation, processReputation, renameOrganization, restoreOrganizationName } from './identity.js';
 import { moveCapital, processCapital } from './capital.js';
 import { processTerritoryThreats } from './territory_defense.js';
+import { answerPactOffer, breakPact, coalitionRespond, createWorldOrder, normalizeWorldOrder, penalizePactWar, processWorldOrder, proposePact } from './world_order.js';
 import { createNuclearRace, normalizeNuclearRace, processNuclearRace, proposeNonProliferation, sabotageProgram, setbackProgram } from './nuclear_race.js';
 import { beginOffensive, createOffensives, getAttackStatus, normalizeOffensives, processOffensives, requestReinforcements, stopOffensive } from './offensives.js';
 import { createDeployments, normalizeDeployments, processDeployments, recallTroops, requestAlliedTroops, sendTroops } from './deployments.js';
@@ -349,6 +350,7 @@ function createGameStateBase(countryId = 'bra', playerProfile = {}) {
     ...createDeployments(),
     ...createOffensives(),
     nuclearRace: createNuclearRace(),
+    worldOrder: createWorldOrder(),
     capitalId: null,
     capitalMoveMonth: -99,
     orgRenameMonth: -99,
@@ -505,7 +507,24 @@ export function startWar(state, contactId) {
   const before = state.geopolitics.contacts.find((contact) => contact.id === contactId);
   const result = startWarCore(state, contactId);
   const after = result.geopolitics.contacts.find((contact) => contact.id === contactId);
-  return after?.atWar && !before?.atWar ? bumpReputationStat(result, 'warsDeclared') : result;
+  if (!(after?.atWar && !before?.atWar)) return result;
+  // Guerra contra quem tem pacto com voce e traicao; atacar membro de coalizao traz todos os outros.
+  return coalitionRespond(penalizePactWar(bumpReputationStat(result, 'warsDeclared'), contactId));
+}
+
+export function proporPacto(state, contactId, years = 1) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(proposePact(state, contactId, years));
+}
+
+export function romperPacto(state, contactId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(breakPact(state, contactId));
+}
+
+export function responderPacto(state, accept) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(answerPactOffer(state, accept));
 }
 
 export function renomearOrganizacao(state, name) {
@@ -1220,7 +1239,7 @@ export function advanceMonth(state) {
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? internalProjectState.notice ?? `mês encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superávit' : 'com déficit'}.`;
 
-  const completedState = processYearEnd(processElection(processSpecialties(processEquipment(processReputation(processCapital(processTerritoryThreats(processNuclearRace(processOffensives(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
+  const completedState = processYearEnd(processElection(processSpecialties(processEquipment(processReputation(processCapital(processTerritoryThreats(processWorldOrder(processNuclearRace(processOffensives(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
     ...state,
     economy: constitutionalState.economy,
     geopolitics: geopoliticalMonth.geopolitics,
@@ -1247,7 +1266,7 @@ export function advanceMonth(state) {
     activeLawIds: corporateState.activeLawIds,
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
-  }))))))))))))));
+  })))))))))))))));
   const corporateDefault = resolveCorporateDefault(completedState);
   if (corporateDefault.regime?.gameOver) return resolverFinalDeJogo(corporateDefault);
   const article5State = detectArticle5(completedState);
@@ -1466,6 +1485,7 @@ export function hydrateGameState(serialized) {
       ...normalizeDeployments(parsed),
       ...normalizeOffensives(parsed),
       nuclearRace: normalizeNuclearRace(parsed.nuclearRace),
+      worldOrder: normalizeWorldOrder(parsed.worldOrder),
       orgRenameMonth: Number.isFinite(Number(parsed.orgRenameMonth)) ? Math.floor(Number(parsed.orgRenameMonth)) : -99,
       reputation: normalizeReputation(parsed.reputation),
       capitalId: typeof parsed.capitalId === 'string' && parsed.capitalId ? parsed.capitalId : null,

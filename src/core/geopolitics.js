@@ -210,7 +210,10 @@ export function processarAgressaoIA(state, probability = 0.03) {
       }
       return contact;
     }
-    const hatesPlayer = (Number(contact.relation) || 0) < 20;
+    // Pacto de nao agressao em vigor: o parceiro nao declara guerra.
+    const pactEnd = state.worldOrder?.pacts?.[contact.id]?.end;
+    const pactActive = Number.isFinite(pactEnd) && pactEnd > (Number(state.monthCounter) || 0);
+    const hatesPlayer = (Number(contact.relation) || 0) < 20 && !pactActive;
     if (!hatesPlayer) {
       random = nextRandom(random.seed);
       return contact;

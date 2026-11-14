@@ -1095,3 +1095,17 @@ h3 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5
 .equipment-row span { display: block; color: var(--muted); font-size: 13px; }
 .equipment-row select { max-width: 240px; background: #0a100d; color: var(--phosphor); border: 1px solid var(--line); padding: 4px; font: inherit; }
 .fold-toggle { white-space: nowrap; }
+
+/* Pactos, coalizoes e potencias rivais */
+.map-shape--rival { fill: #4d3446; opacity: .9; }
+.map-shape.has-pact { stroke: #ffd24d; stroke-width: 1.8; stroke-dasharray: 4 2; }
+.map-shape.in-bloc { stroke-width: 2.4; }
+.map-shape.in-bloc.has-pact { stroke-dasharray: 4 2; }
+.map-legend ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.map-legend li { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--muted); }
+.map-legend li strong { color: var(--phosphor); }
+.legend-swatch { display: inline-block; flex: none; width: 16px; height: 10px; margin-top: 3px; border: 2px solid var(--phosphor); background: transparent; }
+.legend-swatch--pact { border-color: #ffd24d; border-style: dashed; }
+.legend-swatch--rival { background: #4d3446; border-color: #4d3446; }
+.world-order-panel h3 { margin: 12px 0 6px; font-size: 14px; color: var(--muted); }
+select[data-pact-years] { background: #0a100d; color: var(--phosphor); border: 1px solid var(--line); padding: 4px; font: inherit; }

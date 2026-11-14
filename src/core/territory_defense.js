@@ -7,6 +7,7 @@ import { adjustFactions } from './factions.js';
 import { distanceKm, getBaseForce, getSupply } from './offensives.js';
 import { normalizeMilitary } from './military.js';
 import { bumpReputationStat, getTitleModifier } from './identity.js';
+import { getCoalitionBonus, hasPact, isAwake } from './world_order.js';
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
 const count = (value) => Math.max(0, Math.floor(Number(value) || 0));
@@ -43,11 +44,13 @@ export function getAttackers(state, territoryId) {
     if (contact.id === territoryId || contact.destruido || contact.anexado || contact.wasteland || isFriendly(state, contact)) continue;
     const relation = Number(contact.relation) || 0;
     const power = Number(contact.militaryPower) || 0;
-    if (relation >= 20 || power < 5) continue;
+    // Depois que o mundo acorda (3 anexacoes), ate paises neutros cobicam seus territorios; pactos protegem.
+    if (hasPact(state, contact.id)) continue;
+    if (relation >= (isAwake(state) ? 40 : 20) || power < 5) continue;
     const km = distanceKm(contact.id, territoryId);
-    const hostility = (relation < -30 ? 1.5 : 1) * (contact.atWar ? 2 : 1);
+    const hostility = (relation < -30 ? 1.5 : (relation >= 20 ? 0.5 : 1)) * (contact.atWar ? 2 : 1) * (1 + (0.15 * (Number(contact.annexationsMade) || 0)));
     const proximity = km < 4000 ? 1.5 : km > 9000 ? 0.4 : 1;
-    const strength = power * EXPEDITION_SHARE * getSupply(km);
+    const strength = power * EXPEDITION_SHARE * getSupply(km) * getCoalitionBonus(state, contact.id);
     attackers.push({ id: contact.id, name: contact.name, km, strength, weight: hostility * proximity * clamp(power / 25, 0.4, 1.6) });
   }
   return attackers;
