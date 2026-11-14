@@ -20,7 +20,7 @@ export const TUTORIAL_STEPS = Object.freeze([
   Object.freeze({ id: 'guide_indicators', phase: 'presidency', ack: true, tab: 'indicators', title: 'INDICADORES',
     text: 'Gráficos de PIB, inflação, desemprego, caixa e apoio interno, mês a mês. Mais abaixo, os quatro setores da economia: infraestrutura puxa indústria e energia, educação e ciência puxam serviços.' }),
   Object.freeze({ id: 'guide_diplomacy', phase: 'presidency', ack: true, tab: 'diplomacy', title: 'DIPLOMACIA: O MAPA',
-    text: 'No mapa, cada país tem uma cor: verde é aliado, azul é comércio, vermelho vivo é guerra, roxo tem programa nuclear e laranja impôs tarifas. Clique num país para negociar, sabotar ou declarar guerra. Países derrotados podem ser anexados e viram território seu.' }),
+    text: 'No mapa, cada país tem uma cor: verde é aliado, azul é comércio, vermelho vivo é guerra, roxo tem programa nuclear e laranja impôs tarifas. Cada país tem uma especialidade (energia, tecnologia, alimentos...) que você aproveita por comércio, aliança ou conquista. Clique num país para negociar, sabotar ou declarar guerra; derrotados podem ser anexados.' }),
   Object.freeze({ id: 'guide_agenda', phase: 'presidency', ack: true, tab: 'diplomacy', title: 'DIPLOMACIA: AGENDA',
     text: 'No topo da mesma aba ficam seu Título e organização (com 2 países anexados você pode rebatizar o país), a Corrida nuclear, a Guerra comercial e a Agenda internacional, com cúpulas e inspeções da AIEA. Responda a eles para ganhar vantagens e evitar crises.' }),
   Object.freeze({ id: 'guide_military', phase: 'presidency', ack: true, tab: 'military', title: 'FORÇAS ARMADAS',

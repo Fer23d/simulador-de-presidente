@@ -89,5 +89,5 @@ test('the monthly engine applies the automation steel output and worker debuff',
   const result = advanceMonth(prepared);
 
   assert.ok(result.country.steel >= 4_000);
-  assert.ok(result.factions.trabalhadores <= 95);
+  assert.ok(result.factions.trabalhadores <= 95.5, "o debuff da automacao pesa, com margem para o bonus de alimentos do Brasil");
 });

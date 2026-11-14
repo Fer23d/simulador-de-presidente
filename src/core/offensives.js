@@ -5,6 +5,7 @@
 import { COUNTRY_COORDS } from '../data/country_coords.js';
 import { getCapitalId, getDeploymentKind, getDeployed, troopsPower } from './deployments.js';
 import { adjustFactions } from './factions.js';
+import { getLogisticsBonus } from './specialties.js';
 import { getPoderTotal, normalizeMilitary } from './military.js';
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
@@ -173,7 +174,8 @@ export function getReinforcementStatus(state, baseId) {
   if (away.soldiers + transit.soldiers + contingent.soldiers > total * 0.5) return { available: false, reason: 'No máximo metade do exército pode ficar fora de casa.' };
   // A distancia dos reforcos conta a partir da sede do governo (que pode estar num territorio anexado).
   const km = distanceKm(getCapitalId(state), baseId);
-  const months = travelMonths(km);
+  // Logistica forte (portos e canais sob seu controle) encurta a viagem em 1 mes.
+  const months = Math.max(1, travelMonths(km) - getLogisticsBonus(state));
   const gdp = Number(state.economy?.gdp) || 0;
   return { available: true, reason: '', contingent, km, months, cost: Math.round((gdp / 12) * 0.004 * months) };
 }

@@ -13,6 +13,7 @@ import { createMinisters, dismissMinister as dismissCabinetMinister, getMinister
 import { applyUnrestAction as applyUnrestActionState, repressionHangover } from './unrest_actions.js';
 import { createSectors, normalizeSectors } from './sectors.js';
 import { createYearGoals, normalizeYearGoals, normalizeYearReports, processYearEnd } from './year_report.js';
+import { processSpecialties } from './specialties.js';
 import { bumpReputationStat, createReputation, normalizeReputation, processReputation, renameOrganization, restoreOrganizationName } from './identity.js';
 import { moveCapital, processCapital } from './capital.js';
 import { processTerritoryThreats } from './territory_defense.js';
@@ -1201,7 +1202,7 @@ export function advanceMonth(state) {
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? internalProjectState.notice ?? `mês encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superávit' : 'com déficit'}.`;
 
-  const completedState = processYearEnd(processElection(processReputation(processCapital(processTerritoryThreats(processNuclearRace(processOffensives(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
+  const completedState = processYearEnd(processElection(processSpecialties(processReputation(processCapital(processTerritoryThreats(processNuclearRace(processOffensives(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
     ...state,
     economy: constitutionalState.economy,
     geopolitics: geopoliticalMonth.geopolitics,
@@ -1228,7 +1229,7 @@ export function advanceMonth(state) {
     activeLawIds: corporateState.activeLawIds,
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
-  }))))))))))));
+  })))))))))))));
   const corporateDefault = resolveCorporateDefault(completedState);
   if (corporateDefault.regime?.gameOver) return resolverFinalDeJogo(corporateDefault);
   const article5State = detectArticle5(completedState);
