@@ -1124,3 +1124,11 @@ select[data-pact-years] { background: #0a100d; color: var(--phosphor); border: 1
 .mission-story h3 { margin: 16px 0 4px; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; color: #ffb000; }
 .mission-story p { line-height: 1.55; }
 .mission-story--epilogue { border-color: #ffd24d; }
+
+.map-stage { position: relative; }
+.map-stage .world-map-svg { touch-action: none; }
+.map-stage .world-map-svg[data-zoom]:not([data-zoom="1"]) { cursor: grab; }
+.map-zoom { position: absolute; top: 8px; right: 8px; z-index: 2; display: flex; align-items: center; gap: 4px; background: rgba(6, 16, 14, .85); border: 1px solid var(--line); padding: 4px; }
+.map-zoom button { width: 32px; height: 32px; font: inherit; font-size: 18px; line-height: 1; cursor: pointer; background: #06100e; color: var(--text, #9fffb0); border: 1px solid var(--line); }
+.map-zoom button:hover { filter: brightness(1.4); }
+.map-zoom span { padding: 0 6px; font-size: 12px; opacity: .8; }

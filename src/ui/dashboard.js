@@ -1098,8 +1098,15 @@ export function diplomacyMap(state, mapUi = {}) {
   const attackBanner = attackBase ? `<p class="notice attack-banner">Modo ataque: escolha no mapa o país a atacar saindo de <strong>${escapeHtml(attackBase.name)}</strong>. <button type="button" class="quiet-action" data-action="attack-cancel">Cancelar</button></p>` : '';
   const legend = mapLegend(state, worldOrder);
   const card = picked ? attackBanner + mapCountryCard(picked, picked.id === tariffId, state, mapUi, programIds.has(picked.id)) : '<p class="notice">Clique em um país para ver os dados e agir. Verde: aliado · azul: comércio · vermelho vivo: guerra · tons de vermelho a verde: relação (do pior ao melhor) · ciano: você e os países que anexou (território seu) · laranja: quem impôs tarifas a você · roxo: país com programa nuclear em curso.</p>';
-  const [vx, vy, vw, vh] = MAP_REGIONS[region];
-  return `<div class="diplomacy-map">${picked ? '' : attackBanner}${resourceBanner}<div class="map-filters">${regionChips}</div><div class="map-filters">${filterChips}</div><svg class="world-map-svg" viewBox="${vx} ${vy} ${vw} ${vh}" role="group" aria-label="Mapa-múndi de relações internacionais"><rect x="0" y="0" width="1000" height="500" class="map-ocean"></rect><path d="${LAND_BACKGROUND}" class="map-land"></path>${shapes}${home}</svg>${legend}${card}</div>`;
+  const [bx, by, bw, bh] = MAP_REGIONS[region];
+  const zoom = Math.min(8, Math.max(1, Number(mapUi.zoom) || 1));
+  const vw = bw / zoom;
+  const vh = bh / zoom;
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+  const vx = clamp(Number.isFinite(mapUi.cx) ? mapUi.cx - vw / 2 : bx + (bw - vw) / 2, 0, 1000 - vw);
+  const vy = clamp(Number.isFinite(mapUi.cy) ? mapUi.cy - vh / 2 : by + (bh - vh) / 2, 0, 500 - vh);
+  const zoomControls = `<div class="map-zoom" aria-label="Zoom do mapa"><button type="button" data-action="map-zoom" data-dir="in" aria-label="Aumentar zoom" title="Aumentar">+</button><button type="button" data-action="map-zoom" data-dir="out" aria-label="Diminuir zoom" title="Diminuir">−</button><button type="button" data-action="map-zoom" data-dir="reset" aria-label="Restaurar zoom" title="Restaurar">⟲</button><span>${zoom.toFixed(1).replace('.0', '')}x</span></div>`;
+  return `<div class="diplomacy-map">${picked ? '' : attackBanner}${resourceBanner}<div class="map-filters">${regionChips}</div><div class="map-filters">${filterChips}</div><div class="map-stage">${zoomControls}<svg class="world-map-svg" data-zoom="${zoom}" viewBox="${vx} ${vy} ${vw} ${vh}" role="group" aria-label="Mapa-múndi de relações internacionais"><rect x="0" y="0" width="1000" height="500" class="map-ocean"></rect><path d="${LAND_BACKGROUND}" class="map-land"></path>${shapes}${home}</svg></div>${legend}${card}</div>`;
 }
 
 const STATUS_LABEL = Object.freeze({ mine: ['✔ anexado', 'positive'], rival: ['anexado por rival', 'negative'], war: ['em guerra', ''], puppet: ['fantoche seu', ''], free: ['independente', ''], lost: ['indisponível', 'negative'] });
@@ -2032,6 +2039,42 @@ export function mountDashboard(root) {
   // Navegadores so liberam audio apos um gesto; cada clique de botão também faz o "tique" da interface.
   document.addEventListener('pointerdown', () => audio.unlock(), { capture: true });
   document.addEventListener('keydown', () => audio.unlock(), { capture: true });
+  const mapView = (svg) => svg.getAttribute('viewBox').split(' ').map(Number);
+  const applyMapView = (svg, x, y, w, h) => {
+    const nx = Math.min(1000 - w, Math.max(0, x));
+    const ny = Math.min(500 - h, Math.max(0, y));
+    svg.setAttribute('viewBox', `${nx} ${ny} ${w} ${h}`);
+    mapUi = { ...mapUi, cx: nx + w / 2, cy: ny + h / 2 };
+  };
+  let mapDrag = null;
+  document.addEventListener('pointerdown', (event) => {
+    const svg = event.target.closest?.('.world-map-svg');
+    if (!svg || Number(svg.dataset.zoom) <= 1 || event.button !== 0) return;
+    mapDrag = { svg, x: event.clientX, y: event.clientY, view: mapView(svg), moved: false };
+  });
+  document.addEventListener('pointermove', (event) => {
+    if (!mapDrag) return;
+    const dx = event.clientX - mapDrag.x;
+    const dy = event.clientY - mapDrag.y;
+    if (!mapDrag.moved && Math.hypot(dx, dy) < 5) return;
+    mapDrag.moved = true;
+    const rect = mapDrag.svg.getBoundingClientRect();
+    const [x, y, w, h] = mapDrag.view;
+    applyMapView(mapDrag.svg, x - (dx / rect.width) * w, y - (dy / rect.height) * h, w, h);
+  });
+  const endMapDrag = () => { if (mapDrag?.moved) { const blocked = (e) => { e.stopPropagation(); e.preventDefault(); }; document.addEventListener('click', blocked, { capture: true, once: true }); } mapDrag = null; };
+  document.addEventListener('pointerup', endMapDrag);
+  document.addEventListener('pointercancel', () => { mapDrag = null; });
+  document.addEventListener('wheel', (event) => {
+    const svg = event.target.closest?.('.world-map-svg');
+    if (!svg || !event.ctrlKey) return;
+    event.preventDefault();
+    const current = Number(mapUi.zoom) || 1;
+    const next = Math.min(8, Math.max(1, event.deltaY < 0 ? current * 1.25 : current / 1.25));
+    if (next === current) return;
+    mapUi = { ...mapUi, zoom: next, ...(next === 1 ? { cx: undefined, cy: undefined } : { cx: mapUi.cx, cy: mapUi.cy }) };
+    render();
+  }, { passive: false });
   document.addEventListener('click', (event) => {
     const button = event.target.closest('button');
     if (button && !button.disabled && !button.closest('.sound-control')) audio.play('click');
@@ -3461,13 +3504,22 @@ export function mountDashboard(root) {
     }
     if (action === 'tab') { activeTab = control.dataset.tab; render(); return; }
     if (action === 'map-country') { mapUi = { ...mapUi, selected: control.dataset.country }; render(); return; }
-    if (action === 'map-region') { mapUi = { ...mapUi, region: control.dataset.region }; render(); return; }
+    if (action === 'map-region') { mapUi = { ...mapUi, region: control.dataset.region, zoom: 1, cx: undefined, cy: undefined }; render(); return; }
+    if (action === 'map-zoom') {
+      const dir = control.dataset.dir;
+      const current = Number(mapUi.zoom) || 1;
+      const next = dir === 'reset' ? 1 : Math.min(8, Math.max(1, dir === 'in' ? current * 1.5 : current / 1.5));
+      mapUi = { ...mapUi, zoom: next, ...(next === 1 ? { cx: undefined, cy: undefined } : {}) };
+      render();
+      return;
+    }
     if (action === 'map-filter') { mapUi = { ...mapUi, filter: control.dataset.filter }; render(); return; }
     if (action === 'congress-demand') { commit(answerCongressDemand(state, control.dataset.accept === 'yes')); return; }
     if (action === 'map-resource') {
       const resource = control.dataset.resource || null;
       mapUi = { ...mapUi, resource: mapUi.resource === resource ? null : resource };
       render();
+      if (mapUi.resource) requestAnimationFrame(() => document.querySelector('.world-map-svg')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
       return;
     }
     if (action === 'toggle-strategic') {
