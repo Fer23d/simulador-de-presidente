@@ -1136,7 +1136,5 @@ select[data-pact-years] { background: #0a100d; color: var(--phosphor); border: 1
 .release-controls select { font: inherit; background: #06100e; color: inherit; border: 1px solid var(--line); padding: 6px; max-width: 180px; }
 .diplomacy-advance { margin: 10px 0; }
 .contact-stats { font-size: 15px; line-height: 1.5; }
-.branch-list:has(.branch-block) { gap: 14px; border-top: 0; }
-.branch-block { border: 1px solid var(--line); background: rgba(6, 16, 14, .55); padding: 6px 16px 14px; }
-.branch-block .branch-row { border-bottom: 0; flex-wrap: wrap; padding: 10px 0 4px; }
+.branch-block .branch-row { border-bottom: 0; flex-wrap: wrap; padding: 4px 0; }
 .branch-block .equipment-fold { border-top: 1px dashed var(--line); margin-top: 8px; }

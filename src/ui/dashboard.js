@@ -1731,7 +1731,7 @@ function militaryBranches(state, ui = {}) {
     const items = (EQUIPMENT_BY_BRANCH[branch.id] ?? []).map((item) => equipmentRow(state, item)).join('');
     const fold = open ? `<div class="equipment-fold">${items}</div>` : '';
     const stock = EQUIPMENT_LIST.filter((item) => item.branch === branch.id).reduce((sum, item) => sum + getOwned(state, item.id), 0);
-    return `<div class="branch-block"><article class="branch-row"><div><strong>${branch.icon} ${branch.label}</strong><span>${summary[branch.id]}${stock ? ` · ${stock} equipamento(s) em estoque` : ''}</span></div><div class="action-row">${generic[branch.id]}<button type="button" class="quiet-action fold-toggle" data-action="toggle-fold" data-branch="${branch.id}" aria-expanded="${open}">${open ? '▴ Equipamentos' : '▾ Equipamentos'}</button></div></article>${fold}</div>`;
+    return `<section class="panel branch-block"><article class="branch-row"><div><strong>${branch.icon} ${branch.label}</strong><span>${summary[branch.id]}${stock ? ` · ${stock} equipamento(s) em estoque` : ''}</span></div><div class="action-row">${generic[branch.id]}<button type="button" class="quiet-action fold-toggle" data-action="toggle-fold" data-branch="${branch.id}" aria-expanded="${open}">${open ? '▴ Equipamentos' : '▾ Equipamentos'}</button></div></article>${fold}</section>`;
   }).join('');
 }
 
@@ -1742,7 +1742,7 @@ export function militaryView(state, ui = {}) {
   const aeronautica = military.aeronautica ?? { cacas: 0 };
   const maintenance = calculateMilitaryMaintenance(military, state.military_tech_level);
   const canCoup = state.regime.type === 'democracy' && military.support >= 85 && state.budget.defenseSpend >= 0.06;
-  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Tríade militar</p><h2>Poder total ${Number(military.power || 0).toFixed(1)}</h2><p class="notice">${state.notice}</p><div class="branch-list">${militaryBranches(state, ui)}</div><div class="ledger-row"><span>Apoio militar</span><strong>${Number(military.support || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Armas nucleares (o Plano Nuclear fica em Tecnologia)</span><strong>${Number(military.armasNucleares || 0)}</strong></div><div class="ledger-row"><span>CUSTO DE MANUTENÇÃO MENSAL</span><strong>${formatMoney(maintenance)}</strong></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section>${troopsAbroadPanel(state)}${renderMilitaryResearchProjects(state)}</section>`;
+  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Tríade militar</p><h2>Poder total ${Number(military.power || 0).toFixed(1)}</h2><p class="notice">${state.notice}</p><div class="ledger-row"><span>Apoio militar</span><strong>${Number(military.support || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Armas nucleares (o Plano Nuclear fica em Tecnologia)</span><strong>${Number(military.armasNucleares || 0)}</strong></div><div class="ledger-row"><span>CUSTO DE MANUTENÇÃO MENSAL</span><strong>${formatMoney(maintenance)}</strong></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section>${militaryBranches(state, ui)}${troopsAbroadPanel(state)}${renderMilitaryResearchProjects(state)}</section>`;
 }
 
 function cabinetView(state) {
