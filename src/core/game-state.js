@@ -19,6 +19,7 @@ import { isLandlocked } from '../data/military_equipment.js';
 import { bumpReputationStat, createReputation, normalizeReputation, processReputation, renameOrganization, restoreOrganizationName } from './identity.js';
 import { moveCapital, processCapital } from './capital.js';
 import { processTerritoryThreats } from './territory_defense.js';
+import { answerContractOffer, createContracts, fulfillContract, normalizeContracts, processWarContracts } from './war_contracts.js';
 import { abandonMission, checkMissions, createMissions, dismissEpilogue, getMissionStatus, normalizeMissions, processMissions, startMission } from './historical_missions.js';
 import { MISSIONS as HISTORICAL_MISSIONS } from '../data/historical_missions.js';
 import { answerPactOffer, bribeMember, dissolveBloc, inviteToBloc, leaveBloc, liberateCountry, renewPact, breakPact, coalitionRespond, createWorldOrder, normalizeWorldOrder, penalizePactWar, processWorldOrder, proposePact } from './world_order.js';
@@ -354,6 +355,7 @@ function createGameStateBase(countryId = 'bra', playerProfile = {}) {
     nuclearRace: createNuclearRace(),
     worldOrder: createWorldOrder(),
     missions: createMissions(),
+    contracts: createContracts(),
     capitalId: null,
     capitalMoveMonth: -99,
     orgRenameMonth: -99,
@@ -512,7 +514,7 @@ export function startWar(state, contactId) {
   const after = result.geopolitics.contacts.find((contact) => contact.id === contactId);
   if (!(after?.atWar && !before?.atWar)) return result;
   // Guerra contra quem tem pacto com voce e traicao; atacar membro de coalizao traz todos os outros.
-  return coalitionRespond(penalizePactWar(bumpReputationStat(result, 'warsDeclared'), contactId));
+  return coalitionRespond(fulfillContract(penalizePactWar(bumpReputationStat(result, 'warsDeclared'), contactId), contactId));
 }
 
 export function proporPacto(state, contactId, years = 1) {
@@ -557,6 +559,11 @@ export function libertarPais(state, victimId, keep = false) {
 
 // Pegar uma missao faz o jogador assumir o pais da historia: se ele governa outro pais, comeca uma nova partida no pais da missao
 // (as missoes ja cumpridas ficam guardadas).
+export function responderContrato(state, accept) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(answerContractOffer(state, accept));
+}
+
 export function aceitarMissao(state, missionId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   const mission = HISTORICAL_MISSIONS[missionId];
@@ -1295,7 +1302,7 @@ export function advanceMonth(state) {
   const year = state.calendar.month === 12 ? state.calendar.year + 1 : state.calendar.year;
   const notice = stability.event ?? internalProjectState.notice ?? `mês encerrado: PIB ${economicMonth.monthlyBalance >= 0 ? 'com superávit' : 'com déficit'}.`;
 
-  const completedState = processYearEnd(processElection(processSpecialties(processEquipment(processReputation(processCapital(processTerritoryThreats(processMissions(processWorldOrder(processNuclearRace(processOffensives(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
+  const completedState = processYearEnd(processElection(processSpecialties(processEquipment(processReputation(processCapital(processTerritoryThreats(processWarContracts(processMissions(processWorldOrder(processNuclearRace(processOffensives(processDeployments(processTradeWar(processDiplomacyLife(processCongressLife(syncWorld({
     ...state,
     economy: constitutionalState.economy,
     geopolitics: geopoliticalMonth.geopolitics,
@@ -1322,7 +1329,7 @@ export function advanceMonth(state) {
     activeLawIds: corporateState.activeLawIds,
     notice,
     history: addHistory(state, { type: 'month', message: [...geopoliticalMonth.events, notice].join(' '), calendar: { month, year } }),
-  }))))))))))))))));
+  })))))))))))))))));
   const corporateDefault = resolveCorporateDefault(completedState);
   if (corporateDefault.regime?.gameOver) return resolverFinalDeJogo(corporateDefault);
   const article5State = detectArticle5(completedState);
@@ -1543,6 +1550,7 @@ export function hydrateGameState(serialized) {
       nuclearRace: normalizeNuclearRace(parsed.nuclearRace),
       worldOrder: normalizeWorldOrder(parsed.worldOrder),
       missions: normalizeMissions(parsed.missions),
+      contracts: normalizeContracts(parsed.contracts),
       orgRenameMonth: Number.isFinite(Number(parsed.orgRenameMonth)) ? Math.floor(Number(parsed.orgRenameMonth)) : -99,
       reputation: normalizeReputation(parsed.reputation),
       capitalId: typeof parsed.capitalId === 'string' && parsed.capitalId ? parsed.capitalId : null,
