@@ -1308,7 +1308,17 @@ function mapCountryCard(contact, tariff = false, state = null, mapUi = {}, atomi
   return `<article class="map-country-card"><div><strong>${escapeHtml(contact.name)} ${nuclearBadge(contact)}</strong><span>${label} · relação ${formatRelation(contact.relation)} · poder ${Number(contact.militaryPower || 0).toFixed(0)} · PIB ${formatMoney(contact.pib_base || 0)}</span></div>${specialtyLine(state, contact)}<div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${blocked || contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comércio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${blocked || contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Aliança</button><button type="button" class="quiet-action" data-action="sabotage" data-contact="${contact.id}" ${blocked || contact.atWar ? 'disabled' : ''}>Sabotar</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${blocked || contact.atWar ? 'disabled' : ''}>Guerra</button></div>${state ? worldOrderControls(state, contact) : ''}${state ? troopControls(state, contact) : ''}${state ? attackControls(state, contact, mapUi) : ''}</article>`;
 }
 
+function diplomacyAdvanceBar(state, place) {
+  if (state.is_wasteland) return '';
+  const blocked = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid) || Boolean(state.pendingFinalDilemma) || Boolean(state.pendingInterrogation) || Boolean(state.pendingStory) || Boolean(state.pendingBriefing) || Boolean(state.pendingAllianceInvocation) || Boolean(state.pendingHostileAlert);
+  return `<div class="diplomacy-advance diplomacy-advance--${place}"><button type="button" class="primary-action" data-action="advance" ${blocked ? 'disabled' : ''}>Avançar mês <span aria-hidden="true">→</span></button></div>`;
+}
+
 export function diplomacyView(state, searchQuery = '', mapUi = {}) {
+  return `${diplomacyAdvanceBar(state, 'top')}${diplomacyViewCore(state, searchQuery, mapUi)}${diplomacyAdvanceBar(state, 'bottom')}`;
+}
+
+function diplomacyViewCore(state, searchQuery = '', mapUi = {}) {
   if (state.is_wasteland) {
     return `<section class="panel wasteland-diplomacy"><div class="panel-heading"><div><p class="eyebrow">Superficie devastada</p><h2>Facções do Ermo</h2></div><span class="country-code">SUCATA ${formatNumber.format(state.scrap ?? 0)}</span></div><p class="notice">A diplomacia antiga morreu. Envie batedores, negocie com os sobreviventes e defenda o Vault.</p><div class="diplomacy-list">${(state.geopolitics.contacts ?? []).map((contact) => `<article class="bloc-row"><div><strong>${escapeHtml(contact.name)}</strong><span>Relação ${formatRelation(contact.relation)} | Poder ${Number(contact.militaryPower).toFixed(0)}</span></div><button type="button" class="quiet-action" data-action="wasteland-scout" data-contact="${contact.id}" ${state.scrap >= 25 ? '' : 'disabled'}>[ ENVIAR BATEDORES ]</button></article>`).join('')}</div></section>`;
   }
