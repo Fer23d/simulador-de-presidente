@@ -132,7 +132,7 @@ export function getCoalitionBonus(state, contactId) {
 }
 
 export function getAnnexedByRivals(state) {
-  return (state.geopolitics?.contacts ?? []).filter((contact) => contact.annexedBy);
+  return (state.geopolitics?.contacts ?? []).filter((contact) => contact.annexedBy && !contact.donated);
 }
 
 // ---------- pactos ----------

@@ -14,6 +14,7 @@ import { getCapitalStatus } from '../core/capital.js';
 import { describePressure, getPlayerNuclearPressure, getPrograms, getRaceActionStatus, normalizeNuclearRace } from '../core/nuclear_race.js';
 import { MIN_ATTACK_SHARE, describeOdds, getAttackStatus, getBaseForce, getReinforcementStatus, normalizeOffensives } from '../core/offensives.js';
 import { getCapitalId } from '../core/deployments.js';
+import { DONATION_ONU_BONUS, DONATION_RELATION_BONUS, PUPPET_ONU_BONUS, getDonationTargets, getReleaseStatus } from '../core/territory_release.js';
 import { MAX_PROXY_ORDERS, getProxyContractors, getProxyStatus, PLEDGE_MONTHS, getContractWarnings, normalizeContracts, ONU_PENALTY, SPONSOR_RELATION_BONUS } from '../core/war_contracts.js';
 import { MISSION_LIST, MISSIONS } from '../data/historical_missions.js';
 import { describeMissionTime, getMissionStatus, getProgress, getTargets, normalizeMissions } from '../core/historical_missions.js';
@@ -120,6 +121,8 @@ import {
   tirarDoBloco,
   dissolverBloco,
   libertarPais,
+  soltarComoFantoche,
+  doarTerritorio,
   sabotarProgramaNuclear,
   suspenderOfensiva,
   pedirReforcos,
@@ -1080,7 +1083,7 @@ export function diplomacyMap(state, mapUi = {}) {
     const attrs = `class="${classes}"${fill} data-action="map-country" data-country="${contact.id}" role="button" tabindex="0" aria-label="${escapeHtml(contact.name)}"`;
     const annexer = contact.annexedBy ? contacts.concat(state.geopolitics.contacts).find((item) => item.id === contact.annexedBy)?.name ?? contact.annexedBy : '';
     const extraTitle = `${bloc ? ` · coalizão ${bloc.name}` : ''}${pactIds.has(contact.id) ? ' · pacto de não agressão' : ''}`;
-    const title = `<title>${escapeHtml(contact.name)} · ${status === 'annexed' ? 'território seu' : status === 'rival' ? `anexado por ${escapeHtml(annexer)}` : `relação ${formatRelation(contact.relation)}`}${escapeHtml(extraTitle)}</title>`;
+    const title = `<title>${escapeHtml(contact.name)} · ${status === 'annexed' ? 'território seu' : status === 'rival' ? `${contact.donated ? 'doado a' : 'anexado por'} ${escapeHtml(annexer)}` : `relação ${formatRelation(contact.relation)}`}${escapeHtml(extraTitle)}</title>`;
     if (COUNTRY_PATHS[contact.id]) return `<path d="${COUNTRY_PATHS[contact.id]}" ${attrs}>${title}</path>`;
     const [x, y] = COUNTRY_POINTS[contact.id];
     return `<circle cx="${x}" cy="${y}" r="3.6" ${attrs}>${title}</circle>`;
@@ -1258,6 +1261,7 @@ function troopControls(state, contact, compact = false) {
   const request = kind === 'ally' ? (() => { const r = getRequestStatus(state, contact.id); return `<button type="button" class="quiet-action" data-action="request-troops" data-contact="${contact.id}" ${r.available ? '' : 'disabled'} title="${r.reason}">Pedir tropas${r.available ? ` (${Math.round(r.chance * 100)}%)` : ''}</button>`; })() : '';
   let base = '';
   let threat = '';
+  let releaseHtml = '';
   if (!compact && kind === 'territory' && contact.anexado) {
     const chance = getAttackChance(state, contact.id);
     const defense = getDefenseScore(state, contact.id);
@@ -1268,13 +1272,19 @@ function troopControls(state, contact, compact = false) {
     const target = isCapital ? state.country.id : contact.id;
     base += `<button type="button" class="quiet-action" data-action="move-capital" data-target="${target}" ${capitalStatus.available ? '' : 'disabled'} title="${capitalStatus.reason}">${label}${capitalStatus.cost ? ' ' + formatMoney(capitalStatus.cost) : ''}</button>`;
   }
+  if (!compact && kind === 'territory' && contact.anexado) {
+    const release = getReleaseStatus(state, contact.id);
+    const allies = getDonationTargets(state, contact.id);
+    const options = allies.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
+    releaseHtml = `<div class="release-controls"><small>Abrir mão do território: virar fantoche (independente, mas seu; a ONU sobe ${PUPPET_ONU_BONUS}) ou doar a um aliado (relação +${DONATION_RELATION_BONUS}, ONU +${DONATION_ONU_BONUS}, militares ficam descontentes). ${release.available ? '' : escapeHtml(release.reason)}</small><div class="action-row"><button type="button" class="quiet-action" data-action="release-puppet" data-contact="${contact.id}" ${release.available ? '' : 'disabled'}>Soltar como fantoche</button><select aria-label="Aliado que receberá o território" ${allies.length && release.available ? '' : 'disabled'}>${options || '<option>Sem aliado disponível</option>'}</select><button type="button" class="quiet-action" data-action="donate-territory" data-contact="${contact.id}" ${allies.length && release.available ? '' : 'disabled'}>Doar ao aliado</button></div></div>`;
+  }
   if (!compact && kind === 'territory') {
     const reinforce = getReinforcementStatus(state, contact.id);
     const attackable = present && getBaseForce(state, contact.id).share >= MIN_ATTACK_SHARE;
     const reinforceLabel = reinforce.available ? `Pedir reforços (chegam em ${reinforce.months} mês(es))` : 'Pedir reforços';
     base += `<button type="button" class="quiet-action danger-action" data-action="attack-mode" data-base="${contact.id}" ${attackable ? '' : 'disabled'} title="${attackable ? '' : 'Guarneça a base com mais tropas para atacar a partir dela.'}">Atacar a partir daqui</button><button type="button" class="quiet-action" data-action="request-reinforcements" data-base="${contact.id}" ${reinforce.available ? '' : 'disabled'} title="${reinforce.reason}">${reinforceLabel}</button>`;
   }
-  return compact ? `${send}${recall}${request}` : `<div class="troop-controls">${info}${threat}<div class="action-row">${send}${recall}${request}${base}</div></div>`;
+  return compact ? `${send}${recall}${request}` : `<div class="troop-controls">${info}${threat}<div class="action-row">${send}${recall}${request}${base}</div>${releaseHtml}</div>`;
 }
 
 function attackControls(state, contact, mapUi) {
@@ -3576,6 +3586,12 @@ export function mountDashboard(root) {
     if (action === 'invite-bloc') { commit(convidarParaBloco(state, control.dataset.contact)); return; }
     if (action === 'leave-bloc') { commit(tirarDoBloco(state, control.dataset.contact)); return; }
     if (action === 'dissolve-bloc') { commit(dissolverBloco(state)); return; }
+    if (action === 'release-puppet') { commit(soltarComoFantoche(state, control.dataset.contact)); return; }
+    if (action === 'donate-territory') {
+      const ally = control.closest('.release-controls')?.querySelector('select')?.value;
+      commit(doarTerritorio(state, control.dataset.contact, ally));
+      return;
+    }
     if (action === 'liberate') { commit(libertarPais(state, control.dataset.contact, control.dataset.keep === 'yes')); return; }
     if (action === 'break-pact') { commit(romperPacto(state, control.dataset.contact)); return; }
     if (action === 'pact-answer') { commit(responderPacto(state, control.dataset.accept === 'yes')); return; }

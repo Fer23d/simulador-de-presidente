@@ -1132,3 +1132,5 @@ select[data-pact-years] { background: #0a100d; color: var(--phosphor); border: 1
 .map-zoom button { width: 32px; height: 32px; font: inherit; font-size: 18px; line-height: 1; cursor: pointer; background: #06100e; color: var(--text, #9fffb0); border: 1px solid var(--line); }
 .map-zoom button:hover { filter: brightness(1.4); }
 .map-zoom span { padding: 0 6px; font-size: 12px; opacity: .8; }
+.release-controls { margin-top: 8px; }
+.release-controls select { font: inherit; background: #06100e; color: inherit; border: 1px solid var(--line); padding: 6px; max-width: 180px; }

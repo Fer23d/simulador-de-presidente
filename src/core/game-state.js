@@ -19,6 +19,7 @@ import { isLandlocked } from '../data/military_equipment.js';
 import { bumpReputationStat, createReputation, normalizeReputation, processReputation, renameOrganization, restoreOrganizationName } from './identity.js';
 import { moveCapital, processCapital } from './capital.js';
 import { processTerritoryThreats } from './territory_defense.js';
+import { donateTerritory, releaseAsPuppet } from './territory_release.js';
 import { orderProxyAttack, answerContractOffer, createContracts, fulfillContract, normalizeContracts, processWarContracts } from './war_contracts.js';
 import { abandonMission, checkMissions, createMissions, dismissEpilogue, getMissionStatus, normalizeMissions, processMissions, startMission } from './historical_missions.js';
 import { MISSIONS as HISTORICAL_MISSIONS } from '../data/historical_missions.js';
@@ -550,6 +551,16 @@ export function tirarDoBloco(state, contactId) {
 export function dissolverBloco(state) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   return syncWorld(dissolveBloc(state));
+}
+
+export function soltarComoFantoche(state, territoryId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return checkMissions(syncWorld(releaseAsPuppet(state, territoryId)));
+}
+
+export function doarTerritorio(state, territoryId, allyId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return checkMissions(syncWorld(donateTerritory(state, territoryId, allyId)));
 }
 
 export function libertarPais(state, victimId, keep = false) {
