@@ -20,6 +20,8 @@ import { bumpReputationStat, createReputation, normalizeReputation, processReput
 import { moveCapital, processCapital } from './capital.js';
 import { processTerritoryThreats } from './territory_defense.js';
 import { donateTerritory, releaseAsPuppet } from './territory_release.js';
+import { abandonChallenge, createChallenges, normalizeChallenges, processChallenges, startChallenge } from './challenges.js';
+import { createWorldNews, normalizeWorldNews, pushWorldNews, recordWorldNews } from './world_news.js';
 import { orderProxyAttack, answerContractOffer, createContracts, fulfillContract, normalizeContracts, processWarContracts } from './war_contracts.js';
 import { abandonMission, checkMissions, createMissions, dismissEpilogue, getMissionStatus, normalizeMissions, processMissions, startMission } from './historical_missions.js';
 import { MISSIONS as HISTORICAL_MISSIONS } from '../data/historical_missions.js';
@@ -356,6 +358,8 @@ function createGameStateBase(countryId = 'bra', playerProfile = {}) {
     nuclearRace: createNuclearRace(),
     worldOrder: createWorldOrder(),
     missions: createMissions(),
+    challenges: createChallenges(),
+    worldNews: createWorldNews(),
     contracts: createContracts(),
     capitalId: null,
     capitalMoveMonth: -99,
@@ -555,12 +559,26 @@ export function dissolverBloco(state) {
 
 export function soltarComoFantoche(state, territoryId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
-  return checkMissions(syncWorld(releaseAsPuppet(state, territoryId)));
+  const result = checkMissions(syncWorld(releaseAsPuppet(state, territoryId)));
+  const done = result.geopolitics.contacts.find((item) => item.id === territoryId)?.puppet;
+  return done ? pushWorldNews(result, `Você soltou ${result.geopolitics.contacts.find((item) => item.id === territoryId).name} como fantoche.`, 'territory') : result;
+}
+
+export function aceitarDesafio(state, id) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return startChallenge(state, id);
+}
+
+export function abandonarDesafio(state, id) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return abandonChallenge(state, id);
 }
 
 export function doarTerritorio(state, territoryId, allyId) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
-  return checkMissions(syncWorld(donateTerritory(state, territoryId, allyId)));
+  const result = checkMissions(syncWorld(donateTerritory(state, territoryId, allyId)));
+  const gift = result.geopolitics.contacts.find((item) => item.id === territoryId);
+  return gift?.donated ? pushWorldNews(result, `Você doou ${gift.name} a ${result.geopolitics.contacts.find((item) => item.id === allyId)?.name ?? allyId}.`, 'territory') : result;
 }
 
 export function libertarPais(state, victimId, keep = false) {
@@ -1215,6 +1233,12 @@ export function advanceDay(state, days = 1) {
 }
 
 export function advanceMonth(state) {
+  const next = advanceMonthCore(state);
+  if (next === state || next.monthCounter === state.monthCounter) return next;
+  return recordWorldNews(state, processChallenges(next));
+}
+
+function advanceMonthCore(state) {
   if (state.regime?.gameOver) return resolverFinalDeJogo({ ...state, notice: 'A partida foi encerrada.' });
   if (state.pendingHostileAlert) return { ...state, notice: 'Reconheca o alerta militar antes de avancar o mês.' };
   if (state.wasteland_cinematic_ready) return { ...state, notice: 'Assuma o comando do Vault antes de avancar o mês.' };
@@ -1566,6 +1590,8 @@ export function hydrateGameState(serialized) {
       nuclearRace: normalizeNuclearRace(parsed.nuclearRace),
       worldOrder: normalizeWorldOrder(parsed.worldOrder),
       missions: normalizeMissions(parsed.missions),
+      challenges: normalizeChallenges(parsed.challenges),
+      worldNews: normalizeWorldNews(parsed.worldNews),
       contracts: normalizeContracts(parsed.contracts),
       orgRenameMonth: Number.isFinite(Number(parsed.orgRenameMonth)) ? Math.floor(Number(parsed.orgRenameMonth)) : -99,
       reputation: normalizeReputation(parsed.reputation),
