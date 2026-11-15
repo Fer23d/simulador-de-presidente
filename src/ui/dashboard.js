@@ -1735,6 +1735,14 @@ function militaryBranches(state, ui = {}) {
   }).join('');
 }
 
+// Painel que pode ser minimizado: o estado fica em ui.folds[id] (true = minimizado) e e guardado nas preferencias.
+function foldablePanel(html, id, eyebrow, title, ui = {}) {
+  const collapsed = ui.folds?.[id] === true;
+  const toggle = `<button type="button" class="quiet-action panel-toggle" data-action="toggle-fold" data-branch="${id}" aria-expanded="${collapsed ? 'false' : 'true'}">${collapsed ? '[ + EXPANDIR ]' : '[ − MINIMIZAR ]'}</button>`;
+  if (collapsed) return `<section class="panel is-collapsed"><div class="panel-heading"><div><p class="eyebrow">${eyebrow}</p><h2>${title}</h2></div>${toggle}</div></section>`;
+  return html.replace(/^(<section[^>]*>)/, `$1<div class="panel-toggle-bar">${toggle}</div>`);
+}
+
 export function militaryView(state, ui = {}) {
   const military = state.military;
   const exercito = military.exercito ?? { soldados: military.soldiers ?? 0, blindados: 0 };
@@ -1742,7 +1750,7 @@ export function militaryView(state, ui = {}) {
   const aeronautica = military.aeronautica ?? { cacas: 0 };
   const maintenance = calculateMilitaryMaintenance(military, state.military_tech_level);
   const canCoup = state.regime.type === 'democracy' && military.support >= 85 && state.budget.defenseSpend >= 0.06;
-  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Tríade militar</p><h2>Poder total ${Number(military.power || 0).toFixed(1)}</h2><p class="notice">${state.notice}</p><div class="ledger-row"><span>Apoio militar</span><strong>${Number(military.support || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Armas nucleares (o Plano Nuclear fica em Tecnologia)</span><strong>${Number(military.armasNucleares || 0)}</strong></div><div class="ledger-row"><span>CUSTO DE MANUTENÇÃO MENSAL</span><strong>${formatMoney(maintenance)}</strong></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section>${militaryBranches(state, ui)}${troopsAbroadPanel(state)}${renderMilitaryResearchProjects(state)}</section>`;
+  return `<section class="view-grid budget-grid"><section class="panel"><p class="eyebrow">Tríade militar</p><h2>Poder total ${Number(military.power || 0).toFixed(1)}</h2><p class="notice">${state.notice}</p><div class="ledger-row"><span>Apoio militar</span><strong>${Number(military.support || 0).toFixed(0)}%</strong></div><div class="ledger-row"><span>Armas nucleares (o Plano Nuclear fica em Tecnologia)</span><strong>${Number(military.armasNucleares || 0)}</strong></div><div class="ledger-row"><span>CUSTO DE MANUTENÇÃO MENSAL</span><strong>${formatMoney(maintenance)}</strong></div><button type="button" class="quiet-action danger-action" data-action="coup" ${canCoup ? '' : 'disabled'}>Decretar estado de sitio</button></section>${militaryBranches(state, ui)}${foldablePanel(troopsAbroadPanel(state), 'panel_troops', 'Projeção de força', 'Tropas no exterior', ui)}${foldablePanel(renderMilitaryResearchProjects(state), 'panel_research', 'Projetos especiais', '/// PROJETOS ESPECIAIS ///', ui)}</section>`;
 }
 
 function cabinetView(state) {

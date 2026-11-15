@@ -1138,3 +1138,4 @@ select[data-pact-years] { background: #0a100d; color: var(--phosphor); border: 1
 .contact-stats { font-size: 15px; line-height: 1.5; }
 .branch-block .branch-row { border-bottom: 0; flex-wrap: wrap; padding: 4px 0; }
 .branch-block .equipment-fold { border-top: 1px dashed var(--line); margin-top: 8px; }
+.panel-toggle-bar { display: flex; justify-content: flex-end; margin-bottom: 6px; }
