@@ -11,8 +11,8 @@ const finishAll = (tutorial) => presidencySteps.reduce((current, step) => comple
 // Abas da barra lateral, na ordem em que aparecem.
 const SIDEBAR_TABS = ['overview', 'budget', 'indicators', 'diplomacy', 'military', 'cabinet', 'technology', 'projects', 'congress', 'history', 'missions', 'countries', 'profile'];
 
-test('o guia do Presidente tem 18 passos, em ordem, e cada um aponta uma aba', () => {
-  assert.equal(presidencySteps.length, 18);
+test('o guia do Presidente tem 21 passos, em ordem, e cada um aponta uma aba', () => {
+  assert.equal(presidencySteps.length, 21);
   assert.equal(presidencySteps[0].id, 'presidency');
   assert.equal(new Set(presidencySteps.map((step) => step.id)).size, presidencySteps.length, 'ids unicos');
   assert.ok(presidencySteps.slice(1).every((step) => step.tab));
