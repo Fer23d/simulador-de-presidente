@@ -19,7 +19,7 @@ import { isLandlocked } from '../data/military_equipment.js';
 import { bumpReputationStat, createReputation, normalizeReputation, processReputation, renameOrganization, restoreOrganizationName } from './identity.js';
 import { moveCapital, processCapital } from './capital.js';
 import { processTerritoryThreats } from './territory_defense.js';
-import { answerContractOffer, createContracts, fulfillContract, normalizeContracts, processWarContracts } from './war_contracts.js';
+import { orderProxyAttack, answerContractOffer, createContracts, fulfillContract, normalizeContracts, processWarContracts } from './war_contracts.js';
 import { abandonMission, checkMissions, createMissions, dismissEpilogue, getMissionStatus, normalizeMissions, processMissions, startMission } from './historical_missions.js';
 import { MISSIONS as HISTORICAL_MISSIONS } from '../data/historical_missions.js';
 import { answerPactOffer, bribeMember, dissolveBloc, inviteToBloc, leaveBloc, liberateCountry, renewPact, breakPact, coalitionRespond, createWorldOrder, normalizeWorldOrder, penalizePactWar, processWorldOrder, proposePact } from './world_order.js';
@@ -559,6 +559,11 @@ export function libertarPais(state, victimId, keep = false) {
 
 // Pegar uma missao faz o jogador assumir o pais da historia: se ele governa outro pais, comeca uma nova partida no pais da missao
 // (as missoes ja cumpridas ficam guardadas).
+export function encomendarAtaque(state, contractorId, targetId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(orderProxyAttack(state, contractorId, targetId));
+}
+
 export function responderContrato(state, accept) {
   if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
   return syncWorld(answerContractOffer(state, accept));

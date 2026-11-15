@@ -77,3 +77,53 @@ test('guerra a outro pais nao paga o contrato; oferta expira sem resposta; save 
   assert.equal(processWarContracts({ ...e, monthCounter: e.contracts.offer.deadline }).contracts.offer, null);
   assert.equal(normalizeContracts(undefined).offer, null);
 });
+
+import { getProxyContractors, getProxyStatus, orderProxyAttack } from '../src/core/war_contracts.js';
+import { encomendarAtaque } from '../src/core/game-state.js';
+
+const rich = (s) => ({ ...s, economy: { ...s.economy, cash: 5e12 } });
+
+test('encomendar ataque: so amigos aceitam, nao se ataca aliado e paga so se aceitar', () => {
+  let s = rich(patch(patch(patch(base(), 'arg', { alliance: true, relation: 90, militaryPower: 60 }), 'ury', { relation: 0, militaryPower: 6 }), 'chl', { alliance: true }));
+  assert.equal(getProxyContractors(s).some((c) => c.id === 'arg'), true);
+  assert.equal(getProxyStatus(s, 'arg', 'chl').available, false, 'alvo aliado');
+  assert.equal(getProxyStatus(s, 'ury', 'per').available, false, 'contratado sem relacao');
+  const ok = getProxyStatus(s, 'arg', 'ury');
+  assert.equal(ok.available, true);
+  assert.ok(ok.chance > 0.5 && ok.cost > 0);
+  let accepted = null;
+  for (let m = 10; m < 60 && !accepted; m += 1) {
+    const out = orderProxyAttack({ ...s, monthCounter: m }, 'arg', 'ury');
+    if (out.contracts.proxies.length) accepted = out;
+    else assert.equal(out.economy.cash, s.economy.cash, 'recusa nao cobra');
+  }
+  assert.ok(accepted);
+  assert.ok(accepted.economy.cash < s.economy.cash);
+});
+
+test('encomenda resolvida: vitoria enfraquece alvo (nunca zera), derrota custa ao contratado', () => {
+  let s = rich(patch(patch(base(), 'arg', { alliance: true, relation: 90, militaryPower: 80 }), 'ury', { relation: 0, militaryPower: 10 }));
+  let out = null;
+  for (let m = 10; m < 60 && !out; m += 1) {
+    const r = orderProxyAttack({ ...s, monthCounter: m }, 'arg', 'ury');
+    if (r.contracts.proxies.length) out = r;
+  }
+  const due = out.contracts.proxies[0].resolveMonth;
+  const done = processWarContracts({ ...out, monthCounter: due });
+  assert.equal(done.contracts.proxies.length, 0);
+  assert.equal(done.contracts.proxyWon, 1);
+  assert.ok(contact(done, 'ury').militaryPower >= 1 && contact(done, 'ury').militaryPower < 10);
+  // derrota: contratado fraco contra alvo forte
+  const weak = rich(patch(patch(base(), 'arg', { alliance: true, relation: 90, militaryPower: 9 }), 'ury', { relation: 0, militaryPower: 90 }));
+  let o2 = null;
+  for (let m = 10; m < 80 && !o2; m += 1) {
+    const r = orderProxyAttack({ ...weak, monthCounter: m }, 'arg', 'ury');
+    if (r.contracts.proxies.length) o2 = r;
+  }
+  if (o2) {
+    const d2 = processWarContracts({ ...o2, monthCounter: o2.contracts.proxies[0].resolveMonth });
+    assert.equal(d2.contracts.proxyLost, 1);
+    assert.ok(contact(d2, 'arg').militaryPower < 9);
+  }
+  assert.equal(encomendarAtaque(patch(s, 'chl', { alliance: true }), 'arg', 'chl').contracts.proxies.length, 0);
+});

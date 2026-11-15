@@ -3,7 +3,7 @@
 //   + recompensa em caixa e +15 de relacao com quem encomendou;
 //   - a ONU cai um pouco e a relacao com o alvo vai a -100.
 // Se o prazo passa sem ataque, o contratante se ofende.
-import { distanceKm } from './offensives.js';
+import { distanceKm, getSupply } from './offensives.js';
 import { getCoalitionOf, getPlayerBloc, hasPact } from './world_order.js';
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
@@ -17,9 +17,12 @@ export const SPONSOR_RELATION_BONUS = 15;
 export const ONU_PENALTY = 5;
 export const BROKEN_PLEDGE_PENALTY = 10;
 export const MIN_SPONSOR_RELATION = 20;
+export const MAX_PROXY_ORDERS = 2;
+export const PROXY_COOLDOWN_MONTHS = 6;
+export const PROXY_LEAK_CHANCE = 0.4;
 
 export function createContracts() {
-  return { offer: null, active: null, lastOfferMonth: -99, fulfilled: 0, failed: 0, earned: 0 };
+  return { offer: null, active: null, lastOfferMonth: -99, fulfilled: 0, failed: 0, earned: 0, proxies: [], proxyCooldowns: {}, proxyWon: 0, proxyLost: 0, proxyRefused: 0 };
 }
 
 const int = (value, fallback = 0) => (Number.isFinite(Number(value)) ? Math.floor(Number(value)) : fallback);
@@ -41,6 +44,10 @@ export function normalizeContracts(value) {
     fulfilled: Math.max(0, int(value.fulfilled)),
     failed: Math.max(0, int(value.failed)),
     earned: Math.max(0, Number(value.earned) || 0),
+    proxies: (Array.isArray(value.proxies) ? value.proxies : []).map((item) => (item && typeof item.contractorId === 'string' && typeof item.targetId === 'string'
+      ? { contractorId: item.contractorId, targetId: item.targetId, cost: Math.max(0, Number(item.cost) || 0), orderedMonth: int(item.orderedMonth), resolveMonth: int(item.resolveMonth) } : null)).filter(Boolean).slice(0, MAX_PROXY_ORDERS),
+    proxyCooldowns: Object.fromEntries(Object.entries(value.proxyCooldowns ?? {}).filter(([, v]) => Number.isFinite(Number(v))).map(([k, v]) => [k, int(v)])),
+    proxyWon: Math.max(0, int(value.proxyWon)), proxyLost: Math.max(0, int(value.proxyLost)), proxyRefused: Math.max(0, int(value.proxyRefused)),
   };
 }
 
@@ -163,5 +170,103 @@ export function processWarContracts(state) {
     }
   }
   next = { ...next, contracts: data };
+  const proxied = processProxies(next);
+  next = proxied.state;
+  notes.push(...proxied.notes);
   return notes.length ? { ...next, notice: notes.join(' ') } : next;
+}
+
+// ---------- encomendar ataques: voce paga e um pais amigo ataca por voce ----------
+export function getProxyContractors(state) {
+  return (state.geopolitics?.contacts ?? []).filter((contact) => isLive(contact) && !contact.atWar && (Number(contact.militaryPower) || 0) >= 8
+    && (isFriendly(state, contact) || (Number(contact.relation) || 0) >= 40));
+}
+
+export function getProxyStatus(state, contractorId, targetId) {
+  if (!isActive(state)) return { available: false, reason: 'Indisponível.' };
+  const contractor = findContact(state, contractorId);
+  const target = findContact(state, targetId);
+  if (!contractor || !target || contractorId === targetId) return { available: false, reason: 'Escolha um país e um alvo diferentes.' };
+  if (!isLive(contractor) || contractor.atWar) return { available: false, reason: 'O país não está em condições de lutar.' };
+  if (!isLive(target)) return { available: false, reason: 'O alvo está fora do jogo.' };
+  if (isFriendly(state, target) || hasPact(state, targetId)) return { available: false, reason: 'Não dá para encomendar ataque a aliado, fantoche ou parceiro de pacto.' };
+  const bloc = getPlayerBloc(state);
+  if (bloc && bloc.members.includes(targetId)) return { available: false, reason: 'O alvo está no seu bloco.' };
+  if (!isFriendly(state, contractor) && (Number(contractor.relation) || 0) < 40) return { available: false, reason: 'Só aliados, fantoches ou países com relação de 40+ aceitam.' };
+  if ((Number(contractor.militaryPower) || 0) < 8) return { available: false, reason: 'Exército pequeno demais.' };
+  const mine = getCoalitionOf(state, contractorId);
+  if (mine && mine.members.includes(targetId)) return { available: false, reason: 'Fazem parte da mesma coalizão.' };
+  const data = view(state);
+  if (data.proxies.length >= MAX_PROXY_ORDERS) return { available: false, reason: `Você já tem ${MAX_PROXY_ORDERS} ataques encomendados em andamento.` };
+  if (data.proxies.some((item) => item.contractorId === contractorId)) return { available: false, reason: 'Esse país já está cumprindo uma encomenda sua.' };
+  const cooldown = data.proxyCooldowns[contractorId];
+  if (Number.isFinite(cooldown) && cooldown > monthOf(state)) return { available: false, reason: `Aguarde ${cooldown - monthOf(state)} mês(es) para pedir de novo a esse país.` };
+  const cost = getReward(state, target);
+  if ((Number(state.economy?.cash) || 0) < cost) return { available: false, reason: 'Caixa insuficiente.', cost };
+  const km = distanceKm(contractorId, targetId);
+  const ratio = (Number(contractor.militaryPower) || 0) / Math.max(1, Number(target.militaryPower) || 1);
+  const chance = clamp(0.25 + ((Number(contractor.relation) || 0) / 200) + (isFriendly(state, contractor) ? 0.1 : 0) + clamp((ratio - 1) * 0.15, -0.2, 0.2) + 0.1 - (km > 6000 ? 0.15 : 0), 0.05, 0.9);
+  return { available: true, reason: '', cost, chance, km };
+}
+
+export function orderProxyAttack(state, contractorId, targetId) {
+  const status = getProxyStatus(state, contractorId, targetId);
+  if (!status.available) return { ...state, notice: status.reason };
+  const data = view(state);
+  const month = monthOf(state);
+  const contractor = findContact(state, contractorId);
+  const target = findContact(state, targetId);
+  if (hash(month, 1409 + [...contractorId].reduce((sum, ch) => sum + ch.charCodeAt(0), 0), state) >= status.chance) {
+    return { ...state, contracts: { ...data, proxyRefused: data.proxyRefused + 1, proxyCooldowns: { ...data.proxyCooldowns, [contractorId]: month + PROXY_COOLDOWN_MONTHS } }, notice: `${contractor.name} recusou atacar ${target.name} (chance era ${Math.round(status.chance * 100)}%). Nada foi cobrado.` };
+  }
+  const delay = clamp(Math.ceil(status.km / 4000) + 1, 2, 4);
+  const order = { contractorId, targetId, cost: status.cost, orderedMonth: month, resolveMonth: month + delay };
+  return { ...state, economy: { ...state.economy, cash: (Number(state.economy.cash) || 0) - status.cost }, contracts: { ...data, proxies: [...data.proxies, order] }, notice: `${contractor.name} aceitou atacar ${target.name} por ${formatCost(status.cost)}. O resultado sai em ${delay} meses.` };
+}
+
+const formatCost = (value) => `R$ ${(value / 1e9).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} bi`;
+
+function processProxies(state) {
+  const data = view(state);
+  const month = monthOf(state);
+  if (!data.proxies.length) return { state, notes: [] };
+  let next = state;
+  let current = data;
+  const notes = [];
+  const remaining = [];
+  for (const order of data.proxies) {
+    if (order.resolveMonth > month) { remaining.push(order); continue; }
+    const contractor = findContact(next, order.contractorId);
+    const target = findContact(next, order.targetId);
+    if (!contractor || !target || !isLive(contractor) || !isLive(target)) {
+      notes.push('Um ataque encomendado foi cancelado: o contratado ou o alvo saiu do jogo.');
+      continue;
+    }
+    const km = distanceKm(order.contractorId, order.targetId);
+    const attack = (Number(contractor.militaryPower) || 0) * 0.6 * getSupply(km) * (0.8 + (hash(month, 1451 + km, next) * 0.4));
+    const defense = Number(target.militaryPower) || 0;
+    const won = attack >= defense * 0.9;
+    current = { ...current, proxyCooldowns: { ...current.proxyCooldowns, [order.contractorId]: month + PROXY_COOLDOWN_MONTHS } };
+    if (won) {
+      const damage = Math.max(2, (Number(contractor.militaryPower) || 0) * 0.35);
+      next = patchContact(next, order.targetId, (item) => ({ militaryPower: Math.max(1, (Number(item.militaryPower) || 0) - damage), relation: clamp((Number(item.relation) || 0) - 20, -100, 100) }));
+      next = patchContact(next, order.contractorId, (item) => ({ militaryPower: Math.max(1, (Number(item.militaryPower) || 0) - 3), relation: clamp((Number(item.relation) || 0) + 10, -100, 100) }));
+      current = { ...current, proxyWon: current.proxyWon + 1 };
+      let line = `${contractor.name} atacou ${target.name} a seu pedido e venceu: o poder militar do alvo caiu ${damage.toFixed(1)} (relação com você +10).`;
+      if (hash(month, 1481 + km, next) < PROXY_LEAK_CHANCE) {
+        next = patchContact(next, order.targetId, (item) => ({ relation: clamp((Number(item.relation) || 0) - 35, -100, 100) }));
+        next = { ...next, geopolitics: { ...next.geopolitics, onuScore: clamp((Number(next.geopolitics.onuScore) || 0) - 3, 0, 100) } };
+        line += ` Mas vazou que você pagou: ${target.name} te culpa (relação −35) e a ONU caiu 3.`;
+      } else {
+        line += ' A encomenda não vazou.';
+      }
+      notes.push(line);
+    } else {
+      next = patchContact(next, order.contractorId, (item) => ({ militaryPower: Math.max(1, (Number(item.militaryPower) || 0) - 8) }));
+      next = patchContact(next, order.targetId, (item) => ({ militaryPower: Math.max(1, (Number(item.militaryPower) || 0) - 2) }));
+      current = { ...current, proxyLost: current.proxyLost + 1 };
+      notes.push(`${contractor.name} atacou ${target.name} a seu pedido e fracassou: perdeu poder militar e o dinheiro não volta.`);
+    }
+  }
+  return { state: { ...next, contracts: { ...current, proxies: remaining } }, notes };
 }

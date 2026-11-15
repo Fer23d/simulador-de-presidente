@@ -14,7 +14,7 @@ import { getCapitalStatus } from '../core/capital.js';
 import { describePressure, getPlayerNuclearPressure, getPrograms, getRaceActionStatus, normalizeNuclearRace } from '../core/nuclear_race.js';
 import { MIN_ATTACK_SHARE, describeOdds, getAttackStatus, getBaseForce, getReinforcementStatus, normalizeOffensives } from '../core/offensives.js';
 import { getCapitalId } from '../core/deployments.js';
-import { PLEDGE_MONTHS, getContractWarnings, normalizeContracts, ONU_PENALTY, SPONSOR_RELATION_BONUS } from '../core/war_contracts.js';
+import { MAX_PROXY_ORDERS, getProxyContractors, getProxyStatus, PLEDGE_MONTHS, getContractWarnings, normalizeContracts, ONU_PENALTY, SPONSOR_RELATION_BONUS } from '../core/war_contracts.js';
 import { MISSION_LIST, MISSIONS } from '../data/historical_missions.js';
 import { describeMissionTime, getMissionStatus, getProgress, getTargets, normalizeMissions } from '../core/historical_missions.js';
 import { COALITION_MAX_MEMBERS, MAX_ACTIVE_PACTS, PACT_YEARS, AWAKEN_ANNEXATIONS, coalitionColor, getAnnexedByRivals, getCoalitionOf, getPact, getPactChance, getPactStatus, isAwake, listPacts, normalizeWorldOrder, getBribeStatus, getInviteStatus, getPlayerBloc, getLiberationStatus, getRenewStatus, getRivalTargets, getPactTradeBonus, PLAYER_BLOC_MAX_ALLIES } from '../core/world_order.js';
@@ -110,6 +110,7 @@ import {
   romperPacto,
   responderPacto,
   responderContrato,
+  encomendarAtaque,
   aceitarMissao,
   abandonarMissao,
   fecharEpilogoMissao,
@@ -1161,6 +1162,15 @@ function worldOrderControls(state, contact) {
     return `<div class="troop-controls"><small>Anexado por <strong>${escapeHtml(captor?.name ?? contact.annexedBy)}</strong>. ${lib.available ? 'Suas forças bastam para uma campanha de libertação.' : escapeHtml(lib.reason)}</small><div class="action-row"><button type="button" class="quiet-action" data-action="liberate" data-contact="${contact.id}" data-keep="no" ${lib.available ? '' : 'disabled'} title="${escapeHtml(lib.reason)}">Libertar e devolver a independência${cost}</button><button type="button" class="quiet-action danger-action" data-action="liberate" data-contact="${contact.id}" data-keep="yes" ${lib.available ? '' : 'disabled'} title="${escapeHtml(lib.reason)}">Libertar e anexar${cost}</button></div></div>`;
   }
   if (contact.destruido || contact.anexado || contact.annexed || contact.wasteland) return '';
+  let proxyControls = '';
+  if (!contact.alliance && !(contact.puppet && contact.is_puppet_of === 'jogador') && !getPact(state, contact.id)) {
+    const options = getProxyContractors(state).filter((item) => item.id !== contact.id).map((item) => ({ item, status: getProxyStatus(state, item.id, contact.id) })).sort((a, b) => (Number(b.item.relation) || 0) - (Number(a.item.relation) || 0)).slice(0, 25);
+    if (options.length) {
+      const usable = options.some((entry) => entry.status.available);
+      const cost = options.find((entry) => entry.status.cost)?.status.cost;
+      proxyControls = `<div class="action-row"><select data-proxy-from="${contact.id}" aria-label="Quem ataca por você">${options.map(({ item, status }) => `<option value="${item.id}" ${status.available ? '' : 'disabled'}>${escapeHtml(item.name)}${status.available ? ` (${Math.round(status.chance * 100)}%)` : ` — ${escapeHtml(status.reason)}`}</option>`).join('')}</select><button type="button" class="quiet-action danger-action" data-action="order-proxy" data-target="${contact.id}" ${usable ? '' : 'disabled'} title="Paga só se o país aceitar. Pode vazar.">Encomendar ataque${cost ? ` (${formatMoney(cost)})` : ''}</button></div>`;
+    }
+  }
   const pact = getPact(state, contact.id);
   const bloc = getCoalitionOf(state, contact.id);
   let blocActions = '';
@@ -1179,7 +1189,7 @@ function worldOrderControls(state, contact) {
   }
   const status = getPactStatus(state, contact.id, 1);
   const options = PACT_YEARS.map((years) => `<option value="${years}">${years} ano${years > 1 ? 's' : ''} (${Math.round(getPactChance(state, contact.id, years) * 100)}%)</option>`).join('');
-  return `<div class="troop-controls">${blocLine}<div class="action-row">${blocActions}<select data-pact-years="${contact.id}" aria-label="Duração do pacto" ${status.available ? '' : 'disabled'}>${options}</select><button type="button" class="quiet-action" data-action="propose-pact" data-contact="${contact.id}" ${status.available ? '' : 'disabled'} title="${escapeHtml(status.reason)}">Propor pacto de não agressão</button></div>${status.available ? '' : `<small>${escapeHtml(status.reason)}</small>`}</div>`;
+  return `<div class="troop-controls">${blocLine}<div class="action-row">${blocActions}<select data-pact-years="${contact.id}" aria-label="Duração do pacto" ${status.available ? '' : 'disabled'}>${options}</select><button type="button" class="quiet-action" data-action="propose-pact" data-contact="${contact.id}" ${status.available ? '' : 'disabled'} title="${escapeHtml(status.reason)}">Propor pacto de não agressão</button></div>${status.available ? '' : `<small>${escapeHtml(status.reason)}</small>`}${proxyControls}</div>`;
 }
 
 function warContractPanel(state) {
@@ -1187,6 +1197,8 @@ function warContractPanel(state) {
   const nameOf = (id) => state.geopolitics.contacts.find((item) => item.id === id)?.name ?? id;
   const now = Number(state.monthCounter) || 0;
   let body = '';
+  const orders = data.proxies.map((item) => `<div class="ledger-row"><span>${escapeHtml(nameOf(item.contractorId))} ataca ${escapeHtml(nameOf(item.targetId))}</span><strong>resultado em ${Math.max(0, item.resolveMonth - now)} mês(es) · pago ${formatMoney(item.cost)}</strong></div>`).join('');
+  const proxyStats = (data.proxyWon || data.proxyLost || data.proxyRefused) ? `<div class="ledger-row"><span>Ataques encomendados: vitórias / derrotas / recusas</span><strong>${data.proxyWon} / ${data.proxyLost} / ${data.proxyRefused}</strong></div>` : '';
   if (data.offer) {
     const offer = data.offer;
     const warnings = getContractWarnings(state, offer.targetId).map((text) => `<small class="negative">${escapeHtml(text)}</small>`).join('');
@@ -1195,9 +1207,10 @@ function warContractPanel(state) {
   if (data.active) {
     body += `<p class="notice"><strong>Contrato em andamento:</strong> declare guerra a ${escapeHtml(nameOf(data.active.targetId))} em até ${Math.max(0, data.active.deadline - now)} mês(es) para receber ${formatMoney(data.active.reward)} de ${escapeHtml(nameOf(data.active.sponsorId))}. Se o prazo passar, a relação com ${escapeHtml(nameOf(data.active.sponsorId))} cai 10.</p>`;
   }
-  if (!body) body = '<p class="notice">Sem ofertas agora. Países amigos podem oferecer recompensas para você atacar um rival deles, no máximo uma a cada 8 meses.</p>';
+  if (orders) body += `<h3>Ataques encomendados em andamento (${data.proxies.length}/${MAX_PROXY_ORDERS})</h3>${orders}`;
+  if (!body) body = '<p class="notice">Sem ofertas agora. Países amigos podem oferecer recompensas para você atacar um rival deles, no máximo uma a cada 8 meses. Você também pode encomendar ataques: abra um país inimigo no mapa e escolha quem ataca por você.</p>';
   const stats = (data.fulfilled || data.failed) ? `<div class="ledger-row"><span>Contratos cumpridos / descumpridos</span><strong>${data.fulfilled} / ${data.failed}</strong></div><div class="ledger-row"><span>Total recebido</span><strong>${formatMoney(data.earned)}</strong></div>` : '';
-  return `<section class="panel war-contract-panel"><div class="panel-heading"><div><p class="eyebrow">Mercado de guerra</p><h2>Contratos de guerra</h2></div></div>${body}${stats}</section>`;
+  return `<section class="panel war-contract-panel"><div class="panel-heading"><div><p class="eyebrow">Mercado de guerra</p><h2>Contratos de guerra</h2></div></div>${body}${stats}${proxyStats}</section>`;
 }
 
 function worldOrderPanel(state) {
@@ -3489,6 +3502,11 @@ export function mountDashboard(root) {
     if (action === 'propose-pact') {
       const years = Number(root.querySelector(`[data-pact-years="${control.dataset.contact}"]`)?.value) || 1;
       commit(proporPacto(state, control.dataset.contact, years));
+      return;
+    }
+    if (action === 'order-proxy') {
+      const from = root.querySelector(`[data-proxy-from="${control.dataset.target}"]`)?.value;
+      commit(encomendarAtaque(state, from, control.dataset.target));
       return;
     }
     if (action === 'contract-answer') { commit(responderContrato(state, control.dataset.accept === 'yes')); return; }
