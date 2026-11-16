@@ -9,7 +9,7 @@ import { advanceTechnology, createTechnology, getTechnologyModifiers, purchaseTe
 import { calculateMilitaryResearchPoints, getMilitaryTechnology, pesquisarTecnologia } from './tech_tree.js';
 import { getTraitModifiers } from './traits.js';
 import { EVENTS, applyEventOption, rollMonthlyEvent } from './events.js';
-import { createMinisters, dismissMinister as dismissCabinetMinister, getMinisterModifiers, hireMinister as hireCabinetMinister } from './ministers.js';
+import { normalizeMinisters, processMinisters, createMinisters, dismissMinister as dismissCabinetMinister, getMinisterModifiers, hireMinister as hireCabinetMinister } from './ministers.js';
 import { applyUnrestAction as applyUnrestActionState, repressionHangover } from './unrest_actions.js';
 import { createSectors, normalizeSectors } from './sectors.js';
 import { createYearGoals, normalizeYearGoals, normalizeYearReports, processYearEnd } from './year_report.js';
@@ -20,6 +20,8 @@ import { bumpReputationStat, createReputation, normalizeReputation, processReput
 import { moveCapital, processCapital } from './capital.js';
 import { processTerritoryThreats } from './territory_defense.js';
 import { donateTerritory, releaseAsPuppet } from './territory_release.js';
+import { createEmbassies, dismissAmbassador, hireAmbassador, normalizeEmbassies, processEmbassies } from './embassies.js';
+import { createSpies, installAgent, normalizeSpies, processSpies, runOp } from './spy_network.js';
 import { createFavors, normalizeFavors, processFavors } from './favors.js';
 import { abandonChallenge, createChallenges, normalizeChallenges, processChallenges, startChallenge } from './challenges.js';
 import { createWorldNews, normalizeWorldNews, pushWorldNews, recordWorldNews } from './world_news.js';
@@ -361,6 +363,8 @@ function createGameStateBase(countryId = 'bra', playerProfile = {}) {
     missions: createMissions(),
     challenges: createChallenges(),
     favors: createFavors(),
+    spies: createSpies(),
+    embassies: createEmbassies(),
     worldNews: createWorldNews(),
     contracts: createContracts(),
     capitalId: null,
@@ -564,6 +568,26 @@ export function soltarComoFantoche(state, territoryId) {
   const result = checkMissions(syncWorld(releaseAsPuppet(state, territoryId)));
   const done = result.geopolitics.contacts.find((item) => item.id === territoryId)?.puppet;
   return done ? pushWorldNews(result, `Você soltou ${result.geopolitics.contacts.find((item) => item.id === territoryId).name} como fantoche.`, 'territory') : result;
+}
+
+export function instalarAgente(state, id) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(installAgent(state, id));
+}
+
+export function operacaoEspionagem(state, id, opId) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return syncWorld(runOp(state, id, opId));
+}
+
+export function contratarEmbaixador(state, id) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return hireAmbassador(state, id);
+}
+
+export function demitirEmbaixador(state, id) {
+  if (isGameOver(state)) return { ...state, notice: 'A partida foi encerrada.' };
+  return dismissAmbassador(state, id);
 }
 
 export function aceitarDesafio(state, id) {
@@ -1237,7 +1261,7 @@ export function advanceDay(state, days = 1) {
 export function advanceMonth(state) {
   const next = advanceMonthCore(state);
   if (next === state || next.monthCounter === state.monthCounter) return next;
-  return recordWorldNews(state, processChallenges(processFavors(next)));
+  return recordWorldNews(state, processChallenges(processMinisters(processEmbassies(processSpies(processFavors(next))))));
 }
 
 function advanceMonthCore(state) {
@@ -1573,11 +1597,7 @@ export function hydrateGameState(serialized) {
       unlocked_chapters: Array.isArray(parsed.unlocked_chapters)
         ? [...new Set(['cap_1_origem', ...parsed.unlocked_chapters.filter((id) => typeof id === 'string' && getLoreChapter(id))])]
         : base.unlocked_chapters,
-      ministers: {
-        ...base.ministers,
-        economy: parsed.ministers?.economy?.id === 'economy' ? { id: 'economy' } : null,
-        defense: parsed.ministers?.defense?.id === 'defense' ? { id: 'defense' } : null,
-      },
+      ministers: normalizeMinisters(parsed.ministers),
       news: Array.isArray(parsed.news)
         ? parsed.news.filter((item) => typeof item?.text === 'string' && item.calendar).slice(0, 5)
         : base.news,
@@ -1594,6 +1614,8 @@ export function hydrateGameState(serialized) {
       missions: normalizeMissions(parsed.missions),
       challenges: normalizeChallenges(parsed.challenges),
       favors: normalizeFavors(parsed.favors),
+      spies: normalizeSpies(parsed.spies),
+      embassies: normalizeEmbassies(parsed.embassies),
       worldNews: normalizeWorldNews(parsed.worldNews),
       contracts: normalizeContracts(parsed.contracts),
       orgRenameMonth: Number.isFinite(Number(parsed.orgRenameMonth)) ? Math.floor(Number(parsed.orgRenameMonth)) : -99,

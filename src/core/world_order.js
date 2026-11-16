@@ -19,6 +19,8 @@ export const PACT_OFFER_CHANCE = 0.07;
 export const AWAKEN_ANNEXATIONS = 3;
 export const ANNEX_COOLDOWN_MONTHS = 5;
 import { getDifficulty } from './difficulty.js';
+import { getEmbassyPactBonus } from './embassies.js';
+import { getMinisterModifiers } from './ministers.js';
 export const ANNEX_MONTHLY_CHANCE = 0.12;
 export const ANNEX_MAX_KM = 7000;
 export const COALITION_MAX_MEMBERS = 5;
@@ -141,7 +143,7 @@ export function getPactChance(state, contactId, years = 1) {
   const contact = findContact(state, contactId);
   if (!contact) return 0;
   const relation = Number(contact.relation) || 0;
-  return clamp((0.32 + (relation / 150) + (contact.tradeTreaty ? 0.1 : 0) - (0.05 * (years - 1))) * getDifficulty(state).pact, 0.05, 0.92);
+  return clamp((0.32 + (relation / 150) + (contact.tradeTreaty ? 0.1 : 0) - (0.05 * (years - 1)) + getEmbassyPactBonus(state, contactId) + getMinisterModifiers(state.ministers).pactBonus) * getDifficulty(state).pact, 0.05, 0.92);
 }
 
 export function getPactStatus(state, contactId, years = 1) {
