@@ -4,6 +4,7 @@ import { createGeopolitics } from './geopolitics.js';
 import { getCapitalId, getDeployed } from './deployments.js';
 import { adjustFactions } from './factions.js';
 import { normalizeMilitary } from './military.js';
+import { registerDebt } from './favors.js';
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
 const count = (value) => Math.max(0, Math.floor(Number(value) || 0));
@@ -89,7 +90,7 @@ export function donateTerritory(state, territoryId, allyId) {
     area_km2: (Number(contact.area_km2) || 0) + (Number(base.area_km2) || 0),
     militaryPower: (Number(contact.militaryPower) || 0) + Math.round((Number(base.militaryPower) || 10) * 0.3),
   }));
-  next = changeOnu(next, DONATION_ONU_BONUS);
+  next = registerDebt(changeOnu(next, DONATION_ONU_BONUS), allyId);
   next = { ...next, factions: adjustFactions(next.factions, { militares: -3, elite: -1 }) };
   return { ...next, notice: `${territory.name} foi doado a ${ally.name}. A relação subiu ${DONATION_RELATION_BONUS} pontos e a ONU viu com bons olhos (+${DONATION_ONU_BONUS}), mas os militares não gostaram.` };
 }

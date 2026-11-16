@@ -10,7 +10,7 @@ import { levelTrackView } from '../src/ui/level_ui.js';
 test('creates a safe profile and normalizes the call name', () => {
   const profile = createPlayerProfile({ name: '  Layd   Almeida  ', language: 'en' });
 
-  assert.deepEqual(profile, { name: 'Layd Almeida', language: 'en' });
+  assert.deepEqual(profile, { name: 'Layd Almeida', language: 'en', difficulty: 'normal' });
   assert.equal(normalizeLanguage('fr'), 'pt-BR');
 });
 
@@ -20,7 +20,7 @@ test('profile updates are immutable and survive serialization', () => {
   const loaded = hydrateGameState(JSON.stringify(next));
 
   assert.equal(state.playerProfile.name, '');
-  assert.deepEqual(loaded.playerProfile, { name: 'Comandante Aurora', language: 'es' });
+  assert.deepEqual(loaded.playerProfile, { name: 'Comandante Aurora', language: 'es', difficulty: 'normal' });
   assert.equal(getPlayerDisplayName(loaded), 'Comandante Aurora');
 });
 

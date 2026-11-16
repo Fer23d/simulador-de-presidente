@@ -18,6 +18,7 @@ export const PACT_OFFER_DEADLINE = 3;
 export const PACT_OFFER_CHANCE = 0.07;
 export const AWAKEN_ANNEXATIONS = 3;
 export const ANNEX_COOLDOWN_MONTHS = 5;
+import { getDifficulty } from './difficulty.js';
 export const ANNEX_MONTHLY_CHANCE = 0.12;
 export const ANNEX_MAX_KM = 7000;
 export const COALITION_MAX_MEMBERS = 5;
@@ -140,7 +141,7 @@ export function getPactChance(state, contactId, years = 1) {
   const contact = findContact(state, contactId);
   if (!contact) return 0;
   const relation = Number(contact.relation) || 0;
-  return clamp(0.32 + (relation / 150) + (contact.tradeTreaty ? 0.1 : 0) - (0.05 * (years - 1)), 0.05, 0.92);
+  return clamp((0.32 + (relation / 150) + (contact.tradeTreaty ? 0.1 : 0) - (0.05 * (years - 1))) * getDifficulty(state).pact, 0.05, 0.92);
 }
 
 export function getPactStatus(state, contactId, years = 1) {
@@ -466,13 +467,13 @@ export function processWorldOrder(state) {
     notes.push(...cleaned.notes);
   }
   if (order.awake) {
-    if (month - order.lastAnnexMonth >= ANNEX_COOLDOWN_MONTHS && hash(month, 503, next) < ANNEX_MONTHLY_CHANCE) {
+    if (month - order.lastAnnexMonth >= ANNEX_COOLDOWN_MONTHS && hash(month, 503, next) < ANNEX_MONTHLY_CHANCE * getDifficulty(next).rival) {
       const result = rivalAnnex(next, order, month);
       if (result.order !== order) notes.push(result.state.notice);
       next = result.state;
       order = result.order;
     }
-    if (order.coalitions.filter((item) => !item.player).length < COALITION_MAX_COUNT && month - order.lastFormMonth >= COALITION_FORM_COOLDOWN && hash(month, 587, next) < COALITION_FORM_CHANCE) {
+    if (order.coalitions.filter((item) => !item.player).length < COALITION_MAX_COUNT && month - order.lastFormMonth >= COALITION_FORM_COOLDOWN && hash(month, 587, next) < COALITION_FORM_CHANCE * getDifficulty(next).formation) {
       const result = formCoalition(next, order, month);
       if (result.order !== order) notes.push(result.state.notice);
       next = result.state;

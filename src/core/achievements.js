@@ -3,6 +3,8 @@
 import { getDebtStatus } from './economy.js';
 import { SECTOR_IDS, normalizeSectors } from './sectors.js';
 import { getBlocLoyalty } from './congress_life.js';
+import { CHALLENGE_LIST } from './challenges.js';
+import { MISSION_LIST } from '../data/historical_missions.js';
 
 export const ACHIEVEMENTS_KEY = 'simulador-presidente-conquistas-v1';
 
@@ -58,6 +60,16 @@ export const ACHIEVEMENTS = Object.freeze([
     check: (state, trophies) => Boolean(state.ending) || (trophies?.endings?.length ?? 0) >= 1 },
   { id: 'all_endings', icon: '🏆', title: 'Todos os destinos', description: 'Descubra os sete finais da Porta.',
     check: (state, trophies) => (trophies?.endings?.length ?? 0) >= 7 },
+  ...CHALLENGE_LIST.map((def) => ({ id: `challenge_${def.id}`, icon: def.icon, title: `Desafio: ${def.title}`, description: def.text, check: (state) => Boolean(state.challenges?.completed?.[def.id]) })),
+  { id: 'challenges_all', icon: '🎖️', title: 'Mestre dos desafios', description: 'Cumpra todos os desafios de variedade.',
+    check: (state) => CHALLENGE_LIST.every((def) => Boolean(state.challenges?.completed?.[def.id])) },
+  ...MISSION_LIST.map((mission) => ({ id: `mission_${mission.id}`, icon: mission.icon, title: `Missão: ${mission.title}`, description: mission.objective, check: (state) => Boolean(state.missions?.completed?.[mission.id]) })),
+  { id: 'missions_all', icon: '📜', title: 'Historiador', description: 'Cumpra as três missões históricas.',
+    check: (state) => MISSION_LIST.every((mission) => Boolean(state.missions?.completed?.[mission.id])) },
+  { id: 'favor_returned', icon: '🎁', title: 'Gentileza retribuída', description: 'Receba um favor de um aliado depois de doar um território a ele.',
+    check: (state) => (Number(state.favors?.granted) || 0) >= 1 },
+  { id: 'hard_mode', icon: '💀', title: 'Sobrevivente do modo difícil', description: 'Chegue a 5 anos de governo na dificuldade Difícil.',
+    check: (state) => isPresidency(state) && months(state) >= 60 && state.playerProfile?.difficulty === 'hard' && !state.regime?.gameOver },
 ]);
 
 export function createAchievementStore(value = {}) {

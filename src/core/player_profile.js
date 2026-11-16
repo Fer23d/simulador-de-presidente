@@ -1,4 +1,5 @@
 import { getPresidentClass } from './player_state.js';
+import { normalizeDifficulty } from './difficulty.js';
 
 export const DEFAULT_PLAYER_NAME = 'Presidente';
 export const MAX_PLAYER_NAME_LENGTH = 32;
@@ -26,6 +27,7 @@ export function createPlayerProfile(value = {}) {
   return {
     name: normalizeName(value.name ?? value.playerName),
     language: normalizeLanguage(value.language),
+    difficulty: normalizeDifficulty(value.difficulty),
   };
 }
 

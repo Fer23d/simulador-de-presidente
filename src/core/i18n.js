@@ -42,6 +42,7 @@ const UI_MESSAGES = Object.freeze({
     'profile.settings': 'Configurações',
     'profile.language': 'Idioma da interface',
     'profile.languageHint': 'Rótulos, níveis, painéis, alertas e modos acompanham o idioma selecionado.',
+    'profile.difficulty': 'Dificuldade',
     'profile.volume': 'Volume',
     'profile.mute': 'Som mudo',
     'profile.tutorial': 'Tutorial e dicas',

@@ -3,6 +3,7 @@
 //   + recompensa em caixa e +15 de relacao com quem encomendou;
 //   - a ONU cai um pouco e a relacao com o alvo vai a -100.
 // Se o prazo passa sem ataque, o contratante se ofende.
+import { getDifficulty } from './difficulty.js';
 import { distanceKm, getSupply } from './offensives.js';
 import { getCoalitionOf, getPlayerBloc, hasPact } from './world_order.js';
 
@@ -74,7 +75,7 @@ function hash(month, salt, state) {
 export function getReward(state, target) {
   const gdp = Number(state.economy?.gdp) || 0;
   const power = Number(target.militaryPower) || 0;
-  return Math.round(gdp * clamp(0.015 + (power / 100) * 0.03, 0.015, 0.045));
+  return Math.round(gdp * clamp(0.015 + (power / 100) * 0.03, 0.015, 0.045) * getDifficulty(state).reward);
 }
 
 // Avisos mostrados na oferta (riscos de atacar esse alvo).

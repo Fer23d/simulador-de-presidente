@@ -14,6 +14,7 @@ import { getCapitalStatus } from '../core/capital.js';
 import { describePressure, getPlayerNuclearPressure, getPrograms, getRaceActionStatus, normalizeNuclearRace } from '../core/nuclear_race.js';
 import { MIN_ATTACK_SHARE, describeOdds, getAttackStatus, getBaseForce, getReinforcementStatus, normalizeOffensives } from '../core/offensives.js';
 import { getCapitalId } from '../core/deployments.js';
+import { DIFFICULTY_LIST, getDifficulty } from '../core/difficulty.js';
 import { CHALLENGE_LIST, MAX_ACTIVE_CHALLENGES, getChallengeStatus, getChallengeValue, normalizeChallenges } from '../core/challenges.js';
 import { NEWS_KINDS, normalizeWorldNews } from '../core/world_news.js';
 import { DONATION_ONU_BONUS, DONATION_RELATION_BONUS, PUPPET_ONU_BONUS, getDonationTargets, getReleaseStatus } from '../core/territory_release.js';
@@ -430,6 +431,8 @@ function profileViewBase(state, { audio = {}, tutorialEnabled = true } = {}) {
       <div class="panel-heading"><div><p class="eyebrow">/// ${escapeHtml(uiText(language, 'profile.kicker'))} ///</p><h2>${escapeHtml(uiText(language, 'profile.settings'))}</h2></div></div>
       <label class="profile-field"><span>${escapeHtml(uiText(language, 'profile.language'))}</span><select data-profile-language aria-label="${escapeHtml(uiText(language, 'profile.language'))}">${languageOptions}</select></label>
       <p class="profile-hint">${escapeHtml(uiText(language, 'profile.languageHint'))}</p>
+      <label class="profile-field"><span>${escapeHtml(uiText(language, 'profile.difficulty') === 'profile.difficulty' ? 'Dificuldade' : uiText(language, 'profile.difficulty'))}</span><select data-profile-difficulty aria-label="Dificuldade">${DIFFICULTY_LIST.map((item) => `<option value="${item.id}" ${item.id === getDifficulty(state).id ? 'selected' : ''}>${item.label}</option>`).join('')}</select></label>
+      <p class="profile-hint">${escapeHtml(getDifficulty(state).text)} Vale na hora e se aplica às próximas partidas.</p>
       <label class="profile-option"><span>${escapeHtml(uiText(language, 'profile.volume'))}<strong>${Math.round(settings.volume * 100)}%</strong></span><input type="range" min="0" max="100" value="${Math.round(settings.volume * 100)}" data-profile-volume aria-label="${escapeHtml(uiText(language, 'profile.volume'))}"></label>
       <label class="profile-option"><span>${escapeHtml(uiText(language, 'profile.mute'))}</span><input type="checkbox" data-profile-mute ${settings.muted ? 'checked' : ''}></label>
       <label class="profile-option"><span>${escapeHtml(uiText(language, 'profile.tutorial'))}</span><input type="checkbox" data-profile-tutorial ${tutorialEnabled ? 'checked' : ''}></label>
@@ -3785,6 +3788,10 @@ export function mountDashboard(root) {
     if (event.target.matches('[data-action="select-country"]')) {
       activeTab = 'overview';
       commit(createGameState(event.target.value, state.playerProfile));
+      return;
+    }
+    if (event.target.matches('[data-profile-difficulty]')) {
+      commit(updatePlayerProfile(state, { difficulty: event.target.value }));
       return;
     }
     if (event.target.matches('[data-profile-language]')) {

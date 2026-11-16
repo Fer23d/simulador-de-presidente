@@ -20,6 +20,7 @@ import { bumpReputationStat, createReputation, normalizeReputation, processReput
 import { moveCapital, processCapital } from './capital.js';
 import { processTerritoryThreats } from './territory_defense.js';
 import { donateTerritory, releaseAsPuppet } from './territory_release.js';
+import { createFavors, normalizeFavors, processFavors } from './favors.js';
 import { abandonChallenge, createChallenges, normalizeChallenges, processChallenges, startChallenge } from './challenges.js';
 import { createWorldNews, normalizeWorldNews, pushWorldNews, recordWorldNews } from './world_news.js';
 import { orderProxyAttack, answerContractOffer, createContracts, fulfillContract, normalizeContracts, processWarContracts } from './war_contracts.js';
@@ -359,6 +360,7 @@ function createGameStateBase(countryId = 'bra', playerProfile = {}) {
     worldOrder: createWorldOrder(),
     missions: createMissions(),
     challenges: createChallenges(),
+    favors: createFavors(),
     worldNews: createWorldNews(),
     contracts: createContracts(),
     capitalId: null,
@@ -1235,7 +1237,7 @@ export function advanceDay(state, days = 1) {
 export function advanceMonth(state) {
   const next = advanceMonthCore(state);
   if (next === state || next.monthCounter === state.monthCounter) return next;
-  return recordWorldNews(state, processChallenges(next));
+  return recordWorldNews(state, processChallenges(processFavors(next)));
 }
 
 function advanceMonthCore(state) {
@@ -1591,6 +1593,7 @@ export function hydrateGameState(serialized) {
       worldOrder: normalizeWorldOrder(parsed.worldOrder),
       missions: normalizeMissions(parsed.missions),
       challenges: normalizeChallenges(parsed.challenges),
+      favors: normalizeFavors(parsed.favors),
       worldNews: normalizeWorldNews(parsed.worldNews),
       contracts: normalizeContracts(parsed.contracts),
       orgRenameMonth: Number.isFinite(Number(parsed.orgRenameMonth)) ? Math.floor(Number(parsed.orgRenameMonth)) : -99,

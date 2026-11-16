@@ -7,6 +7,7 @@ import { adjustFactions } from './factions.js';
 import { distanceKm, getBaseForce, getSupply } from './offensives.js';
 import { normalizeMilitary } from './military.js';
 import { bumpReputationStat, getTitleModifier } from './identity.js';
+import { getDifficulty } from './difficulty.js';
 import { getBlocSupport, getCoalitionBonus, hasPact, isAwake } from './world_order.js';
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
@@ -67,7 +68,7 @@ export function getAttackChance(state, territoryId) {
   const attackers = getAttackers(state, territoryId);
   const base = attackers.reduce((sum, item) => sum + item.weight, 0) * 0.005;
   const tension = (Number(state.global_defcon) || 5) <= 2 ? 1.4 : 1;
-  return clamp(base * tension * getTitleModifier(state, 'territoryAttack'), 0, MAX_ATTACK_CHANCE);
+  return clamp(base * tension * getTitleModifier(state, 'territoryAttack') * getDifficulty(state).attack, 0, MAX_ATTACK_CHANCE);
 }
 
 export function describeThreat(chance) {
