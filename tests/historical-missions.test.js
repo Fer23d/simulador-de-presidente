@@ -8,7 +8,7 @@ const patch = (s, id, p) => ({ ...s, geopolitics: { ...s.geopolitics, contacts: 
 const make = (country = 'bra') => ({ ...createGameState(country, { name: 'P', language: 'pt-BR' }), monthCounter: 10, pendingBriefing: null });
 
 test('3 missoes iniciais com historia completa e alvos que existem no jogo', () => {
-  assert.deepEqual(MISSION_LIST.map((m) => m.id), ['ussr', 'portugal', 'spain']);
+  assert.deepEqual(MISSION_LIST.map((m) => m.id), ['ussr', 'portugal', 'spain', 'yugoslavia', 'gran_colombia', 'kalmar', 'central_america']);
   const ids = new Set(make().geopolitics.contacts.map((c) => c.id).concat('bra'));
   for (const m of MISSION_LIST) {
     assert.ok(m.story.origin.length > 80 && m.story.peak.length > 80 && m.story.end.length > 80);

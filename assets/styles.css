@@ -1145,3 +1145,7 @@ select[data-pact-years] { background: #0a100d; color: var(--phosphor); border: 1
 .challenge-row { flex-wrap: wrap; }
 .panel.is-folded > :not(.panel-heading):not(.panel-toggle-bar):not(h2):not(.eyebrow) { display: none; }
 .panel-fold-btn { margin-left: auto; padding: 4px 10px; font-size: 13px; }
+.map-search { margin: 6px 0; }
+.map-search input { width: 100%; max-width: 360px; font: inherit; background: #06100e; color: inherit; border: 1px solid var(--line); padding: 8px 10px; }
+.ranking-list { margin: 8px 0 0; padding-left: 4px; list-style: none; display: grid; gap: 6px; font-size: 14px; }
+.ranking-list li span { color: var(--muted); }

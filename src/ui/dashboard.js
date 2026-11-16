@@ -14,6 +14,7 @@ import { getCapitalStatus } from '../core/capital.js';
 import { describePressure, getPlayerNuclearPressure, getPrograms, getRaceActionStatus, normalizeNuclearRace } from '../core/nuclear_race.js';
 import { MIN_ATTACK_SHARE, describeOdds, getAttackStatus, getBaseForce, getReinforcementStatus, normalizeOffensives } from '../core/offensives.js';
 import { getCapitalId } from '../core/deployments.js';
+import { RANKING_KEY, addRankingEntry, computeScore, makeRankingEntry, normalizeRanking } from '../core/score.js';
 import { DIFFICULTY_LIST, getDifficulty } from '../core/difficulty.js';
 import { CHALLENGE_LIST, MAX_ACTIVE_CHALLENGES, getChallengeStatus, getChallengeValue, normalizeChallenges } from '../core/challenges.js';
 import { NEWS_KINDS, normalizeWorldNews } from '../core/world_news.js';
@@ -414,6 +415,23 @@ export function profileView(state, options = {}) {
   return at < 0 ? html : html.slice(0, at) + panel + html.slice(at);
 }
 
+function readRanking() {
+  try { return normalizeRanking(JSON.parse(localStorage.getItem(RANKING_KEY) ?? '[]')); } catch { return []; }
+}
+function saveRankingEntry(entry) {
+  const next = addRankingEntry(readRanking(), entry);
+  try { localStorage.setItem(RANKING_KEY, JSON.stringify(next)); } catch { /* so nesta sessao */ }
+  return next;
+}
+
+function scorePanel(state) {
+  const score = computeScore(state);
+  const ranking = readRanking();
+  const rows = score.rows.map((row) => `<div class="ledger-row"><span>${escapeHtml(row.label)}</span><strong>${formatNumber.format(row.value)}</strong></div>`).join('');
+  const board = ranking.map((item, index) => `<li><span>#${index + 1}</span> <strong>${formatNumber.format(item.total)}</strong> · ${escapeHtml(item.name)} (${escapeHtml(item.country)}) · ${escapeHtml(item.difficulty)} · ${describeMissionTime(item.months)}${item.over ? ' · fim de jogo' : ''}</li>`).join('');
+  return `<section class="panel score-panel"><div class="panel-heading"><div><p class="eyebrow">Campanha atual</p><h2>Pontuação e ranking</h2></div><span class="country-code">${formatNumber.format(score.total)} PTS</span></div>${rows}<div class="ledger-row"><span>Dificuldade ${escapeHtml(score.difficulty)}${score.ruin ? ' · ruína nuclear' : ''}</span><strong>×${score.multiplier.toFixed(2)}</strong></div><div class="action-row"><button type="button" class="quiet-action" data-action="score-register">Registrar no ranking</button></div><h3>Melhores campanhas neste aparelho</h3>${board ? `<ol class="ranking-list">${board}</ol>` : '<p class="notice">Ainda não há campanhas registradas. Ao fim de uma partida a pontuação entra aqui sozinha.</p>'}</section>`;
+}
+
 function profileViewBase(state, { audio = {}, tutorialEnabled = true } = {}) {
   const language = getUiLanguage(state);
   const settings = normalizeAudioSettings(audio);
@@ -439,6 +457,7 @@ function profileViewBase(state, { audio = {}, tutorialEnabled = true } = {}) {
       <div class="profile-actions"><button type="button" class="quiet-action" data-action="profile-restart-tutorial">[ ${escapeHtml(uiText(language, 'profile.restartTutorial'))} ]</button><button type="button" class="quiet-action" data-action="profile-fullscreen">[ ${escapeHtml(uiText(language, 'profile.fullscreen'))} ]</button></div>
       <p class="profile-hint profile-save-note">${escapeHtml(uiText(language, 'profile.version'))}</p>
     </section>
+    ${scorePanel(state)}
     <section class="panel profile-preview-panel"><p class="eyebrow">/// ${escapeHtml(uiText(language, 'profile.active'))} ///</p><h2>${escapeHtml(getPlayerDisplayName(state))}</h2><p>${escapeHtml(state.title ?? 'Presidente')} · ${escapeHtml(state.country?.nome ?? '')}</p></section>
   </section>`;
 }
@@ -1069,6 +1088,18 @@ function relationFill(relation) {
   return `hsl(${hue.toFixed(0)} 38% 30%)`;
 }
 
+// Centro aproximado de um pais no mapa (caixa que envolve o contorno ou o ponto, para os pequenos).
+function mapCountryCenter(id) {
+  if (COUNTRY_POINTS[id]) return COUNTRY_POINTS[id];
+  const path = COUNTRY_PATHS[id];
+  if (!path) return null;
+  const numbers = path.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+  const xs = numbers.filter((_, index) => index % 2 === 0);
+  const ys = numbers.filter((_, index) => index % 2 === 1);
+  if (!xs.length || xs.length !== ys.length) return null;
+  return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+}
+
 export function diplomacyMap(state, mapUi = {}) {
   const filter = (MAP_FILTERS.some(([id]) => id === mapUi.filter) || mapUi.filter === 'mission') ? mapUi.filter : 'all';
   const region = MAP_REGIONS[mapUi.region] ? mapUi.region : 'world';
@@ -1116,7 +1147,7 @@ export function diplomacyMap(state, mapUi = {}) {
   const vx = clamp(Number.isFinite(mapUi.cx) ? mapUi.cx - vw / 2 : bx + (bw - vw) / 2, 0, 1000 - vw);
   const vy = clamp(Number.isFinite(mapUi.cy) ? mapUi.cy - vh / 2 : by + (bh - vh) / 2, 0, 500 - vh);
   const zoomControls = `<div class="map-zoom" aria-label="Zoom do mapa"><button type="button" data-action="map-zoom" data-dir="in" aria-label="Aumentar zoom" title="Aumentar">+</button><button type="button" data-action="map-zoom" data-dir="out" aria-label="Diminuir zoom" title="Diminuir">−</button><button type="button" data-action="map-zoom" data-dir="reset" aria-label="Restaurar zoom" title="Restaurar">⟲</button><span>${zoom.toFixed(1).replace('.0', '')}x</span></div>`;
-  return `<div class="diplomacy-map">${picked ? '' : attackBanner}${resourceBanner}<div class="map-filters">${regionChips}</div><div class="map-filters">${filterChips}</div><div class="map-stage">${zoomControls}<svg class="world-map-svg" data-zoom="${zoom}" viewBox="${vx} ${vy} ${vw} ${vh}" role="group" aria-label="Mapa-múndi de relações internacionais"><rect x="0" y="0" width="1000" height="500" class="map-ocean"></rect><path d="${LAND_BACKGROUND}" class="map-land"></path>${shapes}${home}</svg></div>${legend}${card}</div>`;
+  return `<div class="diplomacy-map">${picked ? '' : attackBanner}${resourceBanner}<div class="map-search"><input type="search" list="map-country-list" data-map-search placeholder="Buscar país no mapa e dar zoom…" aria-label="Buscar país no mapa"><datalist id="map-country-list">${contacts.map((item) => `<option value="${escapeHtml(item.name)}"></option>`).join('')}</datalist></div><div class="map-filters">${regionChips}</div><div class="map-filters">${filterChips}</div><div class="map-stage">${zoomControls}<svg class="world-map-svg" data-zoom="${zoom}" viewBox="${vx} ${vy} ${vw} ${vh}" role="group" aria-label="Mapa-múndi de relações internacionais"><rect x="0" y="0" width="1000" height="500" class="map-ocean"></rect><path d="${LAND_BACKGROUND}" class="map-land"></path>${shapes}${home}</svg></div>${legend}${card}</div>`;
 }
 
 const STATUS_LABEL = Object.freeze({ mine: ['✔ anexado', 'positive'], rival: ['anexado por rival', 'negative'], war: ['em guerra', ''], puppet: ['fantoche seu', ''], free: ['independente', ''], lost: ['indisponível', 'negative'] });
@@ -3134,6 +3165,13 @@ export function mountDashboard(root) {
     announceLevels(previous, state);
     updateLevelTab();
     checkAchievements();
+    recordRankingOnGameOver(previous, state);
+  }
+
+  // Ao fim de uma partida a pontuacao entra no ranking sozinha (uma vez por campanha).
+  function recordRankingOnGameOver(previous, next) {
+    if (!next.regime?.gameOver || previous.regime?.gameOver || next.is_wasteland || next.city) return;
+    saveRankingEntry(makeRankingEntry(next));
   }
 
   // Conquistas da conta: avalia o estado depois de cada acao, guarda as novas e avisa com um aviso na tela.
@@ -3645,6 +3683,7 @@ export function mountDashboard(root) {
       return;
     }
     if (action === 'contract-answer') { commit(responderContrato(state, control.dataset.accept === 'yes')); return; }
+    if (action === 'score-register') { saveRankingEntry(makeRankingEntry(state)); render(); return; }
     if (action === 'panel-fold') {
       const panel = control.closest('section.panel');
       const key = panel?.dataset.foldKey;
@@ -3812,6 +3851,18 @@ export function mountDashboard(root) {
       tutorial = setTutorialEnabled(tutorial, event.target.checked);
       saveTutorial();
     }
+  });
+
+  root.addEventListener('change', (event) => {
+    if (!event.target.matches('[data-map-search]')) return;
+    const fold = (text) => String(text).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    const wanted = fold(event.target.value);
+    const found = (state.world ?? state.geopolitics.contacts).find((item) => fold(item.name) === wanted) ?? (state.world ?? state.geopolitics.contacts).find((item) => wanted.length >= 3 && fold(item.name).startsWith(wanted));
+    if (!found) return;
+    const view = mapCountryCenter(found.id);
+    mapUi = { ...mapUi, selected: found.id, zoom: Math.max(Number(mapUi.zoom) || 1, 4), ...(view ? { cx: view[0], cy: view[1] } : {}) };
+    render();
+    requestAnimationFrame(() => document.querySelector('.world-map-svg')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
   });
 
   root.addEventListener('input', (event) => {
