@@ -1149,3 +1149,8 @@ select[data-pact-years] { background: #0a100d; color: var(--phosphor); border: 1
 .map-search input { width: 100%; max-width: 360px; font: inherit; background: #06100e; color: inherit; border: 1px solid var(--line); padding: 8px 10px; }
 .ranking-list { margin: 8px 0 0; padding-left: 4px; list-style: none; display: grid; gap: 6px; font-size: 14px; }
 .ranking-list li span { color: var(--muted); }
+
+/* Qualidade de imagem (Meu Perfil > Imagem). */
+html[data-quality="medium"] *, html[data-quality="medium"] *::before, html[data-quality="medium"] *::after,
+html[data-quality="low"] *, html[data-quality="low"] *::before, html[data-quality="low"] *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; text-shadow: none !important; }
+html[data-quality="low"] *, html[data-quality="low"] *::before, html[data-quality="low"] *::after { box-shadow: none !important; animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }

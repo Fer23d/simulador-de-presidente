@@ -14,6 +14,7 @@ import { getCapitalStatus } from '../core/capital.js';
 import { describePressure, getPlayerNuclearPressure, getPrograms, getRaceActionStatus, normalizeNuclearRace } from '../core/nuclear_race.js';
 import { MIN_ATTACK_SHARE, describeOdds, getAttackStatus, getBaseForce, getReinforcementStatus, normalizeOffensives } from '../core/offensives.js';
 import { getCapitalId } from '../core/deployments.js';
+import { QUALITY_LEVELS, SCALE_MAX, SCALE_MIN, SCALE_STEP, normalizeImageSettings } from '../core/image_settings.js';
 import { RANKING_KEY, addRankingEntry, computeScore, makeRankingEntry, normalizeRanking } from '../core/score.js';
 import { DIFFICULTY_LIST, getDifficulty } from '../core/difficulty.js';
 import { CHALLENGE_LIST, MAX_ACTIVE_CHALLENGES, getChallengeStatus, getChallengeValue, normalizeChallenges } from '../core/challenges.js';
@@ -415,6 +416,22 @@ export function profileView(state, options = {}) {
   return at < 0 ? html : html.slice(0, at) + panel + html.slice(at);
 }
 
+// Qualidade e escala da interface: valem na hora e ficam guardadas no aparelho.
+function applyImagePrefs() {
+  if (typeof document === 'undefined') return;
+  const settings = normalizeImageSettings(readUiPrefs());
+  const page = document.documentElement;
+  page.dataset.quality = settings.quality;
+  page.style.zoom = settings.scale === 1 ? '' : String(settings.scale);
+}
+
+function imagePanel() {
+  const settings = normalizeImageSettings(readUiPrefs());
+  const options = QUALITY_LEVELS.map((item) => `<option value="${item.id}" ${item.id === settings.quality ? 'selected' : ''}>${item.label}</option>`).join('');
+  const hint = QUALITY_LEVELS.find((item) => item.id === settings.quality)?.text ?? '';
+  return `<section class="panel image-settings-panel"><div class="panel-heading"><div><p class="eyebrow">Configurações</p><h2>Imagem</h2></div></div><label class="profile-field"><span>Qualidade dos efeitos</span><select data-image-quality aria-label="Qualidade dos efeitos">${options}</select></label><p class="profile-hint">${escapeHtml(hint)}</p><label class="profile-option"><span>Escala da interface<strong>${Math.round(settings.scale * 100)}%</strong></span><input type="range" min="${Math.round(SCALE_MIN * 100)}" max="${Math.round(SCALE_MAX * 100)}" step="${Math.round(SCALE_STEP * 100)}" value="${Math.round(settings.scale * 100)}" data-image-scale aria-label="Escala da interface"></label><div class="profile-actions"><button type="button" class="quiet-action" data-action="image-reset">[ Restaurar imagem ]</button></div></section>`;
+}
+
 function readRanking() {
   try { return normalizeRanking(JSON.parse(localStorage.getItem(RANKING_KEY) ?? '[]')); } catch { return []; }
 }
@@ -457,6 +474,7 @@ function profileViewBase(state, { audio = {}, tutorialEnabled = true } = {}) {
       <div class="profile-actions"><button type="button" class="quiet-action" data-action="profile-restart-tutorial">[ ${escapeHtml(uiText(language, 'profile.restartTutorial'))} ]</button><button type="button" class="quiet-action" data-action="profile-fullscreen">[ ${escapeHtml(uiText(language, 'profile.fullscreen'))} ]</button></div>
       <p class="profile-hint profile-save-note">${escapeHtml(uiText(language, 'profile.version'))}</p>
     </section>
+    ${imagePanel()}
     ${scorePanel(state)}
     <section class="panel profile-preview-panel"><p class="eyebrow">/// ${escapeHtml(uiText(language, 'profile.active'))} ///</p><h2>${escapeHtml(getPlayerDisplayName(state))}</h2><p>${escapeHtml(state.title ?? 'Presidente')} · ${escapeHtml(state.country?.nome ?? '')}</p></section>
   </section>`;
@@ -2822,6 +2840,7 @@ export function mountDashboard(root) {
   }
 
   function render() {
+    applyImagePrefs();
     const bunkerSnapshot = bunkerController?.getSnapshot();
     bunkerController?.destroy();
     bunkerController = null;
@@ -3683,6 +3702,7 @@ export function mountDashboard(root) {
       return;
     }
     if (action === 'contract-answer') { commit(responderContrato(state, control.dataset.accept === 'yes')); return; }
+    if (action === 'image-reset') { writeUiPref('imageQuality', 'high'); writeUiPref('uiScale', 1); render(); return; }
     if (action === 'score-register') { saveRankingEntry(makeRankingEntry(state)); render(); return; }
     if (action === 'panel-fold') {
       const panel = control.closest('section.panel');
@@ -3854,6 +3874,8 @@ export function mountDashboard(root) {
   });
 
   root.addEventListener('change', (event) => {
+    if (event.target.matches('[data-image-quality]')) { writeUiPref('imageQuality', event.target.value); render(); return; }
+    if (event.target.matches('[data-image-scale]')) { writeUiPref('uiScale', Number(event.target.value) / 100); render(); return; }
     if (!event.target.matches('[data-map-search]')) return;
     const fold = (text) => String(text).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
     const wanted = fold(event.target.value);
