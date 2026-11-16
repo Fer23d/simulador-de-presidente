@@ -14,6 +14,8 @@ import { getCapitalStatus } from '../core/capital.js';
 import { describePressure, getPlayerNuclearPressure, getPrograms, getRaceActionStatus, normalizeNuclearRace } from '../core/nuclear_race.js';
 import { MIN_ATTACK_SHARE, describeOdds, getAttackStatus, getBaseForce, getReinforcementStatus, normalizeOffensives } from '../core/offensives.js';
 import { getCapitalId } from '../core/deployments.js';
+import { MODES, MODES_DONE_PREF, canSwitchMode, markModeDone, normalizeModesDone } from '../core/mode_switch.js';
+import { modeSwitchButtons, modeSwitchRow } from './mode_switch_ui.js';
 import { QUALITY_LEVELS, SCALE_MAX, SCALE_MIN, SCALE_STEP, normalizeImageSettings } from '../core/image_settings.js';
 import { RANKING_KEY, addRankingEntry, computeScore, makeRankingEntry, normalizeRanking } from '../core/score.js';
 import { LEVEL_NAMES, OPS, canInstallAgain, getInstallStatus, getIntel, getLevel as getSpyLevel, getOpStatus, listNetworks } from '../core/spy_network.js';
@@ -431,6 +433,13 @@ function applyImagePrefs() {
   page.style.zoom = settings.scale === 1 ? '' : String(settings.scale);
 }
 
+function modePanel(state) {
+  const done = normalizeModesDone(readUiPrefs()[MODES_DONE_PREF]);
+  const open = canSwitchMode(state, done);
+  const list = MODES.map((mode) => `<li>${mode.icon} <strong>${mode.label}</strong>${done[mode.id] ? ' · zerado' : ''} · ${escapeHtml(mode.text)}</li>`).join('');
+  return `<section class="panel mode-switch-panel"><div class="panel-heading"><div><p class="eyebrow">Progresso da conta</p><h2>Trocar de modo</h2></div></div><ul class="ranking-list">${list}</ul><p class="notice">${open ? 'Você já zerou um modo: pode começar em outro. A partida atual será substituída.' : 'Zere um modo (um final do Vault, o epílogo da Cidade, um fim de jogo ou uma missão histórica na Presidência, ou 10 anos no poder) para liberar a troca.'}</p><div class="action-row">${modeSwitchButtons(state, { disabled: !open })}</div></section>`;
+}
+
 function imagePanel() {
   const settings = normalizeImageSettings(readUiPrefs());
   const options = QUALITY_LEVELS.map((item) => `<option value="${item.id}" ${item.id === settings.quality ? 'selected' : ''}>${item.label}</option>`).join('');
@@ -480,6 +489,7 @@ function profileViewBase(state, { audio = {}, tutorialEnabled = true } = {}) {
       <div class="profile-actions"><button type="button" class="quiet-action" data-action="profile-restart-tutorial">[ ${escapeHtml(uiText(language, 'profile.restartTutorial'))} ]</button><button type="button" class="quiet-action" data-action="profile-fullscreen">[ ${escapeHtml(uiText(language, 'profile.fullscreen'))} ]</button></div>
       <p class="profile-hint profile-save-note">${escapeHtml(uiText(language, 'profile.version'))}</p>
     </section>
+    ${modePanel(state)}
     ${imagePanel()}
     ${scorePanel(state)}
     <section class="panel profile-preview-panel"><p class="eyebrow">/// ${escapeHtml(uiText(language, 'profile.active'))} ///</p><h2>${escapeHtml(getPlayerDisplayName(state))}</h2><p>${escapeHtml(state.title ?? 'Presidente')} · ${escapeHtml(state.country?.nome ?? '')}</p></section>
@@ -2047,7 +2057,7 @@ function epilogueView(state, trophies) {
   const found = new Set(createTrophies(trophies).endings);
   const gallery = Object.values(ENDINGS).map((item) => `<span class="ending-trophy${found.has(item.id) ? ' is-found' : ''}" title="${found.has(item.id) ? escapeHtml(item.title) : '???'}">${found.has(item.id) ? item.icon : '?'}</span>`).join('');
   const population = (state.inhabitants ?? []).length;
-  return `<section class="door-dialog epilogue" role="dialog" aria-modal="true" aria-labelledby="ending-title"><p class="story-classification">/// FIM · ${Math.floor((Number(state.ending.month) || 0) / 12)} ANOS NO VAULT · ${population} SOBREVIVENTES ///</p><div class="ending-icon" aria-hidden="true">${ending.icon}</div><h2 id="ending-title">${escapeHtml(ending.title.toUpperCase())}</h2><p class="story-typewriter ending-story">${escapeHtml(getEndingStory(state, ending.id))}</p><blockquote class="ending-epigraph">“${escapeHtml(ending.epigraph)}”</blockquote><p class="ending-gallery-label">FINAIS DESCOBERTOS · ${found.size}/${Object.keys(ENDINGS).length}</p><div class="ending-gallery">${gallery}</div><div class="action-row">${CITY_ORIGINS[ending.id] ? '<button type="button" class="wasteland-command-button" data-action="start-city">[ RECONSTRUIR O MUNDO ]</button>' : ''}<button type="button" class="${CITY_ORIGINS[ending.id] ? 'quiet-action' : 'wasteland-command-button'}" data-action="ending-new-game">[ NOVA PARTIDA ]</button></div></section>`;
+  return `<section class="door-dialog epilogue" role="dialog" aria-modal="true" aria-labelledby="ending-title"><p class="story-classification">/// FIM · ${Math.floor((Number(state.ending.month) || 0) / 12)} ANOS NO VAULT · ${population} SOBREVIVENTES ///</p><div class="ending-icon" aria-hidden="true">${ending.icon}</div><h2 id="ending-title">${escapeHtml(ending.title.toUpperCase())}</h2><p class="story-typewriter ending-story">${escapeHtml(getEndingStory(state, ending.id))}</p><blockquote class="ending-epigraph">“${escapeHtml(ending.epigraph)}”</blockquote><p class="ending-gallery-label">FINAIS DESCOBERTOS · ${found.size}/${Object.keys(ENDINGS).length}</p><div class="ending-gallery">${gallery}</div><div class="action-row">${CITY_ORIGINS[ending.id] ? '<button type="button" class="wasteland-command-button" data-action="start-city">[ RECONSTRUIR O MUNDO ]</button>' : ''}<button type="button" class="${CITY_ORIGINS[ending.id] ? 'quiet-action' : 'wasteland-command-button'}" data-action="ending-new-game">[ NOVA PARTIDA ]</button></div>${modeSwitchRow(state)}</section>`;
 }
 
 // História de abertura em cenas; sem indice, mostra a ultima (o alerta de comando).
@@ -3217,6 +3227,24 @@ export function mountDashboard(root) {
     updateLevelTab();
     checkAchievements();
     recordRankingOnGameOver(previous, state);
+    recordModeDone(state);
+  }
+
+  function doSwitchMode(mode, confirmFirst = false) {
+    const done = normalizeModesDone(readUiPrefs()[MODES_DONE_PREF]);
+    if (!MODES.some((item) => item.id === mode) || !canSwitchMode(state, done)) return;
+    if (confirmFirst && typeof window !== 'undefined' && typeof window.confirm === 'function' && !window.confirm('A partida atual será substituída por uma nova no modo escolhido. Continuar?')) return;
+    const found = (trophies?.endings ?? []).find((id) => CITY_ORIGINS[id]);
+    const origin = CITY_ORIGINS[state.ending?.id] ? state.ending.id : (found ?? 'republic');
+    activeTab = 'overview';
+    commit(trocarDeModo(state, mode, origin));
+  }
+
+  // Guarda na conta os modos ja zerados: a troca de modo continua liberada nas proximas partidas.
+  function recordModeDone(next) {
+    const current = normalizeModesDone(readUiPrefs()[MODES_DONE_PREF]);
+    const updated = markModeDone(current, next);
+    if (JSON.stringify(updated) !== JSON.stringify(current)) writeUiPref(MODES_DONE_PREF, updated);
   }
 
   // Ao fim de uma partida a pontuacao entra no ranking sozinha (uma vez por campanha).
@@ -3445,6 +3473,11 @@ export function mountDashboard(root) {
     }
     if (event.target.closest('[data-action="start-city"]')) {
       commit(checkStoryChapters(startCity(state)));
+      return;
+    }
+    const switchButton = event.target.closest('[data-action="switch-mode"]');
+    if (switchButton) {
+      doSwitchMode(switchButton.dataset.mode);
       return;
     }
     if (event.target.closest('[data-action="ending-new-game"]')) {
@@ -3738,6 +3771,7 @@ export function mountDashboard(root) {
     if (action === 'embassy-dismiss') { commit(demitirEmbaixador(state, control.dataset.contact)); return; }
     if (action === 'spy-install') { commit(instalarAgente(state, control.dataset.contact)); return; }
     if (action === 'spy-op') { commit(operacaoEspionagem(state, control.dataset.contact, control.dataset.op)); return; }
+    if (action === 'switch-mode') { doSwitchMode(control.dataset.mode, true); return; }
     if (action === 'image-reset') { writeUiPref('imageQuality', 'high'); writeUiPref('uiScale', 1); render(); return; }
     if (action === 'score-register') { saveRankingEntry(makeRankingEntry(state)); render(); return; }
     if (action === 'panel-fold') {

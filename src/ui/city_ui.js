@@ -5,6 +5,7 @@ import { checkStoryChapters } from '../core/story_lore.js';
 import { CITY_CANVAS_HEIGHT, CITY_CANVAS_WIDTH, CITY_DEFAULT_ZOOM, CITY_TILE, getCityCamera, renderCity } from '../core/city_renderer.js';
 import { getPlayerDisplayName } from '../core/player_profile.js';
 import { translateUiText } from '../core/i18n.js';
+import { modeSwitchRow } from './mode_switch_ui.js';
 
 const number = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
 const escapeText = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -79,7 +80,7 @@ export function cityEpilogueView(state) {
   if (!epilogue) return '';
   const { result } = epilogue;
   const stat = (label, value) => `<div><span>${label}</span><strong>${value}</strong></div>`;
-  return `<section class="door-dialog epilogue city-epilogue" role="dialog" aria-modal="true" aria-labelledby="city-ending-title"><p class="story-classification">/// ${escapeText(epilogue.origin.toUpperCase())} · ${result.years} ANOS DE RECONSTRUÇÃO ///</p><div class="ending-icon" aria-hidden="true">${epilogue.icon}</div><h2 id="city-ending-title">${escapeText(epilogue.title.toUpperCase())}</h2><p class="story-typewriter ending-story">${escapeText(epilogue.story)}</p><div class="city-score"><div class="city-score-main"><span>PONTUAÇÃO</span><strong>${result.score}</strong></div>${stat('População final', number.format(result.population))}${stat('Pico de população', number.format(result.peakPopulation))}${stat('Felicidade média', `${result.averageHappiness}%`)}${stat('Construções', number.format(result.buildings))}</div><div class="action-row"><button type="button" class="wasteland-command-button" data-action="ending-new-game">[ NOVA PARTIDA ]</button></div></section>`;
+  return `<section class="door-dialog epilogue city-epilogue" role="dialog" aria-modal="true" aria-labelledby="city-ending-title"><p class="story-classification">/// ${escapeText(epilogue.origin.toUpperCase())} · ${result.years} ANOS DE RECONSTRUÇÃO ///</p><div class="ending-icon" aria-hidden="true">${epilogue.icon}</div><h2 id="city-ending-title">${escapeText(epilogue.title.toUpperCase())}</h2><p class="story-typewriter ending-story">${escapeText(epilogue.story)}</p><div class="city-score"><div class="city-score-main"><span>PONTUAÇÃO</span><strong>${result.score}</strong></div>${stat('População final', number.format(result.population))}${stat('Pico de população', number.format(result.peakPopulation))}${stat('Felicidade média', `${result.averageHappiness}%`)}${stat('Construções', number.format(result.buildings))}</div><div class="action-row"><button type="button" class="wasteland-command-button" data-action="ending-new-game">[ NOVA PARTIDA ]</button></div>${modeSwitchRow(state)}</section>`;
 }
 
 function statusLine(label, ok, detail) {

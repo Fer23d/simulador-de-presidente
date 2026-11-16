@@ -65,7 +65,7 @@ import { advanceWastelandDays, advanceWastelandMonth, buildMegaVault, buildWaste
 import { getWastelandEvent, WASTELAND_EVENTS } from './game_mechanics.js';
 import { createRpgPlayer, normalizeInhabitants, normalizeRpgPlayer } from './rpg_bunker.js';
 import { normalizeOilField } from './oil.js';
-import { normalizeCity } from './city.js';
+import { CITY_ORIGINS, normalizeCity, startCity } from './city.js';
 import { normalizeCompanion } from './companion.js';
 import { normalizeDarkMarket } from './market.js';
 import { normalizeLaydEscape } from './layd_care.js';
@@ -893,6 +893,21 @@ export function construirProjetoWasteland(state, projectId) {
 
 export function enviarBatedoresWasteland(state, factionId) {
   return enviarBatedores(state, factionId);
+}
+
+// Comeca uma partida nova em outro modo, no mesmo pais e com o mesmo perfil. A Cidade parte de uma origem (um final do Vault).
+export function trocarDeModo(state, mode, originId = 'republic') {
+  const countryId = String(state.country?.id ?? 'bra').replace(/-wasteland$/, '');
+  const fresh = createGameState(countryId, state.playerProfile);
+  if (mode === 'presidency') return { ...fresh, notice: 'Nova presidência: governe, negocie e sobreviva.' };
+  const vault = enterWasteland(fresh, 'troca-de-modo');
+  if (mode === 'vault') return { ...vault, notice: 'Você assumiu o comando do Vault.' };
+  if (mode === 'city') {
+    const origin = CITY_ORIGINS[originId] ? originId : 'republic';
+    const ready = { ...vault, ending: { id: origin, month: 0 }, wasteland_cinematic_pending: false, wasteland_cinematic_ready: false, president_selection_pending: false };
+    return startCity(ready);
+  }
+  return state;
 }
 
 export function transicionarParaWastelandMode(state, reason) {
