@@ -7,6 +7,7 @@ import { advanceMilitary, advanceUnrest, unrestStageMessage, applyNuclearComplet
 import { aggregateActiveLawEffects, LAWS, LAW_LABOR_REFORM } from './laws.js';
 import { advanceTechnology, createTechnology, getTechnologyModifiers, purchaseTechnology } from './technology.js';
 import { calculateMilitaryResearchPoints, getMilitaryTechnology, pesquisarTecnologia } from './tech_tree.js';
+import { createMissionMode, normalizeMissionMode } from './mission_mode.js';
 import { getTraitModifiers } from './traits.js';
 import { EVENTS, applyEventOption, rollMonthlyEvent } from './events.js';
 import { normalizeMinisters, processMinisters, createMinisters, dismissMinister as dismissCabinetMinister, getMinisterModifiers, hireMinister as hireCabinetMinister } from './ministers.js';
@@ -361,6 +362,7 @@ function createGameStateBase(countryId = 'bra', playerProfile = {}) {
     nuclearRace: createNuclearRace(),
     worldOrder: createWorldOrder(),
     missions: createMissions(),
+    missionMode: createMissionMode(),
     challenges: createChallenges(),
     favors: createFavors(),
     spies: createSpies(),
@@ -1280,6 +1282,7 @@ export function advanceMonth(state) {
 }
 
 function advanceMonthCore(state) {
+  if (state.missionMode?.active) return { ...state, notice: 'O War avança por turnos: conclua sua ação ou passe o controle.' };
   if (state.regime?.gameOver) return resolverFinalDeJogo({ ...state, notice: 'A partida foi encerrada.' });
   if (state.pendingHostileAlert) return { ...state, notice: 'Reconheca o alerta militar antes de avancar o mês.' };
   if (state.wasteland_cinematic_ready) return { ...state, notice: 'Assuma o comando do Vault antes de avancar o mês.' };
@@ -1506,6 +1509,7 @@ export function hydrateGameState(serialized) {
       ...base,
       country: {
         ...base.country,
+        ...(parsed.missionMode?.active && typeof parsed.country?.ownerId === 'string' ? { ownerId: parsed.country.ownerId } : {}),
         nome: typeof parsed.country?.nome === 'string' && parsed.country.nome.trim() ? parsed.country.nome : base.country.nome,
         ...(typeof parsed.country?.originalName === 'string' && parsed.country.originalName ? { originalName: parsed.country.originalName } : {}),
         area_km2: countryIsWasteland ? 0 : (Number.isFinite(Number(parsed.country?.area_km2)) ? Math.max(1, Number(parsed.country.area_km2)) : base.country.area_km2),
@@ -1627,6 +1631,7 @@ export function hydrateGameState(serialized) {
       nuclearRace: normalizeNuclearRace(parsed.nuclearRace),
       worldOrder: normalizeWorldOrder(parsed.worldOrder),
       missions: normalizeMissions(parsed.missions),
+      missionMode: normalizeMissionMode(parsed.missionMode),
       challenges: normalizeChallenges(parsed.challenges),
       favors: normalizeFavors(parsed.favors),
       spies: normalizeSpies(parsed.spies),

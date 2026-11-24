@@ -1,4 +1,5 @@
 import { COUNTRIES } from '../data/countries.js';
+import { isWarPhase, warScreenView } from './war_view.js';
 import { getVoteForecast } from '../core/congress.js';
 import { BUDGET_LIMITS, NEUTRAL_INTEREST_RATE, getDebtStatus, projectBudget, summarizeInflation } from '../core/economy.js';
 import { UNREST_ACTIONS, getUnrestActionStatus } from '../core/unrest_actions.js';
@@ -92,6 +93,10 @@ import { AssetManager, DEFAULT_ASSETS, drawSkinPreview } from '../core/sprite_en
 import { createOnboarding, getBootTips, getStoryScenes, guessLanguage, MIN_BOOT_MS, onboardingText, ONBOARDING_KEY } from '../core/onboarding.js';
 import { bootScreenView, profileOnboardingView, storyOnboardingView } from './onboarding_ui.js';
 import { drawCoverArt } from '../core/cover_art.js';
+import { advanceMissionTurn, canAttackTerritory, conquerTerritory, exitMissionMatch, getCompetitivePlayer, getCompetitivePlayerColor, getCountryOwner, getCurrentMissionPlayer, getMissionProgress, getRegionLabel, revealMissionTurn, startMissionMatch } from '../core/mission_mode.js';
+import { createBotRunner } from '../core/war_ai.js';
+import { applyWarSnapshot } from '../core/war_online.js';
+import { connectWarRoom, getRoomFromUrl } from './war_network.js';
 import {
   advanceMonth,
   advanceDay,
@@ -203,7 +208,7 @@ import {
   dispensarHistoria,
   registrarEventoHistorico,
   updatePlayerProfile,
-} from '../core/game-state.js';
+} from '../core/game-state.js?v=2026-11-24-war-online';
 
 const STORAGE_KEY = 'simulador-presidente-state-v1';
 // A enciclopedia fica fora do save da partida para sobreviver a uma Nova Partida.
@@ -1141,6 +1146,7 @@ export function diplomacyMap(state, mapUi = {}) {
   const tariffId = normalizeTradeWar(state.tradeWar).active?.aggressorId;
   const programIds = new Set(Object.keys(normalizeNuclearRace(state.nuclearRace).programs));
   const worldOrder = normalizeWorldOrder(state.worldOrder);
+  const competitiveMode = state.missionMode?.active === true;
   const pactIds = new Set(listPacts(state).map((item) => item.id));
   const blocIds = new Set(worldOrder.coalitions.flatMap((item) => item.members));
   const richIds = new Set([...contacts].sort((a, b) => (Number(b.pib_base) || 0) - (Number(a.pib_base) || 0)).slice(0, 25).map((contact) => contact.id));
@@ -1148,21 +1154,26 @@ export function diplomacyMap(state, mapUi = {}) {
     const status = contact.id === tariffId ? 'tariff' : (programIds.has(contact.id) && !contact.atWar ? 'atomic' : mapStatus(contact));
     const matches = mapMatches(contact, filter, richIds, { blocIds, pactIds, missionIds: new Set(normalizeMissions(state.missions).active ? getTargets(state, normalizeMissions(state.missions).active.id) : []) }) && (!mapUi.resource || getSpecialties(contact.id).includes(mapUi.resource));
     const selected = mapUi.selected === contact.id;
-    const classes = `map-shape map-shape--${status === 'annexed' ? 'mine' : status}${matches ? '' : ' is-dim'}${selected ? ' is-selected' : ''}${pactIds.has(contact.id) ? ' has-pact' : ''}${blocIds.has(contact.id) ? ' in-bloc' : ''}`;
+    const ownerId = competitiveMode ? getCountryOwner(state, contact.id) : null;
+    const ownerColor = ownerId ? getCompetitivePlayerColor(state.missionMode, ownerId) : '';
+    const classes = `map-shape map-shape--${status === 'annexed' ? 'mine' : status}${matches ? '' : ' is-dim'}${selected ? ' is-selected' : ''}${pactIds.has(contact.id) ? ' has-pact' : ''}${blocIds.has(contact.id) ? ' in-bloc' : ''}${ownerId ? ' competitive-territory' : ''}`;
     const bloc = getCoalitionOf(state, contact.id);
-    const styleParts = [status === 'neutral' || status === 'hostile' ? `fill:${relationFill(contact.relation)}` : '', bloc ? `stroke:${coalitionColor(bloc)};stroke-width:2.4` : ''].filter(Boolean);
+    const styleParts = [status === 'neutral' || status === 'hostile' ? `fill:${relationFill(contact.relation)}` : '', ownerColor ? `fill:${ownerColor}` : '', bloc ? `stroke:${coalitionColor(bloc)};stroke-width:2.4` : ''].filter(Boolean);
     const fill = styleParts.length ? ` style="${styleParts.join(';')}"` : '';
     const attrs = `class="${classes}"${fill} data-action="map-country" data-country="${contact.id}" role="button" tabindex="0" aria-label="${escapeHtml(contact.name)}"`;
     const annexer = contact.annexedBy ? contacts.concat(state.geopolitics.contacts).find((item) => item.id === contact.annexedBy)?.name ?? contact.annexedBy : '';
-    const extraTitle = `${bloc ? ` · coalizão ${bloc.name}` : ''}${pactIds.has(contact.id) ? ' · pacto de não agressão' : ''}`;
+    const ownerName = ownerId ? getCompetitivePlayer(state.missionMode, ownerId)?.name : '';
+    const extraTitle = `${bloc ? ` · coalizão ${bloc.name}` : ''}${pactIds.has(contact.id) ? ' · pacto de não agressão' : ''}${ownerName ? ` · controlado por ${ownerName}` : ''}`;
     const title = `<title>${escapeHtml(contact.name)} · ${status === 'annexed' ? 'território seu' : status === 'rival' ? `${contact.donated ? 'doado a' : 'anexado por'} ${escapeHtml(annexer)}` : `relação ${formatRelation(contact.relation)}`}${escapeHtml(extraTitle)}</title>`;
     if (COUNTRY_PATHS[contact.id]) return `<path d="${COUNTRY_PATHS[contact.id]}" ${attrs}>${title}</path>`;
     const [x, y] = COUNTRY_POINTS[contact.id];
     return `<circle cx="${x}" cy="${y}" r="3.6" ${attrs}>${title}</circle>`;
   }).join('');
+  const homeOwnerColor = competitiveMode ? getCompetitivePlayerColor(state.missionMode, getCountryOwner(state, state.country.id)) : '';
+  const homeStyle = homeOwnerColor ? ` style="fill:${homeOwnerColor}"` : '';
   const home = COUNTRY_PATHS[state.country.id]
-    ? `<path d="${COUNTRY_PATHS[state.country.id]}" class="map-shape map-shape--self"><title>${escapeHtml(state.country.nome)} (você)</title></path>`
-    : (COUNTRY_POINTS[state.country.id] ? `<circle cx="${COUNTRY_POINTS[state.country.id][0]}" cy="${COUNTRY_POINTS[state.country.id][1]}" r="5" class="map-shape map-shape--self"></circle>` : '');
+    ? `<path d="${COUNTRY_PATHS[state.country.id]}" class="map-shape map-shape--self competitive-territory"${homeStyle}><title>${escapeHtml(state.country.nome)} (você)</title></path>`
+    : (COUNTRY_POINTS[state.country.id] ? `<circle cx="${COUNTRY_POINTS[state.country.id][0]}" cy="${COUNTRY_POINTS[state.country.id][1]}" r="5" class="map-shape map-shape--self competitive-territory"${homeStyle}></circle>` : '');
   const regionChips = MAP_REGION_LABELS.map(([id, label]) => `<button type="button" class="map-chip map-chip--region" data-action="map-region" data-region="${id}" aria-pressed="${id === region}">${label}</button>`).join('');
   const activeMission = normalizeMissions(state.missions).active;
   const missionIds = new Set(activeMission ? getTargets(state, activeMission.id) : []);
@@ -1173,6 +1184,7 @@ export function diplomacyMap(state, mapUi = {}) {
   const attackBanner = attackBase ? `<p class="notice attack-banner">Modo ataque: escolha no mapa o país a atacar saindo de <strong>${escapeHtml(attackBase.name)}</strong>. <button type="button" class="quiet-action" data-action="attack-cancel">Cancelar</button></p>` : '';
   const legend = mapLegend(state, worldOrder);
   const card = picked ? attackBanner + mapCountryCard(picked, picked.id === tariffId, state, mapUi, programIds.has(picked.id)) : '<p class="notice">Clique em um país para ver os dados e agir. Verde: aliado · azul: comércio · vermelho vivo: guerra · tons de vermelho a verde: relação (do pior ao melhor) · ciano: você e os países que anexou (território seu) · laranja: quem impôs tarifas a você · roxo: país com programa nuclear em curso.</p>';
+  const competitiveBanner = competitiveMode ? `<p class="notice competitive-map-banner">CORES DE COMANDO: ${state.missionMode.players.map((player) => `<span><i style="--mission-color:${escapeHtml(player.color)}"></i>${escapeHtml(player.name)}</span>`).join(' · ')}. Selecione um território rival para atacar no seu turno.</p>` : '';
   const [bx, by, bw, bh] = MAP_REGIONS[region];
   const zoom = Math.min(8, Math.max(1, Number(mapUi.zoom) || 1));
   const vw = bw / zoom;
@@ -1181,7 +1193,7 @@ export function diplomacyMap(state, mapUi = {}) {
   const vx = clamp(Number.isFinite(mapUi.cx) ? mapUi.cx - vw / 2 : bx + (bw - vw) / 2, 0, 1000 - vw);
   const vy = clamp(Number.isFinite(mapUi.cy) ? mapUi.cy - vh / 2 : by + (bh - vh) / 2, 0, 500 - vh);
   const zoomControls = `<div class="map-zoom" aria-label="Zoom do mapa"><button type="button" data-action="map-zoom" data-dir="in" aria-label="Aumentar zoom" title="Aumentar">+</button><button type="button" data-action="map-zoom" data-dir="out" aria-label="Diminuir zoom" title="Diminuir">−</button><button type="button" data-action="map-zoom" data-dir="reset" aria-label="Restaurar zoom" title="Restaurar">⟲</button><span>${zoom.toFixed(1).replace('.0', '')}x</span></div>`;
-  return `<div class="diplomacy-map">${picked ? '' : attackBanner}${resourceBanner}<div class="map-search"><input type="search" list="map-country-list" data-map-search placeholder="Buscar país no mapa e dar zoom…" aria-label="Buscar país no mapa"><datalist id="map-country-list">${contacts.map((item) => `<option value="${escapeHtml(item.name)}"></option>`).join('')}</datalist></div><div class="map-filters">${regionChips}</div><div class="map-filters">${filterChips}</div><div class="map-stage">${zoomControls}<svg class="world-map-svg" data-zoom="${zoom}" viewBox="${vx} ${vy} ${vw} ${vh}" role="group" aria-label="Mapa-múndi de relações internacionais"><rect x="0" y="0" width="1000" height="500" class="map-ocean"></rect><path d="${LAND_BACKGROUND}" class="map-land"></path>${shapes}${home}</svg></div>${legend}${card}</div>`;
+  return `<div class="diplomacy-map">${picked ? '' : attackBanner}${competitiveBanner}${resourceBanner}<div class="map-search"><input type="search" list="map-country-list" data-map-search placeholder="Buscar país no mapa e dar zoom…" aria-label="Buscar país no mapa"><datalist id="map-country-list">${contacts.map((item) => `<option value="${escapeHtml(item.name)}"></option>`).join('')}</datalist></div><div class="map-filters">${regionChips}</div><div class="map-filters">${filterChips}</div><div class="map-stage">${zoomControls}<svg class="world-map-svg" data-zoom="${zoom}" viewBox="${vx} ${vy} ${vw} ${vh}" role="group" aria-label="Mapa-múndi de relações internacionais"><rect x="0" y="0" width="1000" height="500" class="map-ocean"></rect><path d="${LAND_BACKGROUND}" class="map-land"></path>${shapes}${home}</svg></div>${legend}${card}</div>`;
 }
 
 const STATUS_LABEL = Object.freeze({ mine: ['✔ anexado', 'positive'], rival: ['anexado por rival', 'negative'], war: ['em guerra', ''], puppet: ['fantoche seu', ''], free: ['independente', ''], lost: ['indisponível', 'negative'] });
@@ -1425,12 +1437,19 @@ function mapCountryCard(contact, tariff = false, state = null, mapUi = {}, atomi
   const status = tariff ? 'tariff' : (atomic && !contact.atWar ? 'atomic' : mapStatus(contact));
   const label = { atomic: 'Programa nuclear em curso', tariff: 'Impôs tarifas a você', war: 'Em guerra', allies: 'Aliado', trade: 'Acordo comercial', hostile: 'Hostil', annexed: 'Território seu (anexado)', rival: `Anexado por ${state?.geopolitics?.contacts?.find((item) => item.id === contact.annexedBy)?.name ?? 'outra potência'}`, neutral: 'Sem tratado' }[status];
   const blocked = contact.anexado || contact.annexed || Boolean(contact.annexedBy);
-  return `<article class="map-country-card"><div><strong>${escapeHtml(contact.name)} ${nuclearBadge(contact)}</strong><span>${label} · relação ${formatRelation(contact.relation)} · poder ${Number(contact.militaryPower || 0).toFixed(0)} · PIB ${formatMoney(contact.pib_base || 0)}</span></div>${specialtyLine(state, contact)}<div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${blocked || contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comércio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${blocked || contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Aliança</button><button type="button" class="quiet-action" data-action="sabotage" data-contact="${contact.id}" ${blocked || contact.atWar ? 'disabled' : ''}>Sabotar</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${blocked || contact.atWar ? 'disabled' : ''}>Guerra</button></div>${state ? worldOrderControls(state, contact) : ''}${state ? troopControls(state, contact) : ''}${state ? attackControls(state, contact, mapUi) : ''}${state ? serviceControls(state, contact) : ''}</article>`;
+  const competitiveOwner = state?.missionMode?.active ? getCountryOwner(state, contact.id) : null;
+  const competitiveStatus = state?.missionMode?.active ? canAttackTerritory(state, contact.id) : null;
+  const competitiveAction = state?.missionMode?.active
+    ? `<div class="competitive-country-controls"><small>Controlado por ${escapeHtml(getCompetitivePlayer(state.missionMode, competitiveOwner)?.name ?? 'ninguém')}.</small><button type="button" class="quiet-action danger-action" data-action="competitive-attack" data-contact="${contact.id}" ${competitiveStatus?.ok ? '' : `disabled title="${escapeHtml(competitiveStatus?.reason ?? '')}"`}>[ ATACAR TERRITÓRIO ]</button></div>`
+    : '';
+  const regularActions = state?.missionMode?.active ? '' : `<div class="action-row"><button type="button" class="quiet-action" data-action="treaty" data-contact="${contact.id}" ${blocked || contact.tradeTreaty || contact.atWar || contact.relation <= 20 ? 'disabled' : ''}>Comércio</button><button type="button" class="quiet-action" data-action="alliance" data-contact="${contact.id}" ${blocked || contact.alliance || contact.atWar || !contact.tradeTreaty || contact.relation <= 45 ? 'disabled' : ''}>Aliança</button><button type="button" class="quiet-action" data-action="sabotage" data-contact="${contact.id}" ${blocked || contact.atWar ? 'disabled' : ''}>Sabotar</button><button type="button" class="quiet-action danger-action" data-action="war" data-contact="${contact.id}" ${blocked || contact.atWar ? 'disabled' : ''}>Guerra</button></div>`;
+  const auxiliaryActions = state?.missionMode?.active ? '' : `${state ? worldOrderControls(state, contact) : ''}${state ? troopControls(state, contact) : ''}${state ? attackControls(state, contact, mapUi) : ''}${state ? serviceControls(state, contact) : ''}`;
+  return `<article class="map-country-card"><div><strong>${escapeHtml(contact.name)} ${nuclearBadge(contact)}</strong><span>${label} · relação ${formatRelation(contact.relation)} · poder ${Number(contact.militaryPower || 0).toFixed(0)} · PIB ${formatMoney(contact.pib_base || 0)}</span></div>${specialtyLine(state, contact)}${competitiveAction}${regularActions}${auxiliaryActions}</article>`;
 }
 
 function diplomacyAdvanceBar(state, place) {
   if (state.is_wasteland) return '';
-  const blocked = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid) || Boolean(state.pendingFinalDilemma) || Boolean(state.pendingInterrogation) || Boolean(state.pendingStory) || Boolean(state.pendingBriefing) || Boolean(state.pendingAllianceInvocation) || Boolean(state.pendingHostileAlert);
+  const blocked = state.geopolitics.peaceTreaty?.status === 'pending' || Boolean(state.pendingEvent) || Boolean(state.pendingUnVote) || Boolean(state.pendingGlobalBid) || Boolean(state.pendingFinalDilemma) || Boolean(state.pendingInterrogation) || Boolean(state.pendingStory) || Boolean(state.pendingBriefing) || Boolean(state.pendingAllianceInvocation) || Boolean(state.pendingHostileAlert) || Boolean(state.missionMode?.active);
   return `<div class="diplomacy-advance diplomacy-advance--${place}"><button type="button" class="primary-action" data-action="advance" ${blocked ? 'disabled' : ''}>Avançar mês <span aria-hidden="true">→</span></button></div>`;
 }
 
@@ -1927,6 +1946,37 @@ function countriesView(state) {
   return `<section class="panel countries-panel"><div class="panel-heading"><div><p class="eyebrow">Banco mundial</p><h2>200 nações jogáveis</h2></div><span class="country-code">${selection.length}</span></div><div class="country-table"><div class="country-table-head"><span>País</span><span>Área territorial</span><span></span></div>${selection.map((country) => `<div class="country-row ${country.id === state.country.id ? 'selected' : ''}"><span><strong>${country.nome}</strong><small>${country.id.toUpperCase()}</small></span><span>${formatNumber.format(country.area_km2)} km²</span><button type="button" class="quiet-action" data-action="country" data-country="${country.id}">Governar</button></div>`).join('')}</div></section>`;
 }
 
+function competitiveTerritoryCount(state, playerId) {
+  const countries = [state.country, ...(state.geopolitics?.contacts ?? [])];
+  return countries.filter((country) => (country.id === state.country.id ? state.country.ownerId : country.ownerId) === playerId).length;
+}
+
+function competitiveMissionLabel(mission) {
+  if (!mission) return 'Missão indisponível.';
+  if (mission.regionId) return `${mission.title}: ${getRegionLabel(mission.regionId)}`;
+  if (mission.targetPlayerId) return `${mission.title}: alvo designado`;
+  return mission.title;
+}
+
+export function missionModeView(state) {
+  const mode = state.missionMode;
+  if (!mode?.active) {
+    return `<section class="panel mission-mode-setup"><div class="panel-heading"><div><p class="eyebrow">/// GUERRA DE OBJETIVOS ///</p><h2>Modo Missões</h2></div><span class="country-code">2–6 JOGADORES</span></div><p class="notice">Use o mapa geopolítico existente. Cada jogador recebe um objetivo secreto, conquista territórios por turnos e vence assim que cumprir sua missão.</p><div class="mission-mode-form"><label class="profile-field"><span>Quantidade de jogadores</span><select data-mission-player-count aria-label="Quantidade de jogadores">${[2, 3, 4, 5, 6].map((count) => `<option value="${count}">${count} jogadores</option>`).join('')}</select></label><label class="profile-field"><span>Nomes na ordem dos turnos <small>(opcional, separados por vírgula)</small></span><input type="text" data-mission-names maxlength="180" placeholder="Ex.: Ana, Bruno, Carla"></label><button type="button" class="primary-action" data-action="mission-mode-start">[ LANÇAR OS DADOS E DISTRIBUIR MISSÕES ]</button></div><p class="notice">A partida é local e passa-e-joga: o botão de troca de turno esconde a missão até o próximo jogador assumir.</p></section>`;
+  }
+  const current = getCurrentMissionPlayer(state);
+  const progress = getMissionProgress(state, mode.currentPlayerId);
+  const players = mode.players.map((player) => `<li class="mission-player ${player.id === mode.currentPlayerId ? 'is-current' : ''}${player.id === mode.winnerId ? ' is-winner' : ''}"><i style="--mission-color:${escapeHtml(player.color)}"></i><strong>${escapeHtml(player.name)}</strong><span>${competitiveTerritoryCount(state, player.id)} territórios</span></li>`).join('');
+  if (mode.finished) {
+    const winner = getCompetitivePlayer(mode, mode.winnerId);
+    return `<section class="panel mission-mode-result"><div class="panel-heading"><div><p class="eyebrow">/// FIM DA PARTIDA ///</p><h2>Vitória confirmada</h2></div><span class="country-code">TURNO ${mode.turnNumber}</span></div><p class="mission-victory-copy">${escapeHtml(winner?.name ?? 'Um jogador')} cumpriu a missão secreta antes dos rivais.</p><p class="notice">${escapeHtml(winner?.mission?.title ?? '')}</p><div class="action-row"><button type="button" class="primary-action" data-action="mission-mode-exit">[ VOLTAR AO MODO PRESIDENTE ]</button></div></section>`;
+  }
+  if (mode.handoffRequired) {
+    return `<section class="panel mission-handoff"><div class="panel-heading"><div><p class="eyebrow">/// TROCA DE CONTROLE ///</p><h2>Passe o teclado</h2></div><span class="country-code">TURNO ${mode.turnNumber}</span></div><p class="mission-handoff-player" style="--mission-color:${escapeHtml(current?.color ?? '#ffd166')}">${escapeHtml(current?.name ?? 'Próximo jogador')}</p><p class="notice">Não revele sua missão aos outros jogadores. Quando estiver pronto, assuma o controle e abra o mapa.</p><button type="button" class="primary-action" data-action="mission-mode-reveal">[ ASSUMIR MEU TURNO ]</button></section>`;
+  }
+  const mission = current?.mission;
+  return `<section class="panel mission-mode-panel"><div class="panel-heading"><div><p class="eyebrow">/// OBJETIVO SECRETO ///</p><h2>${escapeHtml(current?.name ?? 'Jogador')}</h2></div><span class="country-code">TURNO ${mode.turnNumber}</span></div><article class="secret-mission-card" style="--mission-color:${escapeHtml(current?.color ?? '#ffd166')}"><p class="eyebrow">MISSÃO RECEBIDA</p><h3>${escapeHtml(competitiveMissionLabel(mission))}</h3><p>${escapeHtml(mission?.description ?? '')}</p><div class="mission-progress-copy"><span>Progresso</span><strong>${escapeHtml(progress.label)}</strong></div><div class="meter-track"><span style="width:${progress.target ? Math.min(100, Math.round((progress.value / progress.target) * 100)) : progress.done ? 100 : 0}%"></span></div></article><h3>Jogadores em campo</h3><ul class="mission-player-list">${players}</ul><p class="notice">Abra a aba Diplomacia, selecione um país inimigo no mapa e use <strong>[ ATACAR TERRITÓRIO ]</strong>. Cada turno permite uma ofensiva.</p><div class="action-row"><button type="button" class="primary-action" data-action="mission-mode-end-turn">[ ENCERRAR TURNO ]</button><button type="button" class="quiet-action" data-action="mission-mode-exit">[ SAIR DA PARTIDA ]</button></div></section>`;
+}
+
 export function historyView(state) {
   const entries = state.history_log ?? [];
   return `<section id="tab-historico" class="panel historical-register"><div class="panel-heading"><div><p class="eyebrow">Arquivo presidencial</p><h2>&gt; DIARIO DA NACAO</h2></div><span class="country-code">${entries.length} CRONICAS</span></div><div id="history-log" class="history-terminal" aria-live="polite">${entries.length ? entries.map((entry) => {
@@ -2121,7 +2171,49 @@ export function mountDashboard(root) {
     return { ...cityState, city: { ...cityState.city, speed: 1 } };
   };
   let state = localCityPreview ? createLocalCityPreview() : loadState();
-  const persistState = (nextState) => localCityPreview ? '' : saveState(nextState);
+  let savedBeforeOnline = null;
+  let onlineSession = null;
+  let onlineGeneration = 0;
+  const invitedRoom = getRoomFromUrl();
+  let onlineInfo = invitedRoom ? { status: 'invite', roomId: invitedRoom, members: [], host: false } : null;
+  if (invitedRoom) { savedBeforeOnline = state; state = createGameState('bra', state.playerProfile); }
+  const bots = createBotRunner({ getState: () => state, commit: (next) => commit(next),
+    isPaused: () => titleOpen || Boolean(onlineInfo) || document.hidden || !isWarPhase(state) });
+  document.addEventListener('visibilitychange', () => bots.sync());
+  window.addEventListener('pagehide', () => { bots.stop(); onlineSession?.close(); });
+
+  function leaveOnline() {
+    onlineGeneration += 1;
+    onlineSession?.close(); onlineSession = null; onlineInfo = null;
+    if (savedBeforeOnline) state = savedBeforeOnline;
+    savedBeforeOnline = null;
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+  async function enterOnline(roomId) {
+    const name = root.querySelector('[data-war-online-name]')?.value.trim() || onlineInfo?.name || state.playerProfile?.name || 'Jogador';
+    const generation = ++onlineGeneration;
+    onlineSession?.close(); onlineSession = null;
+    savedBeforeOnline ??= state;
+    state = createGameState('bra', state.playerProfile);
+    mapUi = { ...mapUi, missionVisible: false, selected: null };
+    onlineInfo = { status: 'connecting', roomId, name, members: [], host: !roomId };
+    render();
+    try {
+      const session = await connectWarRoom({ roomId, name, state, onUpdate(info, snapshot) {
+        if (generation !== onlineGeneration) return;
+        onlineInfo = { ...info, name };
+        if (snapshot) state = applyWarSnapshot(state, snapshot);
+        render();
+      } });
+      if (generation !== onlineGeneration) session.close();
+      else onlineSession = session;
+    } catch (error) {
+      if (generation !== onlineGeneration) return;
+      onlineInfo = { ...onlineInfo, status: 'error', error: error.message };
+      render();
+    }
+  }
+  const persistState = (nextState) => localCityPreview || onlineInfo ? '' : saveState(nextState);
   // A interface principal é recriada por estado. Traduzimos somente os blocos
   // que acabaram de ser renderizados; observar o body inteiro fazia cada troca
   // de texto disparar outra varredura completa e deixava o modo Presidente lento.
@@ -2252,7 +2344,7 @@ export function mountDashboard(root) {
     const button = event.target.closest('button');
     if (button && !button.disabled && !button.closest('.sound-control')) audio.play('click');
   }, { capture: true });
-  const hadSave = (() => { try { return localStorage.getItem(STORAGE_KEY) !== null; } catch { return false; } })();
+  let hadSave = (() => { try { return localStorage.getItem(STORAGE_KEY) !== null; } catch { return false; } })();
   let tutorial = (() => { try { return createTutorial(JSON.parse(localStorage.getItem(TUTORIAL_KEY) ?? '{}')); } catch { return createTutorial(); } })();
   const saveTutorial = () => { try { localStorage.setItem(TUTORIAL_KEY, JSON.stringify(tutorial)); } catch { /* so nesta sessão */ } };
   const tutorialCoach = document.createElement('aside');
@@ -2286,6 +2378,7 @@ export function mountDashboard(root) {
   document.body.append(titleScreen);
 
   function updateTutorial() {
+    if (isWarPhase(state)) { tutorialCoach.hidden = true; return; }
     const synced = syncTutorial(tutorial, state);
     if (synced.done.length !== tutorial.done.length) { tutorial = synced; saveTutorial(); }
     const step = getTutorialStep(tutorial, state);
@@ -2379,6 +2472,7 @@ export function mountDashboard(root) {
     syncAudioMood();
     updateTutorial();
     root.querySelector('button, canvas')?.focus();
+    bots.sync();
   }
 
   function animateCover() {
@@ -2440,11 +2534,13 @@ export function mountDashboard(root) {
 
   function leaveBoot() {
     if (titleView !== 'boot' || !bootReady) return;
+    if (onlineInfo?.status === 'invite') { closeTitle(); return; }
     titleView = 'main';
     renderTitle();
   }
 
   function startNewGame() {
+    if (onlineInfo) leaveOnline();
     tutorial = { ...restartTutorial(), enabled: tutorial.enabled };
     saveTutorial();
     activeTab = 'overview';
@@ -2455,6 +2551,7 @@ export function mountDashboard(root) {
   }
 
   function showStoryOrStart() {
+    if (isWarPhase(state)) { startNewGame(); return; }
     if (onboarding.skipStory) { startNewGame(); return; }
     storyIndex = 0;
     storyReplay = false;
@@ -2561,6 +2658,7 @@ export function mountDashboard(root) {
 
   // Aba do topo com o nivel; o painel da trilha so e refeito quando o nivel muda, mantendo a rolagem.
   function updateLevelTab() {
+    if (isWarPhase(state)) return;
     const slot = root.querySelector('[data-level-tab]');
     if (slot) slot.innerHTML = levelTabView(state);
     const panel = levelsModal?.querySelector('[data-levels-panel]');
@@ -2894,37 +2992,34 @@ export function mountDashboard(root) {
       const flashPending = Boolean(state.is_wasteland && state.wasteland_cinematic_pending);
       document.body.classList.toggle('wasteland-mode', Boolean(state.is_wasteland && !flashPending));
       document.body.classList.toggle('theme-wasteland', Boolean(state.is_wasteland && !flashPending));
+      document.body.classList.toggle('war-mode', isWarPhase(state));
       document.documentElement.lang = getUiLanguage(state);
     }
     const language = getUiLanguage(state);
+    if (isWarPhase(state)) {
+      // A antiga fase Presidente é substituída pelo tabuleiro, inclusive em saves antigos.
+      document.querySelectorAll('[role="presentation"]').forEach((modal) => { modal.hidden = true; });
+      tutorialCoach.hidden = true;
+      root.innerHTML = warScreenView(state, { ...mapUi, online: onlineInfo });
+      if (storageNotice) {
+        const warning = document.createElement('p');
+        warning.className = 'storage-notice';
+        warning.textContent = storageNotice;
+        root.prepend(warning);
+      }
+      localizeDocument();
+      root.querySelector('.war-handoff button')?.focus();
+      bots.sync();
+      return;
+    }
     const playerName = getPlayerDisplayName(state);
     const projection = projectBudget(state.economy, state.budget);
     const tabs = [
       ['overview', uiText(language, 'nav.overview')],
-      ['budget', uiText(language, 'nav.budget')],
-      ['indicators', uiText(language, 'nav.indicators')],
-      ['diplomacy', uiText(language, 'nav.diplomacy')],
-      ['military', uiText(language, 'nav.military')],
-      ['cabinet', uiText(language, 'nav.cabinet')],
-      ['technology', uiText(language, 'nav.technology')],
-      ['projects', uiText(language, 'nav.projects')],
-      ['congress', uiText(language, 'nav.congress')],
       ['history', uiText(language, 'nav.history')],
-      ['missions', uiText(language, 'nav.missions')],
-      ['countries', uiText(language, 'nav.countries')],
       ['profile', uiText(language, 'nav.profile')],
     ];
-    const content = activeTab === 'history' ? storyModeView(state) : activeTab === 'missions' && !state.city && !state.is_wasteland ? missionsView(state) : activeTab === 'profile' ? profileView(state, { audio: audio.settings, tutorialEnabled: tutorial.enabled, achievements: achievementStore, trophies }) : state.city ? cityView(state) : state.is_wasteland ? bunkerView(state)
-      : activeTab === 'indicators' ? indicatorsView(state)
-      : activeTab === 'budget' ? budgetView(state, projection)
-      : activeTab === 'diplomacy' ? diplomacyView(state, diplomacyQuery, mapUi)
-        : activeTab === 'military' ? militaryView(state, militaryUi)
-          : activeTab === 'cabinet' ? cabinetView(state)
-          : activeTab === 'technology' ? technologyView(state)
-            : activeTab === 'projects' ? projectsView(state)
-      : activeTab === 'congress' ? congressView(state)
-        : activeTab === 'countries' ? countriesView(state)
-          : overviewView(state, projection);
+    const content = activeTab === 'history' ? storyModeView(state) : activeTab === 'profile' ? profileView(state, { audio: audio.settings, tutorialEnabled: tutorial.enabled, achievements: achievementStore, trophies }) : state.city ? cityView(state) : bunkerView(state);
     const topbarActions = state.is_wasteland
       ? `<span class="bunker-era">${escapeHtml(state.country.nome)}</span><button type="button" class="quiet-action" data-action="reset">${escapeHtml(uiText(language, 'top.newGame'))}</button>`
       : `<label class="country-picker"><span>${escapeHtml(uiText(language, 'top.country'))}</span><select data-action="select-country" aria-label="${escapeHtml(uiText(language, 'top.country'))}">${COUNTRIES.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((country) => `<option value="${country.id}" ${country.id === state.country.id ? 'selected' : ''}>${country.nome}</option>`).join('')}</select></label><button type="button" class="quiet-action" data-action="reset">${escapeHtml(uiText(language, 'top.restart'))}</button>`;
@@ -3185,6 +3280,7 @@ export function mountDashboard(root) {
   }
 
   function startFalloutCinematicIfNeeded() {
+    if (isWarPhase(state)) return;
     if (!state.wasteland_cinematic_pending || falloutCinematicStarted) return;
     falloutCinematicStarted = true;
     audio.play('boom');
@@ -3194,6 +3290,7 @@ export function mountDashboard(root) {
   }
 
   function syncDiscoveries() {
+    if (isWarPhase(state)) return;
     const { encyclopedia: next, added } = recordDiscoveries(encyclopedia, detectDiscoveries(state),
       { day: state.currentDay, now: Date.now() });
     if (!added.length) return;
@@ -3215,6 +3312,13 @@ export function mountDashboard(root) {
 
   function commit(nextState) {
     const previous = state;
+    if (isWarPhase(nextState)) {
+      state = nextState;
+      storageNotice = onlineInfo ? '' : persistState(state);
+      render();
+      syncAudioMood();
+      return;
+    }
     state = awardXp(previous, nextState);
     storageNotice = persistState(state);
     render();
@@ -3663,6 +3767,64 @@ export function mountDashboard(root) {
     const control = event.target.closest('[data-action]');
     if (!control || control.disabled) return;
     const { action } = control.dataset;
+    if (isWarPhase(state)) {
+      if (state.missionMode?.handoffRequired && !['mission-mode-reveal', 'war-menu', 'war-new'].includes(action)) return;
+      if (action === 'war-menu') { bots.stop(); hadSave = true; titleOpen = true; titleView = 'main'; renderTitle(); return; }
+      if (action === 'war-online-create') { enterOnline(null); return; }
+      if (action === 'war-online-accept' || action === 'war-online-reconnect') { enterOnline(onlineInfo.roomId); return; }
+      if (action === 'war-online-join') {
+        try {
+          const url = new URL(root.querySelector('[data-war-invite]')?.value);
+          const roomId = new URLSearchParams(url.hash.slice(1)).get('war-room');
+          if (!/^[a-f0-9-]{36}$/.test(roomId ?? '')) throw new Error();
+          enterOnline(roomId);
+        } catch { mapUi.setupError = 'Cole um link de convite válido do LAST OFFICE.'; render(); }
+        return;
+      }
+      if (action === 'war-online-copy') {
+        const fallback = () => {
+          root.querySelector('[data-war-share]')?.select(); control.textContent = 'COPIE O LINK SELECIONADO';
+        };
+        if (navigator.clipboard) navigator.clipboard.writeText(onlineInfo.link).then(() => { control.textContent = 'LINK COPIADO'; }).catch(fallback);
+        else fallback();
+        return;
+      }
+      if (action === 'war-online-leave') { leaveOnline(); render(); return; }
+      if (action === 'war-online-start') { onlineSession?.start(); return; }
+      if (action === 'war-start') {
+        const count = Number(root.querySelector('[data-war-count]')?.value) || 2;
+        const names = [...root.querySelectorAll('[data-war-name]')].slice(0, count).map((input) => input.value.trim());
+        mapUi = { region: 'world', zoom: 1, missionVisible: false, selected: null };
+        const playStyle = root.querySelector('[data-war-style]')?.value ?? 'local';
+        const difficulty = root.querySelector('[data-war-difficulty]')?.value ?? 'medium';
+        commit(startMissionMatch(state, count, names, Math.random, { playStyle, difficulty }));
+        return;
+      }
+      if (action === 'war-new') {
+        if (onlineInfo) { if (window.confirm('Sair da sala online? O criador deve manter a aba aberta durante a partida.')) { leaveOnline(); render(); } return; }
+        if (state.missionMode?.active && !state.missionMode.finished && !window.confirm('Encerrar a partida de War atual e configurar outra?')) return;
+        mapUi = { region: 'world', zoom: 1, selected: null, missionVisible: false };
+        commit(exitMissionMatch(state)); return;
+      }
+      if (action === 'war-mission') { mapUi = { ...mapUi, missionVisible: !mapUi.missionVisible }; render(); return; }
+      if (action === 'mission-mode-end-turn') {
+        if (onlineInfo) { onlineSession?.command('end-turn'); return; }
+        if (getCurrentMissionPlayer(state)?.isBot) return;
+        mapUi = { ...mapUi, missionVisible: false, selected: null };
+        commit(advanceMissionTurn(state)); return;
+      }
+      if (action === 'mission-mode-reveal') {
+        mapUi = { ...mapUi, missionVisible: false };
+        commit(revealMissionTurn(state)); return;
+      }
+      if (action === 'competitive-attack') {
+        if (onlineInfo) { onlineSession?.command('attack', control.dataset.contact); return; }
+        if (!getCurrentMissionPlayer(state)?.isBot) commit(conquerTerritory(state, control.dataset.contact));
+        return;
+      }
+      // O tabuleiro só aceita ações próprias; atalhos antigos não alteram a campanha.
+      if (!['map-country', 'map-region', 'map-zoom'].includes(action)) return;
+    }
     if (action === 'close-dialogue') { bunkerController?.advanceDialogue(); return; }
     if (action === 'open-expedition-lootbox') {
       const next = openExpeditionLootbox(state);
@@ -3793,6 +3955,17 @@ export function mountDashboard(root) {
     if (action === 'mission-accept') { const id = missionUi.preview; missionUi = { ...missionUi, preview: null }; activeTab = 'missions'; commit(aceitarMissao(state, id)); return; }
     if (action === 'mission-abandon') { commit(abandonarMissao(state)); return; }
     if (action === 'mission-epilogue-close') { commit(fecharEpilogoMissao(state)); return; }
+    if (action === 'mission-mode-start') {
+      const count = Number(root.querySelector('[data-mission-player-count]')?.value) || 2;
+      const names = String(root.querySelector('[data-mission-names]')?.value ?? '').split(',').map((name) => name.trim()).filter(Boolean);
+      activeTab = 'competition';
+      commit(startMissionMatch(state, count, names));
+      return;
+    }
+    if (action === 'mission-mode-reveal') { commit(revealMissionTurn(state)); return; }
+    if (action === 'mission-mode-end-turn') { commit(advanceMissionTurn(state)); return; }
+    if (action === 'mission-mode-exit') { activeTab = 'overview'; commit(exitMissionMatch(state)); return; }
+    if (action === 'competitive-attack') { commit(conquerTerritory(state, control.dataset.contact)); return; }
     if (action === 'renew-pact') {
       const years = Number(root.querySelector(`[data-renew-years="${control.dataset.contact}"]`)?.value) || 1;
       commit(renovarPacto(state, control.dataset.contact, years));
@@ -3906,6 +4079,18 @@ export function mountDashboard(root) {
   });
 
   root.addEventListener('change', (event) => {
+    if (isWarPhase(state)) {
+      if (event.target.matches('[data-war-style]')) { mapUi.setupMode = event.target.value; mapUi.setupError = ''; render(); return; }
+      if (event.target.matches('[data-war-count]')) {
+        const count = Number(event.target.value);
+        root.querySelectorAll('[data-war-name-row]').forEach((row) => { row.hidden = Number(row.dataset.warNameRow) >= (mapUi.setupMode === 'bots' ? 1 : count); });
+      }
+      if (event.target.matches('[data-war-country]')) {
+        mapUi = { ...mapUi, selected: event.target.value || null };
+        render();
+      }
+      return;
+    }
     if (event.target.matches('#shelter-build-slot')) {
       refreshShelterSlots();
       return;
@@ -3970,6 +4155,11 @@ export function mountDashboard(root) {
       const mute = root.querySelector('[data-profile-mute]');
       if (mute) mute.checked = false;
     }
+  });
+
+  root.addEventListener('keydown', (event) => {
+    if (!isWarPhase(state) || !['Enter', ' '].includes(event.key)) return;
+    if (event.target.matches('.war-country')) { event.preventDefault(); event.target.dispatchEvent(new MouseEvent('click', { bubbles: true })); }
   });
 
   render();

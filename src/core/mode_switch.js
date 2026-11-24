@@ -3,7 +3,7 @@
 import { getGameMode } from './levels.js';
 
 export const MODES = Object.freeze([
-  Object.freeze({ id: 'presidency', label: 'Presidência', icon: '🏛️', text: 'Governe um país, faça diplomacia e guerra.' }),
+  Object.freeze({ id: 'presidency', label: 'War', icon: '🌍', text: 'Dispute o mapa com 2 a 6 jogadores e cumpra sua missão secreta.' }),
   Object.freeze({ id: 'vault', label: 'Vault', icon: '☢️', text: 'Comande a colônia subterrânea depois da bomba.' }),
   Object.freeze({ id: 'city', label: 'Cidade', icon: '🏙️', text: 'Reconstrua o mundo, construção por construção.' }),
 ]);
@@ -17,7 +17,7 @@ export function isModeCompleted(state) {
   const mode = getGameMode(state);
   if (mode === 'city') return Boolean(state?.city?.result);
   if (mode === 'vault') return Boolean(state?.ending);
-  return Boolean(state?.regime?.gameOver)
+  return Boolean(state?.missionMode?.finished) || Boolean(state?.regime?.gameOver)
     || Object.keys(state?.missions?.completed ?? {}).length > 0
     || (Number(state?.monthCounter) || 0) >= PRESIDENCY_MILESTONE_MONTHS;
 }

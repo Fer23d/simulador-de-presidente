@@ -1157,3 +1157,89 @@ html[data-quality="low"] *, html[data-quality="low"] *::before, html[data-qualit
 .intel-lines { display: block; color: var(--cyan); line-height: 1.5; }
 .mode-switch-row { margin-top: 12px; align-items: center; flex-wrap: wrap; }
 .mode-switch-label { color: var(--muted); font-size: 12px; letter-spacing: .08em; }
+
+/* Modo competitivo local: usa o mesmo terminal e o mesmo mapa da Diplomacia. */
+/* War ocupa a fase de superfície: o tabuleiro é a área principal. */
+body.war-mode { background: #090f14; }
+body.war-mode #app { max-width: none; padding: 0; }
+.war-shell { --war-line: #33454d; --war-muted: #a3b8bb; color: #e5eee9; padding: clamp(12px, 2vw, 28px); text-shadow: none; }
+.war-shell button, .war-shell input, .war-shell select { font: inherit; }
+.war-header { display: flex; justify-content: space-between; align-items: center; gap: 20px; border-bottom: 1px solid var(--war-line); padding-bottom: 18px; margin-bottom: 18px; }
+.war-header h1 { color: #f4ce80; font-size: clamp(32px, 4vw, 56px); margin: 6px 0 0; }
+.war-header h1 span { display: inline-block; font-size: 18px; font-weight: normal; color: var(--war-muted); letter-spacing: 0; }
+.war-header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 15px; }
+.war-layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 18px; align-items: start; }
+.war-map-panel, .war-panel { border: 1px solid var(--war-line); background: #101a21; min-width: 0; }
+.war-panel { padding: 22px; border-top: 3px solid var(--command-color, #d5b678); }
+.war-panel h2 { font-size: 25px; line-height: 1.2; margin: 8px 0 14px; color: #f4dfb9; }
+.war-panel p { line-height: 1.4; }
+.war-panel .primary-action, .war-end-turn, .war-secret-button { width: 100%; min-height: 44px; white-space: normal; }
+.war-shell .eyebrow { color: #c7ac75; font-size: 13px; letter-spacing: 1.6px; }
+.war-field { display: grid; gap: 6px; margin: 12px 0; }
+.war-field[hidden] { display: none; }
+.war-field input, .war-field select, .war-country-picker select { width: 100%; padding: 9px; background: #091218; border: 1px solid #52636a; color: #e5eee9; min-height: 42px; }
+.war-fine, .war-turn-status { color: var(--war-muted); font-size: 15px; }
+.war-map-heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; align-items: center; padding: 18px; }
+.war-map-heading h2 { margin: 6px 0 0; font-size: 23px; color: #e5eee9; }
+.war-country-picker { display: grid; gap: 4px; font-size: 14px; color: var(--war-muted); width: 210px; }
+.war-map-tools { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 10px 18px; border-block: 1px solid var(--war-line); }
+.war-regions, .war-zoom { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.war-shell .quiet-action, .war-zoom button { color: #cbdada; border: 1px solid #52636a; box-shadow: none; background: #15232b; padding: 8px 12px; }
+.war-shell .quiet-action:hover, .war-shell button[aria-pressed="true"] { background: #dec08c; color: #121b20; }
+.war-map-stage { overflow: hidden; background-color: #0a151e; background-image: linear-gradient(#33495528 1px, transparent 1px), linear-gradient(90deg, #33495528 1px, transparent 1px); background-size: 48px 48px; }
+.war-map.world-map-svg { display: block; width: 100%; min-height: 360px; height: min(62vh, 640px); max-height: none; background: transparent; touch-action: none; }
+.war-country { stroke: #10212c; stroke-width: .6; vector-effect: non-scaling-stroke; fill-opacity: .76; cursor: pointer; transition: fill-opacity .12s; }
+.war-country:hover, .war-country:focus-visible { fill-opacity: 1; stroke: #fff; stroke-width: 1.6; outline: none; }
+.war-country.is-selected { fill-opacity: 1; stroke: #fff; stroke-width: 2.5; }
+.war-land { fill: #1d303b; stroke: #2d4552; stroke-width: .4; }
+.war-map-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 12px 18px; font-size: 14px; color: var(--war-muted); border-top: 1px solid var(--war-line); }
+.war-rules { padding: 14px 18px; border-top: 1px solid var(--war-line); color: var(--war-muted); line-height: 1.6; }
+.war-rules summary { cursor: pointer; color: #f4dfb9; }
+.war-secret { border-left: 3px solid #d5b678; background: #1c2830; padding: 12px; margin-top: 12px; }
+.war-secret h3, .war-target h3 { color: #f4dfb9; margin: 4px 0 8px; font-size: 21px; }
+.war-target { padding-top: 18px; margin-top: 18px; border-top: 1px solid var(--war-line); }
+.war-battle { display: flex; gap: 14px; align-items: center; margin: 14px 0; border: 1px solid var(--war-line); padding: 10px; }
+.war-battle p { margin: 4px 0; font-size: 14px; color: var(--war-muted); }
+.war-die { font: 48px/1 sans-serif; color: #f4dfb9; }
+.war-score { margin: 18px 0 0; padding: 0; list-style: none; }
+.war-score li { display: flex; justify-content: space-between; gap: 8px; padding: 9px 4px; border-bottom: 1px solid var(--war-line); }
+.war-score li.is-current { background: #223139; }
+.war-score i { display: inline-block; width: 10px; height: 10px; margin-right: 8px; background: var(--command-color); }
+.war-notice { font-size: 16px; line-height: 1.5; color: #c7d7d6; padding: 12px 2px; }
+.war-handoff { position: fixed; inset: 0; z-index: 900; display: grid; place-items: center; background: #050b10ec; padding: 20px; }
+.war-handoff .war-panel { width: min(520px, 100%); text-align: center; padding: 36px; }
+.war-victory { border-color: #f4ce80; }
+@media (max-width: 1050px) { .war-layout { grid-template-columns: minmax(0, 1fr) 290px; } .war-panel { padding: 16px; } }
+@media (max-width: 760px) { .war-layout { grid-template-columns: 1fr; } .war-header { align-items: start; flex-direction: column; } .war-header h1 span { display: block; } .war-map.world-map-svg { min-height: 240px; height: 42vh; } .war-setup { grid-row: 1; } .war-country-picker { width: 100%; } }
+.mission-mode-form { display: grid; gap: 12px; max-width: 680px; }
+.mission-mode-form .profile-field { display: grid; gap: 6px; }
+.mission-mode-form input, .mission-mode-form select { min-height: 40px; }
+.secret-mission-card { border: 1px solid var(--mission-color, var(--line)); border-left: 5px solid var(--mission-color, var(--line)); padding: 16px; background: color-mix(in srgb, var(--mission-color, #ffd166) 9%, #08100e); box-shadow: 0 0 18px color-mix(in srgb, var(--mission-color, #ffd166) 15%, transparent); }
+.secret-mission-card h3 { color: var(--mission-color, var(--accent)); margin: 4px 0 8px; }
+.mission-progress-copy { display: flex; justify-content: space-between; gap: 12px; margin-top: 14px; color: var(--muted); }
+.mission-progress-copy strong { color: var(--text); }
+.mission-player-list { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 7px; }
+.mission-player { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: 1px solid var(--line); color: var(--muted); }
+.mission-player.is-current { border-color: var(--accent); color: var(--text); background: rgba(255, 166, 0, .08); }
+.mission-player.is-winner { border-color: #ffd166; color: #ffd166; }
+.mission-player i, .competitive-map-banner i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: var(--mission-color, #888); box-shadow: 0 0 8px var(--mission-color, #888); }
+.mission-player span { margin-left: auto; }
+.mission-handoff { text-align: center; padding: 28px; }
+.mission-handoff-player { color: var(--mission-color, var(--accent)); font-size: 28px; font-weight: 700; text-shadow: 0 0 14px var(--mission-color, var(--accent)); }
+.mission-victory-copy { color: #ffd166; font-size: 24px; font-weight: 700; }
+.competitive-map-banner { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+.competitive-map-banner span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.competitive-territory { filter: saturate(1.18); }
+.competitive-country-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0; padding: 8px 0; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); }
+.competitive-country-controls small { color: var(--muted); }
+
+/* WAR: multiplayer setup and session status. */
+.war-sidebar { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.war-setup select, .war-online input { width: 100%; max-width: 100%; }
+.war-online { border-color: #35a7ff; }
+.war-online h2 { font-size: 1.5rem; }
+.war-online > button { width: 100%; margin: 6px 0; }
+.war-network-error { color: #ff7e8d; border-left: 3px solid currentColor; padding-left: 12px; }
+.war-score li { gap: 8px; }
+.war-score li span { overflow-wrap: anywhere; min-width: 0; }
+.war-turn-status { min-height: 2.5em; }
