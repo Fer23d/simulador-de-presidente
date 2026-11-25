@@ -37,20 +37,20 @@ test('turn handoff hides the next mission until the next player reveals it', () 
 
 test('a successful territorial attack is immutable and can complete an elimination mission', () => {
   let state = revealMissionTurn(startMissionMatch(createGameState('bra'), 2, ['Ana', 'Bruno'], () => 0.1));
-  const lastEnemy = state.geopolitics.contacts.find((country) => country.ownerId === 'player-2');
+  const lastEnemy = state.geopolitics.contacts.find((country) => country.id === 'arg');
   const contacts = state.geopolitics.contacts.map((country) => ({ ...country, ownerId: country.id === lastEnemy.id ? 'player-2' : 'player-1', militaryPower: country.id === lastEnemy.id ? 1 : country.militaryPower }));
   state = {
     ...state,
-    missionMode: {
-      ...state.missionMode,
-      players: state.missionMode.players.map((player) => player.id === 'player-1'
-        ? { ...player, mission: { id: 'break-a-rival', title: 'Quebrar um rival', description: 'Eliminar Bruno.', kind: 'eliminate', targetPlayerId: 'player-2' } }
-        : player),
-    },
+    country: { ...state.country, ownerId: 'player-1' },
+    missionMode: { ...state.missionMode, troopsByCountry: { bra: 2, arg: 1 }, players: state.missionMode.players.map((player) => player.id === 'player-1'
+      ? { ...player, mission: { id: 'break-a-rival', title: 'Quebrar um rival', description: 'Eliminar Bruno.', kind: 'eliminate', targetPlayerId: 'player-2' } }
+      : player) },
     geopolitics: { ...state.geopolitics, contacts },
     world: contacts,
   };
-  const result = conquerTerritory(state, lastEnemy.id, () => 0);
+  const rolls = [0, 0.999];
+  let rollIndex = 0;
+  const result = conquerTerritory(state, lastEnemy.id, 'bra', 1, () => rolls[rollIndex++] ?? 0.5);
   assert.equal(state.missionMode.finished, false);
   assert.equal(result.missionMode.finished, true);
   assert.equal(result.missionMode.winnerId, 'player-1');
@@ -95,10 +95,10 @@ test('excluded countries cannot be targeted or counted, including when an old ho
   assert.equal(getCountryOwner(state, 'lie'), null);
   assert.equal(canAttackTerritory(state, 'lie').ok, false);
   assert.equal(canAttackTerritory(state, 'and').ok, false);
-  assert.deepEqual(conquerTerritory(state, 'lie', () => 0).missionMode, state.missionMode);
+  assert.deepEqual(conquerTerritory(state, 'lie', 'bra', 1, () => 0).missionMode, state.missionMode);
   const html = warScreenView(state);
   assert.doesNotMatch(html, /data-country="(?:lie|and)"|<option value="(?:lie|and)"/);
-  assert.equal((html.match(/class="war-country /g) ?? []).length, 100);
+  assert.equal((html.match(/class="war-country(?: |")/g) ?? []).length, 100);
   assert.deepEqual(territoryCounts(hydrateGameState(JSON.stringify(state))), territoryCounts(state));
   assert.deepEqual(exitMissionMatch(state).country, original.country);
 });
@@ -139,7 +139,12 @@ test('legacy 200-country matches retain their owners and missions; next match us
 test('home territory is conquerable and ownership survives reloading the save', () => {
   let state = revealMissionTurn(startMissionMatch(createGameState('bra'), 2, [], () => .3));
   state = revealMissionTurn(advanceMissionTurn(state));
-  const next = conquerTerritory(state, 'bra', () => 0);
+  const contacts = state.geopolitics.contacts.map((country) => ({ ...country, ownerId: country.id === 'arg' ? 'player-2' : 'player-1' }));
+  state = { ...state, country: { ...state.country, ownerId: 'player-1' }, geopolitics: { ...state.geopolitics, contacts }, world: contacts,
+    missionMode: { ...state.missionMode, troopsByCountry: { bra: 1, arg: 2 } } };
+  const rolls = [0, 0.999];
+  let rollIndex = 0;
+  const next = conquerTerritory(state, 'bra', 'arg', 1, () => rolls[rollIndex++] ?? 0.5);
   assert.equal(getCountryOwner(next, 'bra'), 'player-2');
   assert.equal(state.country.ownerId, 'player-1');
   const saved = hydrateGameState(JSON.stringify(next));
@@ -154,12 +159,15 @@ test('handoff, failed attacks, duplicate clicks and month advance cannot bypass 
   assert.equal(canAttackTerritory(state, enemy.id).ok, false);
   assert.equal(advanceMissionTurn(state), state);
   state = revealMissionTurn(state);
-  const failed = conquerTerritory(state, enemy.id, () => .999);
+  const contacts = state.geopolitics.contacts.map((country) => ({ ...country, ownerId: country.id === 'arg' ? 'player-2' : 'player-1' }));
+  state = { ...state, country: { ...state.country, ownerId: 'player-1' }, geopolitics: { ...state.geopolitics, contacts }, world: contacts,
+    missionMode: { ...state.missionMode, troopsByCountry: { bra: 2, arg: 1 } } };
+  const failed = conquerTerritory(state, 'arg', 'bra', 1, () => .999);
   assert.equal(failed.missionMode.lastBattle.roll, 1);
   assert.equal(failed.missionMode.actionUsed, true);
-  assert.equal(getCountryOwner(failed, enemy.id), 'player-2');
+  assert.equal(getCountryOwner(failed, 'arg'), 'player-2');
   assert.equal(canAttackTerritory(failed, enemy.id).ok, false);
-  assert.deepEqual(conquerTerritory(failed, enemy.id, () => 0).geopolitics, failed.geopolitics);
+  assert.deepEqual(conquerTerritory(failed, 'arg', 'bra', 1, () => 0).geopolitics, failed.geopolitics);
   assert.equal(advanceMonth(failed).monthCounter, failed.monthCounter);
 });
 
@@ -189,7 +197,7 @@ test('War screen replaces presidential menus and protects mission text during ha
   assert.match(locked, /data-country="bra"/);
   const revealed = warScreenView(revealMissionTurn(state), { missionVisible: true });
   assert.ok(revealed.includes(state.missionMode.players[0].mission.description));
-  assert.equal((revealed.match(/class="war-country /g) ?? []).length, allCountries(state).length);
+  assert.equal((revealed.match(/class="war-country(?: |")/g) ?? []).length, allCountries(state).length);
 });
 
 test('closing War removes only competitive ownership and leaves campaign data intact', () => {

@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGameState, hydrateGameState } from '../src/core/game-state.js';
-import { allCountries, startMissionMatch, advanceMissionTurn, getCountryRegion, territoryCounts } from '../src/core/mission_mode.js';
-import { chooseBotTarget, stepBotTurn, createBotRunner } from '../src/core/war_ai.js';
+import { allCountries, startMissionMatch, advanceMissionTurn, getCountryOwner, getCountryRegion, canAttackTerritory, territoryCounts } from '../src/core/mission_mode.js';
+import { chooseBotAttack, chooseBotTarget, stepBotTurn, createBotRunner } from '../src/core/war_ai.js';
 import { WarRoom, applyWarSnapshot } from '../src/core/war_online.js';
+import { WAR_ADJACENCY } from '../src/data/war_adjacency.js';
 import { warScreenView } from '../src/ui/war_view.js';
 
 const botGame = (difficulty = 'hard') => advanceMissionTurn(startMissionMatch(createGameState('bra'), 3, ['Você', 'Bot 1', 'Bot 2'], () => .3, { playStyle: 'bots', difficulty }));
@@ -23,7 +24,10 @@ test('all three AI difficulties persist, act once and never require hotseat hand
     const next = stepBotTurn(saved, () => 0);
     assert.equal(next.missionMode.actionUsed, true);
     assert.equal(next.missionMode.lastBattle.roll, 6);
-    const ended = stepBotTurn(next);
+    let ended = next;
+    for (let round = 0; round < 12 && ended.missionMode.currentPlayerId === 'player-2'; round += 1) {
+      ended = stepBotTurn(ended, () => 0);
+    }
     assert.equal(ended.missionMode.currentPlayerId, 'player-3');
     assert.equal(ended.missionMode.handoffRequired, false);
     assert.equal(saved.missionMode.actionUsed, false);
@@ -41,9 +45,13 @@ test('easy chooses any legal target; medium and hard focus their own region with
     assert.equal(getCountryRegion(chooseBotTarget(state, () => .5)), 'europe');
   }
   const easy = botGame('easy');
-  const targets = allCountries(easy).filter((country) => country.ownerId !== 'player-2');
-  assert.equal(chooseBotTarget(easy, () => 0), targets[0].id);
-  const failed = stepBotTurn(easy, () => .99);
+  const plannedTarget = chooseBotTarget(easy, () => 0);
+  assert.ok(plannedTarget);
+  assert.notEqual(getCountryOwner(easy, plannedTarget), 'player-2');
+  const failedPlan = chooseBotAttack(easy, () => .99);
+  const easyWithDefenders = { ...easy, missionMode: { ...easy.missionMode,
+    troopsByCountry: { ...easy.missionMode.troopsByCountry, [failedPlan.targetId]: 2 } } };
+  const failed = stepBotTurn(easyWithDefenders, () => .99);
   assert.equal(failed.missionMode.lastBattle.roll, 1);
   assert.equal(failed.missionMode.lastBattle.won, false);
 });
@@ -107,10 +115,16 @@ test('snapshots send only the recipient mission; tokens and campaign state never
 
 test('authority rejects forged identity, double rolls, stale revisions and illegal targets', () => {
   const room = newRoom(); room.start();
-  const targetId = allCountries(room.state).find((country) => country.ownerId === 'player-2').id;
-  const command = { action: 'attack', targetId, revision: room.revision };
+  const source = allCountries(room.state).find((country) => getCountryOwner(room.state, country.id) === 'player-1'
+    && (WAR_ADJACENCY[country.id] ?? []).some((id) => getCountryOwner(room.state, id) === 'player-2'));
+  assert.ok(source, 'a human frontier exists for the test');
+  const targetId = (WAR_ADJACENCY[source.id] ?? []).find((id) => getCountryOwner(room.state, id) === 'player-2');
+  const command = { action: 'attack', targetId, sourceId: source.id, amount: 1, revision: room.revision };
   assert.throws(() => room.command('player-2', command), /turno/);
   assert.throws(() => room.command('player-1', { ...command, targetId: 'not-a-country' }));
+  room.command('player-1', { action: 'mobilize', targetId: source.id, amount: 3, revision: room.revision });
+  command.revision = room.revision;
+  assert.equal(canAttackTerritory(room.state, targetId, source.id, 1).ok, true);
   room.command('player-1', command);
   assert.throws(() => room.command('player-1', command), /mudou/);
   assert.throws(() => room.command('player-1', { ...command, revision: room.revision }));

@@ -1,4 +1,5 @@
-import { allCountries, getCountryRegion, getCurrentMissionPlayer, territoryCounts, getLegalAttacks, conquerTerritory, continueBattle, advanceMissionTurn } from './mission_mode.js';
+import { allCountries, getCountryRegion, getCurrentMissionPlayer, getCountryOwner, territoryCounts, getLegalAttacks, mobilizeTroops, conquerTerritory, continueBattle, advanceMissionTurn } from './mission_mode.js';
+import { WAR_ADJACENCY } from '../data/war_adjacency.js';
 
 export const BOT_DIFFICULTIES = Object.freeze({
   easy: { label: 'Fácil', description: 'Escolhe alvos aleatórios. Ideal para aprender.' },
@@ -7,13 +8,32 @@ export const BOT_DIFFICULTIES = Object.freeze({
 });
 const pick = (items, random) => items[Math.min(items.length - 1, Math.max(0, Math.floor(random() * items.length)))];
 
+function botAttackOptions(state, playerId) {
+  const mode = state.missionMode;
+  const remaining = Math.max(0, mode.troopsPerTurn - mode.mobilizedThisTurn);
+  if (!remaining || mode.actionUsed) return getLegalAttacks(state, playerId);
+  const countries = allCountries(state);
+  const options = [];
+  for (const source of countries) {
+    if (getCountryOwner(state, source.id) !== playerId) continue;
+    const hasRivalNeighbor = (WAR_ADJACENCY[source.id] ?? []).some((targetId) => getCountryOwner(state, targetId) && getCountryOwner(state, targetId) !== playerId);
+    if (!hasRivalNeighbor) continue;
+    const troopsByCountry = { ...mode.troopsByCountry, [source.id]: (Number(mode.troopsByCountry?.[source.id]) || 0) + remaining };
+    const preview = { ...state, missionMode: { ...mode, troopsByCountry } };
+    for (const attack of getLegalAttacks(preview, playerId).filter((item) => item.sourceId === source.id)) {
+      options.push({ ...attack, reinforcementAmount: remaining });
+    }
+  }
+  return options;
+}
+
 // Only the acting bot's mission and public territory ownership inform decisions.
 // Difficulty never changes the dice or reads another player's secret objective.
 export function chooseBotAttack(state, random = Math.random) {
   const player = getCurrentMissionPlayer(state);
   if (!player?.isBot || state.missionMode.finished) return null;
   const countries = allCountries(state);
-  const attacks = getLegalAttacks(state, player.id);
+  const attacks = botAttackOptions(state, player.id);
   if (!attacks.length) return null;
   const difficulty = state.missionMode.difficulty;
   if (difficulty === 'easy' || (difficulty === 'medium' && random() < .25)) {
@@ -49,11 +69,17 @@ export function chooseBotTarget(state, random = Math.random) {
 
 export function stepBotTurn(state, random = Math.random) {
   if (state.missionMode?.playStyle !== 'bots' || !getCurrentMissionPlayer(state)?.isBot || state.missionMode.finished) return state;
-  if (state.missionMode.activeBattle) return continueBattle(state, random);
+  if (state.missionMode.activeBattle) {
+    const next = continueBattle(state, random);
+    return next.missionMode.activeBattle ? next : advanceMissionTurn(next);
+  }
+  if (state.missionMode.actionUsed) return advanceMissionTurn(state);
   const attack = chooseBotAttack(state, random);
-  return attack
-    ? conquerTerritory(state, attack.targetId, attack.sourceId, attack.attackingTroops, random)
-    : advanceMissionTurn(state);
+  if (!attack) return advanceMissionTurn(state);
+  const prepared = attack.reinforcementAmount
+    ? mobilizeTroops(state, attack.sourceId, attack.reinforcementAmount)
+    : state;
+  return conquerTerritory(prepared, attack.targetId, attack.sourceId, attack.attackingTroops, random);
 }
 
 export function createBotRunner({ getState, commit, isPaused, schedule = setTimeout, cancel = clearTimeout }) {
