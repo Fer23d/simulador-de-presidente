@@ -93,7 +93,7 @@ import { AssetManager, DEFAULT_ASSETS, drawSkinPreview } from '../core/sprite_en
 import { createOnboarding, getBootTips, getStoryScenes, guessLanguage, MIN_BOOT_MS, onboardingText, ONBOARDING_KEY } from '../core/onboarding.js';
 import { bootScreenView, profileOnboardingView, storyOnboardingView } from './onboarding_ui.js';
 import { drawCoverArt } from '../core/cover_art.js';
-import { advanceMissionTurn, canAttackTerritory, conquerTerritory, exitMissionMatch, getCompetitivePlayer, getCompetitivePlayerColor, getCountryOwner, getCurrentMissionPlayer, getMissionProgress, getRegionLabel, revealMissionTurn, startMissionMatch } from '../core/mission_mode.js';
+import { advanceMissionTurn, canAttackTerritory, conquerTerritory, exitMissionMatch, fortifyTerritory, getCompetitivePlayer, getCompetitivePlayerColor, getCountryOwner, getCurrentMissionPlayer, getMissionProgress, getRegionLabel, mobilizeTroops, revealMissionTurn, startMissionMatch } from '../core/mission_mode.js';
 import { createBotRunner } from '../core/war_ai.js';
 import { applyWarSnapshot } from '../core/war_online.js';
 import { connectWarRoom, getRoomFromUrl } from './war_network.js';
@@ -2179,6 +2179,23 @@ export function mountDashboard(root) {
   if (invitedRoom) { savedBeforeOnline = state; state = createGameState('bra', state.playerProfile); }
   const bots = createBotRunner({ getState: () => state, commit: (next) => commit(next),
     isPaused: () => titleOpen || Boolean(onlineInfo) || document.hidden || !isWarPhase(state) });
+  const warClock = window.setInterval(() => {
+    const mode = state.missionMode;
+    if (!mode?.active || mode.finished || mode.handoffRequired || !mode.turnDeadline) return;
+    const remaining = Math.max(0, mode.turnDeadline - Date.now());
+    const display = root.querySelector('.war-turn-clock');
+    if (display) {
+      display.textContent = `TEMPO: ${Math.ceil(remaining / 1000)}s`;
+      display.classList.toggle('is-urgent', remaining <= 10_000);
+    }
+    if (remaining > 0) return;
+    if (onlineInfo) {
+      if (onlineInfo.host && onlineInfo.status === 'connected' && !onlineInfo.paused) onlineSession?.command('end-turn');
+      return;
+    }
+    commit(advanceMissionTurn(state));
+  }, 250);
+  window.addEventListener('pagehide', () => window.clearInterval(warClock), { once: true });
   document.addEventListener('visibilitychange', () => bots.sync());
   window.addEventListener('pagehide', () => { bots.stop(); onlineSession?.close(); });
 
@@ -3812,6 +3829,19 @@ export function mountDashboard(root) {
         if (getCurrentMissionPlayer(state)?.isBot) return;
         mapUi = { ...mapUi, missionVisible: false, selected: null };
         commit(advanceMissionTurn(state)); return;
+      }
+      if (action === 'war-mobilize') {
+        const amount = Number(root.querySelector('[data-war-troops]')?.value) || 1;
+        if (onlineInfo) { onlineSession?.command('mobilize', control.dataset.country, amount); return; }
+        mapUi = { ...mapUi, selected: control.dataset.country };
+        commit(mobilizeTroops(state, control.dataset.country, amount));
+        return;
+      }
+      if (action === 'war-fortify') {
+        if (onlineInfo) { onlineSession?.command('fortify', control.dataset.country); return; }
+        mapUi = { ...mapUi, selected: control.dataset.country };
+        commit(fortifyTerritory(state, control.dataset.country));
+        return;
       }
       if (action === 'mission-mode-reveal') {
         mapUi = { ...mapUi, missionVisible: false };

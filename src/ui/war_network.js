@@ -121,9 +121,9 @@ export async function connectWarRoom({ roomId, name, state, onUpdate, PeerClass 
   return {
     roomId, host,
     start() { if (!authority) return; try { authority.start(); broadcast(); } catch (error) { emit({ error: error.message }); } },
-    command(action, targetId) {
+    command(action, targetId, amount) {
       if (info.status !== 'connected' || info.pending || info.paused) return;
-      const message = { protocol: WAR_PROTOCOL, action, targetId, revision: info.revision };
+      const message = { protocol: WAR_PROTOCOL, action, targetId, amount, revision: info.revision };
       if (host) hostCommand('player-1', message);
       else if (guestConnection?.open) {
         emit({ pending: true, error: '' }); guestConnection.send(message);

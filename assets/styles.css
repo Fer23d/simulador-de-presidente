@@ -1242,4 +1242,11 @@ body.war-mode #app { max-width: none; padding: 0; }
 .war-network-error { color: #ff7e8d; border-left: 3px solid currentColor; padding-left: 12px; }
 .war-score li { gap: 8px; }
 .war-score li span { overflow-wrap: anywhere; min-width: 0; }
+.war-turn-clock { color: #35a7ff; font-size: 1.25rem; font-weight: 700; letter-spacing: .08em; }
+.war-turn-clock.is-urgent { color: #ff6577; animation: war-clock-pulse .7s steps(2, end) infinite; }
+.war-reinforcement-copy { border: 1px solid var(--war-line); padding: 9px; }
+.war-mobilize { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 12px; }
+.war-mobilize select { width: 100%; }
+.war-troop-badge { fill: #fff2c5; font: 700 9px sans-serif; paint-order: stroke; stroke: #17232b; stroke-width: 3px; pointer-events: none; text-anchor: middle; dominant-baseline: central; }
+@keyframes war-clock-pulse { to { opacity: .55; } }
 .war-turn-status { min-height: 2.5em; }

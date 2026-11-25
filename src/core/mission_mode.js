@@ -5,6 +5,7 @@ import { WAR_COUNTRY_IDS } from '../data/war_countries.js';
 
 export const MAX_MISSION_PLAYERS = 6;
 export const MIN_MISSION_PLAYERS = 2;
+export const reinforcementsPerTurn = (playerCount) => Math.max(3, 8 - Math.max(MIN_MISSION_PLAYERS, Math.min(MAX_MISSION_PLAYERS, Number(playerCount) || MIN_MISSION_PLAYERS)));
 
 export const COMPETITIVE_COLORS = Object.freeze([
   '#39ff14',
@@ -84,6 +85,13 @@ const EMPTY_MODE = Object.freeze({
   eliminatedBy: {},
   playStyle: 'local',
   difficulty: 'medium',
+  turnLimitSeconds: 60,
+  troopsPerTurn: 3,
+  troopsByCountry: {},
+  fortifiedCountries: {},
+  initialTroopsPerPlayer: 5,
+  mobilizedThisTurn: 0,
+  turnDeadline: null,
 });
 
 function clamp(value, minimum, maximum) {
@@ -268,6 +276,13 @@ export function normalizeMissionMode(value) {
     active: true,
     playStyle: ['bots', 'online'].includes(value.playStyle) ? value.playStyle : 'local',
     difficulty: ['easy', 'hard'].includes(value.difficulty) ? value.difficulty : 'medium',
+    turnLimitSeconds: 60,
+    troopsPerTurn: reinforcementsPerTurn(players.length),
+    troopsByCountry: value.troopsByCountry && typeof value.troopsByCountry === 'object' ? { ...value.troopsByCountry } : {},
+    fortifiedCountries: value.fortifiedCountries && typeof value.fortifiedCountries === 'object' ? { ...value.fortifiedCountries } : {},
+    initialTroopsPerPlayer: 5,
+    mobilizedThisTurn: Math.max(0, Math.min(reinforcementsPerTurn(players.length), Math.floor(Number(value.mobilizedThisTurn) || 0))),
+    turnDeadline: Number.isFinite(Number(value.turnDeadline)) ? Number(value.turnDeadline) : null,
     territoryIds: Array.isArray(value.territoryIds)
       ? [...new Set(value.territoryIds.filter((id) => typeof id === 'string' && /^[a-z]{3}$/.test(id)))]
       : null,
@@ -299,7 +314,13 @@ export function startMissionMatch(state, playerCount = 2, playerNames = [], rand
   const playStyle = ['bots', 'online'].includes(options.playStyle) ? options.playStyle : 'local';
   const difficulty = ['easy', 'hard'].includes(options.difficulty) ? options.difficulty : 'medium';
   const playersBase = ids.map((id, index) => ({ id, name: names[index], color: COMPETITIVE_COLORS[index], homeCountryId: firstHomes[index].id, mission: null, isBot: playStyle === 'bots' && index > 0 }));
-  const modeBase = { ...createMissionMode(), playStyle, difficulty, territoryIds: countries.map((country) => country.id), active: true, players: playersBase, currentPlayerId: ids[0], turnNumber: 1, handoffRequired: playStyle === 'local' };
+  const troopsByCountry = {};
+  for (const playerId of ids) {
+    const holdings = countries.filter((country) => ownerByCountry.get(country.id) === playerId);
+    const placements = shuffled(holdings, random).slice(0, Math.min(5, holdings.length));
+    placements.forEach((country) => { troopsByCountry[country.id] = 1; });
+  }
+  const modeBase = { ...createMissionMode(), playStyle, difficulty, troopsPerTurn: reinforcementsPerTurn(count), troopsByCountry, turnDeadline: Date.now() + 60_000, territoryIds: countries.map((country) => country.id), active: true, players: playersBase, currentPlayerId: ids[0], turnNumber: 1, handoffRequired: playStyle === 'local' };
   const prepared = {
     ...state,
     country: { ...state.country, ownerId: ownerByCountry.get(state.country.id) ?? null },
@@ -323,12 +344,35 @@ export function startMissionMatch(state, playerCount = 2, playerNames = [], rand
 export function canAttackTerritory(state, targetId) {
   const mode = state?.missionMode;
   if (!mode?.active || mode.finished || mode.handoffRequired || mode.actionUsed) return { ok: false, reason: 'O jogador já agiu neste turno ou a partida está pausada.' };
+  if (mode.playStyle === 'online' && mode.turnDeadline && Date.now() >= mode.turnDeadline) return { ok: false, reason: 'O tempo acabou. O turno está sendo passado.' };
   const target = allCountries(state).find((country) => country.id === targetId);
   if (!target) return { ok: false, reason: 'Território não encontrado no mapa.' };
   const owner = getCountryOwner(state, targetId);
   if (!owner || owner === mode.currentPlayerId) return { ok: false, reason: 'Esse território já está sob seu controle.' };
   if (!territoriesOf(state, mode.currentPlayerId).length) return { ok: false, reason: 'Este jogador foi eliminado.' };
   return { ok: true, reason: 'Ataque autorizado.' };
+}
+
+export function mobilizeTroops(state, countryId, amount = 1) {
+  const mode = state?.missionMode;
+  const playerId = mode?.currentPlayerId;
+  const country = allCountries(state).find((item) => item.id === countryId);
+  const count = Math.floor(Number(amount));
+  if (!mode?.active || mode.finished || mode.handoffRequired || mode.actionUsed || !country || getCountryOwner(state, countryId) !== playerId) return { ...state, notice: 'Só é possível mobilizar reforços no seu turno, antes de atacar.' };
+  if (!Number.isInteger(count) || count < 1 || count > mode.troopsPerTurn || mode.mobilizedThisTurn + count > mode.troopsPerTurn) return { ...state, notice: `Você pode mobilizar até ${mode.troopsPerTurn} tropas por turno.` };
+  const troopsByCountry = { ...mode.troopsByCountry, [countryId]: (mode.troopsByCountry[countryId] ?? 0) + count };
+  return { ...state, missionMode: { ...mode, troopsByCountry, mobilizedThisTurn: mode.mobilizedThisTurn + count }, notice: `${count} tropa(s) mobilizada(s) em ${country.name ?? country.nome}.` };
+}
+
+export function fortifyTerritory(state, countryId) {
+  const mode = state?.missionMode;
+  const country = allCountries(state).find((item) => item.id === countryId);
+  if (!mode?.active || mode.finished || mode.handoffRequired || mode.actionUsed || !country || getCountryOwner(state, countryId) !== mode.currentPlayerId) {
+    return { ...state, notice: 'Só é possível fortificar um território seu durante seu turno.' };
+  }
+  if (mode.fortifiedCountries?.[countryId]) return { ...state, notice: 'Este território já está fortificado.' };
+  if (mode.mobilizedThisTurn + 2 > mode.troopsPerTurn) return { ...state, notice: 'São necessários 2 reforços disponíveis para fortificar.' };
+  return { ...state, missionMode: { ...mode, fortifiedCountries: { ...mode.fortifiedCountries, [countryId]: true }, mobilizedThisTurn: mode.mobilizedThisTurn + 2 }, notice: `${country.name ?? country.nome} fortificado: +1 na defesa até ser conquistado.` };
 }
 
 export function conquerTerritory(state, targetId, random = Math.random) {
@@ -340,17 +384,25 @@ export function conquerTerritory(state, targetId, random = Math.random) {
   // Um dado por ofensiva, com as mesmas chances para todos os territórios.
   // A ordem invertida mantém random=0 como sucesso nos testes determinísticos.
   const roll = 6 - randomIndex(random, 6);
-  const won = roll >= 4;
-  const lastBattle = { targetId, attackerId, roll, won };
+  const stationed = Math.max(0, Number(mode.troopsByCountry?.[targetId]) || 0);
+  const fortified = Boolean(mode.fortifiedCountries?.[targetId]);
+  const defenseBonus = Math.min(2, Math.floor(stationed / 2)) + Number(fortified);
+  const won = roll + defenseBonus >= 4;
+  const lastBattle = { targetId, attackerId, roll, won, defenseTroops: stationed, fortified, defenseBonus };
   const targetName = target.name ?? target.nome;
   if (!won) {
     return { ...state, missionMode: { ...mode, actionUsed: true, lastBattle }, notice: `Dado ${roll}: ataque repelido em ${targetName}. Encerre seu turno.` };
   }
   const previousOwner = getCountryOwner(state, targetId);
   const contacts = state.geopolitics.contacts.map((country) => country.id === targetId ? { ...country, ownerId: attackerId } : country);
+  const troopsByCountry = { ...mode.troopsByCountry };
+  delete troopsByCountry[targetId];
+  const fortifiedCountries = { ...mode.fortifiedCountries };
+  delete fortifiedCountries[targetId];
   let next = { ...state, country: state.country.id === targetId ? { ...state.country, ownerId: attackerId } : state.country,
-    geopolitics: { ...state.geopolitics, contacts }, world: contacts, missionMode: { ...mode, actionUsed: true, lastBattle },
-    notice: `Dado ${roll}: ${targetName} conquistado por ${getCompetitivePlayer(mode, attackerId)?.name ?? attackerId}.` };
+    geopolitics: { ...state.geopolitics, contacts }, world: contacts,
+    missionMode: { ...mode, troopsByCountry, fortifiedCountries, actionUsed: true, lastBattle },
+    notice: `Dado ${roll} + defesa (${stationed} tropas): ${targetName} conquistado por ${getCompetitivePlayer(mode, attackerId)?.name ?? attackerId}.` };
   if (!territoryCounts(next)[previousOwner]) next = { ...next, missionMode: { ...next.missionMode,
     eliminatedBy: { ...mode.eliminatedBy, [previousOwner]: attackerId } } };
   return checkCompetitiveVictory(next, attackerId);
@@ -358,7 +410,7 @@ export function conquerTerritory(state, targetId, random = Math.random) {
 
 export function revealMissionTurn(state) {
   if (!state?.missionMode?.active || !state.missionMode.handoffRequired) return state;
-  return { ...state, missionMode: { ...state.missionMode, handoffRequired: false }, notice: `${getCompetitivePlayer(state.missionMode, state.missionMode.currentPlayerId)?.name ?? 'Jogador'}, seu turno começou.` };
+  return { ...state, missionMode: { ...state.missionMode, handoffRequired: false, turnDeadline: Date.now() + state.missionMode.turnLimitSeconds * 1000 }, notice: `${getCompetitivePlayer(state.missionMode, state.missionMode.currentPlayerId)?.name ?? 'Jogador'}, seu turno começou. Mobilize seus reforços e planeje antes do prazo.` };
 }
 
 export function advanceMissionTurn(state) {
@@ -371,10 +423,13 @@ export function advanceMissionTurn(state) {
   while (!counts[playerIds[nextIndex]] && nextIndex !== currentIndex) nextIndex = (nextIndex + 1) % playerIds.length;
   const nextPlayerId = playerIds[nextIndex];
   const nextTurn = nextIndex <= currentIndex ? mode.turnNumber + 1 : mode.turnNumber;
+  const reinforcements = Math.min(reinforcementsPerTurn(mode.players.length), counts[nextPlayerId] || 0);
+  const troopsByCountry = { ...mode.troopsByCountry };
+  const turnDeadline = Date.now() + mode.turnLimitSeconds * 1000;
   return {
     ...state,
-    missionMode: { ...mode, currentPlayerId: nextPlayerId, turnNumber: nextTurn, actionUsed: false, handoffRequired: !mode.playStyle || mode.playStyle === 'local' },
-    notice: `Turno de ${getCompetitivePlayer(mode, nextPlayerId)?.name ?? nextPlayerId}.`,
+    missionMode: { ...mode, currentPlayerId: nextPlayerId, turnNumber: nextTurn, actionUsed: false, handoffRequired: !mode.playStyle || mode.playStyle === 'local', mobilizedThisTurn: 0, turnDeadline, troopsByCountry },
+    notice: `Turno de ${getCompetitivePlayer(mode, nextPlayerId)?.name ?? nextPlayerId}. ${reinforcements} reforços disponíveis para posicionar.`,
   };
 }
 

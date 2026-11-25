@@ -1,4 +1,4 @@
-import { allCountries, startMissionMatch, canAttackTerritory, conquerTerritory, advanceMissionTurn } from './mission_mode.js';
+import { allCountries, startMissionMatch, canAttackTerritory, conquerTerritory, advanceMissionTurn, fortifyTerritory, mobilizeTroops } from './mission_mode.js';
 
 export const WAR_PROTOCOL = 1;
 const cleanName = (name) => String(name ?? '').trim().slice(0, 32) || 'Jogador';
@@ -55,6 +55,16 @@ export class WarRoom {
       const valid = canAttackTerritory(this.state, command.targetId);
       if (!valid.ok) throw new Error(valid.reason);
       this.state = conquerTerritory(this.state, command.targetId, this.random);
+    } else if (command.action === 'mobilize') {
+      const before = this.state.missionMode.mobilizedThisTurn;
+      const next = mobilizeTroops(this.state, command.targetId, command.amount);
+      if (next.missionMode.mobilizedThisTurn !== before + command.amount) throw new Error(next.notice);
+      this.state = next;
+    } else if (command.action === 'fortify') {
+      const before = this.state.missionMode.mobilizedThisTurn;
+      const next = fortifyTerritory(this.state, command.targetId);
+      if (next.missionMode.mobilizedThisTurn !== before + 2) throw new Error(next.notice);
+      this.state = next;
     } else if (command.action === 'end-turn') this.state = advanceMissionTurn(this.state);
     else throw new Error('Ação não reconhecida.');
     this.revision += 1;
@@ -70,6 +80,9 @@ export class WarRoom {
       mode: this.started ? {
         active: true, playStyle: 'online', difficulty: 'medium', territoryIds: [...mode.territoryIds],
         currentPlayerId: mode.currentPlayerId, turnNumber: mode.turnNumber, actionUsed: mode.actionUsed,
+        turnDeadline: mode.turnDeadline, turnLimitSeconds: mode.turnLimitSeconds, troopsPerTurn: mode.troopsPerTurn,
+        troopsByCountry: { ...mode.troopsByCountry }, mobilizedThisTurn: mode.mobilizedThisTurn,
+        fortifiedCountries: { ...mode.fortifiedCountries },
         handoffRequired: false, finished: mode.finished, winnerId: mode.winnerId,
         eliminatedBy: { ...mode.eliminatedBy }, lastBattle: mode.lastBattle && { ...mode.lastBattle },
         players: mode.players.map(({ id, name, color, homeCountryId, mission }) => ({ id, name, color, homeCountryId, isBot: false,

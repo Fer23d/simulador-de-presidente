@@ -47,13 +47,17 @@ function turnView(state, ui) {
   const battle = mode.lastBattle;
   const battleCountry = battle && allCountries(state).find((country) => country.id === battle.targetId);
   const winner = mode.finished && getCompetitivePlayer(mode, mode.winnerId);
+  const stationed = Number(mode.troopsByCountry?.[selected?.id]) || 0;
+  const isFortified = Boolean(mode.fortifiedCountries?.[selected?.id]);
+  const deadlineMs = mode.turnDeadline ? Math.max(0, mode.turnDeadline - Date.now()) : null;
   if (winner) return `<section class="war-panel war-victory"><p class="eyebrow">MISSÃO CUMPRIDA</p><h2>${escape(winner.name)} venceu!</h2><p>${escape(winner.mission.description)}</p><p>Vitória na rodada ${mode.turnNumber}.</p><button type="button" class="primary-action" data-action="war-new">JOGAR NOVAMENTE</button></section>`;
-  return `<section class="war-panel" style="--command-color:${escape(player.color)}"><p class="eyebrow">02 — TURNO ATUAL</p><h2>${escape(player.name)}</h2><p class="war-turn-status">${player.isBot ? 'IA ' + BOT_DIFFICULTIES[mode.difficulty].label + ': planejando a ofensiva…' : !mayPlay ? 'Aguarde seu turno ou a reconexão dos jogadores.' : mode.actionUsed ? 'Ofensiva concluída. Encerre seu turno.' : 'Selecione um território rival no mapa.'}</p>
+  return `<section class="war-panel" style="--command-color:${escape(player.color)}"><p class="eyebrow">02 — TURNO ATUAL</p><h2>${escape(player.name)}</h2><div class="war-turn-clock" data-turn-deadline="${mode.turnDeadline ?? ''}" data-turn-limit="${mode.turnLimitSeconds}">${deadlineMs === null ? 'TEMPO: 60s' : `TEMPO: ${Math.ceil(deadlineMs / 1000)}s`}</div><p class="war-reinforcement-copy">Reforços nesta rodada: <strong>${mode.troopsPerTurn - mode.mobilizedThisTurn} / ${mode.troopsPerTurn}</strong> · colocados: ${mode.mobilizedThisTurn}</p><p class="war-turn-status">${player.isBot ? 'IA ' + BOT_DIFFICULTIES[mode.difficulty].label + ': planejando a ofensiva…' : !mayPlay ? 'Aguarde seu turno ou a reconexão dos jogadores.' : mode.actionUsed ? 'Ofensiva concluída. Encerre seu turno.' : 'Selecione um território rival no mapa.'}</p>
     <button type="button" class="quiet-action war-secret-button" data-action="war-mission" aria-expanded="${Boolean(missionVisible)}">${missionVisible ? 'OCULTAR MISSÃO' : 'REVELAR MINHA MISSÃO'}</button>
     ${missionVisible ? `<div class="war-secret"><h3>${escape(viewer?.mission.title)}</h3><p>${escape(viewer?.mission.description)}</p><strong>${escape(progress.label)}</strong></div>` : '<p class="war-fine">Missão protegida. Revele apenas o seu objetivo.</p>'}
     <div class="war-target"><p class="eyebrow">TERRITÓRIO SELECIONADO</p><h3>${selected ? escape(nameOf(selected)) : 'Escolha seu alvo'}</h3><p>${owner ? `Comando: ${escape(owner.name)}` : 'Clique no mapa ou escolha um país na lista.'}</p>
       <button type="button" class="primary-action" data-action="competitive-attack" data-contact="${escape(selected?.id)}" ${attack?.ok && mayPlay ? '' : 'disabled'}>ROLAR DADO E ATACAR</button>
-      <p class="war-fine">${selected && !attack?.ok ? escape(attack?.reason) : '4, 5 ou 6: conquista. 1, 2 ou 3: defesa resiste.'}</p></div>
+      <p class="war-fine">${selected && !attack?.ok ? escape(attack?.reason) : `Defesa: ${stationed} tropas (+${Math.min(2,Math.floor(stationed/2))})${isFortified ? ' + fortificação (+1)' : ''}. Resultado 4 ou mais conquista.`}</p>
+      ${selected && getCountryOwner(state, selected.id) === viewer?.id && !mode.actionUsed && !player.isBot && (!ui.online || (ui.online.status === 'connected' && !ui.online.paused && !ui.online.pending)) ? `<div class="war-mobilize"><label class="war-field">Reforçar este território<select data-war-troops>${Array.from({length:Math.max(0,mode.troopsPerTurn-mode.mobilizedThisTurn)},(_,i)=>`<option value="${i+1}">${i+1} tropa(s)</option>`).join('')}</select></label><button class="quiet-action" data-action="war-mobilize" data-country="${escape(selected.id)}" ${mode.mobilizedThisTurn>=mode.troopsPerTurn?'disabled':''}>POSICIONAR REFORÇOS</button>${!isFortified ? `<button class="quiet-action" data-action="war-fortify" data-country="${escape(selected.id)}" ${mode.mobilizedThisTurn+2>mode.troopsPerTurn?'disabled':''}>FORTIFICAR · 2 REFORÇOS</button>` : '<p>FORTIFICAÇÃO ATIVA · +1 DEFESA</p>'}</div>` : ''}</div>
     ${battle ? `<div class="war-battle" role="status"><span class="war-die" aria-label="Dado ${battle.roll}">${['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][battle.roll] ?? battle.roll}</span><div><strong>${battle.won ? 'Território conquistado' : 'Ataque repelido'}</strong><p>${escape(nameOf(battleCountry))} · ${escape(getCompetitivePlayer(mode, battle.attackerId)?.name)}</p></div></div>` : ''}
     <button type="button" class="quiet-action war-end-turn" data-action="mission-mode-end-turn" ${mayPlay ? '' : 'disabled'}>${mode.actionUsed ? 'ENCERRAR TURNO →' : 'PASSAR A VEZ →'}</button>
     <ul class="war-score">${mode.players.map((item) => `<li style="--command-color:${escape(item.color)}" class="${item.id === player.id ? 'is-current' : ''}"><span><i></i>${escape(item.name)}</span><strong>${counts[item.id] || 'Eliminado'}</strong></li>`).join('')}</ul></section>`;
@@ -74,10 +78,13 @@ export function warScreenView(state, ui = {}) {
   const y = Math.max(0, Math.min(500 - height, (ui.cy ?? by + bh / 2) - height / 2));
   const shapes = countries.map((country) => {
     const owner = getCompetitivePlayer(mode, getCountryOwner(state, country.id));
-    const label = `${nameOf(country)}${owner ? ` — ${owner.name}` : ''}`;
+    const troops = Number(mode?.troopsByCountry?.[country.id]) || 0;
+    const fortified = Boolean(mode?.fortifiedCountries?.[country.id]);
+    const label = `${nameOf(country)}${owner ? ` — ${owner.name}` : ''}${troops ? ` · ${troops} tropas` : ''}${fortified ? ' · fortificado' : ''}`;
     const attributes = `class="war-country ${ui.selected === country.id ? 'is-selected' : ''}" style="fill:${escape(owner?.color ?? '#52666c')}" data-action="map-country" data-country="${country.id}" role="button" tabindex="0" aria-label="${escape(label)}"`;
-    return COUNTRY_PATHS[country.id] ? `<path d="${COUNTRY_PATHS[country.id]}" ${attributes}><title>${escape(label)}</title></path>`
-      : `<circle cx="${COUNTRY_POINTS[country.id][0]}" cy="${COUNTRY_POINTS[country.id][1]}" r="3" ${attributes}><title>${escape(label)}</title></circle>`;
+    const troopBadge = troops || fortified ? `<text class="war-troop-badge" x="${COUNTRY_POINTS[country.id]?.[0] ?? 0}" y="${COUNTRY_POINTS[country.id]?.[1] ?? 0}">${fortified ? 'F' : ''}${troops || ''}</text>` : '';
+    return COUNTRY_PATHS[country.id] ? `<path d="${COUNTRY_PATHS[country.id]}" ${attributes}><title>${escape(label)}</title></path>${troopBadge}`
+      : `<circle cx="${COUNTRY_POINTS[country.id][0]}" cy="${COUNTRY_POINTS[country.id][1]}" r="3" ${attributes}><title>${escape(label)}</title></circle>${troopBadge}`;
   }).join('');
   const player = getCurrentMissionPlayer(state);
   const locked = mode?.active && mode.handoffRequired && !mode.finished;
