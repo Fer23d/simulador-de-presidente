@@ -1191,6 +1191,8 @@ body.war-mode #app { max-width: none; padding: 0; }
 .war-country { stroke: #10212c; stroke-width: .6; vector-effect: non-scaling-stroke; fill-opacity: .76; cursor: pointer; transition: fill-opacity .12s; }
 .war-country:hover, .war-country:focus-visible { fill-opacity: 1; stroke: #fff; stroke-width: 1.6; outline: none; }
 .war-country.is-selected { fill-opacity: 1; stroke: #fff; stroke-width: 2.5; }
+.war-country.is-attack-source { stroke: #ffe36e; stroke-width: 2.8; filter: drop-shadow(0 0 5px #ffd24a); }
+.war-country.is-attackable { stroke: #ff7180; stroke-width: 2.2; filter: drop-shadow(0 0 4px #ff4058); animation: war-target-pulse 1s steps(2, end) infinite; }
 .war-land { fill: #1d303b; stroke: #2d4552; stroke-width: .4; }
 .war-map-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 12px 18px; font-size: 14px; color: var(--war-muted); border-top: 1px solid var(--war-line); }
 .war-rules { padding: 14px 18px; border-top: 1px solid var(--war-line); color: var(--war-muted); line-height: 1.6; }
@@ -1200,7 +1202,17 @@ body.war-mode #app { max-width: none; padding: 0; }
 .war-target { padding-top: 18px; margin-top: 18px; border-top: 1px solid var(--war-line); }
 .war-battle { display: flex; gap: 14px; align-items: center; margin: 14px 0; border: 1px solid var(--war-line); padding: 10px; }
 .war-battle p { margin: 4px 0; font-size: 14px; color: var(--war-muted); }
-.war-die { font: 48px/1 sans-serif; color: #f4dfb9; }
+.war-die { display: inline-block; font: 48px/1 sans-serif; color: #f4dfb9; animation: war-die-settle .55s cubic-bezier(.2,.75,.3,1); }
+.war-dice-pair { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
+.war-dice-pair > b { color: var(--war-muted); }
+.war-die-defense { color: #ff9ba6; }
+.war-dice-rolling { display: grid; justify-items: center; gap: 6px; margin: 14px 0; padding: 16px; border: 1px solid #e0aa58; color: #f4dfb9; text-align: center; }
+.war-dice-rolling span { display: block; font: 42px/1.2 sans-serif; letter-spacing: .12em; transform-origin: center; animation: war-dice-tumble .18s steps(2, end) infinite; }
+.war-dice-rolling strong { color: #e0aa58; letter-spacing: .12em; }
+.war-source-panel { margin: 12px 0; padding: 12px; border: 1px dashed #e0aa58; background: #e0aa580d; }
+.war-source-panel p { margin: 5px 0 9px; }
+.war-adjacent-targets { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.war-adjacent-targets button { text-align: left; }
 .war-battle-continuation { margin: 14px 0; padding: 14px; border: 1px solid #e0aa58; background: #e0aa5812; }
 .war-battle-continuation p { margin: 5px 0; }
 .war-battle-continuation .action-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
@@ -1252,4 +1264,7 @@ body.war-mode #app { max-width: none; padding: 0; }
 .war-mobilize select { width: 100%; }
 .war-troop-badge { fill: #fff2c5; font: 700 9px sans-serif; paint-order: stroke; stroke: #17232b; stroke-width: 3px; pointer-events: none; text-anchor: middle; dominant-baseline: central; }
 @keyframes war-clock-pulse { to { opacity: .55; } }
+@keyframes war-dice-tumble { 0% { transform: translateY(-5px) rotate(-18deg) scale(.92); } 50% { transform: translateY(3px) rotate(15deg) scale(1.06); } 100% { transform: translateY(-2px) rotate(-5deg) scale(1); } }
+@keyframes war-die-settle { 0% { transform: translateY(-16px) rotate(-40deg) scale(.7); filter: blur(2px); } 60% { transform: translateY(4px) rotate(12deg) scale(1.1); filter: blur(0); } 100% { transform: translateY(0) rotate(0) scale(1); } }
+@keyframes war-target-pulse { 50% { stroke: #ffd36a; fill-opacity: 1; } }
 .war-turn-status { min-height: 2.5em; }

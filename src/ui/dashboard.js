@@ -3784,6 +3784,22 @@ export function mountDashboard(root) {
     const control = event.target.closest('[data-action]');
     if (!control || control.disabled) return;
     const { action } = control.dataset;
+    if (isWarPhase(state) && mapUi.rolling) return;
+    const animateDice = (resolve) => {
+      mapUi = { ...mapUi, rolling: true };
+      render();
+      const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+      const spinTimer = window.setInterval(() => {
+        const dice = root.querySelector('[data-dice-faces]');
+        if (!dice) { window.clearInterval(spinTimer); return; }
+        dice.textContent = Array.from({ length: 3 }, () => faces[Math.floor(Math.random() * faces.length)]).join('　');
+      }, 70);
+      window.setTimeout(() => {
+        window.clearInterval(spinTimer);
+        mapUi = { ...mapUi, rolling: false };
+        resolve();
+      }, 720);
+    };
     if (isWarPhase(state)) {
       if (state.missionMode?.handoffRequired && !['mission-mode-reveal', 'war-menu', 'war-new'].includes(action)) return;
       if (action === 'war-menu') { bots.stop(); hadSave = true; titleOpen = true; titleView = 'main'; renderTitle(); return; }
@@ -3827,7 +3843,7 @@ export function mountDashboard(root) {
       if (action === 'mission-mode-end-turn') {
         if (onlineInfo) { onlineSession?.command('end-turn'); return; }
         if (getCurrentMissionPlayer(state)?.isBot) return;
-        mapUi = { ...mapUi, missionVisible: false, selected: null };
+        mapUi = { ...mapUi, missionVisible: false, selected: null, attackSourceId: null };
         commit(advanceMissionTurn(state)); return;
       }
       if (action === 'war-mobilize') {
@@ -3848,15 +3864,20 @@ export function mountDashboard(root) {
         commit(revealMissionTurn(state)); return;
       }
       if (action === 'competitive-attack') {
-        const sourceId = root.querySelector('[data-war-source]')?.value;
+        const sourceId = mapUi.attackSourceId ?? root.querySelector('[data-war-source]')?.value;
         const attackingTroops = Number(root.querySelector('[data-war-attack-troops]')?.value) || 1;
-        if (onlineInfo) { onlineSession?.command('attack', control.dataset.contact, attackingTroops, sourceId); return; }
-        if (!getCurrentMissionPlayer(state)?.isBot) commit(conquerTerritory(state, control.dataset.contact, sourceId, attackingTroops));
+        const targetId = control.dataset.contact;
+        animateDice(() => {
+          if (onlineInfo) { onlineSession?.command('attack', targetId, attackingTroops, sourceId); return; }
+          if (!getCurrentMissionPlayer(state)?.isBot) commit(conquerTerritory(state, targetId, sourceId, attackingTroops));
+        });
         return;
       }
       if (action === 'war-battle-continue') {
-        if (onlineInfo) { onlineSession?.command('continue-battle'); return; }
-        if (!getCurrentMissionPlayer(state)?.isBot) commit(continueBattle(state));
+        animateDice(() => {
+          if (onlineInfo) { onlineSession?.command('continue-battle'); return; }
+          if (!getCurrentMissionPlayer(state)?.isBot) commit(continueBattle(state));
+        });
         return;
       }
       if (action === 'war-battle-retreat') {
@@ -3864,6 +3885,8 @@ export function mountDashboard(root) {
         if (!getCurrentMissionPlayer(state)?.isBot) commit(retreatBattle(state));
         return;
       }
+      if (action === 'war-select-target') { mapUi = { ...mapUi, selected: control.dataset.country }; render(); return; }
+      if (action === 'war-source-clear') { mapUi = { ...mapUi, attackSourceId: null }; render(); return; }
       // O tabuleiro só aceita ações próprias; atalhos antigos não alteram a campanha.
       if (!['map-country', 'map-region', 'map-zoom'].includes(action)) return;
     }
@@ -3912,7 +3935,16 @@ export function mountDashboard(root) {
       return;
     }
     if (action === 'tab') { activeTab = control.dataset.tab; render(); return; }
-    if (action === 'map-country') { mapUi = { ...mapUi, selected: control.dataset.country }; render(); return; }
+    if (action === 'map-country') {
+      const countryId = control.dataset.country;
+      const humanId = onlineInfo?.playerId ?? (state.missionMode?.playStyle === 'bots' ? 'player-1' : state.missionMode?.currentPlayerId);
+      if (isWarPhase(state) && getCountryOwner(state, countryId) === humanId) {
+        mapUi = { ...mapUi, attackSourceId: countryId, selected: null };
+      } else {
+        mapUi = { ...mapUi, selected: countryId };
+      }
+      render(); return;
+    }
     if (action === 'map-region') { mapUi = { ...mapUi, region: control.dataset.region, zoom: 1, cx: undefined, cy: undefined }; render(); return; }
     if (action === 'map-zoom') {
       const dir = control.dataset.dir;
@@ -4128,15 +4160,16 @@ export function mountDashboard(root) {
         root.querySelectorAll('[data-war-name-row]').forEach((row) => { row.hidden = Number(row.dataset.warNameRow) >= (mapUi.setupMode === 'bots' ? 1 : count); });
       }
       if (event.target.matches('[data-war-source]')) {
-        const available = Math.max(1, (Number(state.missionMode?.troopsByCountry?.[event.target.value]) || 0) - 1);
-        const troopInput = root.querySelector('[data-war-attack-troops]');
-        if (troopInput) {
-          troopInput.max = String(available);
-          troopInput.value = String(Math.min(Number(troopInput.value) || 1, available));
-        }
+        mapUi = { ...mapUi, attackSourceId: event.target.value };
+        render();
+        return;
       }
       if (event.target.matches('[data-war-country]')) {
-        mapUi = { ...mapUi, selected: event.target.value || null };
+        const countryId = event.target.value || null;
+        const humanId = onlineInfo?.playerId ?? (state.missionMode?.playStyle === 'bots' ? 'player-1' : state.missionMode?.currentPlayerId);
+        mapUi = countryId && getCountryOwner(state, countryId) === humanId
+          ? { ...mapUi, attackSourceId: countryId, selected: null }
+          : { ...mapUi, selected: countryId };
         render();
       }
       return;

@@ -361,6 +361,14 @@ export function getAdjacentAttackOrigins(state, targetId, playerId = state?.miss
     country && getCountryOwner(state, country.id) === playerId && (Number(state.missionMode?.troopsByCountry?.[country.id]) || 0) >= 2);
 }
 
+export function getAdjacentAttackTargets(state, sourceId, playerId = state?.missionMode?.currentPlayerId) {
+  const sourceTroops = Number(state?.missionMode?.troopsByCountry?.[sourceId]) || 0;
+  if (sourceTroops < 2 || state?.missionMode?.activeBattle || getCountryOwner(state, sourceId) !== playerId) return [];
+  const countries = allCountries(state);
+  return (WAR_ADJACENCY[sourceId] ?? []).map((id) => countries.find((country) => country.id === id)).filter((country) =>
+    country && getCountryOwner(state, country.id) !== playerId);
+}
+
 export function getLegalAttacks(state, playerId = state?.missionMode?.currentPlayerId) {
   const countries = allCountries(state);
   return Object.entries(WAR_ADJACENCY).flatMap(([targetId, origins]) => origins.flatMap((sourceId) => {
