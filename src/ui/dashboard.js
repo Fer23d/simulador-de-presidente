@@ -3849,13 +3849,13 @@ export function mountDashboard(root) {
       if (action === 'war-mobilize') {
         const amount = Number(root.querySelector('[data-war-troops]')?.value) || 1;
         if (onlineInfo) { onlineSession?.command('mobilize', control.dataset.country, amount); return; }
-        mapUi = { ...mapUi, selected: control.dataset.country };
+        mapUi = { ...mapUi, selected: mapUi.attackSourceId === control.dataset.country ? null : control.dataset.country };
         commit(mobilizeTroops(state, control.dataset.country, amount));
         return;
       }
       if (action === 'war-fortify') {
         if (onlineInfo) { onlineSession?.command('fortify', control.dataset.country); return; }
-        mapUi = { ...mapUi, selected: control.dataset.country };
+        mapUi = { ...mapUi, selected: mapUi.attackSourceId === control.dataset.country ? null : control.dataset.country };
         commit(fortifyTerritory(state, control.dataset.country));
         return;
       }
