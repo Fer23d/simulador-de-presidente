@@ -1,4 +1,4 @@
-import { allCountries, getCountryRegion, getCurrentMissionPlayer, territoryCounts, conquerTerritory, advanceMissionTurn } from './mission_mode.js';
+import { allCountries, getCountryRegion, getCurrentMissionPlayer, territoryCounts, getLegalAttacks, conquerTerritory, advanceMissionTurn } from './mission_mode.js';
 
 export const BOT_DIFFICULTIES = Object.freeze({
   easy: { label: 'Fácil', description: 'Escolhe alvos aleatórios. Ideal para aprender.' },
@@ -9,18 +9,23 @@ const pick = (items, random) => items[Math.min(items.length - 1, Math.max(0, Mat
 
 // Only the acting bot's mission and public territory ownership inform decisions.
 // Difficulty never changes the dice or reads another player's secret objective.
-export function chooseBotTarget(state, random = Math.random) {
+export function chooseBotAttack(state, random = Math.random) {
   const player = getCurrentMissionPlayer(state);
   if (!player?.isBot || state.missionMode.finished) return null;
   const countries = allCountries(state);
-  const targets = countries.filter((country) => country.ownerId && country.ownerId !== player.id);
-  if (!targets.length) return null;
+  const attacks = getLegalAttacks(state, player.id);
+  if (!attacks.length) return null;
   const difficulty = state.missionMode.difficulty;
-  if (difficulty === 'easy' || (difficulty === 'medium' && random() < .25)) return pick(targets, random).id;
+  if (difficulty === 'easy' || (difficulty === 'medium' && random() < .25)) {
+    const attack = pick(attacks, random);
+    return { ...attack, attackingTroops: attack.maxTroops };
+  }
   const counts = territoryCounts(state);
   const mission = player.mission;
   const owned = countries.filter((country) => country.ownerId === player.id);
-  const score = (country) => {
+  const score = ({ targetId }) => {
+    const country = countries.find((item) => item.id === targetId);
+    if (!country) return -Infinity;
     let value = 0;
     if (['region', 'bridge'].includes(mission.kind) && getCountryRegion(country) === mission.regionId) value += 100;
     if (mission.kind === 'eliminate' && country.ownerId === mission.targetPlayerId) value += 100;
@@ -32,15 +37,22 @@ export function chooseBotTarget(state, random = Math.random) {
     }
     return value;
   };
-  const best = Math.max(...targets.map(score));
-  return pick(targets.filter((country) => score(country) === best), random).id;
+  const best = Math.max(...attacks.map(score));
+  const attack = pick(attacks.filter((item) => score(item) === best), random);
+  return { ...attack, attackingTroops: attack.maxTroops };
+}
+
+// Compatibilidade para chamadas antigas que só precisam identificar o alvo.
+export function chooseBotTarget(state, random = Math.random) {
+  return chooseBotAttack(state, random)?.targetId ?? null;
 }
 
 export function stepBotTurn(state, random = Math.random) {
   if (state.missionMode?.playStyle !== 'bots' || !getCurrentMissionPlayer(state)?.isBot || state.missionMode.finished) return state;
-  if (state.missionMode.actionUsed) return advanceMissionTurn(state);
-  const target = chooseBotTarget(state, random);
-  return target ? conquerTerritory(state, target, random) : advanceMissionTurn(state);
+  const attack = chooseBotAttack(state, random);
+  return attack
+    ? conquerTerritory(state, attack.targetId, attack.sourceId, attack.attackingTroops, random)
+    : advanceMissionTurn(state);
 }
 
 export function createBotRunner({ getState, commit, isPaused, schedule = setTimeout, cancel = clearTimeout }) {
@@ -54,7 +66,7 @@ export function createBotRunner({ getState, commit, isPaused, schedule = setTime
       timer = null;
       if (getState() === state && !isPaused()) commit(stepBotTurn(state));
       else sync();
-    }, state.missionMode.actionUsed ? 1100 : 800);
+    }, 800);
   }
   return { sync, stop };
 }

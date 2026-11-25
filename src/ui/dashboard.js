@@ -3848,8 +3848,10 @@ export function mountDashboard(root) {
         commit(revealMissionTurn(state)); return;
       }
       if (action === 'competitive-attack') {
-        if (onlineInfo) { onlineSession?.command('attack', control.dataset.contact); return; }
-        if (!getCurrentMissionPlayer(state)?.isBot) commit(conquerTerritory(state, control.dataset.contact));
+        const sourceId = root.querySelector('[data-war-source]')?.value;
+        const attackingTroops = Number(root.querySelector('[data-war-attack-troops]')?.value) || 1;
+        if (onlineInfo) { onlineSession?.command('attack', control.dataset.contact, attackingTroops, sourceId); return; }
+        if (!getCurrentMissionPlayer(state)?.isBot) commit(conquerTerritory(state, control.dataset.contact, sourceId, attackingTroops));
         return;
       }
       // O tabuleiro só aceita ações próprias; atalhos antigos não alteram a campanha.
@@ -4114,6 +4116,14 @@ export function mountDashboard(root) {
       if (event.target.matches('[data-war-count]')) {
         const count = Number(event.target.value);
         root.querySelectorAll('[data-war-name-row]').forEach((row) => { row.hidden = Number(row.dataset.warNameRow) >= (mapUi.setupMode === 'bots' ? 1 : count); });
+      }
+      if (event.target.matches('[data-war-source]')) {
+        const available = Math.max(1, (Number(state.missionMode?.troopsByCountry?.[event.target.value]) || 0) - 1);
+        const troopInput = root.querySelector('[data-war-attack-troops]');
+        if (troopInput) {
+          troopInput.max = String(available);
+          troopInput.value = String(Math.min(Number(troopInput.value) || 1, available));
+        }
       }
       if (event.target.matches('[data-war-country]')) {
         mapUi = { ...mapUi, selected: event.target.value || null };

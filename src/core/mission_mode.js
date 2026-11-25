@@ -2,6 +2,7 @@
 // no mesmo aparelho. O estado continua imutavel: cada acao devolve um novo
 // objeto e o mapa existente continua sendo a fonte visual dos territorios.
 import { WAR_COUNTRY_IDS } from '../data/war_countries.js';
+import { WAR_ADJACENCY } from '../data/war_adjacency.js';
 
 export const MAX_MISSION_PLAYERS = 6;
 export const MIN_MISSION_PLAYERS = 2;
@@ -341,14 +342,34 @@ export function startMissionMatch(state, playerCount = 2, playerNames = [], rand
   };
 }
 
-export function canAttackTerritory(state, targetId) {
+export function getAdjacentAttackOrigins(state, targetId, playerId = state?.missionMode?.currentPlayerId) {
+  const countries = allCountries(state);
+  return (WAR_ADJACENCY[targetId] ?? []).map((id) => countries.find((country) => country.id === id)).filter((country) =>
+    country && getCountryOwner(state, country.id) === playerId && (Number(state.missionMode?.troopsByCountry?.[country.id]) || 0) >= 2);
+}
+
+export function getLegalAttacks(state, playerId = state?.missionMode?.currentPlayerId) {
+  const countries = allCountries(state);
+  return Object.entries(WAR_ADJACENCY).flatMap(([targetId, origins]) => origins.flatMap((sourceId) => {
+    const source = countries.find((country) => country.id === sourceId);
+    if (!source || getCountryOwner(state, sourceId) !== playerId || getCountryOwner(state, targetId) === playerId) return [];
+    const available = Math.max(0, (Number(state.missionMode?.troopsByCountry?.[sourceId]) || 0) - 1);
+    return available ? [{ sourceId, targetId, maxTroops: available }] : [];
+  }));
+}
+
+export function canAttackTerritory(state, targetId, sourceId, attackingTroops = 1) {
   const mode = state?.missionMode;
-  if (!mode?.active || mode.finished || mode.handoffRequired || mode.actionUsed) return { ok: false, reason: 'O jogador já agiu neste turno ou a partida está pausada.' };
-  if (mode.playStyle === 'online' && mode.turnDeadline && Date.now() >= mode.turnDeadline) return { ok: false, reason: 'O tempo acabou. O turno está sendo passado.' };
+  if (!mode?.active || mode.finished || mode.handoffRequired) return { ok: false, reason: 'O turno está pausado ou a partida terminou.' };
+  if (mode.turnDeadline && Date.now() >= mode.turnDeadline) return { ok: false, reason: 'O tempo acabou. O turno está sendo passado.' };
   const target = allCountries(state).find((country) => country.id === targetId);
   if (!target) return { ok: false, reason: 'Território não encontrado no mapa.' };
   const owner = getCountryOwner(state, targetId);
   if (!owner || owner === mode.currentPlayerId) return { ok: false, reason: 'Esse território já está sob seu controle.' };
+  if (!(WAR_ADJACENCY[targetId] ?? []).includes(sourceId)) return { ok: false, reason: 'Só é possível atacar um país vizinho que faça fronteira com o território escolhido.' };
+  if (getCountryOwner(state, sourceId) !== mode.currentPlayerId) return { ok: false, reason: 'Escolha um território de origem que esteja sob seu controle.' };
+  const originTroops = Number(mode.troopsByCountry?.[sourceId]) || 0;
+  if (!Number.isInteger(attackingTroops) || attackingTroops < 1 || attackingTroops >= originTroops) return { ok: false, reason: 'Envie tropas disponíveis e deixe pelo menos 1 no território de origem.' };
   if (!territoriesOf(state, mode.currentPlayerId).length) return { ok: false, reason: 'Este jogador foi eliminado.' };
   return { ok: true, reason: 'Ataque autorizado.' };
 }
@@ -375,34 +396,49 @@ export function fortifyTerritory(state, countryId) {
   return { ...state, missionMode: { ...mode, fortifiedCountries: { ...mode.fortifiedCountries, [countryId]: true }, mobilizedThisTurn: mode.mobilizedThisTurn + 2 }, notice: `${country.name ?? country.nome} fortificado: +1 na defesa até ser conquistado.` };
 }
 
-export function conquerTerritory(state, targetId, random = Math.random) {
-  const status = canAttackTerritory(state, targetId);
+export function conquerTerritory(state, targetId, sourceId, attackingTroops = 1, random = Math.random) {
+  const status = canAttackTerritory(state, targetId, sourceId, attackingTroops);
   if (!status.ok) return { ...state, notice: status.reason };
   const mode = state.missionMode;
   const attackerId = mode.currentPlayerId;
   const target = allCountries(state).find((country) => country.id === targetId);
-  // Um dado por ofensiva, com as mesmas chances para todos os territórios.
-  // A ordem invertida mantém random=0 como sucesso nos testes determinísticos.
-  const roll = 6 - randomIndex(random, 6);
   const stationed = Math.max(0, Number(mode.troopsByCountry?.[targetId]) || 0);
   const fortified = Boolean(mode.fortifiedCountries?.[targetId]);
-  const defenseBonus = Math.min(2, Math.floor(stationed / 2)) + Number(fortified);
-  const won = roll + defenseBonus >= 4;
-  const lastBattle = { targetId, attackerId, roll, won, defenseTroops: stationed, fortified, defenseBonus };
+  const rollDice = (count) => Array.from({ length: count }, () => 6 - randomIndex(random, 6)).sort((a, b) => b - a);
+  const attackDice = rollDice(Math.min(3, attackingTroops));
+  const defenseDice = rollDice(Math.min(2, stationed)).map((die) => Math.min(6, die + Number(fortified))).sort((a, b) => b - a);
+  let attackerLosses = 0;
+  let defenderLosses = 0;
+  for (let index = 0; index < Math.min(attackDice.length, defenseDice.length); index += 1) {
+    // Empate favorece a defesa, como no sistema clássico de Risk.
+    if (attackDice[index] > defenseDice[index]) defenderLosses += 1;
+    else attackerLosses += 1;
+  }
+  const defendersRemaining = stationed - defenderLosses;
+  const won = defendersRemaining === 0;
+  const roll = attackDice[0];
+  const lastBattle = { targetId, sourceId, attackerId, roll, won, attackingTroops, attackDice, defenseDice,
+    attackerLosses, defenderLosses, defendersRemaining, defenseTroops: stationed, fortified };
   const targetName = target.name ?? target.nome;
   if (!won) {
-    return { ...state, missionMode: { ...mode, actionUsed: true, lastBattle }, notice: `Dado ${roll}: ataque repelido em ${targetName}. Encerre seu turno.` };
+    const troopsByCountry = { ...mode.troopsByCountry,
+      [sourceId]: Math.max(1, (Number(mode.troopsByCountry?.[sourceId]) || 1) - attackerLosses),
+      [targetId]: defendersRemaining };
+    const diceText = `ataque ${attackDice.join(',')} contra defesa ${defenseDice.join(',')}`;
+    return { ...state, missionMode: { ...mode, troopsByCountry, actionUsed: true, lastBattle },
+      notice: `Dados ${diceText}: ${targetName} resistiu. Perdas: ${attackerLosses} suas, ${defenderLosses} defensoras.` };
   }
   const previousOwner = getCountryOwner(state, targetId);
   const contacts = state.geopolitics.contacts.map((country) => country.id === targetId ? { ...country, ownerId: attackerId } : country);
   const troopsByCountry = { ...mode.troopsByCountry };
-  delete troopsByCountry[targetId];
+  troopsByCountry[sourceId] = Math.max(1, troopsByCountry[sourceId] - attackingTroops);
+  troopsByCountry[targetId] = attackingTroops - attackerLosses;
   const fortifiedCountries = { ...mode.fortifiedCountries };
   delete fortifiedCountries[targetId];
   let next = { ...state, country: state.country.id === targetId ? { ...state.country, ownerId: attackerId } : state.country,
     geopolitics: { ...state.geopolitics, contacts }, world: contacts,
     missionMode: { ...mode, troopsByCountry, fortifiedCountries, actionUsed: true, lastBattle },
-    notice: `Dado ${roll} + defesa (${stationed} tropas): ${targetName} conquistado por ${getCompetitivePlayer(mode, attackerId)?.name ?? attackerId}.` };
+    notice: `Dados de ataque ${attackDice.join(',')} contra ${defenseDice.join(',') || 'nenhum defensor'}: ${targetName} conquistado por ${getCompetitivePlayer(mode, attackerId)?.name ?? attackerId}.` };
   if (!territoryCounts(next)[previousOwner]) next = { ...next, missionMode: { ...next.missionMode,
     eliminatedBy: { ...mode.eliminatedBy, [previousOwner]: attackerId } } };
   return checkCompetitiveVictory(next, attackerId);

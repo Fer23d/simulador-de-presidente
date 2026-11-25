@@ -1,6 +1,6 @@
 import { allCountries, startMissionMatch, canAttackTerritory, conquerTerritory, advanceMissionTurn, fortifyTerritory, mobilizeTroops } from './mission_mode.js';
 
-export const WAR_PROTOCOL = 1;
+export const WAR_PROTOCOL = 2;
 const cleanName = (name) => String(name ?? '').trim().slice(0, 32) || 'Jogador';
 
 // The host keeps the canonical state. Tokens never leave this object; snapshots
@@ -52,9 +52,9 @@ export class WarRoom {
     if (this.state.missionMode.finished) throw new Error('Esta partida já terminou.');
     if (playerId !== this.state.missionMode.currentPlayerId) throw new Error('Aguarde seu turno.');
     if (command.action === 'attack') {
-      const valid = canAttackTerritory(this.state, command.targetId);
+      const valid = canAttackTerritory(this.state, command.targetId, command.sourceId, command.amount);
       if (!valid.ok) throw new Error(valid.reason);
-      this.state = conquerTerritory(this.state, command.targetId, this.random);
+      this.state = conquerTerritory(this.state, command.targetId, command.sourceId, command.amount, this.random);
     } else if (command.action === 'mobilize') {
       const before = this.state.missionMode.mobilizedThisTurn;
       const next = mobilizeTroops(this.state, command.targetId, command.amount);
