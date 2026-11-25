@@ -434,6 +434,8 @@ function resolveBattleRound(state, random) {
   const battle = mode.activeBattle;
   if (!battle) return state;
   const { sourceId, targetId, attackerId } = battle;
+  const target = allCountries(state).find((country) => country.id === targetId);
+  if (!target) return { ...state, notice: 'O território da batalha não está mais no tabuleiro.' };
   const attacking = battle.attackingRemaining;
   const defending = battle.defendersRemaining;
   const fortified = Boolean(mode.fortifiedCountries?.[targetId]);
