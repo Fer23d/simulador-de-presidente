@@ -1250,6 +1250,14 @@ body.war-mode #app { max-width: none; padding: 0; }
 
 /* WAR: multiplayer setup and session status. */
 .war-sidebar { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.war-tutorial-launch { width: 100%; margin-top: 8px; border-color: var(--accent); color: var(--accent); }
+.war-tutorial { border-color: var(--accent); background: linear-gradient(145deg, rgba(255, 166, 0, .09), rgba(5, 9, 11, .94) 58%); box-shadow: inset 3px 0 0 var(--accent), 0 12px 32px rgba(0, 0, 0, .2); }
+.war-tutorial h2 { margin: 4px 0 8px; font-size: clamp(1.15rem, 2vw, 1.55rem); }
+.war-tutorial > p:not(.eyebrow) { line-height: 1.55; }
+.war-tutorial .primary-action, .war-tutorial-skip { width: 100%; margin-top: 8px; }
+.war-tutorial-wait { color: var(--accent); font-size: .85rem; }
+.war-tutorial-target { outline: 2px solid #ffd36a; outline-offset: 3px; box-shadow: 0 0 0 5px rgba(255, 211, 106, .14), 0 0 18px rgba(255, 211, 106, .28); animation: war-tutorial-pulse 1.4s ease-in-out infinite alternate; }
+@keyframes war-tutorial-pulse { to { box-shadow: 0 0 0 8px rgba(255, 211, 106, .04), 0 0 24px rgba(255, 211, 106, .45); } }
 .war-setup select, .war-online input { width: 100%; max-width: 100%; }
 .war-online { border-color: #35a7ff; }
 .war-online h2 { font-size: 1.5rem; }
@@ -1260,6 +1268,9 @@ body.war-mode #app { max-width: none; padding: 0; }
 .war-turn-clock { color: #35a7ff; font-size: 1.25rem; font-weight: 700; letter-spacing: .08em; }
 .war-turn-clock.is-urgent { color: #ff6577; animation: war-clock-pulse .7s steps(2, end) infinite; }
 .war-reinforcement-copy { border: 1px solid var(--war-line); padding: 9px; }
+.war-reinforcement-panel { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--war-line); background: rgba(8, 15, 18, .72); }
+.war-reinforcement-panel > p { margin: 0; }
+.war-reinforcement-panel select { width: 100%; }
 .war-mobilize { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 12px; }
 .war-mobilize select { width: 100%; }
 .war-troop-badge { fill: #fff2c5; font: 700 9px sans-serif; paint-order: stroke; stroke: #17232b; stroke-width: 3px; pointer-events: none; text-anchor: middle; dominant-baseline: central; }

@@ -3833,24 +3833,52 @@ export function mountDashboard(root) {
         commit(startMissionMatch(state, count, names, Math.random, { playStyle, difficulty }));
         return;
       }
+      if (action === 'war-tutorial-start') {
+        const name = String(state.playerProfile?.name ?? '').trim() || 'Você';
+        mapUi = { region: 'world', zoom: 1, missionVisible: false, selected: null, attackSourceId: null, warTutorialStep: 0 };
+        commit(startMissionMatch(state, 2, [name, 'Instrutor IA'], Math.random, { playStyle: 'bots', difficulty: 'easy' }));
+        return;
+      }
+      if (action === 'war-tutorial-next') {
+        mapUi = { ...mapUi, warTutorialStep: Math.min(6, (Number(mapUi.warTutorialStep) || 0) + 1) };
+        render();
+        return;
+      }
+      if (action === 'war-tutorial-skip') {
+        const { warTutorialStep, ...nextUi } = mapUi;
+        mapUi = nextUi;
+        render();
+        return;
+      }
       if (action === 'war-new') {
         if (onlineInfo) { if (window.confirm('Sair da sala online? O criador deve manter a aba aberta durante a partida.')) { leaveOnline(); render(); } return; }
         if (state.missionMode?.active && !state.missionMode.finished && !window.confirm('Encerrar a partida de War atual e configurar outra?')) return;
         mapUi = { region: 'world', zoom: 1, selected: null, missionVisible: false };
         commit(exitMissionMatch(state)); return;
       }
-      if (action === 'war-mission') { mapUi = { ...mapUi, missionVisible: !mapUi.missionVisible }; render(); return; }
+      if (action === 'war-mission') {
+        const missionVisible = !mapUi.missionVisible;
+        mapUi = { ...mapUi, missionVisible, ...(mapUi.warTutorialStep === 1 && missionVisible ? { warTutorialStep: 2 } : {}) };
+        render(); return;
+      }
       if (action === 'mission-mode-end-turn') {
         if (onlineInfo) { onlineSession?.command('end-turn'); return; }
         if (getCurrentMissionPlayer(state)?.isBot) return;
-        mapUi = { ...mapUi, missionVisible: false, selected: null, attackSourceId: null };
+        const { warTutorialStep, ...nextUi } = mapUi;
+        mapUi = { ...nextUi, missionVisible: false, selected: null, attackSourceId: null };
         commit(advanceMissionTurn(state)); return;
       }
       if (action === 'war-mobilize') {
         const amount = Number(root.querySelector('[data-war-troops]')?.value) || 1;
-        if (onlineInfo) { onlineSession?.command('mobilize', control.dataset.country, amount); return; }
-        mapUi = { ...mapUi, selected: mapUi.attackSourceId === control.dataset.country ? null : control.dataset.country };
-        commit(mobilizeTroops(state, control.dataset.country, amount));
+        const countryId = root.querySelector('[data-war-reinforce-country]')?.value ?? control.dataset.country;
+        if (!countryId) return;
+        if (onlineInfo) { onlineSession?.command('mobilize', countryId, amount); return; }
+        mapUi = { ...mapUi, attackSourceId: countryId, selected: null };
+        const nextState = mobilizeTroops(state, countryId, amount);
+        if ((Number(nextState.missionMode?.mobilizedThisTurn) || 0) > (Number(state.missionMode?.mobilizedThisTurn) || 0) && mapUi.warTutorialStep === 3) {
+          mapUi = { ...mapUi, warTutorialStep: 4 };
+        }
+        commit(nextState);
         return;
       }
       if (action === 'war-fortify') {
@@ -3869,20 +3897,31 @@ export function mountDashboard(root) {
         const targetId = control.dataset.contact;
         animateDice(() => {
           if (onlineInfo) { onlineSession?.command('attack', targetId, attackingTroops, sourceId); return; }
-          if (!getCurrentMissionPlayer(state)?.isBot) commit(conquerTerritory(state, targetId, sourceId, attackingTroops));
+          if (!getCurrentMissionPlayer(state)?.isBot) {
+            if (mapUi.warTutorialStep === 4) mapUi = { ...mapUi, warTutorialStep: 5 };
+            commit(conquerTerritory(state, targetId, sourceId, attackingTroops));
+          }
         });
         return;
       }
       if (action === 'war-battle-continue') {
         animateDice(() => {
           if (onlineInfo) { onlineSession?.command('continue-battle'); return; }
-          if (!getCurrentMissionPlayer(state)?.isBot) commit(continueBattle(state));
+          if (!getCurrentMissionPlayer(state)?.isBot) {
+            const nextState = continueBattle(state);
+            if (!nextState.missionMode?.activeBattle && mapUi.warTutorialStep === 5) mapUi = { ...mapUi, warTutorialStep: 6 };
+            commit(nextState);
+          }
         });
         return;
       }
       if (action === 'war-battle-retreat') {
         if (onlineInfo) { onlineSession?.command('retreat-battle'); return; }
-        if (!getCurrentMissionPlayer(state)?.isBot) commit(retreatBattle(state));
+        if (!getCurrentMissionPlayer(state)?.isBot) {
+          const nextState = retreatBattle(state);
+          if (mapUi.warTutorialStep === 5) mapUi = { ...mapUi, warTutorialStep: 6 };
+          commit(nextState);
+        }
         return;
       }
       if (action === 'war-select-target') { mapUi = { ...mapUi, selected: control.dataset.country }; render(); return; }
@@ -3939,7 +3978,7 @@ export function mountDashboard(root) {
       const countryId = control.dataset.country;
       const humanId = onlineInfo?.playerId ?? (state.missionMode?.playStyle === 'bots' ? 'player-1' : state.missionMode?.currentPlayerId);
       if (isWarPhase(state) && getCountryOwner(state, countryId) === humanId) {
-        mapUi = { ...mapUi, attackSourceId: countryId, selected: null };
+        mapUi = { ...mapUi, attackSourceId: countryId, selected: null, ...(mapUi.warTutorialStep === 2 ? { warTutorialStep: 3 } : {}) };
       } else {
         mapUi = { ...mapUi, selected: countryId };
       }
