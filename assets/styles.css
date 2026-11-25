@@ -1201,6 +1201,9 @@ body.war-mode #app { max-width: none; padding: 0; }
 .war-battle { display: flex; gap: 14px; align-items: center; margin: 14px 0; border: 1px solid var(--war-line); padding: 10px; }
 .war-battle p { margin: 4px 0; font-size: 14px; color: var(--war-muted); }
 .war-die { font: 48px/1 sans-serif; color: #f4dfb9; }
+.war-battle-continuation { margin: 14px 0; padding: 14px; border: 1px solid #e0aa58; background: #e0aa5812; }
+.war-battle-continuation p { margin: 5px 0; }
+.war-battle-continuation .action-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .war-score { margin: 18px 0 0; padding: 0; list-style: none; }
 .war-score li { display: flex; justify-content: space-between; gap: 8px; padding: 9px 4px; border-bottom: 1px solid var(--war-line); }
 .war-score li.is-current { background: #223139; }

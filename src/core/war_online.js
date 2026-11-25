@@ -1,6 +1,6 @@
-import { allCountries, startMissionMatch, canAttackTerritory, conquerTerritory, advanceMissionTurn, fortifyTerritory, mobilizeTroops } from './mission_mode.js';
+import { allCountries, startMissionMatch, canAttackTerritory, conquerTerritory, continueBattle, retreatBattle, advanceMissionTurn, fortifyTerritory, mobilizeTroops } from './mission_mode.js';
 
-export const WAR_PROTOCOL = 2;
+export const WAR_PROTOCOL = 3;
 const cleanName = (name) => String(name ?? '').trim().slice(0, 32) || 'Jogador';
 
 // The host keeps the canonical state. Tokens never leave this object; snapshots
@@ -55,6 +55,14 @@ export class WarRoom {
       const valid = canAttackTerritory(this.state, command.targetId, command.sourceId, command.amount);
       if (!valid.ok) throw new Error(valid.reason);
       this.state = conquerTerritory(this.state, command.targetId, command.sourceId, command.amount, this.random);
+    } else if (command.action === 'continue-battle') {
+      const next = continueBattle(this.state, this.random);
+      if (!this.state.missionMode.activeBattle || next.missionMode.activeBattle === this.state.missionMode.activeBattle) throw new Error(next.notice || 'Não há batalha para continuar.');
+      this.state = next;
+    } else if (command.action === 'retreat-battle') {
+      const next = retreatBattle(this.state);
+      if (next === this.state) throw new Error('Não há batalha para recuar.');
+      this.state = next;
     } else if (command.action === 'mobilize') {
       const before = this.state.missionMode.mobilizedThisTurn;
       const next = mobilizeTroops(this.state, command.targetId, command.amount);
@@ -82,7 +90,7 @@ export class WarRoom {
         currentPlayerId: mode.currentPlayerId, turnNumber: mode.turnNumber, actionUsed: mode.actionUsed,
         turnDeadline: mode.turnDeadline, turnLimitSeconds: mode.turnLimitSeconds, troopsPerTurn: mode.troopsPerTurn,
         troopsByCountry: { ...mode.troopsByCountry }, mobilizedThisTurn: mode.mobilizedThisTurn,
-        fortifiedCountries: { ...mode.fortifiedCountries },
+        fortifiedCountries: { ...mode.fortifiedCountries }, activeBattle: mode.activeBattle && { ...mode.activeBattle },
         handoffRequired: false, finished: mode.finished, winnerId: mode.winnerId,
         eliminatedBy: { ...mode.eliminatedBy }, lastBattle: mode.lastBattle && { ...mode.lastBattle },
         players: mode.players.map(({ id, name, color, homeCountryId, mission }) => ({ id, name, color, homeCountryId, isBot: false,

@@ -1,4 +1,4 @@
-import { allCountries, getCountryRegion, getCurrentMissionPlayer, territoryCounts, getLegalAttacks, conquerTerritory, advanceMissionTurn } from './mission_mode.js';
+import { allCountries, getCountryRegion, getCurrentMissionPlayer, territoryCounts, getLegalAttacks, conquerTerritory, continueBattle, advanceMissionTurn } from './mission_mode.js';
 
 export const BOT_DIFFICULTIES = Object.freeze({
   easy: { label: 'Fácil', description: 'Escolhe alvos aleatórios. Ideal para aprender.' },
@@ -49,6 +49,7 @@ export function chooseBotTarget(state, random = Math.random) {
 
 export function stepBotTurn(state, random = Math.random) {
   if (state.missionMode?.playStyle !== 'bots' || !getCurrentMissionPlayer(state)?.isBot || state.missionMode.finished) return state;
+  if (state.missionMode.activeBattle) return continueBattle(state, random);
   const attack = chooseBotAttack(state, random);
   return attack
     ? conquerTerritory(state, attack.targetId, attack.sourceId, attack.attackingTroops, random)

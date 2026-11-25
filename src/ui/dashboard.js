@@ -93,7 +93,7 @@ import { AssetManager, DEFAULT_ASSETS, drawSkinPreview } from '../core/sprite_en
 import { createOnboarding, getBootTips, getStoryScenes, guessLanguage, MIN_BOOT_MS, onboardingText, ONBOARDING_KEY } from '../core/onboarding.js';
 import { bootScreenView, profileOnboardingView, storyOnboardingView } from './onboarding_ui.js';
 import { drawCoverArt } from '../core/cover_art.js';
-import { advanceMissionTurn, canAttackTerritory, conquerTerritory, exitMissionMatch, fortifyTerritory, getCompetitivePlayer, getCompetitivePlayerColor, getCountryOwner, getCurrentMissionPlayer, getMissionProgress, getRegionLabel, mobilizeTroops, revealMissionTurn, startMissionMatch } from '../core/mission_mode.js';
+import { advanceMissionTurn, canAttackTerritory, conquerTerritory, continueBattle, exitMissionMatch, fortifyTerritory, getCompetitivePlayer, getCompetitivePlayerColor, getCountryOwner, getCurrentMissionPlayer, getMissionProgress, getRegionLabel, mobilizeTroops, retreatBattle, revealMissionTurn, startMissionMatch } from '../core/mission_mode.js';
 import { createBotRunner } from '../core/war_ai.js';
 import { applyWarSnapshot } from '../core/war_online.js';
 import { connectWarRoom, getRoomFromUrl } from './war_network.js';
@@ -3852,6 +3852,16 @@ export function mountDashboard(root) {
         const attackingTroops = Number(root.querySelector('[data-war-attack-troops]')?.value) || 1;
         if (onlineInfo) { onlineSession?.command('attack', control.dataset.contact, attackingTroops, sourceId); return; }
         if (!getCurrentMissionPlayer(state)?.isBot) commit(conquerTerritory(state, control.dataset.contact, sourceId, attackingTroops));
+        return;
+      }
+      if (action === 'war-battle-continue') {
+        if (onlineInfo) { onlineSession?.command('continue-battle'); return; }
+        if (!getCurrentMissionPlayer(state)?.isBot) commit(continueBattle(state));
+        return;
+      }
+      if (action === 'war-battle-retreat') {
+        if (onlineInfo) { onlineSession?.command('retreat-battle'); return; }
+        if (!getCurrentMissionPlayer(state)?.isBot) commit(retreatBattle(state));
         return;
       }
       // O tabuleiro só aceita ações próprias; atalhos antigos não alteram a campanha.
