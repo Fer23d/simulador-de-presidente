@@ -136,7 +136,7 @@ export class WarRoom {
         troopsByCountry: { ...mode.troopsByCountry }, mobilizedThisTurn: mode.mobilizedThisTurn,
         fortifiedCountries: { ...mode.fortifiedCountries }, activeBattle: mode.activeBattle && { ...mode.activeBattle },
         handoffRequired: false, finished: mode.finished, winnerId: mode.winnerId,
-        eliminatedBy: { ...mode.eliminatedBy }, lastBattle: mode.lastBattle && { ...mode.lastBattle },
+        eliminatedBy: { ...mode.eliminatedBy }, history: [...(mode.history ?? [])], lastBattle: mode.lastBattle && { ...mode.lastBattle },
         players: mode.players.map(({ id, name, color, homeCountryId, mission, isBot }) => ({ id, name, color, homeCountryId, isBot: Boolean(isBot),
           mission: id === playerId || (mode.finished && id === mode.winnerId) ? { ...mission } : { kind: 'secret', title: 'Missão secreta', description: 'Conhecida apenas pelo jogador.' } })),
       } : null };

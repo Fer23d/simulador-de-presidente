@@ -1284,3 +1284,42 @@ body.war-mode #app { max-width: none; padding: 0; }
 .war-odds-main.is-bad strong { color: #ff8c8c; }
 .war-odds-round ul { margin: 6px 0 0; padding-left: 18px; }
 .war-odds-round b { color: #ffd166; margin-left: 4px; }
+
+/* War: seletor de dados, animacao dos dados e historico de jogadas. */
+.war-dice-field > span small { color: var(--war-muted, #9bb); font-size: 12px; }
+.war-dice-picker { display: flex; gap: 8px; margin-top: 6px; }
+.war-dice-pick { flex: 1; display: grid; justify-items: center; gap: 2px; padding: 8px 4px; font: 22px/1 sans-serif; color: #f4dfb9; background: rgba(6, 16, 14, .6); border: 1px solid var(--line); cursor: pointer; transition: transform .12s, border-color .12s, background .12s; }
+.war-dice-pick small { font: 11px/1.2 inherit; color: var(--war-muted, #9bb); }
+.war-dice-pick:hover { transform: translateY(-2px); border-color: #e0aa58; }
+.war-dice-pick.is-selected { border-color: #7dff9a; background: rgba(125, 255, 154, .12); box-shadow: 0 0 12px rgba(125, 255, 154, .25); }
+.war-dice-stage { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; width: 100%; margin: 12px 0; padding: 14px; font: inherit; color: #f4dfb9; text-align: left; background: rgba(6, 16, 14, .55); border: 1px dashed #e0aa58; cursor: pointer; }
+.war-dice-stage > b { display: none; }
+.war-dice-stage > strong { grid-column: 1 / -1; color: #e0aa58; letter-spacing: .08em; font-size: 13px; }
+.war-dice-stage > strong small { color: var(--war-muted, #9bb); font-weight: normal; letter-spacing: 0; }
+.war-stage-label { font-size: 12px; letter-spacing: .12em; color: var(--war-muted, #9bb); }
+.war-die.is-rolling { animation: war-die-spin .26s linear infinite; }
+.war-die.is-locked { animation: war-die-lock .3s ease-out; color: #f4dfb9; }
+.war-die-wrap .war-die.is-win { animation: war-die-win .8s ease-out calc(var(--i, 0) * 110ms) both; }
+.war-die-wrap .war-die.is-loss { animation: war-die-shake .5s ease-out calc(var(--i, 0) * 110ms) both; }
+.war-battle-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.war-battle-chips span { padding: 3px 8px; font-size: 13px; border: 1px solid var(--line); }
+.war-battle-chips .is-loss { color: #ff9ba6; border-color: rgba(255, 155, 166, .5); }
+.war-battle-chips .is-win { color: #7dff9a; border-color: rgba(125, 255, 154, .5); }
+@keyframes war-die-spin { 0% { transform: rotate(0) translateY(0); } 25% { transform: rotate(90deg) translateY(-7px); } 50% { transform: rotate(180deg) translateY(0); } 75% { transform: rotate(270deg) translateY(-4px); } 100% { transform: rotate(360deg) translateY(0); } }
+@keyframes war-die-lock { 0% { transform: scale(1.35); filter: brightness(1.6); } 100% { transform: scale(1); filter: none; } }
+@keyframes war-die-win { 0% { transform: scale(.9); } 40% { transform: scale(1.25); } 100% { transform: scale(1); } }
+@keyframes war-die-shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-6px); } 40% { transform: translateX(5px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
+.war-history { margin-top: 12px; border: 1px solid var(--line); background: rgba(6, 16, 14, .45); }
+.war-history header { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.war-history header span { color: var(--war-muted, #9bb); font-size: 12px; margin-right: auto; }
+.war-history ol { list-style: none; margin: 0; padding: 6px 12px 10px; max-height: 280px; overflow-y: auto; display: grid; gap: 4px; }
+.war-history li { display: grid; grid-template-columns: 34px 8px 1fr; gap: 8px; align-items: baseline; font-size: 13px; line-height: 1.45; }
+.war-history li i { width: 8px; height: 8px; border-radius: 50%; background: var(--command-color, #6f8a8f); align-self: center; }
+.war-history-turn { color: var(--war-muted, #9bb); font-size: 11px; }
+.war-history li.is-turn, .war-history li.is-timeout { opacity: .8; }
+.war-history li.is-conquest, .war-history li.is-victory { color: #7dff9a; }
+.war-history li.is-eliminate, .war-history li.is-retreat { color: #ff9ba6; }
+/* O resultado da batalha cabe na barra lateral: dados em cima, texto e chips embaixo. */
+.war-battle { flex-wrap: wrap; }
+.war-battle > div:last-child { flex: 1 1 100%; min-width: 0; }
+.war-dice-compare { flex-wrap: wrap; }
