@@ -3,6 +3,7 @@
 // objeto e o mapa existente continua sendo a fonte visual dos territorios.
 import { WAR_COUNTRY_IDS } from '../data/war_countries.js';
 import { WAR_ADJACENCY } from '../data/war_adjacency.js';
+import { clampDice } from './war_odds.js';
 
 export const MAX_MISSION_PLAYERS = 6;
 export const MIN_MISSION_PLAYERS = 2;
@@ -94,6 +95,7 @@ const EMPTY_MODE = Object.freeze({
   initialTroopsPerPlayer: 5,
   mobilizedThisTurn: 0,
   turnDeadline: null,
+  history: [],
 });
 
 function clamp(value, minimum, maximum) {
@@ -283,7 +285,8 @@ export function normalizeMissionMode(value) {
     && Number.isInteger(rawBattle.defendersRemaining) && rawBattle.defendersRemaining > 0
     ? { sourceId: rawBattle.sourceId, targetId: rawBattle.targetId, attackerId: rawBattle.attackerId,
       attackingRemaining: rawBattle.attackingRemaining, defendersRemaining: rawBattle.defendersRemaining,
-      round: Math.max(0, Math.floor(Number(rawBattle.round) || 0)) }
+      round: Math.max(0, Math.floor(Number(rawBattle.round) || 0)),
+      diceCount: [1, 2, 3].includes(Number(rawBattle.diceCount)) ? Number(rawBattle.diceCount) : null }
     : null;
   return {
     active: true,
@@ -309,10 +312,11 @@ export function normalizeMissionMode(value) {
     lastBattle: value.lastBattle && typeof value.lastBattle === 'object' ? { ...value.lastBattle } : null,
     activeBattle,
     eliminatedBy: value.eliminatedBy && typeof value.eliminatedBy === 'object' ? { ...value.eliminatedBy } : {},
+    history: seedHistory(normalizeHistory(value.history), value),
   };
 }
 
-export function startMissionMatch(state, playerCount = 2, playerNames = [], random = Math.random, options = {}) {
+function startMissionMatchCore(state, playerCount = 2, playerNames = [], random = Math.random, options = {}) {
   if (state?.missionMode?.active) return state;
   const count = clamp(Math.floor(Number(playerCount) || 0), MIN_MISSION_PLAYERS, MAX_MISSION_PLAYERS);
   if (state?.is_wasteland || state?.city) return { ...state, notice: 'O modo de missões usa o mapa geopolítico antes do Wasteland.' };
@@ -396,7 +400,7 @@ export function canAttackTerritory(state, targetId, sourceId, attackingTroops = 
   return { ok: true, reason: 'Ataque autorizado.' };
 }
 
-export function mobilizeTroops(state, countryId, amount = 1) {
+function mobilizeTroopsCore(state, countryId, amount = 1) {
   const mode = state?.missionMode;
   const playerId = mode?.currentPlayerId;
   const country = allCountries(state).find((item) => item.id === countryId);
@@ -407,7 +411,7 @@ export function mobilizeTroops(state, countryId, amount = 1) {
   return { ...state, missionMode: { ...mode, troopsByCountry, mobilizedThisTurn: mode.mobilizedThisTurn + count }, notice: `${count} tropa(s) mobilizada(s) em ${country.name ?? country.nome}.` };
 }
 
-export function fortifyTerritory(state, countryId) {
+function fortifyTerritoryCore(state, countryId) {
   const mode = state?.missionMode;
   const country = allCountries(state).find((item) => item.id === countryId);
   if (!mode?.active || mode.finished || mode.handoffRequired || mode.activeBattle || mode.actionUsed || !country || getCountryOwner(state, countryId) !== mode.currentPlayerId) {
@@ -415,10 +419,11 @@ export function fortifyTerritory(state, countryId) {
   }
   if (mode.fortifiedCountries?.[countryId]) return { ...state, notice: 'Este território já está fortificado.' };
   if (mode.mobilizedThisTurn + 2 > mode.troopsPerTurn) return { ...state, notice: 'São necessários 2 reforços disponíveis para fortificar.' };
-  return { ...state, missionMode: { ...mode, fortifiedCountries: { ...mode.fortifiedCountries, [countryId]: true }, mobilizedThisTurn: mode.mobilizedThisTurn + 2 }, notice: `${country.name ?? country.nome} fortificado: +1 na defesa até ser conquistado.` };
+  return { ...state, missionMode: { ...mode, fortifiedCountries: { ...mode.fortifiedCountries, [countryId]: true }, mobilizedThisTurn: mode.mobilizedThisTurn + 2 }, notice: `${country.name ?? country.nome} fortificado: +1 no melhor dado da defesa até ser conquistado.` };
 }
 
-export function conquerTerritory(state, targetId, sourceId, attackingTroops = 1, random = Math.random) {
+// diceCount (1 a 3): quantos dados o atacante rola em cada rodada (padrao: o maximo possivel).
+export function conquerTerritory(state, targetId, sourceId, attackingTroops = 1, random = Math.random, diceCount = null) {
   const status = canAttackTerritory(state, targetId, sourceId, attackingTroops);
   if (!status.ok) return { ...state, notice: status.reason };
   const mode = state.missionMode;
@@ -426,10 +431,10 @@ export function conquerTerritory(state, targetId, sourceId, attackingTroops = 1,
   const stationed = Math.max(0, Number(mode.troopsByCountry?.[targetId]) || 0);
   const troopsByCountry = { ...mode.troopsByCountry, [sourceId]: mode.troopsByCountry[sourceId] - attackingTroops };
   return resolveBattleRound({ ...state, missionMode: { ...mode, troopsByCountry,
-    activeBattle: { sourceId, targetId, attackerId, attackingRemaining: attackingTroops, defendersRemaining: stationed, round: 0 } } }, random);
+    activeBattle: { sourceId, targetId, attackerId, attackingRemaining: attackingTroops, defendersRemaining: stationed, round: 0, diceCount: [1, 2, 3].includes(Number(diceCount)) ? Number(diceCount) : null } } }, random);
 }
 
-function resolveBattleRound(state, random) {
+function resolveBattleRoundCore(state, random) {
   const mode = state.missionMode;
   const battle = mode.activeBattle;
   if (!battle) return state;
@@ -440,8 +445,10 @@ function resolveBattleRound(state, random) {
   const defending = battle.defendersRemaining;
   const fortified = Boolean(mode.fortifiedCountries?.[targetId]);
   const rollDice = (count) => Array.from({ length: count }, () => 6 - randomIndex(random, 6)).sort((a, b) => b - a);
-  const attackDice = rollDice(Math.min(3, attacking));
-  const defenseDice = rollDice(Math.min(2, defending)).map((die) => Math.min(6, die + Number(fortified))).sort((a, b) => b - a);
+  const attackDice = rollDice(clampDice(battle.diceCount, attacking));
+  // Fortificacao: +1 apenas no melhor dado da defesa (rollDice ja devolve em ordem decrescente).
+  const rolledDefense = rollDice(Math.min(2, defending));
+  const defenseDice = rolledDefense.map((die, index) => (index === 0 ? Math.min(6, die + Number(fortified)) : die)).sort((a, b) => b - a);
   let attackerLosses = 0;
   let defenderLosses = 0;
   for (let index = 0; index < Math.min(attackDice.length, defenseDice.length); index += 1) {
@@ -455,7 +462,7 @@ function resolveBattleRound(state, random) {
   const defeated = attackersRemaining === 0;
   const roll = attackDice[0];
   const lastBattle = { targetId, sourceId, attackerId, roll, won, defeated, round: battle.round + 1,
-    attackingTroops: attacking, attackDice, defenseDice, attackerLosses, defenderLosses,
+    attackingTroops: attacking, attackDice, defenseDice, fortifyFrom: fortified && rolledDefense.length ? rolledDefense[0] : null, attackerLosses, defenderLosses,
     attackersRemaining, defendersRemaining, defenseTroops: defending, fortified };
   const targetName = target.name ?? target.nome;
   if (!won && !defeated) {
@@ -487,15 +494,16 @@ function resolveBattleRound(state, random) {
   return checkCompetitiveVictory(next, attackerId);
 }
 
-export function continueBattle(state, random = Math.random) {
+export function continueBattle(state, random = Math.random, diceCount = null) {
   const mode = state?.missionMode;
   if (!mode?.active || mode.finished || mode.handoffRequired || !mode.activeBattle) return state;
   if (mode.activeBattle.attackerId !== mode.currentPlayerId) return { ...state, notice: 'Esta batalha não pertence ao jogador do turno.' };
   if (mode.turnDeadline && Date.now() >= mode.turnDeadline) return { ...state, notice: 'O tempo acabou. Recue para encerrar a batalha.' };
-  return resolveBattleRound(state, random);
+  const chosen = [1, 2, 3].includes(Number(diceCount)) ? Number(diceCount) : mode.activeBattle.diceCount;
+  return resolveBattleRound({ ...state, missionMode: { ...mode, activeBattle: { ...mode.activeBattle, diceCount: chosen } } }, random);
 }
 
-export function retreatBattle(state) {
+function retreatBattleCore(state) {
   const mode = state?.missionMode;
   const battle = mode?.activeBattle;
   if (!mode?.active || mode.finished || mode.handoffRequired || !battle || battle.attackerId !== mode.currentPlayerId) return state;
@@ -505,12 +513,35 @@ export function retreatBattle(state) {
     notice: `Ofensiva interrompida. ${battle.attackingRemaining} tropa(s) sobrevivente(s) recuaram para o território de origem.` };
 }
 
+// O cronometro estourou: passa o turno (recuando uma batalha em andamento) e avisa de quem era o tempo.
+export function expireMissionTurn(state) {
+  const mode = state?.missionMode;
+  if (!mode?.active || mode.finished || mode.handoffRequired) return state;
+  const name = getCompetitivePlayer(mode, mode.currentPlayerId)?.name ?? 'Jogador';
+  const next = advanceMissionTurn(logMissionEvent(state, 'timeout', `O tempo de ${name} acabou: a vez foi passada.`));
+  return next === state ? state : { ...next, notice: `O tempo de ${name} acabou. ${next.notice}` };
+}
+
+// Um turno salvo guarda um horario absoluto; ao carregar o jogo o relogio recomeca (senao o turno passaria sozinho).
+export function renewMissionDeadline(state, now = Date.now()) {
+  const mode = state?.missionMode;
+  if (!mode?.active || mode.finished || mode.handoffRequired || !mode.turnDeadline) return state;
+  return { ...state, missionMode: { ...mode, turnDeadline: now + mode.turnLimitSeconds * 1000 } };
+}
+
+// Adia o prazo pelo tempo em que o jogo ficou parado (menu aberto, aba escondida, sala pausada).
+export function extendMissionDeadline(state, elapsedMs) {
+  const mode = state?.missionMode;
+  if (!mode?.active || mode.finished || mode.handoffRequired || !mode.turnDeadline || !(elapsedMs > 0)) return state;
+  return { ...state, missionMode: { ...mode, turnDeadline: mode.turnDeadline + elapsedMs } };
+}
+
 export function revealMissionTurn(state) {
   if (!state?.missionMode?.active || !state.missionMode.handoffRequired) return state;
   return { ...state, missionMode: { ...state.missionMode, handoffRequired: false, turnDeadline: Date.now() + state.missionMode.turnLimitSeconds * 1000 }, notice: `${getCompetitivePlayer(state.missionMode, state.missionMode.currentPlayerId)?.name ?? 'Jogador'}, seu turno começou. Mobilize seus reforços e planeje antes do prazo.` };
 }
 
-export function advanceMissionTurn(state) {
+function advanceMissionTurnCore(state) {
   let currentState = state;
   let mode = currentState?.missionMode;
   if (!mode?.active || mode.finished || mode.handoffRequired) return state;
@@ -543,4 +574,89 @@ export function exitMissionMatch(state) {
 
 export function listMissionCatalog() {
   return MISSION_CATALOG.map((mission) => ({ ...mission }));
+}
+
+
+// ---------- Historico de jogadas ----------
+// Registro publico (resultados de batalhas, reforcos, trocas de turno): nada aqui revela missoes secretas.
+export const HISTORY_LIMIT = 80;
+const HISTORY_TYPES = new Set(['info', 'battle', 'conquest', 'retreat', 'reinforce', 'fortify', 'turn', 'timeout', 'eliminate', 'victory']);
+
+// Save de uma partida em andamento sem historico: o painel nao fica vazio, o registro comeca neste ponto.
+function seedHistory(list, value) {
+  if (list.length || !value?.active) return list;
+  const turn = Math.max(1, Math.floor(Number(value.turnNumber) || 1));
+  return [{ turn, type: 'info', playerId: null, text: 'Histórico iniciado neste ponto da partida. As próximas jogadas aparecem aqui.' }];
+}
+
+export function normalizeHistory(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item) => item && typeof item.text === 'string' && item.text)
+    .map((item) => ({ turn: Math.max(1, Math.floor(Number(item.turn) || 1)), type: HISTORY_TYPES.has(item.type) ? item.type : 'info', playerId: typeof item.playerId === 'string' ? item.playerId.slice(0, 20) : null, text: item.text.slice(0, 220) }))
+    .slice(0, HISTORY_LIMIT);
+}
+
+export function logMissionEvent(state, type, text, playerId = undefined) {
+  const mode = state?.missionMode;
+  if (!mode?.active) return state;
+  const entry = { turn: mode.turnNumber, type, playerId: playerId === undefined ? mode.currentPlayerId : playerId, text };
+  return { ...state, missionMode: { ...mode, history: [entry, ...(mode.history ?? [])].slice(0, HISTORY_LIMIT) } };
+}
+
+const nameOfCountry = (state, id) => { const country = allCountries(state).find((item) => item.id === id); return country?.name ?? country?.nome ?? id; };
+const nameOfPlayer = (mode, id) => getCompetitivePlayer(mode, id)?.name ?? 'Jogador';
+
+function resolveBattleRound(state, random) {
+  const before = state.missionMode;
+  const result = resolveBattleRoundCore(state, random);
+  const last = result?.missionMode?.lastBattle;
+  if (result === state || !last || last === before?.lastBattle) return result;
+  const mode = result.missionMode;
+  const attacker = nameOfPlayer(mode, last.attackerId);
+  const target = nameOfCountry(result, last.targetId);
+  let out = logMissionEvent(result, 'battle', `${attacker}: ${nameOfCountry(result, last.sourceId)} → ${target} · dados ${(last.attackDice ?? [last.roll]).join(' ')} × ${(last.defenseDice ?? []).join(' ') || 'sem tropas'} · perdas ${last.attackerLosses ?? 0}/${last.defenderLosses ?? 0}`, last.attackerId);
+  if (last.won) out = logMissionEvent(out, 'conquest', `${attacker} conquistou ${target}.`, last.attackerId);
+  else if (last.defeated) out = logMissionEvent(out, 'retreat', `${attacker} perdeu a ofensiva contra ${target}.`, last.attackerId);
+  for (const [victim, by] of Object.entries(out.missionMode.eliminatedBy ?? {})) {
+    if (!(victim in (before.eliminatedBy ?? {}))) out = logMissionEvent(out, 'eliminate', `${nameOfPlayer(out.missionMode, victim)} foi eliminado por ${nameOfPlayer(out.missionMode, by)}.`, by);
+  }
+  if (out.missionMode.finished && !before.finished) out = logMissionEvent(out, 'victory', `${nameOfPlayer(out.missionMode, out.missionMode.winnerId)} cumpriu a missão e venceu.`, out.missionMode.winnerId);
+  return out;
+}
+
+export function mobilizeTroops(state, countryId, amount = 1) {
+  const result = mobilizeTroopsCore(state, countryId, amount);
+  if (result === state || result.missionMode?.mobilizedThisTurn === state.missionMode?.mobilizedThisTurn) return result;
+  const mode = result.missionMode;
+  return logMissionEvent(result, 'reinforce', `${nameOfPlayer(mode, mode.currentPlayerId)} reforçou ${nameOfCountry(result, countryId)} (+${amount}).`);
+}
+
+export function fortifyTerritory(state, countryId) {
+  const result = fortifyTerritoryCore(state, countryId);
+  if (result === state || result.missionMode?.fortifiedCountries?.[countryId] === state.missionMode?.fortifiedCountries?.[countryId]) return result;
+  const mode = result.missionMode;
+  return logMissionEvent(result, 'fortify', `${nameOfPlayer(mode, mode.currentPlayerId)} fortificou ${nameOfCountry(result, countryId)}.`);
+}
+
+export function retreatBattle(state) {
+  const battle = state?.missionMode?.activeBattle;
+  const result = retreatBattleCore(state);
+  if (result === state || !battle) return result;
+  return logMissionEvent(result, 'retreat', `${nameOfPlayer(result.missionMode, battle.attackerId)} recuou de ${nameOfCountry(result, battle.targetId)} com ${battle.attackingRemaining} tropa(s).`, battle.attackerId);
+}
+
+export function advanceMissionTurn(state) {
+  const result = advanceMissionTurnCore(state);
+  const before = state?.missionMode;
+  const mode = result?.missionMode;
+  if (result === state || !mode || (mode.currentPlayerId === before?.currentPlayerId && mode.turnNumber === before?.turnNumber)) return result;
+  return logMissionEvent(result, 'turn', `Rodada ${mode.turnNumber}: vez de ${nameOfPlayer(mode, mode.currentPlayerId)}.`, mode.currentPlayerId);
+}
+
+export function startMissionMatch(...args) {
+  const result = startMissionMatchCore(...args);
+  const mode = result?.missionMode;
+  if (!mode?.active) return result;
+  return logMissionEvent(result, 'info', `Partida iniciada: ${mode.players.length} jogadores e ${allCountries(result).length} territórios.`, null);
 }

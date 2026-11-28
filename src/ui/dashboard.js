@@ -1,5 +1,5 @@
 import { COUNTRIES } from '../data/countries.js';
-import { isWarPhase, warScreenView } from './war_view.js';
+import { battleOddsHtml, isWarPhase, warScreenView } from './war_view.js';
 import { getVoteForecast } from '../core/congress.js';
 import { BUDGET_LIMITS, NEUTRAL_INTEREST_RATE, getDebtStatus, projectBudget, summarizeInflation } from '../core/economy.js';
 import { UNREST_ACTIONS, getUnrestActionStatus } from '../core/unrest_actions.js';
@@ -93,7 +93,7 @@ import { AssetManager, DEFAULT_ASSETS, drawSkinPreview } from '../core/sprite_en
 import { createOnboarding, getBootTips, getStoryScenes, guessLanguage, MIN_BOOT_MS, onboardingText, ONBOARDING_KEY } from '../core/onboarding.js';
 import { bootScreenView, profileOnboardingView, storyOnboardingView } from './onboarding_ui.js';
 import { drawCoverArt } from '../core/cover_art.js';
-import { advanceMissionTurn, canAttackTerritory, conquerTerritory, continueBattle, exitMissionMatch, fortifyTerritory, getCompetitivePlayer, getCompetitivePlayerColor, getCountryOwner, getCurrentMissionPlayer, getMissionProgress, getRegionLabel, mobilizeTroops, retreatBattle, revealMissionTurn, startMissionMatch } from '../core/mission_mode.js';
+import { expireMissionTurn, extendMissionDeadline, renewMissionDeadline, advanceMissionTurn, canAttackTerritory, conquerTerritory, continueBattle, exitMissionMatch, fortifyTerritory, getCompetitivePlayer, getCompetitivePlayerColor, getCountryOwner, getCurrentMissionPlayer, getMissionProgress, getRegionLabel, mobilizeTroops, retreatBattle, revealMissionTurn, startMissionMatch } from '../core/mission_mode.js';
 import { createBotRunner } from '../core/war_ai.js';
 import { applyWarSnapshot } from '../core/war_online.js';
 import { connectWarRoom, getRoomFromUrl } from './war_network.js';
@@ -543,7 +543,7 @@ function nuclearBadge(country) {
 
 function loadState() {
   try {
-    return applyOfflineProgress(hydrateGameState(localStorage.getItem(STORAGE_KEY)));
+    return renewMissionDeadline(applyOfflineProgress(hydrateGameState(localStorage.getItem(STORAGE_KEY))));
   } catch {
     return createGameState();
   }
@@ -2179,9 +2179,17 @@ export function mountDashboard(root) {
   if (invitedRoom) { savedBeforeOnline = state; state = createGameState('bra', state.playerProfile); }
   const bots = createBotRunner({ getState: () => state, commit: (next) => commit(next),
     isPaused: () => titleOpen || Boolean(onlineInfo) || document.hidden || !isWarPhase(state) });
+  let warClockLast = Date.now();
+  let warRollSkip = null;
   const warClock = window.setInterval(() => {
+    const now = Date.now();
+    const elapsed = Math.min(now - warClockLast, 10 * 60_000);
+    warClockLast = now;
     const mode = state.missionMode;
     if (!mode?.active || mode.finished || mode.handoffRequired || !mode.turnDeadline) return;
+    // O tempo nao corre com o menu aberto, a aba escondida ou a sala online pausada: o prazo e adiado.
+    const paused = onlineInfo ? Boolean(onlineInfo.host && onlineInfo.paused) : (titleOpen || document.hidden);
+    if (paused) { state = extendMissionDeadline(state, elapsed); return; }
     const remaining = Math.max(0, mode.turnDeadline - Date.now());
     const display = root.querySelector('.war-turn-clock');
     if (display) {
@@ -2193,7 +2201,7 @@ export function mountDashboard(root) {
       if (onlineInfo.host && onlineInfo.status === 'connected' && !onlineInfo.paused) onlineSession?.command('end-turn');
       return;
     }
-    commit(advanceMissionTurn(state));
+    commit(expireMissionTurn(state));
   }, 250);
   window.addEventListener('pagehide', () => window.clearInterval(warClock), { once: true });
   document.addEventListener('visibilitychange', () => bots.sync());
@@ -3781,10 +3789,57 @@ export function mountDashboard(root) {
       bunkerController?.advanceDialogue();
       return;
     }
+    const dicePick = event.target.closest('[data-dice-pick]');
+    if (dicePick && isWarPhase(state)) { setDicePick(dicePick); return; }
     const control = event.target.closest('[data-action]');
     if (!control || control.disabled) return;
     const { action } = control.dataset;
+    if (action === 'war-skip-dice') { warRollSkip?.(); return; }
     if (isWarPhase(state) && mapUi.rolling) return;
+    // Rola a batalha offline com o resultado real: cada dado trava no seu valor, um por vez (clique para pular).
+    const rollBattle = (compute, sendOnline) => {
+      if (onlineInfo) { animateDice(() => sendOnline()); return; }
+      if (getCurrentMissionPlayer(state)?.isBot) return;
+      const base = state;
+      const next = compute();
+      const last = next?.missionMode?.lastBattle;
+      if (next === base || !last || last === base.missionMode?.lastBattle || !last.attackDice?.length) { commit(next); return; }
+      const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+      mapUi = { ...mapUi, rolling: { attack: last.attackDice.length, defense: Math.max(1, last.defenseDice.length) } };
+      render();
+      const timers = [];
+      let done = false;
+      const spin = window.setInterval(() => { for (const el of root.querySelectorAll('.war-die.is-rolling')) el.textContent = faces[Math.floor(Math.random() * 6)]; }, 70);
+      const finish = () => {
+        if (done) return;
+        done = true;
+        timers.forEach((id) => window.clearTimeout(id));
+        window.clearInterval(spin);
+        warRollSkip = null;
+        mapUi = { ...mapUi, rolling: false };
+        // Se o turno mudou durante a animacao (tempo esgotado), o resultado calculado nao vale mais.
+        if (state === base) {
+          commit(next);
+          const outcome = state.missionMode?.lastBattle;
+          if (outcome?.won) audio.play('chime'); else if (outcome?.defeated) audio.play('alarm');
+        } else render();
+      };
+      const lock = (side, index, value) => {
+        const el = root.querySelector(`[data-die-side="${side}"][data-die-index="${index}"]`);
+        if (!el) return;
+        el.textContent = faces[value - 1];
+        el.classList.remove('is-rolling');
+        el.classList.add('is-locked');
+        audio.play('click');
+      };
+      let at = 350;
+      last.attackDice.forEach((value, index) => { timers.push(window.setTimeout(() => lock('attack', index, value), at)); at += 170; });
+      at += 120;
+      last.defenseDice.forEach((value, index) => { timers.push(window.setTimeout(() => lock('defense', index, value), at)); at += 170; });
+      timers.push(window.setTimeout(finish, at + 350));
+      warRollSkip = finish;
+    };
+    let warTick = 0;
     const animateDice = (resolve) => {
       mapUi = { ...mapUi, rolling: true };
       render();
@@ -3793,15 +3848,21 @@ export function mountDashboard(root) {
         const dice = root.querySelector('[data-dice-faces]');
         if (!dice) { window.clearInterval(spinTimer); return; }
         dice.textContent = Array.from({ length: 3 }, () => faces[Math.floor(Math.random() * faces.length)]).join('　');
+        warTick += 1;
+        if (warTick % 3 === 0) audio.play('click');
       }, 70);
       window.setTimeout(() => {
         window.clearInterval(spinTimer);
         mapUi = { ...mapUi, rolling: false };
         resolve();
+        const last = state.missionMode?.lastBattle;
+        if (last?.won) audio.play('chime'); else if (last?.defeated) audio.play('alarm'); else if (last) audio.play('click');
       }, 720);
     };
     if (isWarPhase(state)) {
-      if (state.missionMode?.handoffRequired && !['mission-mode-reveal', 'war-menu', 'war-new'].includes(action)) return;
+      if (state.missionMode?.handoffRequired && !['mission-mode-reveal', 'war-menu', 'war-new', 'switch-mode'].includes(action)) return;
+      if (action === 'switch-mode') { doSwitchMode(control.dataset.mode); return; }
+      if (action === 'war-history-toggle') { mapUi = { ...mapUi, historyCollapsed: !mapUi.historyCollapsed }; render(); return; }
       if (action === 'war-menu') { bots.stop(); hadSave = true; titleOpen = true; titleView = 'main'; renderTitle(); return; }
       if (action === 'war-online-create') { enterOnline(null); return; }
       if (action === 'war-online-accept' || action === 'war-online-reconnect') { enterOnline(onlineInfo.roomId); return; }
@@ -3866,18 +3927,14 @@ export function mountDashboard(root) {
       if (action === 'competitive-attack') {
         const sourceId = mapUi.attackSourceId ?? root.querySelector('[data-war-source]')?.value;
         const attackingTroops = Number(root.querySelector('[data-war-attack-troops]')?.value) || 1;
+        const diceCount = Number(root.querySelector('[data-war-attack-dice]')?.value) || 3;
         const targetId = control.dataset.contact;
-        animateDice(() => {
-          if (onlineInfo) { onlineSession?.command('attack', targetId, attackingTroops, sourceId); return; }
-          if (!getCurrentMissionPlayer(state)?.isBot) commit(conquerTerritory(state, targetId, sourceId, attackingTroops));
-        });
+        rollBattle(() => conquerTerritory(state, targetId, sourceId, attackingTroops, Math.random, diceCount), () => onlineSession?.command('attack', targetId, attackingTroops, sourceId, diceCount));
         return;
       }
       if (action === 'war-battle-continue') {
-        animateDice(() => {
-          if (onlineInfo) { onlineSession?.command('continue-battle'); return; }
-          if (!getCurrentMissionPlayer(state)?.isBot) commit(continueBattle(state));
-        });
+        const continueDice = Number(root.querySelector('[data-war-continue-dice]')?.value) || 3;
+        rollBattle(() => continueBattle(state, Math.random, continueDice), () => onlineSession?.command('continue-battle', undefined, undefined, undefined, continueDice));
         return;
       }
       if (action === 'war-battle-retreat') {
@@ -4212,6 +4269,7 @@ export function mountDashboard(root) {
   });
 
   root.addEventListener('change', (event) => {
+    if (event.target.matches('[data-war-attack-troops], [data-war-attack-dice], [data-war-continue-dice]')) { refreshWarOdds(); return; }
     if (event.target.matches('[data-image-quality]')) { writeUiPref('imageQuality', event.target.value); render(); return; }
     if (event.target.matches('[data-image-scale]')) { writeUiPref('uiScale', Number(event.target.value) / 100); render(); return; }
     if (!event.target.matches('[data-map-search]')) return;
@@ -4225,7 +4283,32 @@ export function mountDashboard(root) {
     requestAnimationFrame(() => document.querySelector('.world-map-svg')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
   });
 
+  // Atualiza as chances do War ao mexer em tropas ou dados, sem redesenhar a tela.
+  // Botoes 1/2/3 do numero de dados: atualizam o campo escondido, o destaque e as chances.
+  const setDicePick = (pick) => {
+    const group = pick.closest('.war-dice-field');
+    const input = group?.querySelector('input[type="hidden"]');
+    if (!input) return;
+    input.value = pick.dataset.dicePick;
+    for (const button of group.querySelectorAll('[data-dice-pick]')) {
+      const on = button === pick;
+      button.classList.toggle('is-selected', on);
+      button.setAttribute('aria-checked', String(on));
+    }
+    audio.play('click');
+    refreshWarOdds();
+  };
+  const refreshWarOdds = () => {
+    for (const box of root.querySelectorAll('[data-war-odds]')) {
+      const continuing = box.dataset.mode === 'continue';
+      const attacking = continuing ? Number(box.dataset.attacking) : Math.max(0, Math.floor(Number(root.querySelector('[data-war-attack-troops]')?.value) || 0));
+      const dice = Number(root.querySelector(continuing ? '[data-war-continue-dice]' : '[data-war-attack-dice]')?.value) || 3;
+      box.innerHTML = battleOddsHtml(attacking, Number(box.dataset.defenders), box.dataset.fortified === '1', dice);
+    }
+  };
+
   root.addEventListener('input', (event) => {
+    if (event.target.matches('[data-war-attack-troops], [data-war-attack-dice], [data-war-continue-dice]')) { refreshWarOdds(); return; }
     if (event.target.matches('[data-action="diplomacy-search"]')) {
       diplomacyQuery = event.target.value;
       filterDiplomacyRows(root, diplomacyQuery);
@@ -4238,6 +4321,13 @@ export function mountDashboard(root) {
       const mute = root.querySelector('[data-profile-mute]');
       if (mute) mute.checked = false;
     }
+  });
+
+  // Atalhos 1, 2 e 3 escolhem o numero de dados (o foco costuma ficar no corpo da pagina, fora do #app).
+  document.addEventListener('keydown', (event) => {
+    if (!isWarPhase(state) || !['1', '2', '3'].includes(event.key) || event.ctrlKey || event.metaKey || event.altKey || event.target.matches?.('input, textarea, select')) return;
+    const pick = root.querySelector(`.war-dice-picker [data-dice-pick="${event.key}"]`);
+    if (pick) { event.preventDefault(); pick.click(); }
   });
 
   root.addEventListener('keydown', (event) => {

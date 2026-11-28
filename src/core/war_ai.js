@@ -68,7 +68,7 @@ export function chooseBotTarget(state, random = Math.random) {
 }
 
 export function stepBotTurn(state, random = Math.random) {
-  if (state.missionMode?.playStyle !== 'bots' || !getCurrentMissionPlayer(state)?.isBot || state.missionMode.finished) return state;
+  if (!['bots', 'online'].includes(state.missionMode?.playStyle) || !getCurrentMissionPlayer(state)?.isBot || state.missionMode.finished) return state;
   if (state.missionMode.activeBattle) {
     const next = continueBattle(state, random);
     return next.missionMode.activeBattle ? next : advanceMissionTurn(next);
