@@ -3,6 +3,7 @@
 // objeto e o mapa existente continua sendo a fonte visual dos territorios.
 import { WAR_COUNTRY_IDS } from '../data/war_countries.js';
 import { WAR_ADJACENCY } from '../data/war_adjacency.js';
+import { clampDice } from './war_odds.js';
 
 export const MAX_MISSION_PLAYERS = 6;
 export const MIN_MISSION_PLAYERS = 2;
@@ -283,7 +284,8 @@ export function normalizeMissionMode(value) {
     && Number.isInteger(rawBattle.defendersRemaining) && rawBattle.defendersRemaining > 0
     ? { sourceId: rawBattle.sourceId, targetId: rawBattle.targetId, attackerId: rawBattle.attackerId,
       attackingRemaining: rawBattle.attackingRemaining, defendersRemaining: rawBattle.defendersRemaining,
-      round: Math.max(0, Math.floor(Number(rawBattle.round) || 0)) }
+      round: Math.max(0, Math.floor(Number(rawBattle.round) || 0)),
+      diceCount: [1, 2, 3].includes(Number(rawBattle.diceCount)) ? Number(rawBattle.diceCount) : null }
     : null;
   return {
     active: true,
@@ -415,10 +417,11 @@ export function fortifyTerritory(state, countryId) {
   }
   if (mode.fortifiedCountries?.[countryId]) return { ...state, notice: 'Este território já está fortificado.' };
   if (mode.mobilizedThisTurn + 2 > mode.troopsPerTurn) return { ...state, notice: 'São necessários 2 reforços disponíveis para fortificar.' };
-  return { ...state, missionMode: { ...mode, fortifiedCountries: { ...mode.fortifiedCountries, [countryId]: true }, mobilizedThisTurn: mode.mobilizedThisTurn + 2 }, notice: `${country.name ?? country.nome} fortificado: +1 na defesa até ser conquistado.` };
+  return { ...state, missionMode: { ...mode, fortifiedCountries: { ...mode.fortifiedCountries, [countryId]: true }, mobilizedThisTurn: mode.mobilizedThisTurn + 2 }, notice: `${country.name ?? country.nome} fortificado: +1 no melhor dado da defesa até ser conquistado.` };
 }
 
-export function conquerTerritory(state, targetId, sourceId, attackingTroops = 1, random = Math.random) {
+// diceCount (1 a 3): quantos dados o atacante rola em cada rodada (padrao: o maximo possivel).
+export function conquerTerritory(state, targetId, sourceId, attackingTroops = 1, random = Math.random, diceCount = null) {
   const status = canAttackTerritory(state, targetId, sourceId, attackingTroops);
   if (!status.ok) return { ...state, notice: status.reason };
   const mode = state.missionMode;
@@ -426,7 +429,7 @@ export function conquerTerritory(state, targetId, sourceId, attackingTroops = 1,
   const stationed = Math.max(0, Number(mode.troopsByCountry?.[targetId]) || 0);
   const troopsByCountry = { ...mode.troopsByCountry, [sourceId]: mode.troopsByCountry[sourceId] - attackingTroops };
   return resolveBattleRound({ ...state, missionMode: { ...mode, troopsByCountry,
-    activeBattle: { sourceId, targetId, attackerId, attackingRemaining: attackingTroops, defendersRemaining: stationed, round: 0 } } }, random);
+    activeBattle: { sourceId, targetId, attackerId, attackingRemaining: attackingTroops, defendersRemaining: stationed, round: 0, diceCount: [1, 2, 3].includes(Number(diceCount)) ? Number(diceCount) : null } } }, random);
 }
 
 function resolveBattleRound(state, random) {
@@ -440,8 +443,10 @@ function resolveBattleRound(state, random) {
   const defending = battle.defendersRemaining;
   const fortified = Boolean(mode.fortifiedCountries?.[targetId]);
   const rollDice = (count) => Array.from({ length: count }, () => 6 - randomIndex(random, 6)).sort((a, b) => b - a);
-  const attackDice = rollDice(Math.min(3, attacking));
-  const defenseDice = rollDice(Math.min(2, defending)).map((die) => Math.min(6, die + Number(fortified))).sort((a, b) => b - a);
+  const attackDice = rollDice(clampDice(battle.diceCount, attacking));
+  // Fortificacao: +1 apenas no melhor dado da defesa (rollDice ja devolve em ordem decrescente).
+  const rolledDefense = rollDice(Math.min(2, defending));
+  const defenseDice = rolledDefense.map((die, index) => (index === 0 ? Math.min(6, die + Number(fortified)) : die)).sort((a, b) => b - a);
   let attackerLosses = 0;
   let defenderLosses = 0;
   for (let index = 0; index < Math.min(attackDice.length, defenseDice.length); index += 1) {
@@ -455,7 +460,7 @@ function resolveBattleRound(state, random) {
   const defeated = attackersRemaining === 0;
   const roll = attackDice[0];
   const lastBattle = { targetId, sourceId, attackerId, roll, won, defeated, round: battle.round + 1,
-    attackingTroops: attacking, attackDice, defenseDice, attackerLosses, defenderLosses,
+    attackingTroops: attacking, attackDice, defenseDice, fortifyFrom: fortified && rolledDefense.length ? rolledDefense[0] : null, attackerLosses, defenderLosses,
     attackersRemaining, defendersRemaining, defenseTroops: defending, fortified };
   const targetName = target.name ?? target.nome;
   if (!won && !defeated) {
@@ -487,12 +492,13 @@ function resolveBattleRound(state, random) {
   return checkCompetitiveVictory(next, attackerId);
 }
 
-export function continueBattle(state, random = Math.random) {
+export function continueBattle(state, random = Math.random, diceCount = null) {
   const mode = state?.missionMode;
   if (!mode?.active || mode.finished || mode.handoffRequired || !mode.activeBattle) return state;
   if (mode.activeBattle.attackerId !== mode.currentPlayerId) return { ...state, notice: 'Esta batalha não pertence ao jogador do turno.' };
   if (mode.turnDeadline && Date.now() >= mode.turnDeadline) return { ...state, notice: 'O tempo acabou. Recue para encerrar a batalha.' };
-  return resolveBattleRound(state, random);
+  const chosen = [1, 2, 3].includes(Number(diceCount)) ? Number(diceCount) : mode.activeBattle.diceCount;
+  return resolveBattleRound({ ...state, missionMode: { ...mode, activeBattle: { ...mode.activeBattle, diceCount: chosen } } }, random);
 }
 
 export function retreatBattle(state) {
@@ -503,6 +509,29 @@ export function retreatBattle(state) {
     [battle.sourceId]: (Number(mode.troopsByCountry?.[battle.sourceId]) || 0) + battle.attackingRemaining };
   return { ...state, missionMode: { ...mode, troopsByCountry, activeBattle: null, lastBattle: { ...mode.lastBattle, retreated: true }, actionUsed: true },
     notice: `Ofensiva interrompida. ${battle.attackingRemaining} tropa(s) sobrevivente(s) recuaram para o território de origem.` };
+}
+
+// O cronometro estourou: passa o turno (recuando uma batalha em andamento) e avisa de quem era o tempo.
+export function expireMissionTurn(state) {
+  const mode = state?.missionMode;
+  if (!mode?.active || mode.finished || mode.handoffRequired) return state;
+  const name = getCompetitivePlayer(mode, mode.currentPlayerId)?.name ?? 'Jogador';
+  const next = advanceMissionTurn(state);
+  return next === state ? state : { ...next, notice: `O tempo de ${name} acabou. ${next.notice}` };
+}
+
+// Um turno salvo guarda um horario absoluto; ao carregar o jogo o relogio recomeca (senao o turno passaria sozinho).
+export function renewMissionDeadline(state, now = Date.now()) {
+  const mode = state?.missionMode;
+  if (!mode?.active || mode.finished || mode.handoffRequired || !mode.turnDeadline) return state;
+  return { ...state, missionMode: { ...mode, turnDeadline: now + mode.turnLimitSeconds * 1000 } };
+}
+
+// Adia o prazo pelo tempo em que o jogo ficou parado (menu aberto, aba escondida, sala pausada).
+export function extendMissionDeadline(state, elapsedMs) {
+  const mode = state?.missionMode;
+  if (!mode?.active || mode.finished || mode.handoffRequired || !mode.turnDeadline || !(elapsedMs > 0)) return state;
+  return { ...state, missionMode: { ...mode, turnDeadline: mode.turnDeadline + elapsedMs } };
 }
 
 export function revealMissionTurn(state) {

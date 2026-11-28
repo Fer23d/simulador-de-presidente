@@ -54,9 +54,9 @@ export class WarRoom {
     if (command.action === 'attack') {
       const valid = canAttackTerritory(this.state, command.targetId, command.sourceId, command.amount);
       if (!valid.ok) throw new Error(valid.reason);
-      this.state = conquerTerritory(this.state, command.targetId, command.sourceId, command.amount, this.random);
+      this.state = conquerTerritory(this.state, command.targetId, command.sourceId, command.amount, this.random, command.dice);
     } else if (command.action === 'continue-battle') {
-      const next = continueBattle(this.state, this.random);
+      const next = continueBattle(this.state, this.random, command.dice);
       if (!this.state.missionMode.activeBattle || next.missionMode.activeBattle === this.state.missionMode.activeBattle) throw new Error(next.notice || 'Não há batalha para continuar.');
       this.state = next;
     } else if (command.action === 'retreat-battle') {
@@ -88,7 +88,7 @@ export class WarRoom {
       mode: this.started ? {
         active: true, playStyle: 'online', difficulty: 'medium', territoryIds: [...mode.territoryIds],
         currentPlayerId: mode.currentPlayerId, turnNumber: mode.turnNumber, actionUsed: mode.actionUsed,
-        turnDeadline: mode.turnDeadline, turnLimitSeconds: mode.turnLimitSeconds, troopsPerTurn: mode.troopsPerTurn,
+        turnDeadline: mode.turnDeadline, turnRemainingMs: mode.turnDeadline ? Math.max(0, mode.turnDeadline - Date.now()) : null, turnLimitSeconds: mode.turnLimitSeconds, troopsPerTurn: mode.troopsPerTurn,
         troopsByCountry: { ...mode.troopsByCountry }, mobilizedThisTurn: mode.mobilizedThisTurn,
         fortifiedCountries: { ...mode.fortifiedCountries }, activeBattle: mode.activeBattle && { ...mode.activeBattle },
         handoffRequired: false, finished: mode.finished, winnerId: mode.winnerId,
@@ -103,5 +103,5 @@ export function applyWarSnapshot(state, snapshot) {
   if (!snapshot?.started || snapshot.protocol !== WAR_PROTOCOL || !snapshot.mode?.active) return state;
   const contacts = state.geopolitics.contacts.map((country) => ({ ...country, ownerId: snapshot.owners[country.id] ?? null }));
   return { ...state, country: { ...state.country, ownerId: snapshot.owners[state.country.id] ?? null },
-    geopolitics: { ...state.geopolitics, contacts }, world: contacts, missionMode: snapshot.mode, notice: snapshot.notice };
+    geopolitics: { ...state.geopolitics, contacts }, world: contacts, missionMode: { ...snapshot.mode, ...(Number.isFinite(snapshot.mode.turnRemainingMs) ? { turnDeadline: Date.now() + snapshot.mode.turnRemainingMs } : {}) }, notice: snapshot.notice };
 }

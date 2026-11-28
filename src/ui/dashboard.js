@@ -1,5 +1,5 @@
 import { COUNTRIES } from '../data/countries.js';
-import { isWarPhase, warScreenView } from './war_view.js';
+import { battleOddsHtml, isWarPhase, warScreenView } from './war_view.js';
 import { getVoteForecast } from '../core/congress.js';
 import { BUDGET_LIMITS, NEUTRAL_INTEREST_RATE, getDebtStatus, projectBudget, summarizeInflation } from '../core/economy.js';
 import { UNREST_ACTIONS, getUnrestActionStatus } from '../core/unrest_actions.js';
@@ -93,7 +93,7 @@ import { AssetManager, DEFAULT_ASSETS, drawSkinPreview } from '../core/sprite_en
 import { createOnboarding, getBootTips, getStoryScenes, guessLanguage, MIN_BOOT_MS, onboardingText, ONBOARDING_KEY } from '../core/onboarding.js';
 import { bootScreenView, profileOnboardingView, storyOnboardingView } from './onboarding_ui.js';
 import { drawCoverArt } from '../core/cover_art.js';
-import { advanceMissionTurn, canAttackTerritory, conquerTerritory, continueBattle, exitMissionMatch, fortifyTerritory, getCompetitivePlayer, getCompetitivePlayerColor, getCountryOwner, getCurrentMissionPlayer, getMissionProgress, getRegionLabel, mobilizeTroops, retreatBattle, revealMissionTurn, startMissionMatch } from '../core/mission_mode.js';
+import { expireMissionTurn, extendMissionDeadline, renewMissionDeadline, advanceMissionTurn, canAttackTerritory, conquerTerritory, continueBattle, exitMissionMatch, fortifyTerritory, getCompetitivePlayer, getCompetitivePlayerColor, getCountryOwner, getCurrentMissionPlayer, getMissionProgress, getRegionLabel, mobilizeTroops, retreatBattle, revealMissionTurn, startMissionMatch } from '../core/mission_mode.js';
 import { createBotRunner } from '../core/war_ai.js';
 import { applyWarSnapshot } from '../core/war_online.js';
 import { connectWarRoom, getRoomFromUrl } from './war_network.js';
@@ -543,7 +543,7 @@ function nuclearBadge(country) {
 
 function loadState() {
   try {
-    return applyOfflineProgress(hydrateGameState(localStorage.getItem(STORAGE_KEY)));
+    return renewMissionDeadline(applyOfflineProgress(hydrateGameState(localStorage.getItem(STORAGE_KEY))));
   } catch {
     return createGameState();
   }
@@ -2179,9 +2179,16 @@ export function mountDashboard(root) {
   if (invitedRoom) { savedBeforeOnline = state; state = createGameState('bra', state.playerProfile); }
   const bots = createBotRunner({ getState: () => state, commit: (next) => commit(next),
     isPaused: () => titleOpen || Boolean(onlineInfo) || document.hidden || !isWarPhase(state) });
+  let warClockLast = Date.now();
   const warClock = window.setInterval(() => {
+    const now = Date.now();
+    const elapsed = Math.min(now - warClockLast, 10 * 60_000);
+    warClockLast = now;
     const mode = state.missionMode;
     if (!mode?.active || mode.finished || mode.handoffRequired || !mode.turnDeadline) return;
+    // O tempo nao corre com o menu aberto, a aba escondida ou a sala online pausada: o prazo e adiado.
+    const paused = onlineInfo ? Boolean(onlineInfo.host && onlineInfo.paused) : (titleOpen || document.hidden);
+    if (paused) { state = extendMissionDeadline(state, elapsed); return; }
     const remaining = Math.max(0, mode.turnDeadline - Date.now());
     const display = root.querySelector('.war-turn-clock');
     if (display) {
@@ -2193,7 +2200,7 @@ export function mountDashboard(root) {
       if (onlineInfo.host && onlineInfo.status === 'connected' && !onlineInfo.paused) onlineSession?.command('end-turn');
       return;
     }
-    commit(advanceMissionTurn(state));
+    commit(expireMissionTurn(state));
   }, 250);
   window.addEventListener('pagehide', () => window.clearInterval(warClock), { once: true });
   document.addEventListener('visibilitychange', () => bots.sync());
@@ -3785,6 +3792,7 @@ export function mountDashboard(root) {
     if (!control || control.disabled) return;
     const { action } = control.dataset;
     if (isWarPhase(state) && mapUi.rolling) return;
+    let warTick = 0;
     const animateDice = (resolve) => {
       mapUi = { ...mapUi, rolling: true };
       render();
@@ -3793,11 +3801,15 @@ export function mountDashboard(root) {
         const dice = root.querySelector('[data-dice-faces]');
         if (!dice) { window.clearInterval(spinTimer); return; }
         dice.textContent = Array.from({ length: 3 }, () => faces[Math.floor(Math.random() * faces.length)]).join('　');
+        warTick += 1;
+        if (warTick % 3 === 0) audio.play('click');
       }, 70);
       window.setTimeout(() => {
         window.clearInterval(spinTimer);
         mapUi = { ...mapUi, rolling: false };
         resolve();
+        const last = state.missionMode?.lastBattle;
+        if (last?.won) audio.play('chime'); else if (last?.defeated) audio.play('alarm'); else if (last) audio.play('click');
       }, 720);
     };
     if (isWarPhase(state)) {
@@ -3866,17 +3878,19 @@ export function mountDashboard(root) {
       if (action === 'competitive-attack') {
         const sourceId = mapUi.attackSourceId ?? root.querySelector('[data-war-source]')?.value;
         const attackingTroops = Number(root.querySelector('[data-war-attack-troops]')?.value) || 1;
+        const diceCount = Number(root.querySelector('[data-war-attack-dice]')?.value) || 3;
         const targetId = control.dataset.contact;
         animateDice(() => {
-          if (onlineInfo) { onlineSession?.command('attack', targetId, attackingTroops, sourceId); return; }
-          if (!getCurrentMissionPlayer(state)?.isBot) commit(conquerTerritory(state, targetId, sourceId, attackingTroops));
+          if (onlineInfo) { onlineSession?.command('attack', targetId, attackingTroops, sourceId, diceCount); return; }
+          if (!getCurrentMissionPlayer(state)?.isBot) commit(conquerTerritory(state, targetId, sourceId, attackingTroops, Math.random, diceCount));
         });
         return;
       }
       if (action === 'war-battle-continue') {
+        const continueDice = Number(root.querySelector('[data-war-continue-dice]')?.value) || 3;
         animateDice(() => {
-          if (onlineInfo) { onlineSession?.command('continue-battle'); return; }
-          if (!getCurrentMissionPlayer(state)?.isBot) commit(continueBattle(state));
+          if (onlineInfo) { onlineSession?.command('continue-battle', undefined, undefined, undefined, continueDice); return; }
+          if (!getCurrentMissionPlayer(state)?.isBot) commit(continueBattle(state, Math.random, continueDice));
         });
         return;
       }
@@ -4212,6 +4226,7 @@ export function mountDashboard(root) {
   });
 
   root.addEventListener('change', (event) => {
+    if (event.target.matches('[data-war-attack-troops], [data-war-attack-dice], [data-war-continue-dice]')) { refreshWarOdds(); return; }
     if (event.target.matches('[data-image-quality]')) { writeUiPref('imageQuality', event.target.value); render(); return; }
     if (event.target.matches('[data-image-scale]')) { writeUiPref('uiScale', Number(event.target.value) / 100); render(); return; }
     if (!event.target.matches('[data-map-search]')) return;
@@ -4225,7 +4240,18 @@ export function mountDashboard(root) {
     requestAnimationFrame(() => document.querySelector('.world-map-svg')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
   });
 
+  // Atualiza as chances do War ao mexer em tropas ou dados, sem redesenhar a tela.
+  const refreshWarOdds = () => {
+    for (const box of root.querySelectorAll('[data-war-odds]')) {
+      const continuing = box.dataset.mode === 'continue';
+      const attacking = continuing ? Number(box.dataset.attacking) : Math.max(0, Math.floor(Number(root.querySelector('[data-war-attack-troops]')?.value) || 0));
+      const dice = Number(root.querySelector(continuing ? '[data-war-continue-dice]' : '[data-war-attack-dice]')?.value) || 3;
+      box.innerHTML = battleOddsHtml(attacking, Number(box.dataset.defenders), box.dataset.fortified === '1', dice);
+    }
+  };
+
   root.addEventListener('input', (event) => {
+    if (event.target.matches('[data-war-attack-troops], [data-war-attack-dice], [data-war-continue-dice]')) { refreshWarOdds(); return; }
     if (event.target.matches('[data-action="diplomacy-search"]')) {
       diplomacyQuery = event.target.value;
       filterDiplomacyRows(root, diplomacyQuery);

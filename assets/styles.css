@@ -1268,3 +1268,19 @@ body.war-mode #app { max-width: none; padding: 0; }
 @keyframes war-die-settle { 0% { transform: translateY(-16px) rotate(-40deg) scale(.7); filter: blur(2px); } 60% { transform: translateY(4px) rotate(12deg) scale(1.1); filter: blur(0); } 100% { transform: translateY(0) rotate(0) scale(1); } }
 @keyframes war-target-pulse { 50% { stroke: #ffd36a; fill-opacity: 1; } }
 .war-turn-status { min-height: 2.5em; }
+
+/* Dados do War: pares com vencedor e perdedor, e painel de chances. */
+.war-dice-compare { align-items: flex-start; gap: 12px; }
+.war-dice-side { display: flex; gap: 8px; }
+.war-die-wrap { display: grid; justify-items: center; gap: 2px; }
+.war-die-wrap small { font-size: 12px; color: var(--war-muted, #9bb); }
+.war-die.is-win { color: #7dff9a; text-shadow: 0 0 14px rgba(125, 255, 154, .65); }
+.war-die.is-loss { opacity: .32; filter: grayscale(.8); }
+.war-die.is-idle { opacity: .5; }
+.war-odds { margin: 8px 0; padding: 8px 10px; border: 1px solid var(--line); background: rgba(6, 16, 14, .5); font-size: 14px; line-height: 1.5; }
+.war-odds p { margin: 0 0 4px; }
+.war-odds-main.is-good strong { color: #7dff9a; }
+.war-odds-main.is-even strong { color: #ffd166; }
+.war-odds-main.is-bad strong { color: #ff8c8c; }
+.war-odds-round ul { margin: 6px 0 0; padding-left: 18px; }
+.war-odds-round b { color: #ffd166; margin-left: 4px; }
