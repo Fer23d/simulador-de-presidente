@@ -25,9 +25,9 @@ export function roomLink(roomId) {
 function seatToken(roomId) {
   try {
     const key = 'last-office:war-seat:' + roomId;
-    const existing = sessionStorage.getItem(key);
+    const existing = localStorage.getItem(key) ?? sessionStorage.getItem(key);
     if (existing) return existing;
-    const token = safeToken(); sessionStorage.setItem(key, token); return token;
+    const token = safeToken(); localStorage.setItem(key, token); sessionStorage.setItem(key, token); return token;
   } catch { return safeToken(); }
 }
 
@@ -46,6 +46,19 @@ export async function connectWarRoom({ roomId, name, state, onUpdate, PeerClass 
   let info = { host, roomId, link: roomLink(roomId), playerId: host ? 'player-1' : null, status: 'connecting', members: [], error: '', pending: false };
   const emit = (patch = {}, snapshot) => { if (closed) return; info = { ...info, ...patch }; onUpdate(info, snapshot); };
   const fail = (message) => emit({ status: 'error', error: message, pending: false });
+  // Anfitriao: a cada meio segundo passa o controle a bots de jogadores ausentes e faz os bots jogarem.
+  let hostTimer = null; let lastBotStep = 0; let lastTakeover = null;
+  if (host) {
+    hostTimer = setInterval(() => {
+      if (closed) return;
+      let changed = false;
+      try { changed = authority.tick(); } catch { /* sala ainda nao iniciada */ }
+      if (authority.hasBotTurn() && Date.now() - lastBotStep >= 900) { lastBotStep = Date.now(); try { changed = authority.stepBot() || changed; } catch { /* jogada invalida do bot: tenta no proximo ciclo */ } }
+      const takeover = authority.takeoverIn();
+      if (takeover !== lastTakeover) { lastTakeover = takeover; changed = true; }
+      if (changed) broadcast();
+    }, 500);
+  }
   const peer = new Peer(host ? 'last-office-' + roomId : undefined, { debug: 0 });
   const initialTimeout = later(() => fail('A conexão demorou demais. Verifique a internet e tente reconectar.'), 20000);
   function broadcast() {
@@ -99,16 +112,30 @@ export async function connectWarRoom({ roomId, name, state, onUpdate, PeerClass 
   peer.on('open', () => {
     if (closed) return;
     if (host) { clear(initialTimeout); broadcast(); return; }
-    guestConnection = peer.connect('last-office-' + roomId, { reliable: true, serialization: 'json' });
-    guestConnection.on('open', () => guestConnection.send({ protocol: WAR_PROTOCOL, type: 'hello', name, token: seatToken(roomId) }));
-    guestConnection.on('data', (message) => {
+    let attempts = 0;
+    const connectGuest = () => {
+    const connection = guestConnection = peer.connect('last-office-' + roomId, { reliable: true, serialization: 'json' });
+    let lostHandled = false;
+    // Queda de conexao: tenta voltar sozinho algumas vezes (o lugar na partida e guardado pelo token).
+    const lost = (message) => {
+      if (closed || lostHandled || connection !== guestConnection) return;
+      lostHandled = true;
+      if (attempts >= 4) { fail(message); return; }
+      attempts += 1;
+      emit({ status: 'connecting', error: `Conexão perdida. Reconectando (tentativa ${attempts}/4)…`, pending: false });
+      later(() => { if (peer.disconnected && !peer.destroyed) { try { peer.reconnect(); } catch { /* tenta conectar assim mesmo */ } } connectGuest(); }, 1500 * attempts);
+    };
+    connection.on('open', () => { attempts = 0; connection.send({ protocol: WAR_PROTOCOL, type: 'hello', name, token: seatToken(roomId) }); });
+    connection.on('data', (message) => {
       if (message?.type === 'error') { emit({ error: message.message, pending: false }); return; }
       if (message?.type !== 'snapshot' || message.protocol !== WAR_PROTOCOL || !Number.isInteger(message.revision) || message.revision < lastRevision) return;
       clear(initialTimeout); lastRevision = message.revision;
       emit({ ...message, status: 'connected', error: '', pending: false }, message);
     });
-    guestConnection.on('close', () => fail('Conexão com o criador perdida. Reconecte; a aba do criador precisa permanecer aberta.'));
-    guestConnection.on('error', () => fail('Falha na conexão entre jogadores. Tente outra rede ou reconecte.'));
+    connection.on('close', () => lost('Conexão com o criador perdida. Reconecte; a aba do criador precisa permanecer aberta.'));
+    connection.on('error', () => lost('Falha na conexão entre jogadores. Tente outra rede ou reconecte.'));
+    };
+    connectGuest();
   });
   peer.on('error', (error) => {
     if (error.type === 'peer-unavailable') fail('Sala não encontrada. Confira o link e se o criador continua com o jogo aberto.');
@@ -130,6 +157,6 @@ export async function connectWarRoom({ roomId, name, state, onUpdate, PeerClass 
         later(() => { if (info.pending) fail('A jogada não foi confirmada. Reconecte para atualizar o tabuleiro.'); }, 12000);
       }
     },
-    close() { closed = true; timers.forEach(clearTimeout); timers.clear(); peer.destroy(); connections.clear(); },
+    close() { closed = true; if (hostTimer) clearInterval(hostTimer); timers.forEach(clearTimeout); timers.clear(); peer.destroy(); connections.clear(); },
   };
 }

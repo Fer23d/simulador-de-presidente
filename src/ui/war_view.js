@@ -2,6 +2,7 @@ import { COUNTRY_PATHS, COUNTRY_POINTS, LAND_BACKGROUND, MAP_REGIONS } from '../
 import { WAR_COUNTRY_COUNT } from '../data/war_countries.js';
 import { BOT_DIFFICULTIES } from '../core/war_ai.js';
 import { getBattleOdds } from '../core/war_odds.js';
+import { modeSwitchRow } from './mode_switch_ui.js';
 import { allCountries, canAttackTerritory, getAdjacentAttackOrigins, getAdjacentAttackTargets, getCompetitivePlayer, getCountryOwner, getCurrentMissionPlayer, getMissionProgress, getRegionLabel, territoryCounts } from '../core/mission_mode.js';
 
 const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -54,7 +55,7 @@ function onlineView(online) {
   return `<section class="war-panel war-online"><p class="eyebrow">SALA ONLINE</p><h2>${invite ? 'Você foi convidado.' : online.status === 'connecting' ? 'Conectando…' : 'Seu esquadrão'}</h2>
     ${invite ? '<label class="war-field">Seu nome<input data-war-online-name maxlength="32" placeholder="Seu nome"></label><button class="primary-action" data-action="war-online-accept">ENTRAR NA SALA</button>' : ''}
     ${online.link ? `<label class="war-field">Link do convite<input data-war-share readonly value="${escape(online.link)}"></label><button class="quiet-action" data-action="war-online-copy">COPIAR LINK</button>` : ''}
-    <ul class="war-score">${(online.members ?? []).map((member) => `<li><span>${escape(member.name)}${member.id === online.playerId ? ' (você)' : ''}</span><strong>${member.connected ? 'Conectado' : 'Ausente'}</strong></li>`).join('')}</ul>
+    <ul class="war-score">${(online.members ?? []).map((member) => `<li><span>${escape(member.name)}${member.id === online.playerId ? ' (você)' : ''}</span><strong>${member.bot ? 'Bot joga por ele' : member.connected ? 'Conectado' : Number.isFinite(online.takeoverIn) ? `Ausente · bot assume em ${online.takeoverIn}s` : 'Ausente'}</strong></li>`).join('')}</ul>
     ${online.host && !online.started ? `<button class="primary-action" data-action="war-online-start" ${online.status !== 'connected' || online.members.length < 2 ? 'disabled' : ''}>INICIAR PARTIDA</button>` : ''}
     ${!online.host && online.status === 'connected' && !online.started ? '<p>Aguardando o criador iniciar a partida.</p>' : ''}
     ${online.error ? `<p class="war-network-error" role="alert">${escape(online.error)}</p>` : ''}
@@ -89,7 +90,7 @@ function turnView(state, ui) {
   const stationed = Number(mode.troopsByCountry?.[selected?.id]) || 0;
   const isFortified = Boolean(mode.fortifiedCountries?.[selected?.id]);
   const deadlineMs = mode.turnDeadline ? Math.max(0, mode.turnDeadline - Date.now()) : null;
-  if (winner) return `<section class="war-panel war-victory"><p class="eyebrow">MISSÃO CUMPRIDA</p><h2>${escape(winner.name)} venceu!</h2><p>${escape(winner.mission.description)}</p><p>Vitória na rodada ${mode.turnNumber}.</p><button type="button" class="primary-action" data-action="war-new">JOGAR NOVAMENTE</button></section>`;
+  if (winner) return `<section class="war-panel war-victory"><p class="eyebrow">MISSÃO CUMPRIDA</p><h2>${escape(winner.name)} venceu!</h2><p>${escape(winner.mission.description)}</p><p>Vitória na rodada ${mode.turnNumber}.</p><button type="button" class="primary-action" data-action="war-new">JOGAR NOVAMENTE</button>${modeSwitchRow(state)}</section>`;
   return `<section class="war-panel" style="--command-color:${escape(player.color)}"><p class="eyebrow">02 — TURNO ATUAL</p><h2>${escape(player.name)}</h2><div class="war-turn-clock" data-turn-deadline="${mode.turnDeadline ?? ''}" data-turn-limit="${mode.turnLimitSeconds}">${deadlineMs === null ? 'TEMPO: 60s' : `TEMPO: ${Math.ceil(deadlineMs / 1000)}s`}</div><p class="war-reinforcement-copy">Reforços nesta rodada: <strong>${mode.troopsPerTurn - mode.mobilizedThisTurn} / ${mode.troopsPerTurn}</strong> · colocados: ${mode.mobilizedThisTurn}</p><p class="war-turn-status">${player.isBot ? 'IA ' + BOT_DIFFICULTIES[mode.difficulty].label + ': planejando a ofensiva…' : !mayPlay ? 'Aguarde seu turno ou a reconexão dos jogadores.' : mode.actionUsed ? 'Você pode atacar novamente enquanto houver tropas e tempo.' : 'Selecione um território rival e escolha de onde sairá o ataque.'}</p>
     <button type="button" class="quiet-action war-secret-button" data-action="war-mission" aria-expanded="${Boolean(missionVisible)}">${missionVisible ? 'OCULTAR MISSÃO' : 'REVELAR MINHA MISSÃO'}</button>
     ${missionVisible ? `<div class="war-secret"><h3>${escape(viewer?.mission.title)}</h3><p>${escape(viewer?.mission.description)}</p><strong>${escape(progress.label)}</strong></div>` : '<p class="war-fine">Missão protegida. Revele apenas o seu objetivo.</p>'}

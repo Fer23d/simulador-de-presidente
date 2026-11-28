@@ -1,5 +1,5 @@
-// Troca de modo: Presidencia, Vault e Cidade. Ao zerar um modo (final do Vault, epilogo da Cidade, fim ou marco da
-// Presidencia), o jogador pode comecar em qualquer outro. O progresso fica na conta, entao a troca segue liberada.
+// Troca de modo: War, Vault e Cidade. Ao zerar um modo (vitoria no War, final do Vault, epilogo da Cidade), o jogador pode
+// comecar em qualquer outro. O id 'presidency' e o do modo inicial, hoje exibido como War. O progresso fica na conta.
 import { getGameMode } from './levels.js';
 
 export const MODES = Object.freeze([

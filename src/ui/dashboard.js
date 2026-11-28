@@ -3813,7 +3813,8 @@ export function mountDashboard(root) {
       }, 720);
     };
     if (isWarPhase(state)) {
-      if (state.missionMode?.handoffRequired && !['mission-mode-reveal', 'war-menu', 'war-new'].includes(action)) return;
+      if (state.missionMode?.handoffRequired && !['mission-mode-reveal', 'war-menu', 'war-new', 'switch-mode'].includes(action)) return;
+      if (action === 'switch-mode') { doSwitchMode(control.dataset.mode); return; }
       if (action === 'war-menu') { bots.stop(); hadSave = true; titleOpen = true; titleView = 'main'; renderTitle(); return; }
       if (action === 'war-online-create') { enterOnline(null); return; }
       if (action === 'war-online-accept' || action === 'war-online-reconnect') { enterOnline(onlineInfo.roomId); return; }

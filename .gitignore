@@ -1,0 +1,19 @@
+# Dependencias e arquivos de sistema
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+
+# Configuracao local do Claude
+.claude/settings.local.json
+
+# Trailers: videos, quadros e capturas pesadas (os scripts em marketing/trailer/tools podem ser versionados)
+marketing/trailer/*.mp4
+marketing/trailer/build/
+marketing/trailer/build_*/
+marketing/trailer/clips/
+marketing/trailer/frames/
+marketing/trailer/previa/
+marketing/trailer/stills/
+marketing/trailer/historia_ia/
+marketing/trailer/audio/*.wav
