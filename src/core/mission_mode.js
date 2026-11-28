@@ -312,7 +312,7 @@ export function normalizeMissionMode(value) {
     lastBattle: value.lastBattle && typeof value.lastBattle === 'object' ? { ...value.lastBattle } : null,
     activeBattle,
     eliminatedBy: value.eliminatedBy && typeof value.eliminatedBy === 'object' ? { ...value.eliminatedBy } : {},
-    history: normalizeHistory(value.history),
+    history: seedHistory(normalizeHistory(value.history), value),
   };
 }
 
@@ -581,6 +581,13 @@ export function listMissionCatalog() {
 // Registro publico (resultados de batalhas, reforcos, trocas de turno): nada aqui revela missoes secretas.
 export const HISTORY_LIMIT = 80;
 const HISTORY_TYPES = new Set(['info', 'battle', 'conquest', 'retreat', 'reinforce', 'fortify', 'turn', 'timeout', 'eliminate', 'victory']);
+
+// Save de uma partida em andamento sem historico: o painel nao fica vazio, o registro comeca neste ponto.
+function seedHistory(list, value) {
+  if (list.length || !value?.active) return list;
+  const turn = Math.max(1, Math.floor(Number(value.turnNumber) || 1));
+  return [{ turn, type: 'info', playerId: null, text: 'Histórico iniciado neste ponto da partida. As próximas jogadas aparecem aqui.' }];
+}
 
 export function normalizeHistory(value) {
   if (!Array.isArray(value)) return [];

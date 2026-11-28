@@ -93,3 +93,15 @@ test('tela: historico fica abaixo de Como jogar, recolhe e a animacao dos dados 
   assert.match(after, /style="--i:0"/);
   assert.match(after, /Defesa perdeu \d/);
 });
+
+test('partida salva antes do historico existir nao mostra o painel vazio', () => {
+  const state = match();
+  const { history, ...legacy } = JSON.parse(JSON.stringify(state.missionMode));
+  const loaded = normalizeMissionMode(legacy);
+  assert.equal(loaded.history.length, 1);
+  assert.match(loaded.history[0].text, /Histórico iniciado neste ponto/);
+  const html = warScreenView({ ...state, missionMode: loaded }, {});
+  assert.match(html, /Histórico iniciado neste ponto/);
+  assert.doesNotMatch(html, /Nenhuma jogada ainda/);
+  assert.equal(normalizeMissionMode({ ...legacy, active: false }).history.length ?? 0, 0);
+});
